@@ -1,5 +1,7 @@
 # Tarkov Weapon Mod Optimizer 🔫
 
+[English](README.md) | [中文](README_ZH.md)
+
 An advanced weapon build optimizer for Escape from Tarkov. This tool uses **constraint programming** (via Google OR-Tools CP-SAT solver) to find the mathematically optimal set of modifications for any weapon based on your priorities and constraints.
 
 ![Project Overview](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
