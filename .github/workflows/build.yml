@@ -34,7 +34,7 @@ jobs:
             --include-data-file=tasks.json=tasks.json ^
             --output-dir=dist ^
             --python-flag=no_site ^
-            --noinclude-streamlit-mode=skip ^
+            --anti-bloat=no ^
             app.py
 
       - name: Upload Windows Executable
@@ -67,7 +67,7 @@ jobs:
             --include-data-file=tasks.json=tasks.json \
             --output-dir=dist \
             --python-flag=no_site \
-            --noinclude-streamlit-mode=skip \
+            --anti-bloat=no \
             app.py
 
       - name: Upload Linux Executable
@@ -100,7 +100,7 @@ jobs:
             --include-data-file=tasks.json=tasks.json \
             --output-dir=dist \
             --python-flag=no_site \
-            --noinclude-streamlit-mode=skip \
+            --anti-bloat=no \
             app.py
 
       - name: Upload macOS Executable
