@@ -26,11 +26,27 @@
     "limited": "受限",
     "traders_below_ll4": "{count}位商人低于4级",
     "no_flea": "无跳蚤市场",
-    "level": "{level}级"
+    "level": "{level}级",
+    "include_exclude": "包含/排除模组",
+    "require_categories": "必须包含类别",
+    "ban_categories": "禁用类别",
+    "require_items": "必须包含物品",
+    "ban_items": "禁用物品"
   },
   "tabs": {
     "explore": "探索权衡",
-    "optimize": "优化配置"
+    "optimize": "优化配置",
+    "gunsmith": "机械师任务"
+  },
+  "gunsmith": {
+    "header": "机械师任务优化器",
+    "select_task": "选择任务",
+    "task_requirements": "任务要求",
+    "weapon": "武器",
+    "required_items": "所需物品",
+    "optimize_btn": "按最低价格组装",
+    "missing_item": "⚠️ 数据库中未找到物品: {name}",
+    "weapon_not_found": "⚠️ 未找到武器: {name}"
   },
   "explore": {
     "header": "探索权衡曲线",
@@ -62,6 +78,8 @@
     "preset_ergo_help": "纯人机工效优化",
     "preset_price_help": "纯价格优化",
     "preset_balanced_help": "均衡配置",
+    "manual_weights": "手动调整权重",
+    "weight_info": "权重是相对的，将自动进行归一化处理。",
     "optimize_btn": "优化配置",
     "how_it_works": "工作原理：",
     "how_step_1": "使用三角图设置优先级权重（点击网格点）",
@@ -79,6 +97,7 @@
     "min_ergo_help": "要求的最低最终人机工效",
     "max_recoil": "最大后坐力",
     "max_recoil_v": "最大垂直后坐力",
+    "max_recoil_sum": "最大后坐力总和",
     "max_recoil_help": "最大垂直后坐力（裸枪：{naked}）",
     "min_mag_capacity": "最小弹匣容量",
     "min_mag": "最小弹匣容量",

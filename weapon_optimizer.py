@@ -23,7 +23,7 @@ from queries import GUNS_QUERY, MODS_QUERY
 API_URL = "https://api.tarkov.dev/graphql"
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
 CACHE_TTL = 3600  # 1 hour in seconds
-CACHE_VERSION = 4  # Increment when data format changes
+CACHE_VERSION = 5  # Increment when data format changes
 
 
 def _get_cache_path(query, variables):
@@ -204,12 +204,9 @@ def extract_all_presets(gun):
     - name: preset display name
     - items: list of item IDs in this preset
     - image: preset image URL
-    - price: total preset price (bundle price, TRADER ONLY)
-    - price_source: where to buy the preset (trader name)
-
-    Note: Filters out:
-    - Presets with price = 0 (unavailable/event-only items)
-    - Flea market offers (only trader prices are used)
+    - price: lowest price (legacy/default)
+    - price_source: lowest price source
+    - offers: list of all offers with trader level info
     """
     props = gun.get("properties", {}) or {}
     presets_data = props.get("presets", []) or []
@@ -234,23 +231,43 @@ def extract_all_presets(gun):
         # Get image (prefer high-res images)
         preset_image = (
             preset.get("image512pxLink")
-            or preset.get("image8xLink")
             or preset.get("imageLink")
+            or preset.get("image8xLink")
             or preset.get("gridImageLink")
             or preset.get("baseImageLink")
         )
 
-        # Get lowest price for the preset (TRADER ONLY, exclude flea market)
+        # Extract all buyFor offers
         buy_for = preset.get("buyFor", []) or []
+        offers = []
+        for offer in buy_for:
+            if not isinstance(offer, dict): continue
+            price = offer.get("priceRUB") or 0
+            if price <= 0: continue
+            
+            source = offer.get("source", "")
+            vendor = offer.get("vendor", {}) or {}
+            
+            trader_level = None
+            if source != "fleaMarket":
+                trader_level = vendor.get("minTraderLevel") or 1
+            
+            offers.append({
+                "price": price,
+                "source": source,
+                "vendor_name": vendor.get("name", ""),
+                "vendor_normalized": vendor.get("normalizedName", ""),
+                "trader_level": trader_level,
+            })
+        
+        offers.sort(key=lambda x: x["price"])
+
         lowest_price = 0
         price_source = "basePrice"
-        if buy_for:
-            # Filter out flea market offers - only use trader prices
-            trader_offers = [offer for offer in buy_for if isinstance(offer, dict) and offer.get("source") != "fleaMarket"]
-            if trader_offers:
-                min_offer = min(trader_offers, key=lambda x: x.get("priceRUB", float("inf")))
-                lowest_price = min_offer.get("priceRUB", 0) or 0
-                price_source = min_offer.get("source", "market") or "market"
+        
+        if offers:
+            lowest_price = offers[0]["price"]
+            price_source = offers[0]["source"]
 
         # Fallback to basePrice if no trader offers available (quest-locked or barter-only presets)
         if lowest_price == 0:
@@ -269,6 +286,7 @@ def extract_all_presets(gun):
                     "image": preset_image,
                     "price": lowest_price,
                     "price_source": price_source,
+                    "offers": offers,
                 }
             )
 
@@ -331,14 +349,14 @@ def extract_gun_stats(gun):
                 lowest_price = base_price
                 price_source = "basePrice"
 
-    # Get defaultPreset grid image
+    # Get defaultPreset image
     default_preset = props.get("defaultPreset", {}) or {}
     default_preset_image = (
-        default_preset.get("gridImageLink")
-        or default_preset.get("gridImageLinkFallback")
-        or default_preset.get("image512pxLink")
-        or default_preset.get("image8xLink")
+        default_preset.get("image512pxLink")
         or default_preset.get("imageLink")
+        or default_preset.get("image8xLink")
+        or default_preset.get("gridImageLink")
+        or default_preset.get("gridImageLinkFallback")
         or default_preset.get("iconLink")
         or default_preset.get("iconLinkFallback")
     )
@@ -361,6 +379,7 @@ def extract_gun_stats(gun):
         "weight": gun.get("weight", 0) or 0,
         "width": gun.get("width", 0) or 0,
         "height": gun.get("height", 0) or 0,
+        "sighting_range": props.get("sightingRange") or 0,
         # Price info (naked weapon price, not including preset)
         "price": lowest_price,
         "price_source": price_source,
@@ -453,6 +472,8 @@ def extract_mod_stats(mod):
         "capacity": props.get("capacity") or 0,
         # Sighting range in meters (only for scopes/sights)
         "sighting_range": props.get("sightingRange") or 0,
+        # BSG Category name (e.g. "Silencer", "Scope")
+        "category": mod.get("bsgCategory", {}).get("name"),
     }
 
 
@@ -559,6 +580,9 @@ def build_compatibility_map(weapon_id, item_lookup):
         slot_owner[slot_id] = weapon_id  # Weapon owns this slot
 
         for allowed_id in slot["allowedItems"]:
+            # Skip the weapon itself - it can't be a mod of itself
+            if allowed_id == weapon_id:
+                continue
             if allowed_id in item_lookup:
                 queue.append((allowed_id, slot_id))
                 slot_items[slot_id].append(allowed_id)
@@ -591,9 +615,10 @@ def build_compatibility_map(weapon_id, item_lookup):
             item_to_slots[item_id].append(slot_id)
 
             for allowed_id in slot["allowedItems"]:
-                if allowed_id in item_lookup and allowed_id not in visited:
-                    queue.append((allowed_id, slot_id))
+                if allowed_id in item_lookup:
                     slot_items[slot_id].append(allowed_id)
+                    if allowed_id not in visited:
+                        queue.append((allowed_id, slot_id))
 
     return {
         "reachable_items": reachable,
@@ -649,6 +674,10 @@ def explore_pareto(
     min_mag_capacity=None,
     min_sighting_range=None,
     max_weight=None,
+    include_items=None,
+    exclude_items=None,
+    include_categories=None,
+    exclude_categories=None,
     steps=10,
     trader_levels=None,
     flea_available=True,
@@ -668,6 +697,11 @@ def explore_pareto(
         max_recoil_v: Optional max recoil constraint (always respected if set)
         min_mag_capacity: Optional minimum magazine capacity (always respected if set)
         min_sighting_range: Optional minimum sighting range (always respected if set)
+        max_weight: Optional maximum total weight (always respected if set)
+        include_items: Set of item IDs to require
+        exclude_items: Set of item IDs to ban
+        include_categories: Set of category names to require
+        exclude_categories: Set of category names to ban
         steps: Number of points to sample along the frontier
         trader_levels: Dict mapping trader name to level (1-4). If None, all at LL4.
         flea_available: Whether flea market is accessible
@@ -689,6 +723,10 @@ def explore_pareto(
         "min_mag_capacity": min_mag_capacity,
         "min_sighting_range": min_sighting_range,
         "max_weight": max_weight,
+        "include_items": include_items,
+        "exclude_items": exclude_items,
+        "include_categories": include_categories,
+        "exclude_categories": exclude_categories,
     }
 
     # Weight presets for single-objective optimization
@@ -866,10 +904,91 @@ def _build_frontier_point(stats, result):
     }
 
 
+def _check_constraints_feasibility(
+    weapon, item_lookup, compatibility_map,
+    max_price=None, min_ergonomics=None, max_recoil_v=None, max_recoil_sum=None,
+    min_mag_capacity=None, min_sighting_range=None, max_weight=None,
+    include_items=None, exclude_items=None,
+    include_categories=None, exclude_categories=None,
+    trader_levels=None, flea_available=True
+):
+    """
+    Check if constraints are feasible and return reasons if not.
+    Returns None if feasible, or a list of reason strings if infeasible.
+    """
+    reasons = []
+
+    available_items = compatibility_map["reachable_items"]
+    item_vars = {item_id: i for i, item_id in enumerate(available_items)}
+
+    # Check include_items
+    if include_items:
+        for req_id in include_items:
+            if req_id not in available_items:
+                name = item_lookup.get(req_id, {}).get("data", {}).get("name", req_id)
+                reasons.append(f"Required item '{name}' is not compatible with this weapon")
+
+    # Check include_categories
+    if include_categories:
+        for i, group in enumerate(include_categories):
+            group_names = [cat for cat in group if isinstance(cat, str)]
+            if not group_names:
+                continue
+            found = False
+            for item_id in available_items:
+                cat = item_lookup[item_id]["stats"].get("category", "")
+                if cat in group_names:
+                    found = True
+                    break
+            if not found:
+                reasons.append(f"No items found for required category group: {group_names}")
+
+    # Check min_mag_capacity
+    if min_mag_capacity:
+        has_adequate_mag = False
+        for item_id in available_items:
+            stats = item_lookup[item_id]["stats"]
+            if stats.get("capacity", 0) >= min_mag_capacity:
+                has_adequate_mag = True
+                break
+        if not has_adequate_mag:
+            reasons.append(f"No magazine with capacity >= {min_mag_capacity} rounds available")
+
+    # Check min_sighting_range
+    if min_sighting_range:
+        base_sighting = weapon["stats"].get("sighting_range", 0)
+        if base_sighting < min_sighting_range:
+            has_adequate_sight = False
+            for item_id in available_items:
+                stats = item_lookup[item_id]["stats"]
+                if stats.get("sighting_range", 0) >= min_sighting_range:
+                    has_adequate_sight = True
+                    break
+            if not has_adequate_sight:
+                reasons.append(f"No sight with sighting range >= {min_sighting_range}m available")
+
+    # Check max_weight
+    if max_weight is not None:
+        base_weight = weapon["stats"].get("weight", 0)
+        min_mod_weight = 0
+        for item_id in available_items:
+            stats = item_lookup[item_id]["stats"]
+            weight = stats.get("weight", 0)
+            if weight > 0 and weight < min_mod_weight or min_mod_weight == 0:
+                min_mod_weight = weight
+        total_min_weight = base_weight + min_mod_weight
+        if total_min_weight > max_weight:
+            reasons.append(f"Weight exceeds limit even with lightest mods ({total_min_weight:.2f}kg > {max_weight}kg)")
+
+    return reasons if reasons else None
+
+
 def optimize_weapon(
     weapon_id, item_lookup, compatibility_map,
-    max_price=None, min_ergonomics=None, max_recoil_v=None,
+    max_price=None, min_ergonomics=None, max_recoil_v=None, max_recoil_sum=None,
     min_mag_capacity=None, min_sighting_range=None, max_weight=None,
+    include_items=None, exclude_items=None,
+    include_categories=None, exclude_categories=None,
     ergo_weight=1.0, recoil_weight=1.0, price_weight=0.0,
     trader_levels=None, flea_available=True, player_level=None
 ):
@@ -883,6 +1002,10 @@ def optimize_weapon(
         min_mag_capacity: Optional minimum magazine capacity (e.g., 30 means mag >= 30 rounds)
         min_sighting_range: Optional minimum sighting range in meters (e.g., 100 means sight >= 100m)
         max_weight: Optional maximum total weight in kg (e.g., 5.0 means total <= 5kg)
+        include_items: Set of item IDs to require
+        exclude_items: Set of item IDs to ban
+        include_categories: Set of category names to require
+        exclude_categories: Set of category names to ban
         ergo_weight: Weight for ergonomics in objective (higher = prioritize ergo)
         recoil_weight: Weight for recoil reduction in objective (higher = prioritize low recoil)
         price_weight: Weight for price in objective (higher = prioritize low cost)
@@ -902,77 +1025,314 @@ def optimize_weapon(
     - Magazine Capacity: At least one selected magazine must meet min_mag_capacity
     - Sighting Range: At least one selected sight/scope must meet min_sighting_range
     - Max Weight: Total weight of selected mods must not exceed max_weight
+    - Included/Excluded Items/Categories: Respect user preferences
     """
     if trader_levels is None:
         trader_levels = DEFAULT_TRADER_LEVELS
 
     weapon = item_lookup[weapon_id]
 
+    # Check constraints feasibility before running solver
+    feasibility_reasons = _check_constraints_feasibility(
+        weapon, item_lookup, compatibility_map,
+        max_price, min_ergonomics, max_recoil_v, max_recoil_sum,
+        min_mag_capacity, min_sighting_range, max_weight,
+        include_items, exclude_items, include_categories, exclude_categories,
+        trader_levels, flea_available
+    )
+    if feasibility_reasons is not None:
+        return {
+            "status": "infeasible",
+            "reason": "; ".join(feasibility_reasons),
+            "selected_items": [],
+            "selected_preset": None,
+            "objective_value": 0,
+        }
+
     reachable = compatibility_map["reachable_items"]
     slot_items = compatibility_map["slot_items"]
     slot_owner = compatibility_map["slot_owner"]
 
+    # Build preset maps early to support "unavailable but in preset" logic
+    presets = weapon.get("presets", [])
+    preset_items_map = {}  # preset_id -> set of item_ids
+    item_to_presets = {}   # item_id -> list of preset_ids
+    preset_prices_map = {} # preset_id -> effective price
+    
+    for i, preset in enumerate(presets):
+        # Calculate available price for this preset using trader levels
+        p_price, p_source, p_avail = get_available_price(
+            {"offers": preset.get("offers", []), "price": preset.get("price", 0)},
+            trader_levels, flea_available, player_level
+        )
+        
+        if not p_avail:
+            continue
+
+        preset_id = preset.get("id", f"preset_{i}")
+        preset_prices_map[preset_id] = p_price
+        
+        items_in_preset = set(preset.get("items", []))
+        preset_items_map[preset_id] = items_in_preset
+        for item_id in items_in_preset:
+            if item_id not in item_to_presets:
+                item_to_presets[item_id] = []
+            item_to_presets[item_id].append(preset_id)
+
     # Filter reachable items by availability at given trader levels and player level
+    # Key Logic: Item is available if (Available from Trader/Flea) OR (Included in a Preset)
     available_items = {}
-    item_prices = {}  # item_id -> (price, source) at current trader levels
+    item_prices = {}  # item_id -> (price, source, is_available)
+
+    exclude_items_set = set(exclude_items) if exclude_items else set()
+    exclude_categories_set = set(exclude_categories) if exclude_categories else set()
+
     for item_id in reachable:
         if item_id not in item_lookup:
             continue
+
+        # Explicit exclusion
+        if item_id in exclude_items_set:
+            continue
+
         stats = item_lookup[item_id]["stats"]
+
+        # Category exclusion
+        category = stats.get("category")
+        if category and category in exclude_categories_set:
+            continue
+
         price, source, is_available = get_available_price(
             stats, trader_levels, flea_available, player_level
         )
-        if is_available:
-            available_items[item_id] = reachable[item_id]
-            item_prices[item_id] = (price, source)
+
+        # If not available individually, check if it's in any preset
+        in_preset = item_id in item_to_presets
+
+        # For guns with extremely high price (>100M), they are NOT available individually
+        # even if in a preset - they can ONLY be obtained via presets
+        default_price = stats.get("price", 0)
+        if default_price > 100_000_000:
+            # Only available if in a preset and we're NOT selecting it individually
+            # We mark it as unavailable for individual selection
+            if not in_preset:
+                continue
+            # Mark as unavailable for individual selection (price=0 for individual)
+            price = 0
+            is_available = False
+
+        if not is_available and not in_preset:
+            continue
+
+        available_items[item_id] = reachable[item_id]
+        item_prices[item_id] = (price, source, is_available)
 
     model = cp_model.CpModel()
 
-    # Create boolean variables for each available item (filtered by trader level)
+    # Create boolean variables for each available item
     item_vars = {}
     for item_id in available_items:
         item_vars[item_id] = model.NewBoolVar(f"item_{item_id}")
 
     # Create boolean variables for each preset
-    presets = weapon.get("presets", [])
     preset_vars = {}
-    preset_items_map = {}  # preset_id -> set of item_ids
-    for i, preset in enumerate(presets):
-        preset_id = preset.get("id", f"preset_{i}")
+    for preset_id in preset_items_map:
         preset_vars[preset_id] = model.NewBoolVar(f"preset_{preset_id}")
-        preset_items_map[preset_id] = set(preset.get("items", []))
 
     # Constraint 0: At most ONE preset can be selected
     if preset_vars:
         model.Add(sum(preset_vars.values()) <= 1)
 
-    # Constraint 1: Mutex - at most one item per slot
-    for slot_id, items in slot_items.items():
-        valid_items = [item_vars[i] for i in items if i in item_vars]
-        if valid_items:
-            model.Add(sum(valid_items) <= 1)
+    # Create effective item variables for constraints
+    # An item is "effectively selected" if:
+    # 1. Individually selected (item_vars[item_id] == 1), OR
+    # 2. A preset containing the item is selected
+    # This ensures constraints (mag capacity, sight range, etc.) work with preset-bundled items
+    effective_item_vars = {}
+    item_only_in_preset = {}  # item_id -> True if only available via preset
 
-    # Constraint 2: Dependency - if an item is selected, at least one of its valid parents must be selected
-    # Build a map: item_id -> list of possible parent slot owners (not including weapon)
-    item_parents = {}  # item_id -> set of parent_ids
+    for item_id in item_vars:
+        containing_presets = item_to_presets.get(item_id, [])
+        preset_bool_vars = [preset_vars[pid] for pid in containing_presets if pid in preset_vars]
+        is_individually_available = item_prices[item_id][2]  # is_available from get_available_price
+
+        # Track if item is only available via preset
+        item_only_in_preset[item_id] = not is_individually_available and bool(preset_bool_vars)
+
+        if preset_bool_vars:
+            # effective = item_var OR any(preset_vars_containing_item)
+            effective = model.NewBoolVar(f"effective_{item_id}")
+            model.AddMaxEquality(effective, [item_vars[item_id]] + preset_bool_vars)
+            effective_item_vars[item_id] = effective
+        else:
+            effective_item_vars[item_id] = item_vars[item_id]
+
+    # Pre-compute which items are in which slots for preset occupancy tracking
+    slot_to_preset_items = {}  # slot_id -> set of item_ids that are in this slot AND in presets
+    for preset_id, preset_item_ids in preset_items_map.items():
+        for item_id in preset_item_ids:
+            # Find which slot this item belongs to
+            for slot_id, items in slot_items.items():
+                if item_id in items:
+                    if slot_id not in slot_to_preset_items:
+                        slot_to_preset_items[slot_id] = set()
+                    slot_to_preset_items[slot_id].add(item_id)
+                    break
+
+    # Constraint: Included items
+    if include_items:
+        for req_id in include_items:
+            if req_id in item_vars:
+                model.Add(item_vars[req_id] == 1)
+            else:
+                # Required item is not available -> infeasible
+                model.Add(0 == 1)
+
+    # Constraint: Included categories (List of Groups, where each Group is OR)
+    if include_categories:
+        for group in include_categories:
+            group_vars = []
+            for req_cat in group:
+                for item_id, var in item_vars.items():
+                    if item_lookup[item_id]["stats"].get("category") == req_cat:
+                        group_vars.append(var)
+            if group_vars:
+                model.Add(sum(group_vars) >= 1)
+            else:
+                # No available items for required category group -> infeasible
+                model.Add(0 == 1)
+
+    # Constraint: Availability (Item <= Presets if not individually available)
+    for item_id, var in item_vars.items():
+        is_avail = item_prices[item_id][2]
+        if not is_avail:
+            containing = [preset_vars[pid] for pid in item_to_presets.get(item_id, []) if pid in preset_vars]
+            if containing:
+                model.Add(var <= sum(containing))
+            else:
+                model.Add(var == 0)
+
+    # Constraint 1 & 2: Placement-based mutex and dependency
+    #
+    # Key insight: An item that can go in multiple slots (e.g., Aimpoint Mount can go on
+    # Leapers UTG slot OR on RAP mount's slot) should not be globally mutex'd with items
+    # in any of those slots. Instead, we track WHERE each item is actually placed.
+    #
+    # For items that can only go in ONE slot, we use the simple model (item_var directly).
+    # For items that can go in MULTIPLE slots, we create placement variables.
+
+    # First pass: identify which slots each item can go into (only considering available parents)
+    item_to_valid_slots = {i: [] for i in item_vars}  # item_id -> list of (slot_id, owner_id, is_base)
+
     for slot_id, items in slot_items.items():
         owner_id = slot_owner.get(slot_id)
-        if owner_id and owner_id != weapon_id and owner_id in item_vars:
+        is_base = (owner_id == weapon_id)
+
+        # Check if slot owner is available (either weapon, or available mod)
+        owner_available = is_base or owner_id in item_vars or owner_id in effective_item_vars
+
+        if owner_available:
             for item_id in items:
                 if item_id in item_vars:
-                    if item_id not in item_parents:
-                        item_parents[item_id] = set()
-                    item_parents[item_id].add(owner_id)
+                    item_to_valid_slots[item_id].append((slot_id, owner_id, is_base))
 
-    # For each item with parent dependencies, add constraint: item <= sum(parents)
-    # This means: if item is selected, at least one parent must be selected
-    for item_id, parents in item_parents.items():
-        if item_id not in item_vars:
+    # Create placement variables for items with multiple valid slots
+    # placed_in[item_id][slot_id] = 1 if item is placed in this specific slot
+    placed_in = {}  # item_id -> {slot_id -> BoolVar}
+    items_needing_placement = set()
+
+    for item_id, valid_slots in item_to_valid_slots.items():
+        if len(valid_slots) > 1:
+            # Item can go in multiple slots - need placement variables
+            items_needing_placement.add(item_id)
+            placed_in[item_id] = {}
+            for slot_id, owner_id, is_base in valid_slots:
+                placed_in[item_id][slot_id] = model.NewBoolVar(f"placed_{item_id[:8]}_{slot_id[:8]}")
+
+    # Constraint 1a: For items with placement variables, item is selected iff placed somewhere
+    for item_id in items_needing_placement:
+        placement_vars = list(placed_in[item_id].values())
+        # item_var == 1 iff sum(placements) >= 1, and sum(placements) <= 1 (exactly one placement)
+        model.Add(sum(placement_vars) == item_vars[item_id])
+
+    # Constraint 1b: Mutex per slot - at most one item can be placed in each slot
+    for slot_id, items in slot_items.items():
+        slot_placements = []
+        for item_id in items:
+            if item_id not in item_vars:
+                continue
+            if item_id in items_needing_placement:
+                # Use placement variable for this slot (if it exists)
+                if slot_id in placed_in.get(item_id, {}):
+                    slot_placements.append(placed_in[item_id][slot_id])
+            else:
+                # Item only has one valid slot, use item_var directly
+                # But only add if this is the item's valid slot
+                valid_slots = item_to_valid_slots.get(item_id, [])
+                if any(s[0] == slot_id for s in valid_slots):
+                    slot_placements.append(item_vars[item_id])
+
+        if slot_placements:
+            model.Add(sum(slot_placements) <= 1)
+
+    # Constraint 1c: Preset occupancy
+    if preset_vars:
+        for preset_id, preset_var in preset_vars.items():
+            preset_item_ids = preset_items_map.get(preset_id, set())
+            for slot_id, preset_items_in_slot in slot_to_preset_items.items():
+                items_in_both = preset_items_in_slot & preset_item_ids
+                if items_in_both:
+                    for item_id in items_in_both:
+                        if item_only_in_preset.get(item_id, False):
+                            model.Add(item_vars[item_id] == 0).OnlyEnforceIf(preset_var)
+
+    # Constraint 2: Dependency - placement requires parent to be selected
+    item_connected_to_base = {i: False for i in item_vars}
+
+    for item_id, valid_slots in item_to_valid_slots.items():
+        if not valid_slots:
+            # No valid slots - item cannot be mounted
+            model.Add(item_vars[item_id] == 0)
             continue
-        parent_vars = [item_vars[p] for p in parents if p in item_vars]
-        if parent_vars:
-            # item can only be selected if at least one parent is selected
-            model.Add(item_vars[item_id] <= sum(parent_vars))
+
+        has_base_slot = any(is_base for _, _, is_base in valid_slots)
+        if has_base_slot:
+            item_connected_to_base[item_id] = True
+
+        if item_id in items_needing_placement:
+            # For items with placement vars, each placement requires its owner
+            for slot_id, owner_id, is_base in valid_slots:
+                if slot_id not in placed_in[item_id]:
+                    continue
+                placement_var = placed_in[item_id][slot_id]
+
+                if not is_base:
+                    # Placement requires owner to be selected
+                    if owner_id in item_vars:
+                        model.Add(placement_var <= item_vars[owner_id])
+                    elif owner_id in effective_item_vars:
+                        model.Add(placement_var <= effective_item_vars[owner_id])
+                    else:
+                        # Owner not available - this placement is impossible
+                        model.Add(placement_var == 0)
+        else:
+            # Simple case: item has only one valid slot
+            # If that slot is not on the base weapon, require the owner
+            if not has_base_slot:
+                parent_vars = []
+                for slot_id, owner_id, is_base in valid_slots:
+                    if owner_id in item_vars:
+                        parent_vars.append(item_vars[owner_id])
+                    elif owner_id in effective_item_vars:
+                        parent_vars.append(effective_item_vars[owner_id])
+
+                if not parent_vars:
+                    model.Add(item_vars[item_id] == 0)
+                else:
+                    # item <= OR(parents)
+                    parent_or = model.NewBoolVar(f'parent_or_{item_id}')
+                    model.AddMaxEquality(parent_or, parent_vars)
+                    model.Add(item_vars[item_id] <= parent_or)
 
     # Constraint 3: Conflicting items - can't select both
     conflict_pairs_added = set()
@@ -991,106 +1351,80 @@ def optimize_weapon(
                     model.Add(item_vars[item_id] + item_vars[conflict_id] <= 1)
 
     # Constraint 4: Required slots
-    # 4a: Weapon's required slots - always must have exactly one item
+    # 4a: Weapon's required slots - must have at least one item (individual OR preset)
     for slot in weapon["slots"]:
         if slot.get("required", False):
             slot_id = slot["id"]
-            items_in_slot = [i for i in slot_items.get(slot_id, []) if i in item_vars]
+            items_in_slot = [i for i in slot_items.get(slot_id, []) if i in effective_item_vars]
             if items_in_slot:
-                model.Add(sum(item_vars[i] for i in items_in_slot) == 1)
+                model.Add(sum(effective_item_vars[i] for i in items_in_slot) >= 1)
 
-    # 4b: Mod's required slots - if mod is selected, its required slots must be filled
+    # 4b: Mod's required slots - if mod is effectively selected, its required slots must be filled
     for owner_id, slot_ids in compatibility_map["item_to_slots"].items():
-        if owner_id not in item_lookup or owner_id not in item_vars:
+        if owner_id not in item_lookup or owner_id not in effective_item_vars:
             continue
         owner_data = item_lookup[owner_id]
         for slot in owner_data.get("slots", []):
             slot_id = slot["id"]
             if slot.get("required", False):
-                items_in_slot = [i for i in slot_items.get(slot_id, []) if i in item_vars]
+                items_in_slot = [i for i in slot_items.get(slot_id, []) if i in effective_item_vars]
                 if items_in_slot:
-                    # If owner is selected, slot must have at least one item
-                    model.Add(sum(item_vars[i] for i in items_in_slot) >= 1).OnlyEnforceIf(item_vars[owner_id])
+                    # If owner is effectively selected, slot must have at least one item
+                    model.Add(sum(effective_item_vars[i] for i in items_in_slot) >= 1).OnlyEnforceIf(effective_item_vars[owner_id])
 
-    # Build item-to-presets mapping for price calculation
-    item_to_presets = {}  # item_id -> list of preset_ids containing this item
-    for preset_id, item_set in preset_items_map.items():
-        for item_id in item_set:
-            if item_id not in item_to_presets:
-                item_to_presets[item_id] = []
-            item_to_presets[item_id].append(preset_id)
+    # Logic to handle item cost (deduplicating if in preset)
+    item_cost_vars = {} 
+    
+    for item_id in available_items:
+        containing_presets = item_to_presets.get(item_id, [])
+        containing_preset_vars = [preset_vars[pid] for pid in containing_presets if pid in preset_vars]
+        
+        if containing_preset_vars:
+            any_preset = model.NewBoolVar(f"any_preset_{item_id}")
+            model.AddMaxEquality(any_preset, containing_preset_vars)
+            
+            should_count = model.NewBoolVar(f"pay_for_{item_id}")
+            # should_count = item_selected AND NOT any_preset
+            model.Add(should_count <= item_vars[item_id])
+            model.Add(should_count <= 1 - any_preset)
+            model.Add(should_count >= item_vars[item_id] - any_preset)
+            
+            item_cost_vars[item_id] = should_count
+        else:
+            item_cost_vars[item_id] = item_vars[item_id]
+
+    # Helper to build price terms (reused for constraint and objective)
+    def get_price_terms():
+        terms = []
+        # 1. Naked gun (only if not unpurchasable)
+        naked_gun_price = int(weapon["stats"].get("price", 0))
+        if naked_gun_price < 100_000_000:
+            if preset_vars:
+                any_preset_selected_var = model.NewBoolVar("any_preset_selected_total")
+                model.AddMaxEquality(any_preset_selected_var, list(preset_vars.values()))
+                no_preset_selected_var = model.NewBoolVar("no_preset_selected_total")
+                model.Add(no_preset_selected_var == 1 - any_preset_selected_var)
+                terms.append(naked_gun_price * no_preset_selected_var)
+            else:
+                terms.append(naked_gun_price)
+
+        # 2. Presets
+        for pid, var in preset_vars.items():
+            p_price = int(preset_prices_map.get(pid, 0))
+            if p_price > 0:
+                terms.append(p_price * var)
+
+        # 3. Items
+        for item_id, var in item_cost_vars.items():
+            # item_prices is (price, source, is_available)
+            price = int(item_prices[item_id][0])
+            if price > 0:
+                terms.append(price * var)
+        return terms
 
     # Optional: Max price constraint
     if max_price is not None:
-        price_terms = []
-
-        # Add naked gun price (only if no preset is selected)
-        naked_gun_price = int(weapon["stats"].get("price", 0))
-        if preset_vars and naked_gun_price > 0:
-            # Create a variable: any_preset_selected = 1 if any preset is selected
-            any_preset_selected_var = model.NewBoolVar("any_preset_selected")
-            if preset_vars:
-                model.AddMaxEquality(any_preset_selected_var, list(preset_vars.values()))
-
-            # no_preset_selected = 1 - any_preset_selected
-            no_preset_selected_var = model.NewBoolVar("no_preset_selected")
-            model.Add(no_preset_selected_var == 1 - any_preset_selected_var)
-
-            # Add naked gun price only if no preset is selected
-            price_terms.append(naked_gun_price * no_preset_selected_var)
-        elif naked_gun_price > 0:
-            # No presets available, always add naked gun price
-            price_terms.append(naked_gun_price)
-
-        # Add preset prices
-        for i, preset in enumerate(presets):
-            preset_id = preset.get("id", f"preset_{i}")
-            if preset_id in preset_vars:
-                preset_price = int(preset.get("price", 0))
-                price_terms.append(preset_price * preset_vars[preset_id])
-
-        # Add individual mod prices (only if not covered by a selected preset)
-        # Use trader-level-aware prices from item_prices
-        for item_id in available_items:
-            if item_id not in item_vars:
-                continue
-            item_price = int(item_prices.get(item_id, (0, None))[0])
-
-            containing_presets = item_to_presets.get(item_id, [])
-            if not containing_presets:
-                # Item not in any preset - always count if selected
-                if item_price > 0:
-                    price_terms.append(item_price * item_vars[item_id])
-            else:
-                # Item IS in one or more presets
-                # Count individual price ONLY if item is selected AND no containing preset is selected
-
-                # Create a boolean variable to represent whether any containing preset is selected
-                any_preset_selected = model.NewBoolVar(f"any_preset_{item_id}")
-                containing_preset_vars = [preset_vars[pid] for pid in containing_presets if pid in preset_vars]
-
-                if containing_preset_vars:
-                    # any_preset_selected = 1 IFF at least one containing preset is selected
-                    model.AddMaxEquality(any_preset_selected, containing_preset_vars)
-
-                    # should_count = item_selected AND NOT any_preset_selected
-                    # We'll count the price if item is selected and no preset is selected
-                    should_count = model.NewBoolVar(f"count_price_{item_id}")
-
-                    # should_count can only be 1 if item is selected
-                    model.Add(should_count <= item_vars[item_id])
-                    # should_count can only be 1 if no preset is selected
-                    model.Add(should_count <= 1 - any_preset_selected)
-                    # If item selected AND no preset, should_count must be 1 (to properly count price)
-                    model.Add(should_count >= item_vars[item_id] + (1 - any_preset_selected) - 1)
-
-                    if item_price > 0:
-                        price_terms.append(item_price * should_count)
-                else:
-                    # No containing presets in preset_vars - treat as normal item
-                    if item_price > 0:
-                        price_terms.append(item_price * item_vars[item_id])
-
+        price_terms = get_price_terms()
         if price_terms:
             model.Add(sum(price_terms) <= max_price)
 
@@ -1101,17 +1435,23 @@ def optimize_weapon(
     weapon_naked_ergo = weapon["stats"].get("naked_ergonomics", 0)
 
     # === ERGONOMICS VARIABLE ===
+    # Multiply by 10 to preserve decimal values (e.g., 0.5 -> 5)
+    ERGO_SCALE = 10
     ergo_terms = []
     for item_id in available_items:
         if item_id not in item_vars:
             continue
         stats = item_lookup[item_id]["stats"]
-        ergo = int(stats.get("ergonomics", 0))
+        ergo = int(stats.get("ergonomics", 0) * ERGO_SCALE)
         ergo_terms.append(ergo * item_vars[item_id])
 
-    # Total ergo = naked + sum of mod ergonomics
+    # Total ergo = naked + sum of mod ergonomics (scaled)
+    total_ergo_scaled_var = model.NewIntVar(-2000, 3000, "total_ergo_scaled")
+    model.Add(total_ergo_scaled_var == weapon_naked_ergo * ERGO_SCALE + sum(ergo_terms))
+
+    # Convert back to regular ergo for constraints
     total_ergo_var = model.NewIntVar(-200, 300, "total_ergo")
-    model.Add(total_ergo_var == weapon_naked_ergo + sum(ergo_terms))
+    model.AddDivisionEquality(total_ergo_var, total_ergo_scaled_var, ERGO_SCALE)
 
     # Capped ergo for objective (game caps at 0-100)
     ergo_capped_at_100 = model.NewIntVar(-200, 100, "ergo_capped_at_100")
@@ -1147,17 +1487,28 @@ def optimize_weapon(
         max_recoil_modifier = int(SCALE * (max_recoil_v / naked_recoil_v - 1))
         model.Add(total_recoil_var <= max_recoil_modifier)
 
+    # Maximum final recoil SUM constraint
+    if max_recoil_sum is not None:
+        naked_recoil_v = weapon["stats"].get("naked_recoil_v", 0)
+        naked_recoil_h = weapon["stats"].get("naked_recoil_h", 0)
+        naked_sum = naked_recoil_v + naked_recoil_h
+        
+        if naked_sum > 0:
+            max_modifier = int(SCALE * (max_recoil_sum / naked_sum - 1))
+            model.Add(total_recoil_var <= max_modifier)
+
     # Minimum magazine capacity constraint
     # At least one selected magazine must have capacity >= min_mag_capacity
+    # Uses effective_item_vars to count items from both individual selection AND presets
     if min_mag_capacity is not None:
         mag_vars_meeting_capacity = []
         for item_id in available_items:
-            if item_id not in item_vars:
+            if item_id not in effective_item_vars:
                 continue
             stats = item_lookup[item_id]["stats"]
             capacity = stats.get("capacity", 0)
             if capacity >= min_mag_capacity:
-                mag_vars_meeting_capacity.append(item_vars[item_id])
+                mag_vars_meeting_capacity.append(effective_item_vars[item_id])
         if mag_vars_meeting_capacity:
             model.Add(sum(mag_vars_meeting_capacity) >= 1)
         else:
@@ -1166,20 +1517,25 @@ def optimize_weapon(
 
     # Minimum sighting range constraint
     # At least one selected sight/scope must have sighting_range >= min_sighting_range
+    # OR the base gun must have it (if iron sights are assumed retained/sufficient)
+    # Uses effective_item_vars to count items from both individual selection AND presets
     if min_sighting_range is not None:
-        sight_vars_meeting_range = []
-        for item_id in available_items:
-            if item_id not in item_vars:
-                continue
-            stats = item_lookup[item_id]["stats"]
-            sighting_range = stats.get("sighting_range", 0)
-            if sighting_range >= min_sighting_range:
-                sight_vars_meeting_range.append(item_vars[item_id])
-        if sight_vars_meeting_range:
-            model.Add(sum(sight_vars_meeting_range) >= 1)
-        else:
-            # No sights meet the range requirement - problem is infeasible
-            model.Add(0 >= 1)  # Force infeasibility
+        base_sighting_range = weapon["stats"].get("sighting_range", 0)
+
+        if base_sighting_range < min_sighting_range:
+            sight_vars_meeting_range = []
+            for item_id in available_items:
+                if item_id not in effective_item_vars:
+                    continue
+                stats = item_lookup[item_id]["stats"]
+                sighting_range = stats.get("sighting_range", 0)
+                if sighting_range >= min_sighting_range:
+                    sight_vars_meeting_range.append(effective_item_vars[item_id])
+            if sight_vars_meeting_range:
+                model.Add(sum(sight_vars_meeting_range) >= 1)
+            else:
+                # No sights meet the range requirement - problem is infeasible
+                model.Add(0 >= 1)  # Force infeasibility
 
     # Maximum weight constraint
     # Total weight of base weapon + selected mods must not exceed max_weight
@@ -1209,12 +1565,9 @@ def optimize_weapon(
     naked_gun_not_purchasable = naked_gun_price_raw > 100_000_000
 
     if preset_vars and naked_gun_not_purchasable:
-        any_preset_obj_var = model.NewBoolVar("any_preset_obj")
-        model.AddMaxEquality(any_preset_obj_var, list(preset_vars.values()))
-        no_preset_obj_var = model.NewBoolVar("no_preset_obj")
-        model.Add(no_preset_obj_var == 1 - any_preset_obj_var)
-        HUGE_PENALTY = 10_000_000
-        objective_terms.append(-HUGE_PENALTY * no_preset_obj_var)
+        # Hard constraint: at least one preset MUST be selected
+        # The gun itself is not available for individual selection
+        model.Add(sum(preset_vars.values()) >= 1)
 
     # === COMBINED WEIGHTED OBJECTIVE ===
     # Ergonomics: higher is better (use capped value)
@@ -1255,7 +1608,7 @@ def optimize_weapon(
 
     # Solve
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 30.0
+    solver.parameters.max_time_in_seconds = 120.0
     status = solver.Solve(model)
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -1278,8 +1631,15 @@ def optimize_weapon(
             "objective_value": solver.ObjectiveValue(),
         }
     else:
+        # Solver failed - likely due to stat constraints (min_ergo, max_recoil)
+        reason = "No valid configuration found"
+        if min_ergonomics is not None:
+            reason += f" (cannot achieve {min_ergonomics} ergonomics)"
+        if max_recoil_sum is not None:
+            reason += f" (cannot reduce recoil to {max_recoil_sum})"
         return {
             "status": "infeasible",
+            "reason": reason,
             "selected_items": [],
             "selected_preset": None,
             "objective_value": 0,

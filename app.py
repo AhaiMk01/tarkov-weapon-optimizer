@@ -60,6 +60,45 @@ def get_compat_map(weapon_id, _item_lookup):
     return build_compatibility_map(weapon_id, _item_lookup)
 
 
+@st.cache_data(show_spinner=False)
+def load_tasks():
+    """Load Gunsmith tasks from JSON file."""
+    try:
+        with open("tasks.json", "r", encoding="utf-8") as f:
+            return json.load(f)
+    except FileNotFoundError:
+        return []
+
+
+def resolve_item_id(name_query, item_lookup):
+    """
+    Find item ID by name using fuzzy-ish matching.
+    Returns ID if found, else None.
+    """
+    # 1. Exact match (case-insensitive)
+    query_lower = name_query.lower().strip()
+    
+    candidates_substring = []
+    
+    for item_id, item in item_lookup.items():
+        name = item["data"]["name"]
+        name_lower = name.lower()
+        
+        if name_lower == query_lower:
+            return item_id
+            
+        if query_lower in name_lower:
+            candidates_substring.append(item_id)
+            
+    # 2. Substring match
+    # Prefer shortest name (closest match)
+    if candidates_substring:
+        candidates_substring.sort(key=lambda i: len(item_lookup[i]["data"]["name"]))
+        return candidates_substring[0]
+        
+    return None
+
+
 def get_image_url(item_data, prefer_high_res=False, prefer_icon=False):
     """Get image URL from item data with fallback chain."""
     if prefer_icon:
@@ -163,7 +202,7 @@ def display_mods_table(item_ids, item_lookup, show_price=True, constraints=None)
             row = {
                 "icon": f"![]({icon_url})" if icon_url else "",
                 "name": name,
-                "ergo": f"{ergo:+.0f}" if ergo != 0 else "-",
+                "ergo": f"{ergo:+.1f}" if ergo != 0 else "-",
                 "recoil": f"{recoil:+.1f}%" if recoil != 0 else "-",
             }
             if show_price:
@@ -221,9 +260,9 @@ def display_optimization_results(result, item_lookup, weapon_stats, presets, sel
     with col1:
         st.metric(
             t("sidebar.ergonomics"),
-            f"{capped_ergo:.0f}",
-            f"{ergo_delta:+.0f}",
-            help=f"Raw: {raw_ergo:.0f} (capped at 0-100). Delta from naked weapon.",
+            f"{capped_ergo:.1f}",
+            f"{ergo_delta:+.1f}",
+            help=f"Raw: {raw_ergo:.1f} (capped at 0-100). Delta from naked weapon.",
         )
 
     # Recoil Vertical
@@ -249,20 +288,20 @@ def display_optimization_results(result, item_lookup, weapon_stats, presets, sel
         )
 
     # Total Weight
-    base_weight = weapon_stats.get("weight", 0)
-    weight_delta = final_stats["total_weight"] - base_weight
     with col4:
         st.metric(
             t("results.total_weight"),
             f"{final_stats['total_weight']:.2f} {t('units.kg')}",
-            f"{weight_delta:+.2f} {t('units.kg')}",
-            delta_color="inverse",
-            help=f"Base weapon: {base_weight:.2f} {t('units.kg')}",
+            help=f"{t('results.base_weapon')}: {weapon_stats.get('weight', 0):.2f} {t('units.kg')}",
         )
 
     # Total Cost (including preset if selected, or naked gun + mods)
     total_cost = final_stats['total_price']
     weapon_base_price = weapon_stats.get("price", 0)
+    
+    # Check if dummy price (unavailable) - don't include in total
+    if weapon_base_price > 100_000_000:
+        weapon_base_price = 0
 
     if selected_preset:
         preset_info_temp = next((p for p in presets if p.get("id") == selected_preset), None)
@@ -274,14 +313,20 @@ def display_optimization_results(result, item_lookup, weapon_stats, presets, sel
                 if item_id not in preset_items_temp and item_id in item_lookup
             ])
             total_cost = preset_info_temp.get("price", 0) + individual_cost
+            cost_composition = f"{t('results.preset')}: ₽{preset_info_temp.get('price', 0):,} + {t('results.additional_mods')}: ₽{individual_cost:,}"
+            delta_val = individual_cost
     else:
         total_cost = weapon_base_price + final_stats['total_price']
+        cost_composition = f"{t('results.base_weapon')}: ₽{weapon_base_price:,} + {t('results.additional_mods')}: ₽{final_stats['total_price']:,}"
+        delta_val = final_stats['total_price']
 
     with col5:
         st.metric(
             t("results.total_build_cost"),
             f"₽{total_cost:,}",
-            help=t("results.total_cost_help"),
+            f"+₽{delta_val:,}",
+            delta_color="off",
+            help=f"{t('results.total_cost_help')}\n\n{cost_composition}",
         )
 
     # Display selected mods
@@ -398,6 +443,11 @@ def generate_build_export(result, item_lookup, weapon_stats, presets, selected_g
     # Calculate total cost
     total_cost = final_stats['total_price']
     weapon_base_price = weapon_stats.get("price", 0)
+    
+    # Check if dummy price (unavailable)
+    if weapon_base_price > 100_000_000:
+        weapon_base_price = 0
+        
     preset_info = None
 
     if selected_preset:
@@ -457,7 +507,7 @@ def generate_build_export(result, item_lookup, weapon_stats, presets, selected_g
         "## Final Stats",
         f"| Stat | Value |",
         f"|------|-------|",
-        f"| Ergonomics | {min(100, max(0, final_stats['ergonomics'])):.0f} |",
+        f"| Ergonomics | {min(100, max(0, final_stats['ergonomics'])):.1f} |",
         f"| Recoil V | {final_stats['recoil_vertical']:.1f} |",
         f"| Recoil H | {final_stats['recoil_horizontal']:.1f} |",
         f"| Weight | {final_stats['total_weight']:.2f} kg |",
@@ -491,7 +541,7 @@ def generate_build_export(result, item_lookup, weapon_stats, presets, selected_g
                 ergo = item["stats"].get("ergonomics", 0)
                 recoil = item["stats"].get("recoil_modifier", 0) * 100
                 price = item["stats"].get("price", 0)
-                md_lines.append(f"| {name} | {ergo:+.0f} | {recoil:+.1f}% | ₽{price:,} |")
+                md_lines.append(f"| {name} | {ergo:+.1f} | {recoil:+.1f}% | ₽{price:,} |")
         md_lines.append("")
 
     if constraints:
@@ -546,6 +596,9 @@ def main():
             st.error(f"{t('status.failed_load')}: {e}")
             st.stop()
 
+    # Load tasks
+    tasks = load_tasks()
+
     # Sidebar: Weapon Selection
     st.sidebar.header(f"🔫 {t('sidebar.select_weapon')}")
 
@@ -563,7 +616,12 @@ def main():
     weapon_stats = item_lookup[weapon_id]["stats"]
     presets = item_lookup[weapon_id]["presets"]
 
-    # Display weapon image (always use defaultPreset grid image)
+    # Build compatibility map immediately for sidebar filters
+    # This ensures we only show compatible mods in the inclusion/exclusion lists
+    compat_map = get_compat_map(weapon_id, item_lookup)
+    reachable_ids = set(compat_map["reachable_items"].keys())
+
+    # Display weapon image
     weapon_image_url = weapon_stats.get("default_preset_image") or get_image_url(selected_gun, prefer_high_res=True)
     if weapon_image_url:
         st.sidebar.image(weapon_image_url, width="stretch")
@@ -761,8 +819,33 @@ def main():
                 key="sb_max_weight",
             )
 
-    # Create tabs for Explore and Optimize
-    tab_explore, tab_optimize = st.tabs([f"📊 {t('tabs.explore')}", f"🚀 {t('tabs.optimize')}"])
+    # Include/Exclude Mods Sidebar Section
+    with st.sidebar.expander(f"➕/➖ {t('sidebar.include_exclude')}", expanded=False):
+        # Prepare data for selection - FILTER by compatibility
+        compatible_mods = [m for m in mods if m["id"] in reachable_ids]
+        
+        all_mod_names = sorted(list(set(m["name"] for m in compatible_mods if m.get("name"))))
+        all_categories = sorted(list(set(m.get("bsgCategory", {}).get("name") for m in compatible_mods if m.get("bsgCategory", {}).get("name"))))
+        mod_name_to_id = {m["name"]: m["id"] for m in compatible_mods if m.get("name")}
+
+        sel_include_cats = st.multiselect(t("sidebar.require_categories"), all_categories, key="sb_inc_cat")
+        sel_exclude_cats = st.multiselect(t("sidebar.ban_categories"), all_categories, key="sb_exc_cat")
+        
+        sel_include_items = st.multiselect(t("sidebar.require_items"), all_mod_names, key="sb_inc_item")
+        sel_exclude_items = st.multiselect(t("sidebar.ban_items"), all_mod_names, key="sb_exc_item")
+
+        # Convert to list of lists for AND logic (each sublist is OR, here size 1)
+        include_categories = [[c] for c in sel_include_cats] if sel_include_cats else None
+        exclude_categories = set(sel_exclude_cats) if sel_exclude_cats else None
+        include_items = set(mod_name_to_id[n] for n in sel_include_items) if sel_include_items else None
+        exclude_items = set(mod_name_to_id[n] for n in sel_exclude_items) if sel_exclude_items else None
+
+    # Create tabs for Explore, Optimize, and Gunsmith
+    tab_explore, tab_optimize, tab_gunsmith = st.tabs([
+        f"📊 {t('tabs.explore')}", 
+        f"🚀 {t('tabs.optimize')}",
+        f"🛠️ {t('tabs.gunsmith')}"
+    ])
 
     # ==================== EXPLORE TAB ====================
     with tab_explore:
@@ -811,6 +894,10 @@ def main():
                         min_mag_capacity=min_mag_capacity,
                         min_sighting_range=min_sighting_range,
                         max_weight=max_weight,
+                        include_items=include_items,
+                        exclude_items=exclude_items,
+                        include_categories=include_categories,
+                        exclude_categories=exclude_categories,
                         steps=8,
                         trader_levels=trader_levels,
                         flea_available=flea_available,
@@ -891,7 +978,7 @@ def main():
                 st.dataframe(
                     frontier_df,
                     column_config={
-                        col_ergo: st.column_config.NumberColumn(col_ergo, format="%d"),
+                        col_ergo: st.column_config.NumberColumn(col_ergo, format="%.1f"),
                         col_recoil_pct: st.column_config.TextColumn(col_recoil_pct),
                         col_recoil_v: st.column_config.NumberColumn(col_recoil_v, format="%.1f"),
                         col_recoil_h: st.column_config.NumberColumn(col_recoil_h, format="%.1f"),
@@ -1028,6 +1115,13 @@ def main():
 
         st.caption(f"{t('optimize.preset_ergo')}: {w_ergo}% | {t('optimize.preset_recoil')}: {w_recoil}% | {t('optimize.preset_price')}: {w_price}%")
 
+        # Manual weight sliders
+        with st.expander(f"⚙️ {t('optimize.manual_weights')}", expanded=False):
+            st.slider(t("optimize.preset_ergo"), 0, 100, key="weight_ergo", help=t("optimize.preset_ergo_help"))
+            st.slider(t("optimize.preset_recoil"), 0, 100, key="weight_recoil", help=t("optimize.preset_recoil_help"))
+            st.slider(t("optimize.preset_price"), 0, 100, key="weight_price", help=t("optimize.preset_price_help"))
+            st.info(t("optimize.weight_info"))
+
         # Convert percentages to weights
         total = w_ergo + w_recoil + w_price
         if total > 0:
@@ -1067,6 +1161,10 @@ def main():
                         min_mag_capacity=min_mag_capacity,
                         min_sighting_range=min_sighting_range,
                         max_weight=max_weight,
+                        include_items=include_items,
+                        exclude_items=exclude_items,
+                        include_categories=include_categories,
+                        exclude_categories=exclude_categories,
                         ergo_weight=ergo_weight,
                         recoil_weight=recoil_weight,
                         price_weight=price_weight,
@@ -1085,6 +1183,9 @@ def main():
                     st.stop()
 
             # Display results
+            # Helper to map IDs to names for display/export
+            id_to_name = lambda ids: sorted([item_lookup[i]["data"]["name"] for i in ids]) if ids else None
+            
             constraints = {
                 "max_price": max_price,
                 "min_ergonomics": min_ergonomics,
@@ -1092,6 +1193,10 @@ def main():
                 "min_mag_capacity": min_mag_capacity,
                 "min_sighting_range": min_sighting_range,
                 "max_weight": max_weight,
+                "include_items": id_to_name(include_items),
+                "exclude_items": id_to_name(exclude_items),
+                "include_categories": sorted(list(include_categories)) if include_categories else None,
+                "exclude_categories": sorted(list(exclude_categories)) if exclude_categories else None,
                 "trader_levels": trader_levels,
                 "flea_available": flea_available,
                 "player_level": player_level,
@@ -1136,6 +1241,135 @@ def main():
 
             **{t('optimize.tip')}** {t('optimize.tip_text')}
             """)
+
+
+    # ==================== GUNSMITH TAB ====================
+    with tab_gunsmith:
+        st.header(t("gunsmith.header"))
+        
+        task_options = {task["task_name"]: task for task in tasks}
+        selected_task_name = st.selectbox(t("gunsmith.select_task"), list(task_options.keys()))
+        
+        if selected_task_name:
+            task = task_options[selected_task_name]
+            st.markdown(f"**{t('gunsmith.task_requirements')}**")
+            
+            # Show requirements
+            req_cols = st.columns(3)
+            with req_cols[0]:
+                st.write(f"**{t('gunsmith.weapon')}:** {task['weapon_name']}")
+            with req_cols[1]:
+                constraints = task.get("constraints", {})
+                if constraints:
+                    # Map task keys to locale keys
+                    key_map = {
+                        "min_ergonomics": "constraints.min_ergonomics",
+                        "max_recoil_v": "constraints.max_recoil",
+                        "max_recoil_sum": "constraints.max_recoil_sum",
+                        "max_weight": "constraints.max_weight",
+                        "min_mag_capacity": "constraints.min_mag_capacity",
+                        "min_sighting_range": "constraints.min_sighting_range"
+                    }
+                    for k, v in constraints.items():
+                        label = t(key_map.get(k, k))
+                        st.write(f"- {label}: {v}")
+            with req_cols[2]:
+                required_items = task.get("required_items", [])
+                required_categories = task.get("required_categories", [])
+                required_groups = task.get("required_category_groups", [])
+                
+                if required_items or required_categories or required_groups:
+                    st.write(f"**{t('gunsmith.required_items')}:**")
+                    for item in required_items:
+                        st.write(f"- {item}")
+                    for cat in required_categories:
+                        st.write(f"- Category: {cat}")
+                    for group in required_groups:
+                        st.write(f"- One of: {', '.join(group)}")
+            
+            st.markdown("---")
+            
+            if st.button(t("gunsmith.optimize_btn"), type="primary"):
+                target_gun_id = None
+                for gun in guns:
+                    if gun["name"] == task["weapon_name"]:
+                        target_gun_id = gun["id"]
+                        break
+                
+                if not target_gun_id:
+                    st.error(t("gunsmith.weapon_not_found", name=task["weapon_name"]))
+                else:
+                    task_include_items = set()
+                    missing_items = []
+                    for item_name in task.get("required_items", []):
+                        resolved_id = resolve_item_id(item_name, item_lookup)
+                        if resolved_id:
+                            task_include_items.add(resolved_id)
+                        else:
+                            missing_items.append(item_name)
+                    
+                    # Resolved categories
+                    task_include_categories = []
+                    if "required_category_groups" in task:
+                        task_include_categories.extend(task["required_category_groups"])
+                    if "required_categories" in task:
+                        # Convert simple list to list of lists (AND logic)
+                        for cat in task["required_categories"]:
+                            task_include_categories.append([cat])
+                    
+                    if missing_items:
+                        for m in missing_items:
+                            st.warning(t("gunsmith.missing_item", name=m))
+                    
+                    with st.status(t("status.optimizing"), expanded=True) as status:
+                        try:
+                            status.update(label=t("status.building_compat"))
+                            target_compat_map = get_compat_map(target_gun_id, item_lookup)
+                            
+                            status.update(label=t("status.running_solver"))
+                            c = task.get("constraints", {})
+                            
+                            result = optimize_weapon(
+                                target_gun_id,
+                                item_lookup,
+                                target_compat_map,
+                                max_price=c.get("max_price"),
+                                min_ergonomics=c.get("min_ergonomics"),
+                                max_recoil_v=c.get("max_recoil_v"),
+                                max_recoil_sum=c.get("max_recoil_sum"),
+                                min_mag_capacity=c.get("min_mag_capacity"),
+                                min_sighting_range=c.get("min_sighting_range"),
+                                max_weight=c.get("max_weight"),
+                                include_items=task_include_items,
+                                include_categories=task_include_categories,
+                                price_weight=100,
+                                ergo_weight=0,
+                                recoil_weight=0,
+                                trader_levels=trader_levels,
+                                flea_available=flea_available,
+                                player_level=player_level,
+                            )
+                            
+                            if result["status"] == "infeasible":
+                                status.update(label=t("status.no_solution"), state="error")
+                            else:
+                                status.update(label=t("results.optimal"), state="complete")
+                                
+                                target_stats = item_lookup[target_gun_id]["stats"]
+                                target_presets = item_lookup[target_gun_id]["presets"]
+                                target_gun_data = item_lookup[target_gun_id]["data"]
+                                
+                                task_constraints = c.copy()
+                                task_constraints["include_items"] = sorted([item_lookup[i]["data"]["name"] for i in task_include_items])
+                                task_constraints["include_categories"] = sorted(list(task_include_categories))
+                                
+                                display_optimization_results(
+                                    result, item_lookup, target_stats, target_presets, target_gun_data, task_constraints
+                                )
+                                
+                        except Exception as e:
+                            status.update(label="Error", state="error")
+                            st.error(f"Error: {e}")
 
 
 if __name__ == "__main__":

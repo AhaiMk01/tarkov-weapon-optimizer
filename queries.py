@@ -44,6 +44,7 @@ query AllGuns {
       ... on ItemPropertiesWeapon {
         caliber
         effectiveDistance
+        sightingRange
         fireRate
         ergonomics
         defaultErgonomics
@@ -197,6 +198,17 @@ query AllMods {
         sightingRange
         sightModes
         zoomLevels
+        slots {
+          id
+          name
+          nameId
+          required
+          filters {
+            allowedItems {
+              id
+            }
+          }
+        }
       }
     }
     imageLinkFallback

@@ -26,11 +26,27 @@
     "limited": "Limited",
     "traders_below_ll4": "{count} traders below LL4",
     "no_flea": "no flea",
-    "level": "level {level}"
+    "level": "level {level}",
+    "include_exclude": "Include/Exclude Mods",
+    "require_categories": "Require Categories",
+    "ban_categories": "Ban Categories",
+    "require_items": "Require Specific Items",
+    "ban_items": "Ban Specific Items"
   },
   "tabs": {
     "explore": "Explore Trade-offs",
-    "optimize": "Optimize Build"
+    "optimize": "Optimize Build",
+    "gunsmith": "Gunsmith Tasks"
+  },
+  "gunsmith": {
+    "header": "Gunsmith Task Optimizer",
+    "select_task": "Select Task",
+    "task_requirements": "Task Requirements",
+    "weapon": "Weapon",
+    "required_items": "Required Items",
+    "optimize_btn": "Assemble for Cheapest Price",
+    "missing_item": "⚠️ Item not found in database: {name}",
+    "weapon_not_found": "⚠️ Weapon not found: {name}"
   },
   "explore": {
     "header": "Explore Trade-off Curves",
@@ -62,6 +78,8 @@
     "preset_ergo_help": "Pure ergonomics",
     "preset_price_help": "Pure price",
     "preset_balanced_help": "Balanced build",
+    "manual_weights": "Manual Weight Adjustment",
+    "weight_info": "Weights are relative and will be normalized automatically.",
     "optimize_btn": "Optimize Build",
     "how_it_works": "How it works:",
     "how_step_1": "Set your priority weights using the triangle chart (click grid points)",
@@ -79,6 +97,7 @@
     "min_ergo_help": "Minimum final ergonomics required",
     "max_recoil": "Maximum Recoil",
     "max_recoil_v": "Max Recoil V",
+    "max_recoil_sum": "Max Recoil Sum",
     "max_recoil_help": "Maximum final vertical recoil (naked: {naked})",
     "min_mag_capacity": "Min Magazine Capacity",
     "min_mag": "Min Mag Capacity",
