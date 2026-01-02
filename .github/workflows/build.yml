@@ -131,6 +131,7 @@ jobs:
         with:
           files: release/**
           generate_release_notes: true
+          prerelease: ${{ contains(github.ref, '-') }}
 
   notify:
     needs: [build-windows, build-linux, build-macos]
