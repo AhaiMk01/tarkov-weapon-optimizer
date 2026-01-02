@@ -29,27 +29,21 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system nuitka requests ortools streamlit altair pandas plotly
+          uv pip install --system pyinstaller requests ortools streamlit altair pandas plotly
 
       - name: Build Windows Executable
         run: |
-          $nuitkaArgs = @(
-            "--standalone",
-            "--onefile",
-            "--windows-disable-console",
-            "--include-data-dir=locales=locales",
-            "--include-data-file=tasks.json=tasks.json",
-            "--output-dir=dist",
-            "--python-flag=no_site",
-            "app.py"
-          )
-          nuitka @nuitkaArgs
+          pyinstaller --onefile --noconsole `
+            --add-data "locales;locales" `
+            --add-data "tasks.json;." `
+            --name tarkov-optimizer `
+            app.py
 
       - name: Upload Windows Executable
         uses: actions/upload-artifact@v4
         with:
           name: tarkov-optimizer-windows
-          path: dist/app.exe
+          path: dist/tarkov-optimizer.exe
           compression-level: 0
 
   build-linux:
@@ -70,23 +64,21 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system nuitka requests ortools streamlit altair pandas plotly
+          uv pip install --system pyinstaller requests ortools streamlit altair pandas plotly
 
       - name: Build Linux Executable
         run: |
-          nuitka --standalone --onefile \
-            --include-data-dir=locales=locales \
-            --include-data-file=tasks.json=tasks.json \
-            --output-dir=dist \
-            --python-flag=no_site \
-            --noinclude-default-mode=nofollow \
+          pyinstaller --onefile \
+            --add-data "locales:locales" \
+            --add-data "tasks.json:." \
+            --name tarkov-optimizer \
             app.py
 
       - name: Upload Linux Executable
         uses: actions/upload-artifact@v4
         with:
           name: tarkov-optimizer-linux
-          path: dist/app
+          path: dist/tarkov-optimizer
           compression-level: 0
 
   build-macos:
@@ -107,23 +99,21 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv pip install --system nuitka requests ortools streamlit altair pandas plotly
+          uv pip install --system pyinstaller requests ortools streamlit altair pandas plotly
 
       - name: Build macOS Executable
         run: |
-          nuitka --standalone --onefile \
-            --include-data-dir=locales=locales \
-            --include-data-file=tasks.json=tasks.json \
-            --output-dir=dist \
-            --python-flag=no_site \
-            --noinclude-default-mode=nofollow \
+          pyinstaller --onefile \
+            --add-data "locales:locales" \
+            --add-data "tasks.json:." \
+            --name tarkov-optimizer \
             app.py
 
       - name: Upload macOS Executable
         uses: actions/upload-artifact@v4
         with:
           name: tarkov-optimizer-macos
-          path: dist/app
+          path: dist/tarkov-optimizer
           compression-level: 0
 
   create-release:
