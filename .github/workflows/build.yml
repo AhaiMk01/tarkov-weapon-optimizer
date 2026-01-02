@@ -74,11 +74,12 @@ jobs:
 
       - name: Build Linux Executable
         run: |
-          nuitka --standalone --onefile --disable-console \
+          nuitka --standalone --onefile \
             --include-data-dir=locales=locales \
             --include-data-file=tasks.json=tasks.json \
             --output-dir=dist \
             --python-flag=no_site \
+            --noinclude-default-mode=nofollow \
             app.py
 
       - name: Upload Linux Executable
@@ -110,11 +111,12 @@ jobs:
 
       - name: Build macOS Executable
         run: |
-          nuitka --standalone --onefile --disable-console \
+          nuitka --standalone --onefile \
             --include-data-dir=locales=locales \
             --include-data-file=tasks.json=tasks.json \
             --output-dir=dist \
             --python-flag=no_site \
+            --noinclude-default-mode=nofollow \
             app.py
 
       - name: Upload macOS Executable
