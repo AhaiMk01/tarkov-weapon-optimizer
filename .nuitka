@@ -1,0 +1,9 @@
+[anti-bloat]
+# Don't modify these modules (they have issues with Nuitka's anti-bloat)
+no_standard_lib =
+    streamlit
+
+[prelude]
+# Skip these modules entirely
+skip =
+    streamlit.runtime.caching.cache_utils
