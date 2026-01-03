@@ -16,6 +16,7 @@ Usage:
 
 import json
 import os
+import sys
 from functools import lru_cache
 
 import streamlit as st
@@ -28,7 +29,12 @@ LANGUAGES = {
 }
 
 DEFAULT_LANGUAGE = "en"
-LOCALES_DIR = os.path.join(os.path.dirname(__file__), "locales")
+
+# Handle PyInstaller bundle paths
+if getattr(sys, 'frozen', False):
+    LOCALES_DIR = os.path.join(sys._MEIPASS, "locales")
+else:
+    LOCALES_DIR = os.path.join(os.path.dirname(__file__), "locales")
 
 
 @lru_cache(maxsize=10)

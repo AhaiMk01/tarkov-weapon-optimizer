@@ -36,12 +36,47 @@ jobs:
           pyinstaller --onefile --noconsole `
             --add-data "locales;locales" `
             --add-data "tasks.json;." `
-            --copy-metadata streamlit `
+            --add-data "app.py;." `
+            --add-data "weapon_optimizer.py;." `
+            --add-data "i18n.py;." `
+            --add-data "queries.py;." `
+            --collect-all streamlit `
             --copy-metadata altair `
             --copy-metadata plotly `
             --collect-all ortools `
             --name tarkov-optimizer `
-            app.py
+            launcher.py
+
+      - name: Test Windows Executable
+        run: |
+          # Start the app in background
+          Start-Process -FilePath "dist\tarkov-optimizer.exe" -PassThru | Set-Variable -Name proc
+
+          # Wait for server to start (max 60s)
+          $timeout = 60
+          $started = $false
+          for ($i = 0; $i -lt $timeout; $i++) {
+            Start-Sleep -Seconds 1
+            try {
+              $response = Invoke-WebRequest -Uri "http://localhost:8501/_stcore/health" -UseBasicParsing -TimeoutSec 2
+              if ($response.StatusCode -eq 200) {
+                Write-Host "✅ Server started successfully after $i seconds"
+                $started = $true
+                break
+              }
+            } catch {
+              Write-Host "Waiting for server... ($i/$timeout)"
+            }
+          }
+
+          # Kill the process
+          Get-Process -Name "tarkov-optimizer" -ErrorAction SilentlyContinue | Stop-Process -Force
+
+          if (-not $started) {
+            Write-Host "❌ Server failed to start within $timeout seconds"
+            exit 1
+          }
+        shell: pwsh
 
       - name: Upload Windows Executable
         uses: actions/upload-artifact@v4
@@ -75,12 +110,44 @@ jobs:
           pyinstaller --onefile \
             --add-data "locales:locales" \
             --add-data "tasks.json:." \
-            --copy-metadata streamlit \
+            --add-data "app.py:." \
+            --add-data "weapon_optimizer.py:." \
+            --add-data "i18n.py:." \
+            --add-data "queries.py:." \
+            --collect-all streamlit \
             --copy-metadata altair \
             --copy-metadata plotly \
             --collect-all ortools \
             --name tarkov-optimizer \
-            app.py
+            launcher.py
+
+      - name: Test Linux Executable
+        run: |
+          # Start the app in background
+          chmod +x dist/tarkov-optimizer
+          dist/tarkov-optimizer &
+          APP_PID=$!
+
+          # Wait for server to start (max 60s)
+          timeout=60
+          started=false
+          for i in $(seq 1 $timeout); do
+            sleep 1
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8501/_stcore/health | grep -q "200"; then
+              echo "✅ Server started successfully after $i seconds"
+              started=true
+              break
+            fi
+            echo "Waiting for server... ($i/$timeout)"
+          done
+
+          # Kill the process
+          kill $APP_PID 2>/dev/null || true
+
+          if [ "$started" != "true" ]; then
+            echo "❌ Server failed to start within $timeout seconds"
+            exit 1
+          fi
 
       - name: Upload Linux Executable
         uses: actions/upload-artifact@v4
@@ -114,12 +181,44 @@ jobs:
           pyinstaller --onefile \
             --add-data "locales:locales" \
             --add-data "tasks.json:." \
-            --copy-metadata streamlit \
+            --add-data "app.py:." \
+            --add-data "weapon_optimizer.py:." \
+            --add-data "i18n.py:." \
+            --add-data "queries.py:." \
+            --collect-all streamlit \
             --copy-metadata altair \
             --copy-metadata plotly \
             --collect-all ortools \
             --name tarkov-optimizer \
-            app.py
+            launcher.py
+
+      - name: Test macOS Executable
+        run: |
+          # Start the app in background
+          chmod +x dist/tarkov-optimizer
+          dist/tarkov-optimizer &
+          APP_PID=$!
+
+          # Wait for server to start (max 60s)
+          timeout=60
+          started=false
+          for i in $(seq 1 $timeout); do
+            sleep 1
+            if curl -s -o /dev/null -w "%{http_code}" http://localhost:8501/_stcore/health | grep -q "200"; then
+              echo "✅ Server started successfully after $i seconds"
+              started=true
+              break
+            fi
+            echo "Waiting for server... ($i/$timeout)"
+          done
+
+          # Kill the process
+          kill $APP_PID 2>/dev/null || true
+
+          if [ "$started" != "true" ]; then
+            echo "❌ Server failed to start within $timeout seconds"
+            exit 1
+          fi
 
       - name: Upload macOS Executable
         uses: actions/upload-artifact@v4

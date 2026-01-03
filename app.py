@@ -3,6 +3,8 @@ Streamlit Web UI for Tarkov Weapon Mod Optimizer
 """
 
 import json
+import os
+import sys
 from datetime import datetime
 
 import altair as alt
@@ -60,11 +62,19 @@ def get_compat_map(weapon_id, _item_lookup):
     return build_compatibility_map(weapon_id, _item_lookup)
 
 
+def get_resource_path(filename):
+    """Get the correct path for bundled resources."""
+    if getattr(sys, 'frozen', False):
+        # Running as PyInstaller bundle
+        return os.path.join(sys._MEIPASS, filename)
+    return filename
+
+
 @st.cache_data(show_spinner=False)
 def load_tasks():
     """Load Gunsmith tasks from JSON file."""
     try:
-        with open("tasks.json", "r", encoding="utf-8") as f:
+        with open(get_resource_path("tasks.json"), "r", encoding="utf-8") as f:
             return json.load(f)
     except FileNotFoundError:
         return []
@@ -586,13 +596,17 @@ def main():
     # Load data with status indicator
     with st.status(t("status.loading"), expanded=False) as status:
         try:
-            status.update(label=t("status.fetching"))
+            if status:
+                status.update(label=t("status.fetching"))
             guns, mods = load_data()
-            status.update(label=t("status.building_lookup"))
+            if status:
+                status.update(label=t("status.building_lookup"))
             item_lookup = build_lookup(guns, mods)
-            status.update(label=t("status.loaded", guns=len(guns), mods=len(mods)), state="complete")
+            if status:
+                status.update(label=t("status.loaded", guns=len(guns), mods=len(mods)), state="complete")
         except Exception as e:
-            status.update(label=t("status.failed_load"), state="error")
+            if status:
+                status.update(label=t("status.failed_load"), state="error")
             st.error(f"{t('status.failed_load')}: {e}")
             st.stop()
 
