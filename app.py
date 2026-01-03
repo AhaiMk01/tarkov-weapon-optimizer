@@ -63,9 +63,19 @@ def get_compat_map(weapon_id, _item_lookup):
 
 
 def get_resource_path(filename):
-    """Get the correct path for bundled resources."""
+    """Get the correct path for bundled resources.
+
+    When running as a PyInstaller bundle, resources are extracted to a
+    temporary directory (sys._MEIPASS). This function returns the correct
+    path whether running from source or as a bundled executable.
+
+    Args:
+        filename: Name of the resource file (e.g., "tasks.json")
+
+    Returns:
+        Full path to the resource file
+    """
     if getattr(sys, 'frozen', False):
-        # Running as PyInstaller bundle
         return os.path.join(sys._MEIPASS, filename)
     return filename
 
@@ -1198,7 +1208,7 @@ def main():
 
             # Display results
             # Helper to map IDs to names for display/export
-            id_to_name = lambda ids: sorted([item_lookup[i]["data"]["name"] for i in ids]) if ids else None
+            id_to_name = lambda ids: sorted([item_lookup[i]["data"]["name"] for i in ids if i in item_lookup]) if ids else None
             
             constraints = {
                 "max_price": max_price,

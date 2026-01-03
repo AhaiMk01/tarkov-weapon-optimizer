@@ -88,7 +88,18 @@ def t(key: str, **kwargs) -> str:
         else:
             # Key not found, try English fallback
             if lang != DEFAULT_LANGUAGE:
-                return t.__wrapped__(key, **kwargs) if hasattr(t, '__wrapped__') else key
+                fallback = _load_translations(DEFAULT_LANGUAGE)
+                for p in key.split("."):
+                    if isinstance(fallback, dict) and p in fallback:
+                        fallback = fallback[p]
+                    else:
+                        return key
+                if kwargs and isinstance(fallback, str):
+                    try:
+                        return fallback.format(**kwargs)
+                    except KeyError:
+                        return fallback
+                return fallback
             return key
 
     # Apply string formatting if placeholders provided
