@@ -11,6 +11,9 @@ on:
         required: false
         default: 'all'
 
+permissions:
+  contents: write
+
 jobs:
   build-windows:
     if: github.event.inputs.platform != 'linux' && github.event.inputs.platform != 'macos'
