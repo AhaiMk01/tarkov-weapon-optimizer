@@ -358,14 +358,8 @@ def extract_all_presets(gun):
             lowest_price = offers[0]["price"]
             price_source = offers[0]["source"]
 
-        # Fallback to basePrice if no trader offers available (quest-locked or barter-only presets)
-        if lowest_price == 0:
-            base_price = preset.get("basePrice", 0) or 0
-            if base_price > 0:
-                lowest_price = base_price
-                price_source = "basePrice"
-
         # Only include presets that can actually be purchased (price > 0)
+        # Note: We intentionally do NOT fall back to basePrice - only real market prices
         if lowest_price > 0:
             presets.append(
                 {
@@ -432,11 +426,10 @@ def extract_gun_stats(gun):
             lowest_price = 999999999  # Prohibitively expensive
             price_source = "not_available"
         else:
-            # No presets either, fall back to basePrice
-            base_price = gun.get("basePrice", 0) or 0
-            if base_price > 0:
-                lowest_price = base_price
-                price_source = "basePrice"
+            # No presets and no trader offers - gun is not purchasable
+            # Note: We intentionally do NOT fall back to basePrice - only real market prices
+            lowest_price = 999999999  # Prohibitively expensive
+            price_source = "not_available"
 
     # Get defaultPreset image
     default_preset = props.get("defaultPreset", {}) or {}
@@ -1233,89 +1226,95 @@ def optimize_weapon(
 
     model = cp_model.CpModel()
 
-    # Create boolean variables for each available item
-    item_vars = {}
-    for item_id in available_items:
-        item_vars[item_id] = model.NewBoolVar(f"item_{item_id}")
+    # ============================================================
+    # CLEANER MODEL: Separate "in build" (x) from "pay for" (buy)
+    # ============================================================
+    # x[i] = 1 if item i is in the final build
+    # p[j] = 1 if base j is selected (naked gun or a preset)
+    # buy[i] = 1 if we pay for item i individually
+    #
+    # Key insight: An item is "in the build" if selected, regardless of
+    # whether it came from a preset or was bought individually.
+    # Cost is tracked separately via buy[i].
+    # ============================================================
 
-    # Create boolean variables for each preset
-    preset_vars = {}
+    # Create base selection variables (naked gun OR one preset)
+    base_vars = {}
+    naked_gun_price_raw = weapon["stats"].get("price", 0)
+    naked_gun_purchasable = naked_gun_price_raw < 100_000_000
+
+    if naked_gun_purchasable:
+        base_vars["naked"] = model.NewBoolVar("base_naked")
+
     for preset_id in preset_items_map:
-        preset_vars[preset_id] = model.NewBoolVar(f"preset_{preset_id}")
+        base_vars[preset_id] = model.NewBoolVar(f"base_{preset_id}")
 
-    # Constraint 0: At most ONE preset can be selected
-    if preset_vars:
-        model.Add(sum(preset_vars.values()) <= 1)
+    # Constraint: Exactly one base must be selected
+    if base_vars:
+        model.Add(sum(base_vars.values()) == 1)
+    else:
+        # No purchasable base - infeasible
+        logger.warning("No purchasable base (naked gun or preset) available")
+        return {
+            "status": "infeasible",
+            "selected_items": [],
+            "selected_preset": None,
+            "objective_value": 0,
+        }
 
-    # Pre-compute which items are in which slots for preset occupancy tracking
-    slot_to_preset_items = {}  # slot_id -> set of item_ids that are in this slot AND in presets
-    preset_item_to_slot = {}   # item_id -> slot_id (for items in presets)
-    for preset_id, preset_item_ids in preset_items_map.items():
-        for item_id in preset_item_ids:
-            # Find which slot this item belongs to
-            for slot_id, items in slot_items.items():
-                if item_id in items:
-                    if slot_id not in slot_to_preset_items:
-                        slot_to_preset_items[slot_id] = set()
-                    slot_to_preset_items[slot_id].add(item_id)
-                    preset_item_to_slot[item_id] = slot_id
-                    break
+    # Create x[i] = "item i is in the build" variables
+    x = {}  # item_id -> BoolVar
+    for item_id in available_items:
+        x[item_id] = model.NewBoolVar(f"x_{item_id}")
 
-    # Create effective item variables for constraints
-    # An item is "effectively selected" if:
-    # 1. Individually selected (item_vars[item_id] == 1), OR
-    # 2. A preset containing the item is selected AND no replacement is chosen for that slot
-    # This ensures constraints work with preset-bundled items while allowing replacements
-    effective_item_vars = {}
+    # Track item availability info
     item_only_in_preset = {}  # item_id -> True if only available via preset
-    preset_item_kept_vars = {}  # item_id -> BoolVar (1 if preset item is kept, 0 if replaced)
-
-    for item_id in item_vars:
+    for item_id in available_items:
         containing_presets = item_to_presets.get(item_id, [])
-        preset_bool_vars = [preset_vars[pid] for pid in containing_presets if pid in preset_vars]
-        is_individually_available = item_prices[item_id][2]  # is_available from get_available_price
+        is_individually_available = item_prices[item_id][2]
+        item_only_in_preset[item_id] = not is_individually_available and bool(containing_presets)
 
-        # Track if item is only available via preset
-        item_only_in_preset[item_id] = not is_individually_available and bool(preset_bool_vars)
+    # Constraint: Item availability
+    # x[i] can only be 1 if: (available individually) OR (in a selected preset)
+    for item_id in available_items:
+        is_individually_available = item_prices[item_id][2]
+        containing_presets = [base_vars[pid] for pid in item_to_presets.get(item_id, [])
+                             if pid in base_vars]
 
-        if preset_bool_vars and item_id in preset_item_to_slot:
-            # This item is in a preset - it's "kept" only if preset selected AND no replacement
-            slot_id = preset_item_to_slot[item_id]
-            other_items_in_slot = [i for i in slot_items.get(slot_id, [])
-                                   if i != item_id and i in item_vars]
-
-            if other_items_in_slot:
-                # Create "any replacement selected" variable
-                any_replacement = model.NewBoolVar(f"any_replacement_{item_id}")
-                model.AddMaxEquality(any_replacement, [item_vars[i] for i in other_items_in_slot])
-
-                # Create "any preset with this item selected" variable
-                any_preset_with_item = model.NewBoolVar(f"any_preset_with_{item_id}")
-                model.AddMaxEquality(any_preset_with_item, preset_bool_vars)
-
-                # kept = preset_selected AND NOT replacement
-                kept = model.NewBoolVar(f"kept_{item_id}")
-                model.Add(kept <= any_preset_with_item)
-                model.Add(kept <= 1 - any_replacement)
-                model.Add(kept >= any_preset_with_item - any_replacement)
-                preset_item_kept_vars[item_id] = kept
-
-                # effective = item_var OR kept (not just item_var OR preset_var)
-                effective = model.NewBoolVar(f"effective_{item_id}")
-                model.AddMaxEquality(effective, [item_vars[item_id], kept])
-                effective_item_vars[item_id] = effective
+        if not is_individually_available:
+            if containing_presets:
+                # Only available via preset - x[i] <= sum of containing preset vars
+                model.Add(x[item_id] <= sum(containing_presets))
             else:
-                # No other items can go in this slot, so preset item is always kept if preset selected
-                effective = model.NewBoolVar(f"effective_{item_id}")
-                model.AddMaxEquality(effective, [item_vars[item_id]] + preset_bool_vars)
-                effective_item_vars[item_id] = effective
-        elif preset_bool_vars:
-            # Item is in preset but we couldn't find its slot - use simple logic
-            effective = model.NewBoolVar(f"effective_{item_id}")
-            model.AddMaxEquality(effective, [item_vars[item_id]] + preset_bool_vars)
-            effective_item_vars[item_id] = effective
+                # Not available at all (shouldn't happen due to earlier filtering)
+                model.Add(x[item_id] == 0)
+
+    # Create buy[i] = "we pay for item i individually" variables
+    buy = {}  # item_id -> BoolVar
+    for item_id in available_items:
+        buy[item_id] = model.NewBoolVar(f"buy_{item_id}")
+
+        containing_presets = [base_vars[pid] for pid in item_to_presets.get(item_id, [])
+                             if pid in base_vars]
+
+        if containing_presets:
+            # buy[i] = x[i] AND NOT any_preset_containing_i
+            # Linearized: buy >= x - sum(presets), buy <= x, buy <= 1 - each preset
+            any_preset_with_item = model.NewBoolVar(f"preset_has_{item_id}")
+            model.AddMaxEquality(any_preset_with_item, containing_presets)
+
+            # buy = x AND NOT any_preset_with_item
+            model.Add(buy[item_id] <= x[item_id])
+            model.Add(buy[item_id] <= 1 - any_preset_with_item)
+            model.Add(buy[item_id] >= x[item_id] - any_preset_with_item)
         else:
-            effective_item_vars[item_id] = item_vars[item_id]
+            # Not in any preset - must pay if selected
+            model.Add(buy[item_id] == x[item_id])
+
+    # For backward compatibility, create aliases
+    item_vars = x  # x[i] is what we use for constraints
+    effective_item_vars = x  # x[i] already represents "in build"
+    preset_vars = {k: v for k, v in base_vars.items() if k != "naked"}  # Exclude naked
 
     # Constraint: Included items
     if include_items:
@@ -1393,26 +1392,22 @@ def optimize_weapon(
         # item_var == 1 iff sum(placements) >= 1, and sum(placements) <= 1 (exactly one placement)
         model.Add(sum(placement_vars) == item_vars[item_id])
 
-    # Constraint 1b: Mutex per slot - at most one item can be placed/kept in each slot
-    # This includes both individually selected items AND preset items that are "kept"
+    # Constraint 1b: Mutex per slot - at most one item in each slot
+    # With the new model, x[i] directly represents "in build", so this is simple
     for slot_id, items in slot_items.items():
         slot_placements = []
         for item_id in items:
-            if item_id not in item_vars:
+            if item_id not in x:
                 continue
             if item_id in items_needing_placement:
                 # Use placement variable for this slot (if it exists)
                 if slot_id in placed_in.get(item_id, {}):
                     slot_placements.append(placed_in[item_id][slot_id])
             else:
-                # Item only has one valid slot
+                # Item only has one valid slot - use x[i] directly
                 valid_slots = item_to_valid_slots.get(item_id, [])
                 if any(s[0] == slot_id for s in valid_slots):
-                    # For preset items, use the "kept" variable instead of item_var
-                    # This ensures preset items occupy slots when kept
-                    if item_id in preset_item_kept_vars:
-                        slot_placements.append(preset_item_kept_vars[item_id])
-                    slot_placements.append(item_vars[item_id])
+                    slot_placements.append(x[item_id])
 
         if slot_placements:
             model.Add(sum(slot_placements) <= 1)
@@ -1503,54 +1498,30 @@ def optimize_weapon(
                     # If owner is effectively selected, slot must have at least one item
                     model.Add(sum(effective_item_vars[i] for i in items_in_slot) >= 1).OnlyEnforceIf(effective_item_vars[owner_id])
 
-    # Logic to handle item cost (deduplicating if in preset)
-    item_cost_vars = {} 
-    
-    for item_id in available_items:
-        containing_presets = item_to_presets.get(item_id, [])
-        containing_preset_vars = [preset_vars[pid] for pid in containing_presets if pid in preset_vars]
-        
-        if containing_preset_vars:
-            any_preset = model.NewBoolVar(f"any_preset_{item_id}")
-            model.AddMaxEquality(any_preset, containing_preset_vars)
-            
-            should_count = model.NewBoolVar(f"pay_for_{item_id}")
-            # should_count = item_selected AND NOT any_preset
-            model.Add(should_count <= item_vars[item_id])
-            model.Add(should_count <= 1 - any_preset)
-            model.Add(should_count >= item_vars[item_id] - any_preset)
-            
-            item_cost_vars[item_id] = should_count
-        else:
-            item_cost_vars[item_id] = item_vars[item_id]
-
-    # Helper to build price terms (reused for constraint and objective)
+    # Helper to build price terms using the new buy[i] variables
+    # Cost = base_price (naked or preset) + sum of individually purchased items
     def get_price_terms():
         terms = []
-        # 1. Naked gun (only if not unpurchasable)
+
+        # 1. Base cost (naked gun or preset)
         naked_gun_price = int(weapon["stats"].get("price", 0))
-        if naked_gun_price < 100_000_000:
-            if preset_vars:
-                any_preset_selected_var = model.NewBoolVar("any_preset_selected_total")
-                model.AddMaxEquality(any_preset_selected_var, list(preset_vars.values()))
-                no_preset_selected_var = model.NewBoolVar("no_preset_selected_total")
-                model.Add(no_preset_selected_var == 1 - any_preset_selected_var)
-                terms.append(naked_gun_price * no_preset_selected_var)
-            else:
-                terms.append(naked_gun_price)
+        if "naked" in base_vars:
+            terms.append(naked_gun_price * base_vars["naked"])
 
-        # 2. Presets
-        for pid, var in preset_vars.items():
-            p_price = int(preset_prices_map.get(pid, 0))
-            if p_price > 0:
-                terms.append(p_price * var)
+        for pid in preset_prices_map:
+            if pid in base_vars:
+                p_price = int(preset_prices_map.get(pid, 0))
+                if p_price > 0:
+                    terms.append(p_price * base_vars[pid])
 
-        # 3. Items
-        for item_id, var in item_cost_vars.items():
-            # item_prices is (price, source, is_available)
+        # 2. Individual item costs (using buy[i] - only pay if not covered by preset)
+        for item_id in available_items:
+            if item_id not in buy:
+                continue
             price = int(item_prices[item_id][0])
             if price > 0:
-                terms.append(price * var)
+                terms.append(price * buy[item_id])
+
         return terms
 
     # Optional: Max price constraint
@@ -1691,15 +1662,6 @@ def optimize_weapon(
     # === OBJECTIVE FUNCTION ===
     objective_terms = []
 
-    # Handle non-purchasable naked guns (force preset selection)
-    naked_gun_price_raw = weapon["stats"].get("price", 0)
-    naked_gun_not_purchasable = naked_gun_price_raw > 100_000_000
-
-    if preset_vars and naked_gun_not_purchasable:
-        # Hard constraint: at least one preset MUST be selected
-        # The gun itself is not available for individual selection
-        model.Add(sum(preset_vars.values()) >= 1)
-
     # === COMBINED WEIGHTED OBJECTIVE ===
     # Ergonomics: higher is better (use capped value)
     objective_terms.append(int(ergo_weight * SCALE) * capped_ergo_var)
@@ -1708,37 +1670,31 @@ def optimize_weapon(
     objective_terms.append(int(-recoil_weight * SCALE) * total_recoil_var)
 
     # Price: lower is better (subtract from objective)
+    # Uses the new model: base cost + buy[i] for individual items
     if price_weight > 0:
-        # Add preset prices
-        for preset_id, preset_var in preset_vars.items():
-            preset_info = next((p for p in presets if p.get("id") == preset_id), None)
-            if preset_info:
-                preset_price = int(preset_info.get("price", 0))
-                objective_terms.append(int(-price_weight * preset_price) * preset_var)
+        # Base cost (naked gun or preset)
+        naked_gun_price = int(weapon["stats"].get("price", 0))
+        if "naked" in base_vars:
+            objective_terms.append(int(-price_weight * naked_gun_price) * base_vars["naked"])
 
-        # Add individual item prices (using trader-level-aware prices)
+        for pid in preset_prices_map:
+            if pid in base_vars:
+                p_price = int(preset_prices_map.get(pid, 0))
+                if p_price > 0:
+                    objective_terms.append(int(-price_weight * p_price) * base_vars[pid])
+
+        # Individual item costs (only pay if not covered by preset)
         for item_id in available_items:
-            if item_id not in item_vars:
+            if item_id not in buy:
                 continue
             item_price = int(item_prices.get(item_id, (0, None))[0])
-            objective_terms.append(int(-price_weight * item_price) * item_vars[item_id])
-
-        # Add naked gun price when no preset selected
-        if not naked_gun_not_purchasable:
-            naked_price = int(naked_gun_price_raw)
-            if preset_vars:
-                any_preset_var = model.NewBoolVar("any_preset_price")
-                model.AddMaxEquality(any_preset_var, list(preset_vars.values()))
-                no_preset_var = model.NewBoolVar("no_preset_price")
-                model.Add(no_preset_var == 1 - any_preset_var)
-                objective_terms.append(int(-price_weight * naked_price) * no_preset_var)
-            else:
-                objective_terms.append(int(-price_weight * naked_price))
+            if item_price > 0:
+                objective_terms.append(int(-price_weight * item_price) * buy[item_id])
 
     model.Maximize(sum(objective_terms))
 
     # Solve
-    logger.debug(f"Model built with {len(item_vars)} item variables, {len(preset_vars)} preset variables")
+    logger.debug(f"Model built with {len(x)} item variables, {len(base_vars)} base options")
     logger.info("Running CP-SAT solver...")
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = 120.0
@@ -1749,16 +1705,20 @@ def optimize_weapon(
     logger.debug(f"Solver finished in {solve_time:.2f}s")
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
+        # Get items in the build (x[i] = 1)
         selected = []
-        for item_id, var in item_vars.items():
+        for item_id, var in x.items():
             if solver.Value(var) == 1:
                 selected.append(item_id)
 
-        # Check which preset was selected (if any)
+        # Check which base was selected (naked or preset)
         selected_preset = None
-        for preset_id, var in preset_vars.items():
+        selected_base = None
+        for base_id, var in base_vars.items():
             if solver.Value(var) == 1:
-                selected_preset = preset_id
+                selected_base = base_id
+                if base_id != "naked":
+                    selected_preset = base_id
                 break
 
         status_str = "optimal" if status == cp_model.OPTIMAL else "feasible"
