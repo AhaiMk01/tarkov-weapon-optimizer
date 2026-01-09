@@ -7,6 +7,9 @@
 ![项目概览](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red.svg)
+![平台](https://img.shields.io/badge/平台-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
+[![GitHub Actions](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions/workflows/build.yml/badge.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions)
+[![下载](https://img.shields.io/badge/下载-Releases-green.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
 
 ## 🚀 主要功能
 
@@ -35,6 +38,9 @@
 - **可视化**: Plotly, Altair, 和 Pandas
 
 ## 📥 安装指南
+
+### 下载预编译版本
+从 [**Releases 页面**](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases) 下载最新版本。无需安装 - 直接运行可执行文件即可。
 
 ### 使用 Pixi (推荐)
 如果您已安装 [pixi](https://pixi.sh/)：

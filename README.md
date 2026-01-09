@@ -7,6 +7,9 @@ An advanced weapon build optimizer for Escape from Tarkov. This tool uses **cons
 ![Project Overview](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red.svg)
+![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
+[![GitHub Actions](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions/workflows/build.yml/badge.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions)
+[![Download](https://img.shields.io/badge/Download-Releases-green.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
 
 ## 🚀 Key Features
 
@@ -35,6 +38,9 @@ An advanced weapon build optimizer for Escape from Tarkov. This tool uses **cons
 - **Visuals**: Plotly, Altair, and Pandas
 
 ## 📥 Installation
+
+### Download Pre-built Executable
+Download the latest release from the [**Releases Page**](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases). No installation required - just run the executable.
 
 ### Using Pixi (Recommended)
 If you have [pixi](https://pixi.sh/) installed:
