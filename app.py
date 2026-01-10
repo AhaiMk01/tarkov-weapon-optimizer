@@ -7,6 +7,9 @@ import os
 import sys
 from datetime import datetime
 
+# Set Streamlit config directory to project directory (must be before streamlit import)
+os.environ.setdefault("STREAMLIT_CONFIG_DIR", os.path.dirname(os.path.abspath(__file__)))
+
 import altair as alt
 import pandas as pd
 import plotly.graph_objects as go
@@ -700,8 +703,131 @@ def main():
     # Sidebar: Weapon Selection
     st.sidebar.header(f"🔫 {t('sidebar.select_weapon')}")
 
-    gun_options = {gun["name"]: gun for gun in guns}
+    # Helper to get caliber display name
+    def get_caliber_display(gun):
+        props = gun.get("properties", {}) or {}
+        caliber = props.get("caliber", "")
+        return caliber.replace("Caliber", "").strip() if caliber else ""
+
+    # Helper to get category name
+    def get_category_name(gun):
+        category = gun.get("bsgCategory", {})
+        return category.get("name", "") if category else ""
+
+    # Build category counts and caliber counts for all guns
+    all_category_counts = {}
+    all_caliber_counts = {}
+    for gun in guns:
+        cat = get_category_name(gun)
+        cal = get_caliber_display(gun)
+        if cat:
+            all_category_counts[cat] = all_category_counts.get(cat, 0) + 1
+        if cal:
+            all_caliber_counts[cal] = all_caliber_counts.get(cal, 0) + 1
+
+    # Get selected types from session state (for cascading logic)
+    if "selected_types" not in st.session_state:
+        st.session_state.selected_types = []
+    if "selected_calibers" not in st.session_state:
+        st.session_state.selected_calibers = []
+
+    # Calculate available calibers based on selected types (for cascading)
+    if st.session_state.selected_types:
+        guns_of_selected_types = [g for g in guns if get_category_name(g) in st.session_state.selected_types]
+    else:
+        guns_of_selected_types = guns
+
+    available_caliber_counts = {}
+    for gun in guns_of_selected_types:
+        cal = get_caliber_display(gun)
+        if cal:
+            available_caliber_counts[cal] = available_caliber_counts.get(cal, 0) + 1
+
+    # Calculate available categories based on selected calibers (for cascading)
+    if st.session_state.selected_calibers:
+        guns_of_selected_calibers = [g for g in guns if get_caliber_display(g) in st.session_state.selected_calibers]
+    else:
+        guns_of_selected_calibers = guns
+
+    available_category_counts = {}
+    for gun in guns_of_selected_calibers:
+        cat = get_category_name(gun)
+        if cat:
+            available_category_counts[cat] = available_category_counts.get(cat, 0) + 1
+
+    # Build options with counts
+    category_options = sorted(available_category_counts.keys())
+    caliber_options = sorted(available_caliber_counts.keys())
+
+    # Format options with counts
+    def format_with_count(option, counts):
+        count = counts.get(option, 0)
+        return f"{option} ({count})"
+
+    # Gun type filter (multi-select) with counts
+    selected_types = st.sidebar.multiselect(
+        t("sidebar.filter_gun_type"),
+        category_options,
+        default=st.session_state.selected_types,
+        format_func=lambda x: format_with_count(x, available_category_counts),
+        placeholder="All",
+        key="type_filter",
+    )
+
+    # Update session state and rerun if changed
+    if selected_types != st.session_state.selected_types:
+        st.session_state.selected_types = selected_types
+        # Clear calibers that are no longer available
+        if selected_types:
+            new_available_calibers = set()
+            for gun in guns:
+                if get_category_name(gun) in selected_types:
+                    cal = get_caliber_display(gun)
+                    if cal:
+                        new_available_calibers.add(cal)
+            st.session_state.selected_calibers = [c for c in st.session_state.selected_calibers if c in new_available_calibers]
+        st.rerun()
+
+    # Caliber filter (multi-select) with counts
+    selected_calibers = st.sidebar.multiselect(
+        t("sidebar.filter_caliber"),
+        caliber_options,
+        default=st.session_state.selected_calibers,
+        format_func=lambda x: format_with_count(x, available_caliber_counts),
+        placeholder="All",
+        key="caliber_filter",
+    )
+
+    # Update session state and rerun if changed
+    if selected_calibers != st.session_state.selected_calibers:
+        st.session_state.selected_calibers = selected_calibers
+        # Clear types that are no longer available
+        if selected_calibers:
+            new_available_types = set()
+            for gun in guns:
+                if get_caliber_display(gun) in selected_calibers:
+                    cat = get_category_name(gun)
+                    if cat:
+                        new_available_types.add(cat)
+            st.session_state.selected_types = [t for t in st.session_state.selected_types if t in new_available_types]
+        st.rerun()
+
+    # Filter guns by selected types and calibers
+    filtered_guns = guns
+    if selected_types:
+        filtered_guns = [g for g in filtered_guns if get_category_name(g) in selected_types]
+    if selected_calibers:
+        filtered_guns = [g for g in filtered_guns if get_caliber_display(g) in selected_calibers]
+
+    gun_options = {gun["name"]: gun for gun in filtered_guns}
     gun_names = sorted(gun_options.keys())
+
+    # Show match count
+    st.sidebar.caption(f"Showing {len(gun_names)} of {len(guns)} weapons")
+
+    if not gun_names:
+        st.sidebar.warning("No weapons match the selected filters.")
+        st.stop()
 
     selected_gun_name = st.sidebar.selectbox(
         t("sidebar.choose_weapon"),
@@ -724,11 +850,54 @@ def main():
     if weapon_image_url:
         st.sidebar.image(weapon_image_url, width="stretch")
 
-    # Show base weapon stats
-    st.sidebar.markdown(f"**{t('sidebar.base_stats')}**")
-    st.sidebar.markdown(f"- {t('sidebar.ergonomics')}: {weapon_stats.get('naked_ergonomics', 0):.0f}")
-    st.sidebar.markdown(f"- {t('sidebar.recoil_v')}: {weapon_stats.get('naked_recoil_v', 0):.0f}")
-    st.sidebar.markdown(f"- {t('sidebar.recoil_h')}: {weapon_stats.get('naked_recoil_h', 0):.0f}")
+    # Show base weapon stats in a folded expander
+    with st.sidebar.expander(f"📊 {t('sidebar.base_stats')}", expanded=False):
+        # Basic stats
+        st.markdown(f"- {t('sidebar.ergonomics')}: {weapon_stats.get('naked_ergonomics', 0):.0f}")
+        st.markdown(f"- {t('sidebar.recoil_v')}: {weapon_stats.get('naked_recoil_v', 0):.0f}")
+        st.markdown(f"- {t('sidebar.recoil_h')}: {weapon_stats.get('naked_recoil_h', 0):.0f}")
+
+        # Caliber and fire rate
+        caliber = weapon_stats.get('caliber', '')
+        if caliber:
+            # Format caliber name (remove "Caliber" prefix if present)
+            caliber_display = caliber.replace("Caliber", "").strip()
+            st.markdown(f"- {t('sidebar.caliber')}: {caliber_display}")
+
+        fire_rate = weapon_stats.get('fire_rate', 0)
+        if fire_rate:
+            st.markdown(f"- {t('sidebar.fire_rate')}: {fire_rate} RPM")
+
+        fire_modes = weapon_stats.get('fire_modes', [])
+        if fire_modes:
+            modes_display = ", ".join(fire_modes)
+            st.markdown(f"- {t('sidebar.fire_modes')}: {modes_display}")
+
+        # Weapon handling properties
+        st.markdown("---")
+        camera_snap = weapon_stats.get('camera_snap', 0)
+        if camera_snap:
+            st.markdown(f"- {t('sidebar.camera_snap')}: {camera_snap}")
+
+        center_of_impact = weapon_stats.get('center_of_impact', 0)
+        if center_of_impact:
+            st.markdown(f"- {t('sidebar.center_of_impact')}: {center_of_impact}")
+
+        deviation_max = weapon_stats.get('deviation_max', 0)
+        if deviation_max:
+            st.markdown(f"- {t('sidebar.deviation_max')}: {deviation_max}")
+
+        deviation_curve = weapon_stats.get('deviation_curve', 0)
+        if deviation_curve:
+            st.markdown(f"- {t('sidebar.deviation_curve')}: {deviation_curve}")
+
+        recoil_angle = weapon_stats.get('recoil_angle', 0)
+        if recoil_angle:
+            st.markdown(f"- {t('sidebar.recoil_angle')}: {recoil_angle}°")
+
+        recoil_dispersion = weapon_stats.get('recoil_dispersion', 0)
+        if recoil_dispersion:
+            st.markdown(f"- {t('sidebar.recoil_dispersion')}: {recoil_dispersion}")
 
     # Show all presets info
     if presets:

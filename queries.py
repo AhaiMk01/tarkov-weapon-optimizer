@@ -40,12 +40,23 @@ query AllGuns {
     imageLink
     iconLinkFallback
     iconLink
+    bsgCategory {
+      id
+      name
+    }
     properties {
       ... on ItemPropertiesWeapon {
         caliber
         effectiveDistance
         sightingRange
         fireRate
+        fireModes
+        cameraSnap
+        centerOfImpact
+        deviationMax
+        deviationCurve
+        recoilAngle
+        recoilDispersion
         ergonomics
         defaultErgonomics
         recoilVertical

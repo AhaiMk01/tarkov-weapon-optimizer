@@ -74,7 +74,7 @@ def set_log_level(level: str):
 API_URL = "https://api.tarkov.dev/graphql"
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
 CACHE_TTL = 3600  # 1 hour in seconds
-CACHE_VERSION = 6  # Increment when data format changes
+CACHE_VERSION = 7  # Increment when data format changes
 
 
 def _get_cache_path(query, variables):
@@ -474,11 +474,22 @@ def extract_gun_stats(gun):
         # Other stats
         "accuracy_modifier": gun.get("accuracyModifier", 0) or 0,
         "fire_rate": props.get("fireRate", 0) or 0,
+        "fire_modes": props.get("fireModes", []) or [],
         "caliber": props.get("caliber", ""),
         "weight": gun.get("weight", 0) or 0,
         "width": gun.get("width", 0) or 0,
         "height": gun.get("height", 0) or 0,
         "sighting_range": props.get("sightingRange") or 0,
+        # Category
+        "category": gun.get("bsgCategory", {}).get("name", "") if gun.get("bsgCategory") else "",
+        "category_id": gun.get("bsgCategory", {}).get("id", "") if gun.get("bsgCategory") else "",
+        # Weapon handling properties
+        "camera_snap": props.get("cameraSnap", 0) or 0,
+        "center_of_impact": props.get("centerOfImpact", 0) or 0,
+        "deviation_max": props.get("deviationMax", 0) or 0,
+        "deviation_curve": props.get("deviationCurve", 0) or 0,
+        "recoil_angle": props.get("recoilAngle", 0) or 0,
+        "recoil_dispersion": props.get("recoilDispersion", 0) or 0,
         # Price info (naked weapon price, not including preset)
         "price": lowest_price,
         "price_source": price_source,
