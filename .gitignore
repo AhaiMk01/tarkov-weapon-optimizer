@@ -58,3 +58,5 @@ api_cache_debug.json
 
 # Logs
 logs/
+
+pixi.lock
