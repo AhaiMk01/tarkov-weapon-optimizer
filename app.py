@@ -1243,14 +1243,19 @@ def main():
                     for point in frontier
                 ])
 
+                frontier_df_display = frontier_df.copy()
+                frontier_df_display[col_price] = frontier_df_display[col_price].apply(
+                    lambda x: f"₽{int(x):,}" if pd.notna(x) else ""
+                )
+
                 st.dataframe(
-                    frontier_df,
+                    frontier_df_display,
                     column_config={
                         col_ergo: st.column_config.NumberColumn(col_ergo, format="%.1f"),
                         col_recoil_pct: st.column_config.TextColumn(col_recoil_pct),
                         col_recoil_v: st.column_config.NumberColumn(col_recoil_v, format="%.1f"),
                         col_recoil_h: st.column_config.NumberColumn(col_recoil_h, format="%.1f"),
-                        col_price: st.column_config.NumberColumn(col_price, format="₽%,d"),
+                        col_price: st.column_config.TextColumn(col_price),
                     },
                     hide_index=True,
                     width="stretch",
