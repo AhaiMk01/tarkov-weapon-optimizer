@@ -725,99 +725,159 @@ def main():
         if cal:
             all_caliber_counts[cal] = all_caliber_counts.get(cal, 0) + 1
 
-    # Get selected types from session state (for cascading logic)
-    if "selected_types" not in st.session_state:
-        st.session_state.selected_types = []
-    if "selected_calibers" not in st.session_state:
-        st.session_state.selected_calibers = []
+    def strip_display_count(s):
+        """Helper to remove ' (N)' suffix from formatted strings."""
+        if isinstance(s, str) and " (" in s and s.endswith(")"):
+            return s.split(" (")[0]
+        return s
 
-    # Calculate available calibers based on selected types (for cascading)
-    if st.session_state.selected_types:
-        guns_of_selected_types = [g for g in guns if get_category_name(g) in st.session_state.selected_types]
+    # Callbacks for cascading filters
+    def update_calibers_on_type_change():
+        """Update selected caliber when gun type changes to ensure consistency."""
+        logger.debug("Callback: update_calibers_on_type_change triggered")
+        # Sanitize input from session state
+        selected_type = strip_display_count(st.session_state.get("type_filter", "All"))
+        
+        # Handle legacy list if present
+        if isinstance(selected_type, list):
+            return 
+
+        if selected_type == "All":
+            return
+            
+        valid_calibers = set()
+        for gun in guns:
+            if get_category_name(gun) == selected_type:
+                cal = get_caliber_display(gun)
+                if cal:
+                    valid_calibers.add(cal)
+        
+        # Current caliber in session state
+        current_caliber = strip_display_count(st.session_state.get("caliber_filter", "All"))
+        if isinstance(current_caliber, list):
+             current_caliber = "All"
+        
+        # If the currently selected caliber is NOT in the new valid list, reset to All.
+        if current_caliber != "All" and current_caliber not in valid_calibers:
+             logger.debug(f"Callback: Resetting caliber because '{current_caliber}' not in valid calibers for type '{selected_type}'")
+             st.session_state.caliber_filter = "All"
+
+    def update_types_on_caliber_change():
+        """Update selected type when caliber changes to ensure consistency."""
+        logger.debug("Callback: update_types_on_caliber_change triggered")
+        # Sanitize input from session state
+        selected_caliber = strip_display_count(st.session_state.get("caliber_filter", "All"))
+
+        if isinstance(selected_caliber, list):
+            return
+
+        if selected_caliber == "All":
+            return
+
+        valid_types = set()
+        for gun in guns:
+            if get_caliber_display(gun) == selected_caliber:
+                cat = get_category_name(gun)
+                if cat:
+                    valid_types.add(cat)
+                    
+        current_type = strip_display_count(st.session_state.get("type_filter", "All"))
+        if isinstance(current_type, list):
+             current_type = "All"
+        
+        if current_type != "All" and current_type not in valid_types:
+             logger.debug(f"Callback: Resetting type because '{current_type}' not in valid types for caliber '{selected_caliber}'")
+             st.session_state.type_filter = "All"
+
+    # Get current filter values from widget keys (source of truth)
+    raw_type = st.session_state.get("type_filter", "All")
+    raw_caliber = st.session_state.get("caliber_filter", "All")
+
+    # Handle legacy state transition (list -> str)
+    if isinstance(raw_type, list):
+        current_type = raw_type[0] if len(raw_type) == 1 else "All"
+        st.session_state.type_filter = current_type
     else:
-        guns_of_selected_types = guns
+        current_type = strip_display_count(raw_type)
+
+    if isinstance(raw_caliber, list):
+        current_caliber = raw_caliber[0] if len(raw_caliber) == 1 else "All"
+        st.session_state.caliber_filter = current_caliber
+    else:
+        current_caliber = strip_display_count(raw_caliber)
+
+    # Calculate available calibers based on selected type (for cascading display)
+    if current_type != "All":
+        guns_of_selected_type = [g for g in guns if get_category_name(g) == current_type]
+    else:
+        guns_of_selected_type = guns
 
     available_caliber_counts = {}
-    for gun in guns_of_selected_types:
+    for gun in guns_of_selected_type:
         cal = get_caliber_display(gun)
         if cal:
             available_caliber_counts[cal] = available_caliber_counts.get(cal, 0) + 1
 
-    # Calculate available categories based on selected calibers (for cascading)
-    if st.session_state.selected_calibers:
-        guns_of_selected_calibers = [g for g in guns if get_caliber_display(g) in st.session_state.selected_calibers]
+    # Calculate available categories based on selected caliber (for cascading display)
+    if current_caliber != "All":
+        guns_of_selected_caliber = [g for g in guns if get_caliber_display(g) == current_caliber]
     else:
-        guns_of_selected_calibers = guns
+        guns_of_selected_caliber = guns
 
     available_category_counts = {}
-    for gun in guns_of_selected_calibers:
+    for gun in guns_of_selected_caliber:
         cat = get_category_name(gun)
         if cat:
             available_category_counts[cat] = available_category_counts.get(cat, 0) + 1
 
     # Build options with counts
-    category_options = sorted(available_category_counts.keys())
-    caliber_options = sorted(available_caliber_counts.keys())
+    category_options = ["All"] + sorted(available_category_counts.keys())
+    caliber_options = ["All"] + sorted(available_caliber_counts.keys())
+
+    # Safety: Ensure current selections exist in options for the selectbox index
+    if current_type not in category_options:
+        logger.debug(f"Safety: Type '{current_type}' not in options, resetting to All")
+        current_type = "All"
+        st.session_state.type_filter = "All"
+
+    if current_caliber not in caliber_options:
+        logger.debug(f"Safety: Caliber '{current_caliber}' not in options, resetting to All")
+        current_caliber = "All"
+        st.session_state.caliber_filter = "All"
 
     # Format options with counts
     def format_with_count(option, counts):
+        if option == "All":
+            return "All"
         count = counts.get(option, 0)
         return f"{option} ({count})"
 
-    # Gun type filter (multi-select) with counts
-    selected_types = st.sidebar.multiselect(
+    # Gun type filter (single-select) with counts
+    selected_type = st.sidebar.selectbox(
         t("sidebar.filter_gun_type"),
         category_options,
-        default=st.session_state.selected_types,
+        index=category_options.index(current_type),
         format_func=lambda x: format_with_count(x, available_category_counts),
-        placeholder="All",
         key="type_filter",
+        on_change=update_calibers_on_type_change,
     )
 
-    # Update session state and rerun if changed
-    if selected_types != st.session_state.selected_types:
-        st.session_state.selected_types = selected_types
-        # Clear calibers that are no longer available
-        if selected_types:
-            new_available_calibers = set()
-            for gun in guns:
-                if get_category_name(gun) in selected_types:
-                    cal = get_caliber_display(gun)
-                    if cal:
-                        new_available_calibers.add(cal)
-            st.session_state.selected_calibers = [c for c in st.session_state.selected_calibers if c in new_available_calibers]
-        st.rerun()
-
-    # Caliber filter (multi-select) with counts
-    selected_calibers = st.sidebar.multiselect(
+    # Caliber filter (single-select) with counts
+    selected_caliber = st.sidebar.selectbox(
         t("sidebar.filter_caliber"),
         caliber_options,
-        default=st.session_state.selected_calibers,
+        index=caliber_options.index(current_caliber),
         format_func=lambda x: format_with_count(x, available_caliber_counts),
-        placeholder="All",
         key="caliber_filter",
+        on_change=update_types_on_caliber_change,
     )
 
-    # Update session state and rerun if changed
-    if selected_calibers != st.session_state.selected_calibers:
-        st.session_state.selected_calibers = selected_calibers
-        # Clear types that are no longer available
-        if selected_calibers:
-            new_available_types = set()
-            for gun in guns:
-                if get_caliber_display(gun) in selected_calibers:
-                    cat = get_category_name(gun)
-                    if cat:
-                        new_available_types.add(cat)
-            st.session_state.selected_types = [t for t in st.session_state.selected_types if t in new_available_types]
-        st.rerun()
-
-    # Filter guns by selected types and calibers
+    # Filter guns by selected type and caliber
     filtered_guns = guns
-    if selected_types:
-        filtered_guns = [g for g in filtered_guns if get_category_name(g) in selected_types]
-    if selected_calibers:
-        filtered_guns = [g for g in filtered_guns if get_caliber_display(g) in selected_calibers]
+    if selected_type != "All":
+        filtered_guns = [g for g in filtered_guns if get_category_name(g) == selected_type]
+    if selected_caliber != "All":
+        filtered_guns = [g for g in filtered_guns if get_caliber_display(g) == selected_caliber]
 
     gun_options = {gun["name"]: gun for gun in filtered_guns}
     gun_names = sorted(gun_options.keys())
@@ -829,11 +889,20 @@ def main():
         st.sidebar.warning("No weapons match the selected filters.")
         st.stop()
 
+    # Determine initial selection index - preserve previous selection if still valid
+    default_index = 0
+    if "selected_weapon" in st.session_state and st.session_state.selected_weapon in gun_names:
+        default_index = gun_names.index(st.session_state.selected_weapon)
+
     selected_gun_name = st.sidebar.selectbox(
         t("sidebar.choose_weapon"),
         gun_names,
+        index=default_index,
         help=t("sidebar.choose_weapon"),
+        key="weapon_selector",
     )
+    # Store selection in session state for persistence across filter changes
+    st.session_state.selected_weapon = selected_gun_name
 
     selected_gun = gun_options[selected_gun_name]
     weapon_id = selected_gun["id"]
