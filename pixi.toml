@@ -14,6 +14,9 @@ plotly = ">=5.18.0"
 pandas = ">=2.0.0"
 altair = ">=5.0.0"
 
+[target.win-64.dependencies]
+vc14_runtime = ">=14.38"
+
 [tasks]
 start = "streamlit run app.py"
 
