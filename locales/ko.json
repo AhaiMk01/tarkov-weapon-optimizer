@@ -4,6 +4,7 @@
     "subtitle": "제약 프로그래밍을 사용하여 무기 빌드를 최적화하세요"
   },
   "sidebar": {
+    "game_mode": "게임 모드",
     "select_weapon": "무기 선택",
     "choose_weapon": "무기를 선택하세요:",
     "filter_gun_type": "유형별 필터",

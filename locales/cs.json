@@ -4,6 +4,7 @@
     "subtitle": "Optimalizujte své zbraně pomocí programování s omezeními"
   },
   "sidebar": {
+    "game_mode": "Herní režim",
     "select_weapon": "Vybrat zbraň",
     "choose_weapon": "Vyberte zbraň:",
     "filter_gun_type": "Filtrovat podle typu",

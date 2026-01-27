@@ -4,6 +4,7 @@
     "subtitle": "制約プログラミングを使用して武器ビルドを最適化"
   },
   "sidebar": {
+    "game_mode": "ゲームモード",
     "select_weapon": "武器を選択",
     "choose_weapon": "武器を選ぶ:",
     "filter_gun_type": "タイプでフィルター",

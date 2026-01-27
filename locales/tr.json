@@ -4,6 +4,7 @@
     "subtitle": "Kısıt programlama kullanarak silah yapılarınızı optimize edin"
   },
   "sidebar": {
+    "game_mode": "Oyun Modu",
     "select_weapon": "Silah Seç",
     "choose_weapon": "Bir silah seçin:",
     "filter_gun_type": "Türe Göre Filtrele",

@@ -4,6 +4,7 @@
     "subtitle": "Оптимизируйте сборки оружия с помощью constraint programming"
   },
   "sidebar": {
+    "game_mode": "Режим игры",
     "select_weapon": "Выбор оружия",
     "choose_weapon": "Выберите оружие:",
     "filter_gun_type": "Фильтр по типу",

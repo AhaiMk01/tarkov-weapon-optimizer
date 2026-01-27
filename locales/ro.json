@@ -4,6 +4,7 @@
     "subtitle": "Optimizează-ți configurațiile de arme folosind programarea cu constrângeri"
   },
   "sidebar": {
+    "game_mode": "Mod de Joc",
     "select_weapon": "Selectează Arma",
     "choose_weapon": "Alege o armă:",
     "filter_gun_type": "Filtrează după Tip",

@@ -4,6 +4,7 @@
     "subtitle": "Otimize as suas configurações de armas usando programação de restrições"
   },
   "sidebar": {
+    "game_mode": "Modo de Jogo",
     "select_weapon": "Selecionar Arma",
     "choose_weapon": "Escolha uma arma:",
     "filter_gun_type": "Filtrar por Tipo",

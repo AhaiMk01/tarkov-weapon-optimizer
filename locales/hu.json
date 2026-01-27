@@ -4,6 +4,7 @@
     "subtitle": "Optimalizáld a fegyverösszeállításaidat korlátozás-programozással"
   },
   "sidebar": {
+    "game_mode": "Játékmód",
     "select_weapon": "Fegyver kiválasztása",
     "choose_weapon": "Válassz egy fegyvert:",
     "filter_gun_type": "Szűrés típus szerint",

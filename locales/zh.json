@@ -4,6 +4,7 @@
     "subtitle": "使用约束规划优化您的武器配置"
   },
   "sidebar": {
+    "game_mode": "游戏模式",
     "select_weapon": "选择武器",
     "choose_weapon": "选择一把武器：",
     "filter_gun_type": "按类型筛选",

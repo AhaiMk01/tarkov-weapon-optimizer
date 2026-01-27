@@ -4,6 +4,7 @@
     "subtitle": "Zoptymalizuj swoje konfiguracje broni za pomocą programowania ograniczeń"
   },
   "sidebar": {
+    "game_mode": "Tryb Gry",
     "select_weapon": "Wybierz broń",
     "choose_weapon": "Wybierz broń:",
     "filter_gun_type": "Filtruj według typu",

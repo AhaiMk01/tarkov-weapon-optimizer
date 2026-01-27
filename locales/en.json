@@ -4,6 +4,7 @@
     "subtitle": "Optimize your weapon builds using constraint programming"
   },
   "sidebar": {
+    "game_mode": "Game Mode",
     "select_weapon": "Select Weapon",
     "choose_weapon": "Choose a weapon:",
     "filter_gun_type": "Filter by Type",

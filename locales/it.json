@@ -4,6 +4,7 @@
     "subtitle": "Ottimizza le tue build di armi usando la programmazione a vincoli"
   },
   "sidebar": {
+    "game_mode": "Modalità di Gioco",
     "select_weapon": "Seleziona Arma",
     "choose_weapon": "Scegli un'arma:",
     "filter_gun_type": "Filtra per Tipo",

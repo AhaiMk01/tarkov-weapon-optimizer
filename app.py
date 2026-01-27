@@ -61,21 +61,22 @@ st.set_page_config(
 
 # Cached data loading functions
 @st.cache_data(show_spinner=False)
-def load_data(lang="en"):
+def load_data(lang="en", game_mode="regular"):
     """Fetch all guns and mods from API (cached). Saves to debug file."""
-    logger.info(f"Loading game data (lang={lang})...")
-    guns, mods = fetch_all_data(lang=lang)
+    logger.info(f"Loading game data (lang={lang}, game_mode={game_mode})...")
+    guns, mods = fetch_all_data(lang=lang, game_mode=game_mode)
 
     # Save to debug file
     debug_data = {
         "fetched_at": datetime.now().isoformat(),
         "lang": lang,
+        "game_mode": game_mode,
         "guns_count": len(guns),
         "mods_count": len(mods),
         "guns": guns,
         "mods": mods,
     }
-    with open(f"api_cache_debug_{lang}.json", "w", encoding="utf-8") as f:
+    with open(f"api_cache_debug_{lang}_{game_mode}.json", "w", encoding="utf-8") as f:
         json.dump(debug_data, f, indent=2, ensure_ascii=False)
 
     logger.info(f"Loaded {len(guns)} guns and {len(mods)} mods")
@@ -83,14 +84,14 @@ def load_data(lang="en"):
 
 
 @st.cache_data(show_spinner=False)
-def build_lookup(_guns, _mods, lang="en"):
-    """Build item lookup dictionary (cached per language)."""
+def build_lookup(_guns, _mods, lang="en", game_mode="regular"):
+    """Build item lookup dictionary (cached per language and game mode)."""
     return build_item_lookup(_guns, _mods)
 
 
 @st.cache_data(show_spinner=False)
-def get_compat_map(weapon_id, _item_lookup, lang="en"):
-    """Build compatibility map for a weapon (cached per weapon_id and language)."""
+def get_compat_map(weapon_id, _item_lookup, lang="en", game_mode="regular"):
+    """Build compatibility map for a weapon (cached per weapon_id, language and game mode)."""
     return build_compatibility_map(weapon_id, _item_lookup)
 
 
@@ -669,14 +670,54 @@ def generate_build_export(result, item_lookup, weapon_stats, presets, selected_g
     return json_data, markdown_text
 
 
+def get_game_mode() -> str:
+    """Get current game mode from session state."""
+    if "game_mode" not in st.session_state:
+        st.session_state.game_mode = "regular"
+    return st.session_state.game_mode
+
+
+def game_mode_selector(clear_on_change: list = None) -> str:
+    """Render a game mode selector widget."""
+    GAME_MODES = {
+        "regular": "PvP",
+        "pve": "PvE",
+    }
+    current = get_game_mode()
+    options = list(GAME_MODES.keys())
+    current_index = options.index(current) if current in options else 0
+
+    selected = st.selectbox(
+        "🎮 " + t("sidebar.game_mode"),
+        options=options,
+        index=current_index,
+        format_func=lambda x: GAME_MODES.get(x, x),
+        key="game_mode_selector",
+    )
+
+    if selected != current:
+        st.session_state.game_mode = selected
+        # Clear specified session state keys on game mode change
+        if clear_on_change:
+            for state_key in clear_on_change:
+                if state_key in st.session_state:
+                    del st.session_state[state_key]
+        st.rerun()
+
+    return selected
+
+
 def main():
     logger.debug("Streamlit app main() started")
 
-    # Language selector at top of sidebar
-    # Clear weapon filters when language changes (names are translated)
+    # Language and game mode selectors at top of sidebar
+    # Clear weapon filters when language/game mode changes
     with st.sidebar:
         language_selector(
             label="🌐 Language",
+            clear_on_change=["selected_weapon", "type_filter", "caliber_filter"],
+        )
+        game_mode_selector(
             clear_on_change=["selected_weapon", "type_filter", "caliber_filter"],
         )
         st.markdown("---")
@@ -691,10 +732,11 @@ def main():
             if status:
                 status.update(label=t("status.fetching"))
             current_lang = get_language()
-            guns, mods = load_data(lang=current_lang)
+            current_game_mode = get_game_mode()
+            guns, mods = load_data(lang=current_lang, game_mode=current_game_mode)
             if status:
                 status.update(label=t("status.building_lookup"))
-            item_lookup = build_lookup(guns, mods, lang=current_lang)
+            item_lookup = build_lookup(guns, mods, lang=current_lang, game_mode=current_game_mode)
             if status:
                 status.update(label=t("status.loaded", guns=len(guns), mods=len(mods)), state="complete")
         except Exception as e:
@@ -917,7 +959,7 @@ def main():
 
     # Build compatibility map immediately for sidebar filters
     # This ensures we only show compatible mods in the inclusion/exclusion lists
-    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang)
+    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang, game_mode=current_game_mode)
     reachable_ids = set(compat_map["reachable_items"].keys())
 
     # Display weapon image
@@ -1211,7 +1253,7 @@ def main():
                 # Build compatibility map (cached per weapon and language)
                 try:
                     status.update(label=t("status.building_compat"))
-                    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang)
+                    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang, game_mode=current_game_mode)
                     st.write(f"✓ {t('status.found_mods', count=len(compat_map['reachable_items']))}")
                 except Exception as e:
                     status.update(label=t("status.failed"), state="error")
@@ -1489,7 +1531,7 @@ def main():
                 # Build compatibility map (cached per weapon and language)
                 try:
                     status.update(label=t("status.building_compat"))
-                    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang)
+                    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang, game_mode=current_game_mode)
                     st.write(f"✓ {t('status.found_mods', count=len(compat_map['reachable_items']))}")
                 except Exception as e:
                     status.update(label=t("status.failed"), state="error")
@@ -1674,7 +1716,7 @@ def main():
                     with st.status(t("status.optimizing"), expanded=True) as status:
                         try:
                             status.update(label=t("status.building_compat"))
-                            target_compat_map = get_compat_map(target_gun_id, item_lookup, lang=current_lang)
+                            target_compat_map = get_compat_map(target_gun_id, item_lookup, lang=current_lang, game_mode=current_game_mode)
                             
                             status.update(label=t("status.running_solver"))
                             c = task.get("constraints", {})

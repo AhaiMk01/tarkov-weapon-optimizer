@@ -170,15 +170,15 @@ def run_query(query, variables=None, max_retries=3):
     raise RuntimeError(f"Failed to fetch data from API after {max_retries} attempts: {last_error}")
 
 
-def fetch_all_data(lang="en"):
+def fetch_all_data(lang="en", game_mode="regular"):
     """Fetch all guns and mods from the API with translations."""
-    logger.info(f"Fetching guns (lang={lang})...")
-    guns_data = run_query(GUNS_QUERY, variables={"lang": lang})
+    logger.info(f"Fetching guns (lang={lang}, gameMode={game_mode})...")
+    guns_data = run_query(GUNS_QUERY, variables={"lang": lang, "gameMode": game_mode})
     guns_list = guns_data.get("items", [])
     logger.info(f"Found {len(guns_list)} guns")
 
-    logger.info(f"Fetching mods (lang={lang})...")
-    mods_data = run_query(MODS_QUERY, variables={"lang": lang})
+    logger.info(f"Fetching mods (lang={lang}, gameMode={game_mode})...")
+    mods_data = run_query(MODS_QUERY, variables={"lang": lang, "gameMode": game_mode})
     mods_list = mods_data.get("items", [])
     logger.info(f"Found {len(mods_list)} mods")
 

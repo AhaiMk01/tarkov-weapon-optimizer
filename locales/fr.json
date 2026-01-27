@@ -4,6 +4,7 @@
     "subtitle": "Optimisez vos configurations d'armes en utilisant la programmation par contraintes"
   },
   "sidebar": {
+    "game_mode": "Mode de Jeu",
     "select_weapon": "Sélectionner une arme",
     "choose_weapon": "Choisissez une arme :",
     "filter_gun_type": "Filtrer par type",

@@ -4,6 +4,7 @@
     "subtitle": "Optimiere deine Waffenkonfigurationen mit Constraint-Programmierung"
   },
   "sidebar": {
+    "game_mode": "Spielmodus",
     "select_weapon": "Waffe auswählen",
     "choose_weapon": "Wähle eine Waffe:",
     "filter_gun_type": "Nach Typ filtern",
