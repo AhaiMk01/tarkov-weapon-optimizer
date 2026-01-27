@@ -21,10 +21,23 @@ from functools import lru_cache
 
 import streamlit as st
 
-# Available languages with display names
+# Available languages with display names (native)
 LANGUAGES = {
+    "cs": "Čeština",
+    "de": "Deutsch",
     "en": "English",
+    "es": "Español",
+    "fr": "Français",
+    "hu": "Magyar",
+    "it": "Italiano",
+    "ja": "日本語",
+    "ko": "한국어",
+    "pl": "Polski",
+    "pt": "Português",
+    "ro": "Română",
     "ru": "Русский",
+    "sk": "Slovenčina",
+    "tr": "Türkçe",
     "zh": "中文",
 }
 
@@ -112,13 +125,18 @@ def t(key: str, **kwargs) -> str:
     return value
 
 
-def language_selector(label: str = "Language", key: str = "lang_selector") -> str:
+def language_selector(
+    label: str = "Language",
+    key: str = "lang_selector",
+    clear_on_change: list = None,
+) -> str:
     """
     Render a language selector widget.
 
     Args:
         label: Label for the selectbox
         key: Streamlit widget key
+        clear_on_change: List of session state keys to clear when language changes
 
     Returns:
         Selected language code
@@ -137,6 +155,11 @@ def language_selector(label: str = "Language", key: str = "lang_selector") -> st
 
     if selected != current:
         set_language(selected)
+        # Clear specified session state keys on language change
+        if clear_on_change:
+            for state_key in clear_on_change:
+                if state_key in st.session_state:
+                    del st.session_state[state_key]
         st.rerun()
 
     return selected

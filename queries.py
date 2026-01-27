@@ -233,3 +233,25 @@ query AllMods {
   }
 }
 """
+
+# Query to fetch translations for all items
+TRANSLATIONS_QUERY = """
+query MyQuery($lang: LanguageCode) {
+  items(lang: $lang) {
+    id
+    name
+    shortName
+  }
+}
+"""
+
+# Query to fetch translated category names
+CATEGORIES_QUERY = """
+query transCategories($lang: LanguageCode) {
+  itemCategories(lang: $lang) {
+    id
+    name
+    normalizedName
+  }
+}
+"""

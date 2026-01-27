@@ -20,7 +20,7 @@ from collections import deque
 from loguru import logger
 from ortools.sat.python import cp_model
 
-from queries import GUNS_QUERY, MODS_QUERY
+from queries import GUNS_QUERY, MODS_QUERY, TRANSLATIONS_QUERY, CATEGORIES_QUERY
 
 # Configure loguru
 # Remove default handler and add custom one
@@ -74,7 +74,7 @@ def set_log_level(level: str):
 API_URL = "https://api.tarkov.dev/graphql"
 CACHE_DIR = os.path.join(os.path.dirname(__file__), ".cache")
 CACHE_TTL = 3600  # 1 hour in seconds
-CACHE_VERSION = 7  # Increment when data format changes
+CACHE_VERSION = 9  # Increment when data format changes
 
 
 def _get_cache_path(query, variables):
@@ -170,7 +170,7 @@ def run_query(query, variables=None, max_retries=3):
     raise RuntimeError(f"Failed to fetch data from API after {max_retries} attempts: {last_error}")
 
 
-def fetch_all_data():
+def fetch_all_data(lang="en"):
     """Fetch all guns and mods from the API (cached for 1 hour)."""
     logger.info("Fetching guns...")
     guns_data = run_query(GUNS_QUERY)
@@ -179,6 +179,70 @@ def fetch_all_data():
     logger.info("Fetching mods...")
     mods_data = run_query(MODS_QUERY)
     logger.info(f"Found {len(mods_data['itemsByType'])} mods")
+
+    if lang and lang != "en":
+        logger.info(f"Fetching translations ({lang})...")
+        try:
+            translations_data = run_query(TRANSLATIONS_QUERY, variables={"lang": lang})
+            translations = {item["id"]: item for item in translations_data.get("items", [])}
+            logger.info(f"Loaded {len(translations)} translations from API")
+            
+            # Apply translations to guns
+            for gun in guns_data["itemsByType"]:
+                if gun["id"] in translations:
+                    t_item = translations[gun["id"]]
+                    gun["name"] = t_item["name"]
+                    gun["shortName"] = t_item["shortName"]
+                    
+            # Apply translations to mods
+            translated_mods_count = 0
+            untranslated_mods_examples = []
+            translated_mods_examples = []
+            
+            for mod in mods_data["itemsByType"]:
+                if mod["id"] in translations:
+                    t_item = translations[mod["id"]]
+                    if translated_mods_count < 3:
+                        translated_mods_examples.append(f"{mod['name']} -> {t_item['name']}")
+                    
+                    mod["name"] = t_item["name"]
+                    mod["shortName"] = t_item["shortName"]
+                    translated_mods_count += 1
+                else:
+                    if len(untranslated_mods_examples) < 3:
+                        untranslated_mods_examples.append(f"{mod['id']}: {mod['name']}")
+            
+            logger.info(f"Applied translations to {translated_mods_count}/{len(mods_data['itemsByType'])} mods")
+            if translated_mods_examples:
+                logger.debug(f"Translation examples: {translated_mods_examples}")
+            if untranslated_mods_examples:
+                logger.warning(f"Missing translations for some mods: {untranslated_mods_examples}")
+
+        except Exception as e:
+            logger.warning(f"Failed to fetch translations: {e}")
+
+        # Fetch and apply category translations
+        try:
+            logger.info(f"Fetching category translations ({lang})...")
+            categories_data = run_query(CATEGORIES_QUERY, variables={"lang": lang})
+            categories = {cat["id"]: cat for cat in categories_data.get("itemCategories", [])}
+            logger.info(f"Loaded {len(categories)} category translations from API")
+
+            # Apply category translations to guns
+            for gun in guns_data["itemsByType"]:
+                bsg_cat = gun.get("bsgCategory")
+                if bsg_cat and bsg_cat.get("id") in categories:
+                    bsg_cat["name"] = categories[bsg_cat["id"]]["name"]
+
+            # Apply category translations to mods
+            for mod in mods_data["itemsByType"]:
+                bsg_cat = mod.get("bsgCategory")
+                if bsg_cat and bsg_cat.get("id") in categories:
+                    bsg_cat["name"] = categories[bsg_cat["id"]]["name"]
+
+            logger.info("Applied category translations to guns and mods")
+        except Exception as e:
+            logger.warning(f"Failed to fetch category translations: {e}")
 
     return guns_data["itemsByType"], mods_data["itemsByType"]
 

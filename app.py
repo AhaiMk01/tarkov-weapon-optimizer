@@ -61,20 +61,21 @@ st.set_page_config(
 
 # Cached data loading functions
 @st.cache_data(show_spinner=False)
-def load_data():
+def load_data(lang="en"):
     """Fetch all guns and mods from API (cached). Saves to debug file."""
-    logger.info("Loading game data...")
-    guns, mods = fetch_all_data()
+    logger.info(f"Loading game data (lang={lang})...")
+    guns, mods = fetch_all_data(lang=lang)
 
     # Save to debug file
     debug_data = {
         "fetched_at": datetime.now().isoformat(),
+        "lang": lang,
         "guns_count": len(guns),
         "mods_count": len(mods),
         "guns": guns,
         "mods": mods,
     }
-    with open("api_cache_debug.json", "w", encoding="utf-8") as f:
+    with open(f"api_cache_debug_{lang}.json", "w", encoding="utf-8") as f:
         json.dump(debug_data, f, indent=2, ensure_ascii=False)
 
     logger.info(f"Loaded {len(guns)} guns and {len(mods)} mods")
@@ -82,14 +83,14 @@ def load_data():
 
 
 @st.cache_data(show_spinner=False)
-def build_lookup(_guns, _mods):
-    """Build item lookup dictionary (cached)."""
+def build_lookup(_guns, _mods, lang="en"):
+    """Build item lookup dictionary (cached per language)."""
     return build_item_lookup(_guns, _mods)
 
 
 @st.cache_data(show_spinner=False)
-def get_compat_map(weapon_id, _item_lookup):
-    """Build compatibility map for a weapon (cached per weapon_id)."""
+def get_compat_map(weapon_id, _item_lookup, lang="en"):
+    """Build compatibility map for a weapon (cached per weapon_id and language)."""
     return build_compatibility_map(weapon_id, _item_lookup)
 
 
@@ -672,8 +673,12 @@ def main():
     logger.debug("Streamlit app main() started")
 
     # Language selector at top of sidebar
+    # Clear weapon filters when language changes (names are translated)
     with st.sidebar:
-        language_selector(label="🌐 Language")
+        language_selector(
+            label="🌐 Language",
+            clear_on_change=["selected_weapon", "type_filter", "caliber_filter"],
+        )
         st.markdown("---")
 
     # Title
@@ -685,10 +690,11 @@ def main():
         try:
             if status:
                 status.update(label=t("status.fetching"))
-            guns, mods = load_data()
+            current_lang = get_language()
+            guns, mods = load_data(lang=current_lang)
             if status:
                 status.update(label=t("status.building_lookup"))
-            item_lookup = build_lookup(guns, mods)
+            item_lookup = build_lookup(guns, mods, lang=current_lang)
             if status:
                 status.update(label=t("status.loaded", guns=len(guns), mods=len(mods)), state="complete")
         except Exception as e:
@@ -911,7 +917,7 @@ def main():
 
     # Build compatibility map immediately for sidebar filters
     # This ensures we only show compatible mods in the inclusion/exclusion lists
-    compat_map = get_compat_map(weapon_id, item_lookup)
+    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang)
     reachable_ids = set(compat_map["reachable_items"].keys())
 
     # Display weapon image
@@ -1202,10 +1208,10 @@ def main():
         if explore_button:
             logger.info(f"User started Pareto exploration for {selected_gun_name}")
             with st.status(t("status.exploring"), expanded=True) as status:
-                # Build compatibility map (cached per weapon)
+                # Build compatibility map (cached per weapon and language)
                 try:
                     status.update(label=t("status.building_compat"))
-                    compat_map = get_compat_map(weapon_id, item_lookup)
+                    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang)
                     st.write(f"✓ {t('status.found_mods', count=len(compat_map['reachable_items']))}")
                 except Exception as e:
                     status.update(label=t("status.failed"), state="error")
@@ -1480,10 +1486,10 @@ def main():
         if optimize_button:
             logger.info(f"User started optimization for {selected_gun_name} (weights: ergo={w_ergo}%, recoil={w_recoil}%, price={w_price}%)")
             with st.status(t("status.optimizing"), expanded=True) as status:
-                # Build compatibility map (cached per weapon)
+                # Build compatibility map (cached per weapon and language)
                 try:
                     status.update(label=t("status.building_compat"))
-                    compat_map = get_compat_map(weapon_id, item_lookup)
+                    compat_map = get_compat_map(weapon_id, item_lookup, lang=current_lang)
                     st.write(f"✓ {t('status.found_mods', count=len(compat_map['reachable_items']))}")
                 except Exception as e:
                     status.update(label=t("status.failed"), state="error")
@@ -1668,7 +1674,7 @@ def main():
                     with st.status(t("status.optimizing"), expanded=True) as status:
                         try:
                             status.update(label=t("status.building_compat"))
-                            target_compat_map = get_compat_map(target_gun_id, item_lookup)
+                            target_compat_map = get_compat_map(target_gun_id, item_lookup, lang=current_lang)
                             
                             status.update(label=t("status.running_solver"))
                             c = task.get("constraints", {})
