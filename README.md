@@ -10,6 +10,7 @@ An advanced weapon build optimizer for Escape from Tarkov. This tool uses **cons
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 [![GitHub Actions](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions/workflows/build.yml/badge.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions)
 [![Download](https://img.shields.io/badge/Download-Releases-green.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
+[![Github All Releases](https://img.shields.io/github/downloads/AhaiMk01/tarkov-weapon-optimizer/total.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
 
 ## 🚀 Key Features
 

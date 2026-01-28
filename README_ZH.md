@@ -10,6 +10,7 @@
 ![平台](https://img.shields.io/badge/平台-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
 [![GitHub Actions](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions/workflows/build.yml/badge.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions)
 [![下载](https://img.shields.io/badge/下载-Releases-green.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
+[![Github All Releases](https://img.shields.io/github/downloads/AhaiMk01/tarkov-weapon-optimizer/total.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
 
 ## 🚀 主要功能
 
