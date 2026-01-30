@@ -123,35 +123,6 @@ def load_tasks():
         return []
 
 
-def resolve_item_id(name_query, item_lookup):
-    """
-    Find item ID by name using fuzzy-ish matching.
-    Returns ID if found, else None.
-    """
-    # 1. Exact match (case-insensitive)
-    query_lower = name_query.lower().strip()
-    
-    candidates_substring = []
-    
-    for item_id, item in item_lookup.items():
-        name = item["data"]["name"]
-        name_lower = name.lower()
-        
-        if name_lower == query_lower:
-            return item_id
-            
-        if query_lower in name_lower:
-            candidates_substring.append(item_id)
-            
-    # 2. Substring match
-    # Prefer shortest name (closest match)
-    if candidates_substring:
-        candidates_substring.sort(key=lambda i: len(item_lookup[i]["data"]["name"]))
-        return candidates_substring[0]
-        
-    return None
-
-
 def get_image_url(item_data, prefer_high_res=False, prefer_icon=False):
     """Get image URL from item data with fallback chain."""
     if prefer_icon:
@@ -711,39 +682,35 @@ def main():
     logger.debug("Streamlit app main() started")
 
     # Language and game mode selectors at top of sidebar
-    # Clear weapon filters when language/game mode changes
+    # Clear weapon/category/item filters when language/game mode changes
+    # (translated names in selections won't match new language data)
     with st.sidebar:
+        filter_keys_to_clear = [
+            "selected_weapon", "type_filter", "caliber_filter", "weapon_selector",
+            "sb_inc_cat", "sb_exc_cat", "sb_inc_item", "sb_exc_item",
+        ]
         language_selector(
             label="🌐 Language",
-            clear_on_change=["selected_weapon", "type_filter", "caliber_filter"],
+            clear_on_change=filter_keys_to_clear,
         )
         game_mode_selector(
-            clear_on_change=["selected_weapon", "type_filter", "caliber_filter"],
+            clear_on_change=filter_keys_to_clear,
         )
         st.markdown("---")
 
-    # Title
-    st.title(f"🔫 {t('app.title')}")
-    st.markdown(t("app.subtitle"))
+    # Title (compact)
+    st.markdown(f"## 🔫 {t('app.title')}")
 
-    # Load data with status indicator
-    with st.status(t("status.loading"), expanded=False) as status:
-        try:
-            if status:
-                status.update(label=t("status.fetching"))
-            current_lang = get_language()
-            current_game_mode = get_game_mode()
+    # Load data
+    try:
+        current_lang = get_language()
+        current_game_mode = get_game_mode()
+        with st.spinner(t("status.loading")):
             guns, mods = load_data(lang=current_lang, game_mode=current_game_mode)
-            if status:
-                status.update(label=t("status.building_lookup"))
             item_lookup = build_lookup(guns, mods, lang=current_lang, game_mode=current_game_mode)
-            if status:
-                status.update(label=t("status.loaded", guns=len(guns), mods=len(mods)), state="complete")
-        except Exception as e:
-            if status:
-                status.update(label=t("status.failed_load"), state="error")
-            st.error(f"{t('status.failed_load')}: {e}")
-            st.stop()
+    except Exception as e:
+        st.error(f"{t('status.failed_load')}: {e}")
+        st.stop()
 
     # Load tasks
     tasks = load_tasks()
@@ -1644,11 +1611,21 @@ def main():
         if selected_task_name:
             task = task_options[selected_task_name]
             st.markdown(f"**{t('gunsmith.task_requirements')}**")
-            
+
+            # Build category ID to name map for display
+            category_id_to_name = {}
+            for item in item_lookup.values():
+                cat_id = item["stats"].get("category_id")
+                cat_name = item["stats"].get("category")
+                if cat_id and cat_name and cat_id not in category_id_to_name:
+                    category_id_to_name[cat_id] = cat_name
+
             # Show requirements
             req_cols = st.columns(3)
             with req_cols[0]:
-                st.write(f"**{t('gunsmith.weapon')}:** {task['weapon_name']}")
+                weapon_id = task.get("weapon_id")
+                weapon_name = item_lookup[weapon_id]["data"]["name"] if weapon_id and weapon_id in item_lookup else "Unknown"
+                st.write(f"**{t('gunsmith.weapon')}:** {weapon_name}")
             with req_cols[1]:
                 constraints = task.get("constraints", {})
                 if constraints:
@@ -1665,53 +1642,41 @@ def main():
                         label = t(key_map.get(k, k))
                         st.write(f"- {label}: {v}")
             with req_cols[2]:
-                required_items = task.get("required_items", [])
-                required_categories = task.get("required_categories", [])
-                required_groups = task.get("required_category_groups", [])
-                
-                if required_items or required_categories or required_groups:
+                required_item_ids = task.get("required_item_ids", [])
+                required_category_group_ids = task.get("required_category_group_ids", [])
+
+                if required_item_ids or required_category_group_ids:
                     st.write(f"**{t('gunsmith.required_items')}:**")
-                    for item in required_items:
-                        st.write(f"- {item}")
-                    for cat in required_categories:
-                        st.write(f"- Category: {cat}")
-                    for group in required_groups:
-                        st.write(f"- One of: {', '.join(group)}")
+                    for item_id in required_item_ids:
+                        item_name = item_lookup[item_id]["data"]["name"] if item_id in item_lookup else item_id
+                        st.write(f"- {item_name}")
+                    for group in required_category_group_ids:
+                        group_names = [category_id_to_name.get(cat_id, cat_id) for cat_id in group]
+                        st.write(f"- One of: {', '.join(group_names)}")
             
             st.markdown("---")
             
             if st.button(t("gunsmith.optimize_btn"), type="primary"):
                 logger.info(f"User started Gunsmith task optimization for {selected_task_name}")
-                target_gun_id = None
-                for gun in guns:
-                    if gun["name"] == task["weapon_name"]:
-                        target_gun_id = gun["id"]
-                        break
-                
-                if not target_gun_id:
-                    st.error(t("gunsmith.weapon_not_found", name=task["weapon_name"]))
+                # Get weapon ID directly from task (tasks.json now uses IDs)
+                target_gun_id = task.get("weapon_id")
+
+                if not target_gun_id or target_gun_id not in item_lookup:
+                    st.error(t("gunsmith.weapon_not_found", name=task["task_name"]))
                 else:
-                    task_include_items = set()
-                    missing_items = []
-                    for item_name in task.get("required_items", []):
-                        resolved_id = resolve_item_id(item_name, item_lookup)
-                        if resolved_id:
-                            task_include_items.add(resolved_id)
-                        else:
-                            missing_items.append(item_name)
-                    
-                    # Resolved categories
-                    task_include_categories = []
-                    if "required_category_groups" in task:
-                        task_include_categories.extend(task["required_category_groups"])
-                    if "required_categories" in task:
-                        # Convert simple list to list of lists (AND logic)
-                        for cat in task["required_categories"]:
-                            task_include_categories.append([cat])
-                    
+                    # Get required item IDs directly from task
+                    task_include_items = set(task.get("required_item_ids", []))
+
+                    # Check for missing items (items not in current item_lookup)
+                    missing_items = [item_id for item_id in task_include_items if item_id not in item_lookup]
+                    task_include_items -= set(missing_items)
+
+                    # Get category group IDs directly from task
+                    task_include_categories = task.get("required_category_group_ids", [])
+
                     if missing_items:
-                        for m in missing_items:
-                            st.warning(t("gunsmith.missing_item", name=m))
+                        for item_id in missing_items:
+                            st.warning(t("gunsmith.missing_item", name=item_id))
                     
                     with st.status(t("status.optimizing"), expanded=True) as status:
                         try:
@@ -1752,8 +1717,18 @@ def main():
                                 target_gun_data = item_lookup[target_gun_id]["data"]
                                 
                                 task_constraints = c.copy()
-                                task_constraints["include_items"] = sorted([item_lookup[i]["data"]["name"] for i in task_include_items])
-                                task_constraints["include_categories"] = sorted(list(task_include_categories))
+                                task_constraints["include_items"] = sorted([item_lookup[i]["data"]["name"] for i in task_include_items if i in item_lookup])
+                                # Convert category IDs to names for display
+                                category_id_to_name = {}
+                                for item in item_lookup.values():
+                                    cat_id = item["stats"].get("category_id")
+                                    cat_name = item["stats"].get("category")
+                                    if cat_id and cat_name and cat_id not in category_id_to_name:
+                                        category_id_to_name[cat_id] = cat_name
+                                task_constraints["include_categories"] = [
+                                    [category_id_to_name.get(cat_id, cat_id) for cat_id in group]
+                                    for group in task_include_categories
+                                ]
                                 
                                 display_optimization_results(
                                     result, item_lookup, target_stats, target_presets, target_gun_data, task_constraints

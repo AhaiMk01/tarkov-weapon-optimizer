@@ -586,6 +586,8 @@ def extract_mod_stats(mod):
         "sighting_range": props.get("sightingRange") or 0,
         # BSG Category name (e.g. "Silencer", "Scope")
         "category": mod.get("bsgCategory", {}).get("name"),
+        # BSG Category ID (language-agnostic)
+        "category_id": mod.get("bsgCategory", {}).get("id", "") if mod.get("bsgCategory") else "",
     }
 
 
@@ -1045,20 +1047,23 @@ def _check_constraints_feasibility(
                 name = item_lookup.get(req_id, {}).get("data", {}).get("name", req_id)
                 reasons.append(f"Required item '{name}' is not compatible with this weapon")
 
-    # Check include_categories
+    # Check include_categories (supports both names and IDs for language-agnostic matching)
     if include_categories:
         for i, group in enumerate(include_categories):
-            group_names = [cat for cat in group if isinstance(cat, str)]
-            if not group_names:
+            group_values = [cat for cat in group if isinstance(cat, str)]
+            if not group_values:
                 continue
             found = False
             for item_id in available_items:
-                cat = item_lookup[item_id]["stats"].get("category", "")
-                if cat in group_names:
+                stats = item_lookup[item_id]["stats"]
+                cat_name = stats.get("category", "")
+                cat_id = stats.get("category_id", "")
+                # Match by category name OR category_id
+                if cat_name in group_values or cat_id in group_values:
                     found = True
                     break
             if not found:
-                reasons.append(f"No items found for required category group: {group_names}")
+                reasons.append(f"No items found for required category group: {group_values}")
 
     # Check min_mag_capacity
     if min_mag_capacity:
@@ -1224,9 +1229,10 @@ def optimize_weapon(
 
         stats = item_lookup[item_id]["stats"]
 
-        # Category exclusion
+        # Category exclusion (supports both category names and IDs)
         category = stats.get("category")
-        if category and category in exclude_categories_set:
+        category_id = stats.get("category_id")
+        if (category and category in exclude_categories_set) or (category_id and category_id in exclude_categories_set):
             continue
 
         price, source, is_available = get_available_price(
@@ -1391,12 +1397,15 @@ def optimize_weapon(
                 model.Add(0 == 1)
 
     # Constraint: Included categories (List of Groups, where each Group is OR)
+    # Supports both category names and category IDs for language-agnostic matching
     if include_categories:
         for group in include_categories:
             group_vars = []
             for req_cat in group:
                 for item_id, var in item_vars.items():
-                    if item_lookup[item_id]["stats"].get("category") == req_cat:
+                    stats = item_lookup[item_id]["stats"]
+                    # Match by category name OR category_id (for language-agnostic matching)
+                    if stats.get("category") == req_cat or stats.get("category_id") == req_cat:
                         group_vars.append(var)
             if group_vars:
                 model.Add(sum(group_vars) >= 1)

@@ -1,22 +1,24 @@
 [
   {
     "task_name": "Gunsmith - Part 1 (MP-133)",
-    "weapon_name": "MP-133 12ga pump-action shotgun",
     "constraints": {
       "min_ergonomics": 47,
       "max_recoil_sum": 850,
       "min_mag_capacity": 5
     },
-    "required_items": [
-      "MP-133/153 plastic pistol grip"
+    "weapon_id": "54491c4f4bdc2db1078b4568",
+    "required_item_ids": [
+      "56083a334bdc2dc8488b4571"
     ],
-    "required_category_groups": [
-      ["Comb. tact. device", "Flashlight", "Laser Designator"]
+    "required_category_group_ids": [
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 2 (AKS-74U)",
-    "weapon_name": "Kalashnikov AKS-74U 5.45x39 assault rifle",
     "constraints": {
       "min_ergonomics": 59,
       "max_recoil_sum": 550,
@@ -24,13 +26,13 @@
       "min_mag_capacity": 60,
       "max_weight": 3.5
     },
-    "required_items": [
-      "AKS-74U Zenit B-11 handguard"
+    "weapon_id": "57dc2fa62459775949412633",
+    "required_item_ids": [
+      "57ffa9f4245977728561e844"
     ]
   },
   {
     "task_name": "Gunsmith - Part 3 (MP5)",
-    "weapon_name": "HK MP5 9x19 submachine gun (Navy 3 Round Burst)",
     "constraints": {
       "min_ergonomics": 45,
       "max_recoil_sum": 210,
@@ -38,17 +40,22 @@
       "max_weight": 4.0,
       "min_mag_capacity": 50
     },
-    "required_items": [
-      "HK MP5 9x19 X Products X-5 50-round drum magazine"
+    "weapon_id": "5926bb2186f7744b1c6c6e60",
+    "required_item_ids": [
+      "5a351711c4a282000b1521a4"
     ],
-    "required_category_groups": [
-      ["Silencer"],
-      ["Comb. tact. device", "Flashlight", "Laser Designator"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ],
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 4 (OP-SKS)",
-    "weapon_name": "Molot Arms Simonov OP-SKS 7.62x39 carbine",
     "constraints": {
       "min_ergonomics": 35,
       "max_recoil_sum": 350,
@@ -56,44 +63,53 @@
       "max_weight": 6.0,
       "min_mag_capacity": 20
     },
-    "required_category_groups": [
-      ["Silencer"]
+    "weapon_id": "587e02ff24597743df3deaeb",
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 5 (M870)",
-    "weapon_name": "Remington Model 870 12ga pump-action shotgun",
     "constraints": {
       "min_ergonomics": 60,
       "max_recoil_sum": 500
     },
-    "required_items": [
-      "M870 Magpul MOE handguard"
+    "weapon_id": "5a7828548dc32e5a9c28b516",
+    "required_item_ids": [
+      "5a788068c5856700137e4c8f"
     ],
-    "required_category_groups": [
-      ["Comb. tact. device", "Flashlight", "Laser Designator"],
-      ["Foregrip"]
+    "required_category_group_ids": [
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ],
+      [
+        "55818af64bdc2d5b648b4570"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 6 (AKM)",
-    "weapon_name": "Kalashnikov AKM 7.62x39 assault rifle",
     "constraints": {
       "min_ergonomics": 40,
       "max_recoil_sum": 400,
       "min_sighting_range": 800
     },
-    "required_items": [
-      "Fortis Shift tactical foregrip",
-      "AK 7.62x39 Magpul PMAG 30 GEN M3 30-round magazine"
+    "weapon_id": "59d6088586f774275f37482f",
+    "required_item_ids": [
+      "59f8a37386f7747af3328f06",
+      "59d6272486f77466146386ff"
     ],
-    "required_category_groups": [
-      ["Silencer"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 7 (M4A1)",
-    "weapon_name": "Colt M4A1 5.56x45 assault rifle",
     "constraints": {
       "min_ergonomics": 47,
       "max_recoil_sum": 300,
@@ -101,109 +117,120 @@
       "min_mag_capacity": 60,
       "max_weight": 3.8
     },
-    "required_category_groups": [
-      ["Silencer"]
+    "weapon_id": "5447a9cd4bdc2dbd208b4567",
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 8 (AKS-74N)",
-    "weapon_name": "Kalashnikov AKS-74N 5.45x39 assault rifle",
     "constraints": {
       "min_ergonomics": 60,
       "max_recoil_sum": 275
     },
-    "required_items": [
-      "AK Zenit B-30 handguard with B-31S upper handguard rail",
-      "Zenit RK-0 tactical foregrip",
-      "AK-12 5.45x39 30-round magazine",
-      "Zenit Klesch-2IKS IR illuminator with laser",
-      "AK Zenit DTK-1 7.62x39/5.45x39 muzzle brake",
-      "AK Zenit RK-3 pistol grip",
-      "AKS-74/AKS-74U Zenit PT Lock",
-      "AK Zenit PT-3 \"Klassika\" stock",
-      "AK Zenit B-33 dust cover"
+    "weapon_id": "5ab8e9fcd8ce870019439434",
+    "required_item_ids": [
+      "5efaf417aeb21837e749c7f2",
+      "5c1bc4812e22164bef5cfde7",
+      "5bed61680db834001d2c45ab",
+      "5a5f1ce64f39f90b401987bc",
+      "5649ab884bdc2ded0b8b457f",
+      "5649ae4a4bdc2d1b2b8b4588",
+      "59ecc28286f7746d7a68aa8c",
+      "59ecc3dd86f7746dc827481c",
+      "5649af884bdc2d1b2b8b4589"
     ]
   },
   {
     "task_name": "Gunsmith - Part 9 (P226R)",
-    "weapon_name": "SIG P226R 9x19 pistol",
     "constraints": {
       "min_ergonomics": 80,
       "max_recoil_sum": 610
     },
-    "required_items": [
-      "P226 Stainless Elite pistol slide",
-      "P226 Stainless Elite Wooden pistol grip",
-      "P226 9x19 20-round extended magazine"
+    "weapon_id": "56d59856d2720bd8418b456a",
+    "required_item_ids": [
+      "5c0009510db834001966907f",
+      "5c00076d0db834001d23ee1f",
+      "5c920e902e221644f31c3c99"
     ],
-    "required_category_groups": [
-      ["Comb. tact. device", "Flashlight", "Laser Designator"]
+    "required_category_group_ids": [
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 10 (AK-105)",
-    "weapon_name": "Kalashnikov AK-105 5.45x39 assault rifle",
     "constraints": {
       "min_ergonomics": 38,
       "max_recoil_sum": 500,
       "min_sighting_range": 800,
       "max_weight": 4.8
     },
-    "required_items": [
-      "AK-74 5.45x39 6L31 60-round magazine"
+    "weapon_id": "5ac66d9b5acfc4001633997a",
+    "required_item_ids": [
+      "55d482194bdc2d1d4e8b456b"
     ],
-    "required_category_groups": [
-      ["Silencer"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 11 (Vector 9x19)",
-    "weapon_name": "TDI KRISS Vector Gen.2 9x19 submachine gun",
     "constraints": {
       "min_ergonomics": 50,
       "max_recoil_sum": 230,
       "min_sighting_range": 300
     },
-    "required_items": [
-      "KRISS Vector Mk.5 modular rail",
-      "Tactical Dynamics Skeletonized Foregrip",
-      "Glock 9x19 \"Big Stick\" 33-round magazine"
+    "weapon_id": "5fc3f2d5900b1d5091531e57",
+    "required_item_ids": [
+      "5fbb978207e8a97d1f0902d3",
+      "5f6340d3ca442212f4047eb2",
+      "5a7ad2e851dfba0016153692"
     ],
-    "required_category_groups": [
-      ["Silencer"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 12 (MPX)",
-    "weapon_name": "SIG MPX 9x19 submachine gun",
     "constraints": {
       "min_ergonomics": 52,
       "max_recoil_sum": 225,
       "min_sighting_range": 300,
       "max_weight": 4.0
     },
-    "required_items": [
-      "AR-15 Tactical Dynamics Skeletonized pistol grip",
-      "Yankee Hill Annihilator multi-caliber flash hider",
-      "Steiner LAS/TAC 2 tactical flashlight"
+    "weapon_id": "58948c8e86f77409493f7266",
+    "required_item_ids": [
+      "5b07db875acfc40dc528a5f6",
+      "5b3a16655acfc40016387a2a",
+      "5b07dd285acfc4001754240d"
     ]
   },
   {
     "task_name": "Gunsmith - Part 13 (RSASS)",
-    "weapon_name": "Remington R11 RSASS 7.62x51 marksman rifle",
     "constraints": {
       "min_ergonomics": 26,
       "max_recoil_sum": 300,
       "min_sighting_range": 1500,
       "max_weight": 6.7
     },
-    "required_category_groups": [
-      ["Silencer"]
+    "weapon_id": "5a367e5dc4a282000e49738f",
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 14 (HK 416A5)",
-    "weapon_name": "HK 416A5 5.56x45 assault rifle",
     "constraints": {
       "min_ergonomics": 60,
       "max_recoil_sum": 300,
@@ -211,113 +238,118 @@
       "min_sighting_range": 300,
       "min_mag_capacity": 30
     },
-    "required_items": [
-      "SureFire SOCOM556-RC2 5.56x45 sound suppressor",
-      "Magpul RVG foregrip (FDE)",
-      "EOTech EXPS3-0 holographic sight (Tan)",
-      "AR-15 Magpul UBR GEN2 stock (FDE)",
-      "AR-15 Magpul MOE pistol grip (FDE)",
-      "L3Harris LA-5B/PEQ tactical device"
+    "weapon_id": "5bb2475ed4351e00853264e3",
+    "required_item_ids": [
+      "5ea17bbc09aa976f2e7a51cd",
+      "5fce0cf655375d18a253eff0",
+      "558022b54bdc2dac148b458d",
+      "5947eab886f77475961d96c5",
+      "5d15cf3bd7ad1a67e71518b2",
+      "5c06595c0db834001a66af6c"
     ]
   },
   {
     "task_name": "Gunsmith - Part 15 (AS VAL)",
-    "weapon_name": "AS VAL 9x39 special assault rifle",
     "constraints": {
       "min_ergonomics": 33,
       "max_recoil_sum": 220,
       "min_mag_capacity": 30
     },
-    "required_items": [
-      "AR-15 FAB Defense GL-SHOCK buttstock",
-      "L3Harris AN/PEQ-15 tactical device",
-      "NSPU-M 3.5x dovetail night vision scope",
-      "VSS/VAL 9x39 SR3M.130 30-round magazine"
+    "weapon_id": "57c44b372459772d2b39b8ce",
+    "required_item_ids": [
+      "5a9eb32da2750c00171b3f9c",
+      "544909bb4bdc2d6f028b4577",
+      "5a7c74b3e899ef0014332c29",
+      "5a9e81fba2750c00164f6b11"
     ]
   },
   {
     "task_name": "Gunsmith - Part 16 (DVL-10)",
-    "weapon_name": "Lobaev Arms DVL-10 7.62x51 bolt-action sniper rifle",
     "constraints": {
       "min_ergonomics": 40,
       "max_recoil_sum": 450,
       "min_sighting_range": 2000,
       "max_weight": 6.7
     },
-    "required_category_groups": [
-      ["Comb. tact. device", "Flashlight", "Laser Designator"]
+    "weapon_id": "588892092459774ac91d4b11",
+    "required_category_group_ids": [
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 17 (AK-102)",
-    "weapon_name": "Kalashnikov AK-102 5.56x45 assault rifle",
     "constraints": {
       "min_ergonomics": 68,
       "max_recoil_sum": 300,
       "min_sighting_range": 800
     },
-    "required_items": [
-      "Ferfrans CRD 5.56x45 Concussion Reduction Device",
-      "Magpul AFG tactical foregrip (Olive Drab)",
-      "Zenit Klesch-2U tactical flashlight",
-      "RPK-16 buffer tube",
-      "SLR-106/AK 5.56x45 Circle 10 30-round magazine"
+    "weapon_id": "5ac66d015acfc400180ae6e4",
+    "required_item_ids": [
+      "5f6339d53ada5942720e2dc3",
+      "588226ef24597767af46e39c",
+      "5b3a337e5acfc4704b4a19a0",
+      "5beec8b20db834001961942a",
+      "5c0548ae0db834001966a3c2"
     ]
   },
   {
     "task_name": "Gunsmith - Part 18 (AKMN)",
-    "weapon_name": "Kalashnikov AKMN 7.62x39 assault rifle",
     "constraints": {
       "min_ergonomics": 45,
       "max_recoil_sum": 350,
       "max_weight": 5.0
     },
-    "required_items": [
-      "AK Magpul MOE AKM handguard (Black)",
-      "AKM/AK-74 Magpul Zhukov-S stock",
-      "AK Magpul MOE pistol grip (Black)",
-      "AK 7.62x39 Magpul PMAG 30 GEN M3 30-round magazine",
-      "Magpul M-LOK AFG tactical foregrip (Black)",
-      "Rotor 43 7.62x39 sound suppressor",
-      "EOTech HHS-1 hybrid sight"
+    "weapon_id": "5a0ec13bfcdbcb00165aa685",
+    "required_item_ids": [
+      "57cff947245977638e6f2a19",
+      "5b0e794b5acfc47a877359b2",
+      "5b30ac585acfc433000eb79c",
+      "59d6272486f77466146386ff",
+      "57cffb66245977632f391a99",
+      "5a9fbacda2750c00141e080f",
+      "5c07dd120db834001c39092d"
     ]
   },
   {
     "task_name": "Gunsmith - Part 19 (SVDS)",
-    "weapon_name": "SVDS 7.62x54R sniper rifle",
     "constraints": {
       "min_ergonomics": 15,
       "max_recoil_sum": 500
     },
-    "required_items": [
-      "AR-15 Magpul UBR GEN2 stock (Black)",
-      "SVD SAG MK1 chassis",
-      "AK Magpul MOE pistol grip (Black)",
-      "March Tactical 3-24x42 FFP 30mm riflescope"
+    "weapon_id": "5c46fbd72e2216398b5a8c9c",
+    "required_item_ids": [
+      "5947e98b86f774778f1448bc",
+      "5dfcd0e547101c39625f66f9",
+      "5b30ac585acfc433000eb79c",
+      "57c5ac0824597754771e88a9"
     ],
-    "required_category_groups": [
-      ["Silencer"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 20 (M1A)",
-    "weapon_name": "Springfield Armory M1A 7.62x51 rifle",
     "constraints": {
       "min_ergonomics": 20,
       "max_recoil_sum": 400,
       "max_weight": 7.3,
       "min_mag_capacity": 20
     },
-    "required_items": [
-      "M14 UltiMAK M8 Forward Optic mount",
-      "Nightforce ATACR 7-35x56 34mm riflescope",
-      "Aimpoint Micro T-1 reflex sight",
-      "Holosun LS321 Tactical device"
+    "weapon_id": "5aafa857e5b5b00018480968",
+    "required_item_ids": [
+      "5addbfbb5acfc400194dbcf7",
+      "5aa66be6e5b5b0214e506e97",
+      "58d399e486f77442e0016fe7",
+      "57fd23e32459772d0805bcf1"
     ]
   },
   {
     "task_name": "Gunsmith - Part 21 (M700)",
-    "weapon_name": "Remington Model 700 7.62x51 bolt-action sniper rifle",
     "constraints": {
       "min_ergonomics": 35,
       "max_recoil_sum": 500,
@@ -325,137 +357,144 @@
       "max_weight": 6.0,
       "min_mag_capacity": 5
     },
-    "required_items": [
-      "M700 AB Arms MOD*X GEN 3 chassis",
-      "M700 AB Arms MOD*X GEN 3 KeyMod handguard",
-      "M700 AB Arms MOD*X rail mount"
+    "weapon_id": "5bfea6e90db834001b7347f3",
+    "required_item_ids": [
+      "5cde739cd7f00c0010373bd3",
+      "5cde7afdd7f00c000d36b89d",
+      "5cde7b43d7f00c000d36b93e"
     ],
-    "required_category_groups": [
-      ["Silencer"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Part 22 (M4A1)",
-    "weapon_name": "Colt M4A1 5.56x45 assault rifle",
     "constraints": {
       "min_ergonomics": 40,
       "max_recoil_sum": 270,
       "max_weight": 5.0,
       "min_mag_capacity": 60
     },
-    "required_items": [
-      "KAC QDSS NT4 5.56x45 sound suppressor (FDE)",
-      "AR-15 Alexander Arms MK10 rifle length handguard",
-      "Trijicon REAP-IR thermal scope"
+    "weapon_id": "5447a9cd4bdc2dbd208b4567",
+    "required_item_ids": [
+      "57dbb57e2459774673234890",
+      "5b2cfa535acfc432ff4db7a0"
     ]
   },
   {
     "task_name": "Gunsmith - Part 23 (Mk47 Mutant)",
-    "weapon_name": "CMMG Mk47 Mutant 7.62x39 assault rifle",
     "constraints": {
       "min_ergonomics": 30,
       "max_weight": 5.0
     },
-    "required_items": [
-      "AR-10 Noveske SWS N6 Split handguard",
-      "Mk47 409mm barrel",
-      "AR-10 Odin Works ATLAS-7 7.62x51 muzzle brake",
-      "Tactical Dynamics Skeletonized Foregrip",
-      "Glock GTL 21 tactical flashlight with laser",
-      "Vortex Razor AMG UH-1 holographic sight",
-      "AR-15 HK E1 buttstock",
-      "AR-15 F1 Firearms Skeletonized Style 2 pistol grip",
-      "AK 7.62x39 ProMag AK-A-16 73-round drum magazine"
+    "weapon_id": "606587252535c57a13424cfd",
+    "required_item_ids": [
+      "5d00ef6dd7ad1a0940739b16",
+      "6065878ac9cf8012264142fd",
+      "5bbdb8bdd4351e4502011460",
+      "5f6340d3ca442212f4047eb2",
+      "5a800961159bd4315e3a1657",
+      "59f9d81586f7744c7506ee62",
+      "5c87a07c2e2216001219d4a2",
+      "6113cce3d92c473c770200c7",
+      "5c6175362e221600133e3b94"
     ]
   },
   {
     "task_name": "Gunsmith - Part 24 (SR-25)",
-    "weapon_name": "Knight's Armament Company SR-25 7.62x51 marksman rifle",
     "constraints": {
       "min_ergonomics": 25,
       "max_weight": 6.0
     },
-    "required_items": [
-      "KAC PRS/QDC 7.62x51 sound suppressor",
-      "Stark SE-5 Express Forward foregrip",
-      "AR-15 Magpul PRS GEN3 stock (Black)",
-      "AR-15 HK Ergo PSG-1 style pistol grip",
-      "Steiner DBAL-PL tactical device",
-      "Burris FastFire 3 reflex sight",
-      "NcSTAR MPR45 Backup mount",
-      "AR-10 7.62x51 KAC 10-round steel magazine",
-      "FLIR RS-32 2.25-9x 35mm 60Hz thermal riflescope"
+    "weapon_id": "5df8ce05b11454561e39243b",
+    "required_item_ids": [
+      "5dfa3d2b0dee1b22f862eade",
+      "5b057b4f5acfc4771e1bd3e9",
+      "5d44069ca4b9361ebd26fc37",
+      "5d025cc1d7ad1a53845279ef",
+      "5d2369418abbc306c62e0c80",
+      "577d141e24597739c5255e01",
+      "5649a2464bdc2d91118b45a8",
+      "5df8f535bb49d91fb446d6b0",
+      "5d1b5e94d7ad1a2b865a96b0"
     ]
   },
   {
     "task_name": "Gunsmith - Part 25 (PKP)",
-    "weapon_name": "Kalashnikov PKP 7.62x54R infantry machine gun",
     "constraints": {
       "min_ergonomics": 11,
       "max_recoil_sum": 950
     },
-    "required_items": [
-      "PK Zenit B-50 handguard",
-      "PK Zenit PT-2 \"Klassika\" stock",
-      "PK Zenit DTK-1P 7.62x54R muzzle brake",
-      "NPZ USP-1 Tyulpan 4x scope",
-      "PK 7.62x54R 100-round box",
-      "AK Custom Arms AGS-74 PRO + Sniper Kit pistol grip",
-      "AK-74 bakelite pistol grip",
-      "AK GP-25 accessory kit recoil pad",
-      "NPZ USP-1 scope eyecup"
+    "weapon_id": "64ca3d3954fc657e230529cc",
+    "required_item_ids": [
+      "6491c6f6ef312a876705191b",
+      "6492d7847363b8a52206bc52",
+      "6492ef63cfcf7c89e701abf1",
+      "5cf638cbd7f00c06595bc936",
+      "646372518610c40fc20204e8",
+      "6087e663132d4d12c81fd96b",
+      "5649ad3f4bdc2df8348b4585",
+      "5a0c59791526d8dba737bba7",
+      "5cf639aad7f00c065703d455"
     ],
-    "required_category_groups": [
-      ["Comb. tact. device", "Flashlight", "Laser Designator"]
+    "required_category_group_ids": [
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Old Friend's Request (T-5000M)",
-    "weapon_name": "ORSIS T-5000M 7.62x51 bolt-action sniper rifle",
     "constraints": {
       "min_ergonomics": 18,
       "max_recoil_sum": 500,
       "min_mag_capacity": 5
     },
-    "required_items": [
-      "Nightforce ATACR 7-35x56 34mm riflescope",
-      "Harris S-BRM 6-9\" Bipod"
+    "weapon_id": "5df24cf80dee1b22f862e9bc",
+    "required_item_ids": [
+      "5aa66be6e5b5b0214e506e97",
+      "5888961624597754281f93f3"
     ],
-    "required_category_groups": [
-      ["Silencer"]
+    "required_category_group_ids": [
+      [
+        "550aa4cd4bdc2dd8348b456c"
+      ]
     ]
   },
   {
     "task_name": "Gunsmith - Old Friend's Request (PP-19-01)",
-    "weapon_name": "PP-19-01 Vityaz 9x19 submachine gun",
     "constraints": {
       "min_ergonomics": 58,
       "max_recoil_sum": 400,
       "min_mag_capacity": 30
     },
-    "required_items": [
-      "Aimpoint Micro T-1 reflex sight",
-      "Aimpoint Micro Spacer High",
-      "Zenit RK-6 tactical foregrip",
-      "AK Zenit RK-3 pistol grip",
-      "AK Zenit PT-3 \"Klassika\" stock",
-      "L3Harris AN/PEQ-15 tactical device",
-      "Zenit Klesch-2P flashlight with laser",
-      "PP-19-01 Vityaz 9x19 sound suppressor"
+    "weapon_id": "59984ab886f7743e98271174",
+    "required_item_ids": [
+      "58d399e486f77442e0016fe7",
+      "58d39b0386f77443380bf13c",
+      "5c1bc7752e221602b1779b34",
+      "5649ae4a4bdc2d1b2b8b4588",
+      "59ecc3dd86f7746dc827481c",
+      "544909bb4bdc2d6f028b4577",
+      "560d657b4bdc2da74d8b4572",
+      "59bfc5c886f7743bf6794e62"
     ]
   },
   {
     "task_name": "Gunsmith - Old Friend's Request (Glock 17)",
-    "weapon_name": "Glock 17 9x19 pistol",
     "constraints": {
       "min_ergonomics": 90,
       "min_mag_capacity": 21
     },
-    "required_items": [
-      "Zenit Klesch-2P flashlight with laser",
-      "Glock Pachmayr Tactical Grip Glove",
-      "Glock 9x19 Double Diamond 114mm threaded barrel",
-      "Glock 9x19 Double Diamond thread protector"
+    "weapon_id": "5a7ae0c351dfba0017554310",
+    "required_item_ids": [
+      "560d657b4bdc2da74d8b4572",
+      "5a7b4960e899ef197b331a2d",
+      "5a6b5e468dc32e001207faf5",
+      "5a6b592c8dc32e00094b97bf"
     ]
   }
 ]
