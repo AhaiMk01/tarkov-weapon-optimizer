@@ -495,6 +495,8 @@ def extract_gun_stats(gun):
         # Price info (naked weapon price, not including preset)
         "price": lowest_price,
         "price_source": price_source,
+        # Weight (explicitly float)
+        "weight": float(gun.get("weight") or 0),
     }
 
 
@@ -573,8 +575,8 @@ def extract_mod_stats(mod):
         "price": lowest_price,
         # Price source (trader name or "market")
         "price_source": price_source,
-        # Weight
-        "weight": mod.get("weight", 0) or 0,
+        # Weight (explicitly float)
+        "weight": float(mod.get("weight") or 0),
         # Grid size
         "width": mod.get("width", 0) or 0,
         "height": mod.get("height", 0) or 0,
@@ -757,7 +759,7 @@ def calculate_total_stats(weapon_stats, selected_mods, item_lookup):
     total_ergo = weapon_stats["naked_ergonomics"]
     total_recoil_mod = 0.0
     total_price = 0
-    total_weight = weapon_stats.get("weight", 0)  # Include base weapon weight
+    total_weight = float(weapon_stats.get("weight", 0))  # Include base weapon weight
 
     for mod_id in selected_mods:
         if mod_id in item_lookup:

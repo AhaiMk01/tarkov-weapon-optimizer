@@ -898,10 +898,10 @@ def main():
     gun_names = sorted(gun_options.keys())
 
     # Show match count
-    st.sidebar.caption(f"Showing {len(gun_names)} of {len(guns)} weapons")
+    st.sidebar.caption(t("sidebar.showing_count", count=len(gun_names), total=len(guns)))
 
     if not gun_names:
-        st.sidebar.warning("No weapons match the selected filters.")
+        st.sidebar.warning(t("sidebar.no_match"))
         st.stop()
 
     # Determine initial selection index - preserve previous selection if still valid
@@ -991,8 +991,8 @@ def main():
                 preset_price = preset.get("price", 0)
                 preset_items = preset.get("items", [])
                 st.markdown(f"**{preset_name}**")
-                st.markdown(f"  - Price: ₽{preset_price:,}")
-                st.markdown(f"  - Items: {len(preset_items)}")
+                st.markdown(f"  - {t('sidebar.preset_price', price=f'{preset_price:,}')}")
+                st.markdown(f"  - {t('sidebar.preset_items', count=len(preset_items))}")
                 st.markdown("---")
 
     # Player Level and Trader Settings
@@ -1419,8 +1419,8 @@ def main():
             c=[w_price],
             mode='markers',
             marker=dict(size=18, color='red', symbol='circle', line=dict(width=2, color='white')),
-            name='Current',
-            hovertemplate=f"<b>Current</b><br>{t('optimize.preset_ergo')}: %{{a}}%<br>{t('optimize.preset_recoil')}: %{{b}}%<br>{t('optimize.preset_price')}: %{{c}}%<extra></extra>",
+            name=t('chart.current_weights'),
+            hovertemplate=f"<b>{t('chart.current_weights')}</b><br>{t('optimize.preset_ergo')}: %{{a}}%<br>{t('optimize.preset_recoil')}: %{{b}}%<br>{t('optimize.preset_price')}: %{{c}}%<extra></extra>",
         ))
 
         # Add corner labels
@@ -1735,8 +1735,8 @@ def main():
                                 )
                                 
                         except Exception as e:
-                            status.update(label="Error", state="error")
-                            st.error(f"Error: {e}")
+                            status.update(label=t("status.failed"), state="error")
+                            st.error(t("error.generic", error=e))
 
 
 if __name__ == "__main__":

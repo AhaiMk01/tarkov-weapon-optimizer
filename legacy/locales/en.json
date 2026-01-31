@@ -43,7 +43,14 @@
     "require_categories": "Require Categories",
     "ban_categories": "Ban Categories",
     "require_items": "Require Specific Items",
-    "ban_items": "Ban Specific Items"
+    "ban_items": "Ban Specific Items",
+    "showing_count": "Showing {count} of {total} weapons",
+    "no_match": "No weapons match the selected filters.",
+    "preset_price": "Price: ₽{price}",
+    "preset_items": "Items: {count}"
+  },
+  "error": {
+    "generic": "Error: {error}"
   },
   "tabs": {
     "explore": "Explore Trade-offs",
@@ -156,13 +163,15 @@
     "max_weight_constraint": "Max Weight",
     "flea_market": "Flea Market",
     "available": "Available",
-    "not_available_short": "Not Available"
+    "not_available_short": "Not Available",
+    "unknown": "Unknown"
   },
   "chart": {
     "ergonomics": "Ergonomics",
     "recoil_v": "Recoil V",
     "price": "Price (₽)",
-    "weight": "Weight (kg)"
+    "weight": "Weight (kg)",
+    "current_weights": "Current"
   },
   "export": {
     "header": "Export Build",
@@ -180,6 +189,7 @@
     "source": "Source"
   },
   "status": {
+    "system_online": "SYSTEM ONLINE",
     "loading": "Loading data...",
     "fetching": "Fetching weapons and mods from API...",
     "building_lookup": "Building item lookup...",
@@ -199,6 +209,61 @@
     "building_model": "Building constraint model...",
     "no_solution": "No solution found",
     "optimization_failed": "Optimization failed"
+  },
+  "ui": {
+    "initializing": "INITIALIZING ARMORY...",
+    "select_weapon": "Select a weapon...",
+    "included_in_preset": "Included in preset",
+    "unknown": "Unknown",
+    "id_label": "ID:",
+    "no_weapons_found": "No weapons found",
+    "objective_score": "Objective Score",
+    "vert_recoil": "Vert. Recoil",
+    "horiz_recoil": "Horiz. Recoil",
+    "total_cost": "Total Cost",
+    "weight_kg": "Weight: {value} kg",
+    "base_preset_used": "Base Preset Used",
+    "preset_more_optimal": "Starting from this preset was more optimal than building from scratch.",
+    "build_manifest": "Build Manifest",
+    "export_md": "EXPORT MD",
+    "export_json": "EXPORT JSON",
+    "table_image": "Image",
+    "table_name": "Name",
+    "table_stats": "Stats",
+    "table_source": "Source",
+    "table_price": "Price",
+    "new_changed_parts": "New / Changed Parts",
+    "retained_from_preset": "Retained from Preset: {name}",
+    "pareto_exploration": "Pareto Frontier Exploration",
+    "analyze_tradeoffs": "Analyze trade-offs between key stats.",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Recoil (Ignore Price)",
+    "tradeoff_ergo_vs_price": "Ergo vs Price (Ignore Recoil)",
+    "tradeoff_recoil_vs_price": "Recoil vs Price (Ignore Ergo)",
+    "build_stats": "Build Stats",
+    "stat_ergo": "Ergo:",
+    "stat_recoil_v": "Recoil V:",
+    "stat_recoil_h": "Recoil H:",
+    "stat_price": "Price:",
+    "table_items": "Items",
+    "explore_prompt": "Select a tradeoff strategy and run analysis to visualize the Pareto frontier.",
+    "min_ergo_label": "Min Ergonomics",
+    "max_recoil_sum_label": "Max Recoil Sum",
+    "min_mag_label": "Min Mag Capacity",
+    "min_sight_label": "Min Sighting Range",
+    "max_weight_label": "Max Weight",
+    "no_items_required": "No specific items required",
+    "required_categories": "Required Categories (one from each group):",
+    "solution_found": "Solution Found!",
+    "no_solution": "No Solution",
+    "recoil_sum": "Recoil Sum",
+    "weight_label": "Weight",
+    "build_for_task": "Build for {task}",
+    "chart_ergonomics": "Ergonomics",
+    "chart_recoil_v": "Recoil V",
+    "chart_vertical_recoil": "Vertical Recoil",
+    "chart_price": "Price",
+    "chart_price_roubles": "Price (₽)",
+    "chart_recoil_pct": "Recoil %"
   },
   "units": {
     "rounds": "rounds",

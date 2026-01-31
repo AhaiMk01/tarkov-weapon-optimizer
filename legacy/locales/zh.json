@@ -43,7 +43,14 @@
     "require_categories": "必须包含类别",
     "ban_categories": "禁用类别",
     "require_items": "必须包含物品",
-    "ban_items": "禁用物品"
+    "ban_items": "禁用物品",
+    "showing_count": "显示 {total} 把武器中的 {count} 把",
+    "no_match": "没有匹配当前筛选条件的武器。",
+    "preset_price": "价格: ₽{price}",
+    "preset_items": "包含物品: {count}"
+  },
+  "error": {
+    "generic": "错误: {error}"
   },
   "tabs": {
     "explore": "探索权衡",
@@ -162,7 +169,8 @@
     "ergonomics": "人机工效",
     "recoil_v": "垂直后坐力",
     "price": "价格 (₽)",
-    "weight": "重量 (公斤)"
+    "weight": "重量 (公斤)",
+    "current_weights": "当前权重"
   },
   "export": {
     "header": "导出配置",

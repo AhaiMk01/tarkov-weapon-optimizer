@@ -1,0 +1,10 @@
+{
+  "name": "tarkov-weapon-optimizer-v2",
+  "version": "1.0.0",
+  "scripts": {
+    "dev:frontend": "npm run dev --prefix frontend",
+    "dev:backend": "python -m uvicorn backend.app.main:app --reload",
+    "install:all": "npm install --prefix frontend && pip install -r backend/requirements.txt",
+    "build:frontend": "npm run build --prefix frontend"
+  }
+}
