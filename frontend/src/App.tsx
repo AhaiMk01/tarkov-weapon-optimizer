@@ -1115,9 +1115,9 @@ function App() {
             </div>
           )
         ) : activeTab === 'explore' ? (
-           <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <div className="bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl p-6">
-              <div className="flex items-center justify-between mb-6">
+           <div className="flex-1 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="flex-1 flex flex-col bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl p-6">
+              <div className="shrink-0 flex items-center justify-between mb-6">
                  <div>
                     <h2 className="text-lg font-bold text-zinc-900 dark:text-white">{t('ui.pareto_exploration', 'Pareto Frontier Exploration')}</h2>
                     <p className="text-xs text-zinc-500">{t('ui.analyze_tradeoffs', 'Analyze trade-offs between key stats.')}</p>
@@ -1149,8 +1149,8 @@ function App() {
               </div>
 
               {exploreResult.length > 0 ? (
-                 <div className="space-y-6">
-                    <div className="flex-1 w-full bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-300 dark:border-zinc-800">
+                 <div className="flex-1 flex flex-col gap-6">
+                    <div className="flex-1 w-full min-h-[300px] bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-300 dark:border-zinc-800">
                        <ResponsiveContainer width="100%" height="100%">
                           <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                              <CartesianGrid strokeDasharray="3 3" stroke={document.documentElement.classList.contains('dark') ? '#333' : '#e4e4e7'} />
@@ -1205,7 +1205,7 @@ function App() {
                        </ResponsiveContainer>
                     </div>
 
-                    <div className="overflow-x-auto border border-zinc-300 dark:border-zinc-800 rounded-lg">
+                    <div className="shrink-0 overflow-x-auto border border-zinc-300 dark:border-zinc-800 rounded-lg">
                        <table className="w-full text-xs text-left">
                           <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 font-medium uppercase border-b border-zinc-300 dark:border-zinc-800">
                              <tr>
@@ -1231,7 +1231,7 @@ function App() {
                     </div>
                  </div>
               ) : (
-                 <div className="h-[400px] flex flex-col items-center justify-center text-zinc-500 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900/10">
+                 <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-zinc-500 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900/10">
                     <BarChart2 className="h-12 w-12 mb-4 opacity-20" />
                     <p>{t('ui.explore_prompt', 'Select a tradeoff strategy and run analysis to visualize the Pareto frontier.')}</p>
                  </div>
