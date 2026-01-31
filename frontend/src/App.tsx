@@ -853,10 +853,15 @@ function App() {
             </div>
           </section>
 
+          <footer className="px-2 py-4 text-[10px] text-zinc-500 font-mono space-y-1">
+            <p>{t('ui.footer_data')} <a href="https://tarkov.dev" target="_blank" rel="noopener noreferrer" className="text-orange-500 hover:underline text-xs">tarkov.dev</a></p>
+            <p>{t('ui.footer_copyright')} | <a href="https://github.com/AhaiMk01" target="_blank" rel="noopener noreferrer" className="text-zinc-400 hover:text-zinc-300 hover:underline">GitHub</a></p>
+          </footer>
+
         </div>
 
         {/* Right Content: Results */}
-        <div className="lg:col-span-8 xl:col-span-9 min-[1800px]:col-span-10 space-y-6">
+        <div className="lg:col-span-8 xl:col-span-9 min-[1800px]:col-span-10 flex flex-col gap-6">
           
           {/* Mode Tabs & Action */}
           <div className="flex items-center justify-between gap-4">
@@ -1086,7 +1091,7 @@ function App() {
               )}
             </div>
           ) : (
-            <div className="h-full min-h-[400px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/20">
+            <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/20">
               <div className="h-20 w-20 bg-zinc-200 dark:bg-zinc-900 rounded-full flex items-center justify-center mb-6 border border-zinc-300 dark:border-zinc-800 shadow-xl">
                  <TrendingUp className="h-10 w-10 text-zinc-400" />
               </div>
@@ -1145,7 +1150,7 @@ function App() {
 
               {exploreResult.length > 0 ? (
                  <div className="space-y-6">
-                    <div className="h-[400px] w-full bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-300 dark:border-zinc-800">
+                    <div className="flex-1 w-full bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-300 dark:border-zinc-800">
                        <ResponsiveContainer width="100%" height="100%">
                           <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
                              <CartesianGrid strokeDasharray="3 3" stroke={document.documentElement.classList.contains('dark') ? '#333' : '#e4e4e7'} />

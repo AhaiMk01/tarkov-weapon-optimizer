@@ -263,6 +263,8 @@
     "chart_vertical_recoil": "Вертикальная отдача",
     "chart_price": "Цена",
     "chart_price_roubles": "Цена (₽)",
-    "chart_recoil_pct": "Отдача %"
+    "chart_recoil_pct": "Отдача %",
+    "footer_data": "Данные предоставлены",
+    "footer_copyright": "© 2026 AhaiMk01"
   }
 }

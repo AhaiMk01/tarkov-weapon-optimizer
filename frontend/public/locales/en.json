@@ -249,12 +249,16 @@
     "no_solution": "No Solution",
     "recoil_sum": "Recoil Sum",
     "weight_label": "Weight",
-    "build_for_task": "Build for {{task}}"
+    "build_for_task": "Build for {{task}}",
+    "footer_data": "Data provided by",
+    "footer_copyright": "© 2026 AhaiMk01"
   },
   "units": {
     "rounds": "rounds",
     "meters": "m",
     "kg": "kg",
-    "roubles": "₽"
+    "chart_recoil_pct": "Recoil %",
+    "footer_data": "Data provided by",
+    "footer_copyright": "© 2026 AhaiMk01"
   }
 }

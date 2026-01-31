@@ -125,7 +125,7 @@
     "max_weight_help": "最大总重量（基础武器：{{base}}公斤）",
     "budget_le": "预算 ≤ ₽{{value}}",
     "ergo_ge": "人机 ≥ {{value}}",
-    "recoil_le": "后坐力 ≤ {{value}}",
+    "recoil_le": "后坐力 ≤ {{value}}"
   },
   "results": {
     "optimization_status": "优化",
@@ -263,6 +263,8 @@
     "chart_vertical_recoil": "垂直后坐力",
     "chart_price": "价格",
     "chart_price_roubles": "价格 (₽)",
-    "chart_recoil_pct": "后坐力 %"
+    "chart_recoil_pct": "后坐力 %",
+    "footer_data": "数据提供:",
+    "footer_copyright": "© 2026 AhaiMk01"
   }
 }
