@@ -440,6 +440,12 @@ def build_compatibility_map(weapon_id, item_lookup):
         if item_id not in item_lookup: continue
 
         item = item_lookup[item_id]
+
+        # Skip items that conflict with the base weapon
+        conflicting = item.get("conflicting_items", [])
+        if weapon_id in conflicting:
+            continue
+
         reachable[item_id] = {"item": item}
         item_to_slots[item_id] = []
 
