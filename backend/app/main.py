@@ -115,14 +115,24 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Tarkov Optimizer API", lifespan=lifespan)
 
-# CORS
+# CORS - Use environment variable for production
+def get_cors_origins():
+    env_origins = os.getenv("CORS_ORIGINS", "")
+    if env_origins:
+        return env_origins.split(",")
+    # Default: allow all for development
+    return ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For dev, allow all. In prod, lock to frontend domain.
+    allow_origins=get_cors_origins(),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Note: Rate limiting can be enabled with fastapi-limiter + Redis
+# See: https://github.com/long2dev/fastapi-limiter
 
 def get_state(lang: str, game_mode: str = "regular"):
     """Get state for language and game mode, loading on-demand if needed."""

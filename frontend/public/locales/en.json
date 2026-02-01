@@ -101,7 +101,9 @@
     "tip_text": "Use the **Explore Trade-offs** tab first to understand what's achievable!",
     "ready_title": "Ready to Optimize",
     "ready_description": "Select a weapon platform and adjust your priorities to generate the mathematically perfect build for your budget.",
-    "generate_btn": "GENERATE OPTIMAL BUILD"
+    "generate_btn": "GENERATE OPTIMAL BUILD",
+    "triangle_hint": "Click on the triangle to adjust weights",
+    "ternary_chart": "Ternary Weight Chart"
   },
   "constraints": {
     "budget_limit": "Budget Limit",

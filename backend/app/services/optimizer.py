@@ -975,7 +975,7 @@ def optimize_weapon(
     model.Maximize(sum(objective_terms))
 
     solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = 120.0
+    solver.parameters.max_time_in_seconds = 30.0  # 30 second timeout for web requests
     status = solver.Solve(model)
 
     if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
@@ -1234,14 +1234,51 @@ def explore_pareto(
                 stats = result["final_stats"]
                 frontier.append(_build_frontier_point(stats, result))
 
-    seen = set()
-    unique_frontier = []
-    for point in frontier:
-        key = (point["ergo"], point["recoil_v"], point["price"])
-        if key not in seen:
-            seen.add(key)
-            unique_frontier.append(point)
-    return unique_frontier
+    # Deduplicate logic based on the trade-off strategy
+    # We collapse points that overlap on the visible 2D chart by picking the best value for the 3rd (hidden) dimension.
+    points_map = {}
+
+    if ignore == "price":
+        # Chart: Ergo vs Recoil. Hidden: Price (Minimize)
+        for point in frontier:
+            key = (point["ergo"], point["recoil_v"])
+            if key not in points_map:
+                points_map[key] = point
+            else:
+                if point["price"] < points_map[key]["price"]:
+                    points_map[key] = point
+
+    elif ignore == "recoil":
+        # Chart: Ergo vs Price. Hidden: Recoil (Minimize)
+        for point in frontier:
+            key = (point["ergo"], point["price"])
+            if key not in points_map:
+                points_map[key] = point
+            else:
+                if point["recoil_v"] < points_map[key]["recoil_v"]:
+                    points_map[key] = point
+
+    elif ignore == "ergo":
+        # Chart: Recoil vs Price. Hidden: Ergo (Maximize)
+        for point in frontier:
+            key = (point["recoil_v"], point["price"])
+            if key not in points_map:
+                points_map[key] = point
+            else:
+                if point["ergo"] > points_map[key]["ergo"]:
+                    points_map[key] = point
+    else:
+        # Fallback to exact deduplication if unknown ignore param
+        seen = set()
+        unique = []
+        for point in frontier:
+            key = (point["ergo"], point["recoil_v"], point["price"])
+            if key not in seen:
+                seen.add(key)
+                unique.append(point)
+        return unique
+
+    return sorted(list(points_map.values()), key=lambda p: p["price"])
 
 def _build_frontier_point(stats, result):
     return {

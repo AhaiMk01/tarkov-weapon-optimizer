@@ -1,35 +1,35 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 
 class TraderLevels(BaseModel):
-    prapor: int = 4
-    skier: int = 4
-    peacekeeper: int = 4
-    mechanic: int = 4
-    jaeger: int = 4
+    prapor: int = Field(default=4, ge=1, le=4)
+    skier: int = Field(default=4, ge=1, le=4)
+    peacekeeper: int = Field(default=4, ge=1, le=4)
+    mechanic: int = Field(default=4, ge=1, le=4)
+    jaeger: int = Field(default=4, ge=1, le=4)
 
 class OptimizeRequest(BaseModel):
     weapon_id: str
-    max_price: Optional[int] = None
-    min_ergonomics: Optional[int] = None
-    max_recoil_v: Optional[int] = None
-    max_recoil_sum: Optional[int] = None
-    min_mag_capacity: Optional[int] = None
-    min_sighting_range: Optional[int] = None
-    max_weight: Optional[float] = None
-    
+    max_price: Optional[int] = Field(default=None, ge=0)
+    min_ergonomics: Optional[int] = Field(default=None, ge=0, le=100)
+    max_recoil_v: Optional[int] = Field(default=None, ge=0)
+    max_recoil_sum: Optional[int] = Field(default=None, ge=0)
+    min_mag_capacity: Optional[int] = Field(default=None, ge=0)
+    min_sighting_range: Optional[int] = Field(default=None, ge=0)
+    max_weight: Optional[float] = Field(default=None, ge=0)
+
     include_items: Optional[List[str]] = None
     exclude_items: Optional[List[str]] = None
     include_categories: Optional[List[List[str]]] = None
     exclude_categories: Optional[List[str]] = None
-    
-    ergo_weight: float = 1.0
-    recoil_weight: float = 1.0
-    price_weight: float = 0.0
-    
+
+    ergo_weight: float = Field(default=1.0, ge=0)
+    recoil_weight: float = Field(default=1.0, ge=0)
+    price_weight: float = Field(default=0.0, ge=0)
+
     trader_levels: Optional[TraderLevels] = None
     flea_available: bool = True
-    player_level: Optional[int] = None
+    player_level: Optional[int] = Field(default=None, ge=1, le=100)
 
 class FinalStats(BaseModel):
     ergonomics: float
