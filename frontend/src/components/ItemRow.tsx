@@ -7,10 +7,10 @@ interface ItemRowProps {
 
 export function ItemRow({ item }: ItemRowProps) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[80px_1fr_120px_150px_100px] gap-4 px-6 py-4 items-center hover:bg-zinc-800/30 transition-colors group">
+    <div className="grid grid-cols-1 md:grid-cols-[100px_1fr_120px_150px_100px] gap-4 px-6 py-4 items-center hover:bg-zinc-800/30 transition-colors group">
        {/* Icon */}
-       <div className="h-16 w-16 bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-700/50 p-1 flex-shrink-0">
-         {item.icon ? <img src={item.icon} alt={item.name} className="w-full h-full object-contain" /> : <Settings2 className="h-8 w-8 text-zinc-700" />}
+       <div className="h-20 w-20 bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-700/50 p-1 flex-shrink-0">
+         {item.icon ? <img src={item.icon} alt={item.name} className="w-full h-full object-contain" /> : <Settings2 className="h-10 w-10 text-zinc-700" />}
        </div>
        
        {/* Name */}

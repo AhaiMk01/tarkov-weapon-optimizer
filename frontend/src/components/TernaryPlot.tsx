@@ -8,26 +8,26 @@ interface TernaryPlotProps {
   onChange: (ergo: number, recoil: number, price: number) => void;
 }
 
+// Triangle dimensions
+const size = 300;
+const padding = 70;
+const sideLength = size - padding * 2;
+const height = sideLength * (Math.sqrt(3) / 2);
+const verticalOffset = (sideLength - height) / 2;
+
+// Corner positions (equilateral triangle)
+// Top: Ergo, Bottom-Left: Price, Bottom-Right: Recoil
+const topX = size / 2;
+const topY = padding + verticalOffset;
+const leftX = padding;
+const leftY = topY + height;
+const rightX = size - padding;
+const rightY = topY + height;
+
 export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }: TernaryPlotProps) {
   const { t } = useTranslation();
   const svgRef = useRef<SVGSVGElement>(null);
   const [hoveredPoint, setHoveredPoint] = useState<{ ergo: number; recoil: number; price: number } | null>(null);
-
-  // Triangle dimensions
-  const size = 300;
-  const padding = 70;
-  const sideLength = size - padding * 2;
-  const height = sideLength * (Math.sqrt(3) / 2);
-  const verticalOffset = (sideLength - height) / 2;
-
-  // Corner positions (equilateral triangle)
-  // Top: Ergo, Bottom-Left: Price, Bottom-Right: Recoil
-  const topX = size / 2;
-  const topY = padding + verticalOffset;
-  const leftX = padding;
-  const leftY = topY + height;
-  const rightX = size - padding;
-  const rightY = topY + height;
 
   // Convert barycentric coordinates (ergo, recoil, price) to SVG coordinates
   const toSVG = useCallback((ergo: number, recoil: number, price: number) => {
@@ -63,7 +63,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const p = 1 - e - r;
 
     return { e: Math.max(0, Math.min(1, e)), r: Math.max(0, Math.min(1, r)), p: Math.max(0, Math.min(1, p)) };
-  }, [topX, topY, leftX, leftY, rightX, rightY]);
+  }, []);
 
   // Handle click on the triangle
   const handleClick = useCallback((e: React.MouseEvent<SVGSVGElement>) => {

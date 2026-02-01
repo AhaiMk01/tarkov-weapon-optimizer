@@ -40,15 +40,15 @@
     "no_flea": "no flea",
     "level": "level {{level}}",
     "include_exclude": "Include/Exclude Mods",
-    "require_categories": "Require Categories",
-    "ban_categories": "Ban Categories",
-    "require_items": "Require Specific Items",
-    "ban_items": "Ban Specific Items"
+    "require_categories": "Categories",
+    "ban_categories": "Categories",
+    "require_items": "Specific Items",
+    "ban_items": "Specific Items"
   },
   "tabs": {
-    "explore": "Explore Trade-offs",
-    "optimize": "Optimize Build",
-    "gunsmith": "Gunsmith Tasks"
+    "explore": "Explore",
+    "optimize": "Optimize",
+    "gunsmith": "Gunsmith"
   },
   "gunsmith": {
     "header": "Gunsmith Task Optimizer",
@@ -57,6 +57,7 @@
     "weapon": "Weapon",
     "required_items": "Required Items",
     "optimize_btn": "Assemble for Cheapest Price",
+    "select_task_prompt": "Select a Gunsmith task...",
     "missing_item": "⚠️ Item not found in database: {{name}}",
     "weapon_not_found": "⚠️ Weapon not found: {{name}}"
   },
@@ -75,7 +76,9 @@
     "select_build": "Select a build from the chart or table to view details",
     "tip_recoil_at_ergo": "Each row shows the best recoil at that ergo level.",
     "tip_price_at_ergo": "Each row shows the lowest price at that ergo level.",
-    "tip_price_at_recoil": "Each row shows the lowest price at that recoil level."
+    "tip_price_at_recoil": "Each row shows the lowest price at that recoil level.",
+    "ready_title": "Ready to Explore",
+    "ready_description": "Select a weapon and trade-off strategy to visualize the Pareto frontier of optimal builds."
   },
   "optimize": {
     "header": "Optimize Your Build",
@@ -104,6 +107,7 @@
     "ready_description": "Select a weapon platform and adjust your priorities to generate the mathematically perfect build for your budget.",
     "generate_btn": "GENERATE OPTIMAL BUILD",
     "triangle_hint": "Click on the triangle to adjust weights",
+    "use_controls_hint": "(Use the controls on the left to start)",
     "ternary_chart": "Ternary Weight Chart"
   },
   "constraints": {
@@ -254,7 +258,31 @@
     "weight_label": "Weight",
     "build_for_task": "Build for {{task}}",
     "footer_data": "Data provided by",
-    "footer_copyright": "© 2026 AhaiMk01"
+    "footer_copyright": "© 2026 AhaiMk01",
+    "hide": "Hide Parts",
+    "show": "Show Parts",
+    "retained_from_preset_short": "Retained from Preset",
+    "no_tasks_found": "No tasks found",
+    "unknown": "Unknown",
+    "id_label": "ID:",
+    "stat_recoil": "Recoil:",
+    "search_weapons": "Search weapons...",
+    "search_tasks_weapons": "Search tasks or weapons...",
+    "light_mode": "Light mode",
+    "dark_mode": "Dark mode",
+    "system_preference": "System preference",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "run_analysis": "RUN ANALYSIS",
+    "tradeoff_strategy": "Trade-off Strategy",
+    "compact_on": "COMPACT ON",
+    "compact_off": "COMPACT OFF",
+    "last_updated": "Last updated"
+  },
+  "error": {
+    "application_error": "Application Error",
+    "something_went_wrong": "Something went wrong. Please try refreshing the page.",
+    "refresh_page": "Refresh Page"
   },
   "units": {
     "rounds": "rounds",

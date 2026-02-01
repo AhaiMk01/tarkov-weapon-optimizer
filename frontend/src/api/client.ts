@@ -79,7 +79,7 @@ export interface OptimizeResponse {
   status: string;
   selected_items: ItemDetail[];
   selected_preset?: PresetDetail;
-  fallback_base?: any;
+  fallback_base?: Record<string, unknown>;
   objective_value: number;
   reason?: string;
   final_stats?: FinalStats;
@@ -161,5 +161,10 @@ export interface GunsmithTasksResponse {
 
 export const getGunsmithTasks = async (gameMode: GameMode = 'regular', lang: string = 'en'): Promise<GunsmithTasksResponse> => {
   const response = await apiClient.get<GunsmithTasksResponse>('/api/gunsmith/tasks', { params: { game_mode: gameMode, lang } });
+  return response.data;
+};
+
+export const getStatus = async (gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ timestamp: number }> => {
+  const response = await apiClient.get<{ timestamp: number }>('/api/status', { params: { game_mode: gameMode, lang } });
   return response.data;
 };

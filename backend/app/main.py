@@ -50,7 +50,7 @@ def _load_processed_cache(lang: str, game_mode: str = "regular"):
         if cached.get("version") != CACHE_VERSION:
             return None
         if time.time() - cached.get("timestamp", 0) < CACHE_TTL:
-            return cached.get("data")
+            return cached.get("data"), cached.get("timestamp", 0)
     except Exception:
         pass
     return None
@@ -67,19 +67,23 @@ def load_language_data(lang: str, game_mode: str = "regular") -> dict:
     # Try processed cache first
     cached = _load_processed_cache(lang, game_mode)
     if cached:
+        data, timestamp = cached
         logger.info(f"Loaded {lang} from processed cache")
-        return cached
+        data["timestamp"] = timestamp
+        return data
 
     # Fetch and process
     logger.info(f"Building data for {lang}...")
     guns, mods = fetch_all_data(lang=lang, game_mode=game_mode)
     lookup = build_item_lookup(guns, mods)
 
+    timestamp = time.time()
     data = {
         "guns": guns,
         "mods": mods,
         "item_lookup": lookup,
-        "compat_maps": {}
+        "compat_maps": {},
+        "timestamp": timestamp
     }
 
     # Save to cache (without compat_maps which are built on-demand)
@@ -168,6 +172,17 @@ def get_state(lang: str, game_mode: str = "regular"):
 def read_root():
     loaded = [f"{lang}/{mode}" for (lang, mode) in state.data.keys()]
     return {"status": "ok", "message": "Tarkov Weapon Optimizer API is running", "loaded": loaded, "game_modes": SUPPORTED_GAME_MODES}
+
+@app.get("/api/status")
+def get_status(lang: str = "en", game_mode: str = "regular"):
+    """Return the status of the data for the given language and game mode, including last update timestamp."""
+    try:
+        current_state = get_state(lang, game_mode)
+        return {
+            "timestamp": current_state.get("timestamp", 0)
+        }
+    except Exception:
+        return {"timestamp": 0}
 
 @app.get("/api/info", response_model=InfoResponse)
 def get_info(lang: str = "en", game_mode: str = "regular"):

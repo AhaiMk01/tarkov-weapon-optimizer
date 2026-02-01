@@ -1278,6 +1278,38 @@ def explore_pareto(
                 unique.append(point)
         return unique
 
+    # Apply Pareto dominance filtering to remove dominated points
+    # A point is dominated if another point is at least as good in all objectives
+    # and strictly better in at least one
+    deduplicated = list(points_map.values())
+
+    def is_dominated(p, others, ignore_mode):
+        """Check if point p is dominated by any point in others."""
+        for q in others:
+            if q is p:
+                continue
+            if ignore_mode == "price":
+                # Ergo vs Recoil: maximize ergo, minimize recoil
+                # q dominates p if q.ergo >= p.ergo AND q.recoil <= p.recoil AND (strictly better in one)
+                if (q["ergo"] >= p["ergo"] and q["recoil_v"] <= p["recoil_v"] and
+                    (q["ergo"] > p["ergo"] or q["recoil_v"] < p["recoil_v"])):
+                    return True
+            elif ignore_mode == "recoil":
+                # Ergo vs Price: maximize ergo, minimize price
+                # q dominates p if q.ergo >= p.ergo AND q.price <= p.price AND (strictly better in one)
+                if (q["ergo"] >= p["ergo"] and q["price"] <= p["price"] and
+                    (q["ergo"] > p["ergo"] or q["price"] < p["price"])):
+                    return True
+            elif ignore_mode == "ergo":
+                # Recoil vs Price: minimize recoil, minimize price
+                # q dominates p if q.recoil <= p.recoil AND q.price <= p.price AND (strictly better in one)
+                if (q["recoil_v"] <= p["recoil_v"] and q["price"] <= p["price"] and
+                    (q["recoil_v"] < p["recoil_v"] or q["price"] < p["price"])):
+                    return True
+        return False
+
+    pareto_frontier = [p for p in deduplicated if not is_dominated(p, deduplicated, ignore)]
+
     # Sort based on the chart's X-axis to ensure the line is drawn correctly
     if ignore == "price" or ignore == "recoil":
         # X-axis is Ergo
@@ -1289,7 +1321,7 @@ def explore_pareto(
         # Default fallback
         sort_key = lambda p: p["price"]
 
-    return sorted(list(points_map.values()), key=sort_key)
+    return sorted(pareto_frontier, key=sort_key)
 
 def _build_frontier_point(stats, result):
     return {

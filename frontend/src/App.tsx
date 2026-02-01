@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
-import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
-import type { Gun, OptimizeResponse, ModInfo, ExplorePoint, GunsmithTask, GameMode } from './api/client'
+import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, getStatus } from './api/client'
+import type { Gun, OptimizeResponse, ModInfo, ExplorePoint, GunsmithTask, GameMode, ItemDetail } from './api/client'
 import { Loader2, Crosshair, Target, Settings2, ShoppingCart, ShieldAlert, Zap, Weight, Anchor, Filter, User, Grip, Plus, Minus, Search, Download, FileText, BarChart2, Wrench, CheckCircle, AlertTriangle, ChevronDown, Sun, Moon, Monitor, Globe, TrendingUp } from 'lucide-react'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import clsx from 'clsx'
@@ -66,8 +66,24 @@ function App() {
     localStorage.setItem('theme', theme)
   }, [theme])
 
+  // --- Compact Mode ---
+  const [compactMode, setCompactMode] = useState<boolean>(() => {
+    return localStorage.getItem('compactMode') === 'true'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('compactMode', String(compactMode))
+  }, [compactMode])
+
   // --- Game Mode ---
-  const [gameMode, setGameMode] = useState<GameMode>('regular')
+  const [gameMode, setGameMode] = useState<GameMode>(() => {
+    const saved = localStorage.getItem('gameMode')
+    return (saved as GameMode) || 'regular'
+  })
+
+  useEffect(() => {
+    localStorage.setItem('gameMode', gameMode)
+  }, [gameMode])
 
   const [guns, setGuns] = useState<Gun[]>([])
   const [selectedGunId, setSelectedGunId] = useState<string>('')
@@ -127,6 +143,8 @@ function App() {
 
   // --- Exploration Mode ---
   const [activeTab, setActiveTab] = useState<'optimize' | 'explore' | 'gunsmith'>('optimize')
+  const [showRetained, setShowRetained] = useState(false)
+  const [showNewParts, setShowNewParts] = useState(true)
   const [exploring, setExploring] = useState(false)
   const [exploreResult, setExploreResult] = useState<ExplorePoint[]>([])
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
@@ -138,6 +156,15 @@ function App() {
   const [gunsmithResult, setGunsmithResult] = useState<OptimizeResponse | null>(null)
   const [optimizingGunsmith, setOptimizingGunsmith] = useState(false)
 
+  // --- Gunsmith Dropdown ---
+  const [taskDropdownOpen, setTaskDropdownOpen] = useState(false)
+  const [taskSearch, setTaskSearch] = useState('')
+  const taskDropdownRef = useRef<HTMLDivElement>(null)
+  const taskButtonRef = useRef<HTMLButtonElement>(null)
+  const [taskDropdownPosition, setTaskDropdownPosition] = useState({ top: 0, left: 0, width: 0 })
+
+  const [lastUpdated, setLastUpdated] = useState<number>(0)
+
   // Load data when game mode or language changes
   useEffect(() => {
     setLoading(true)
@@ -146,8 +173,9 @@ function App() {
     const lang = i18n.language || 'en'
     Promise.all([
       getInfo(gameMode, lang),
-      getGunsmithTasks(gameMode, lang)
-    ]).then(([infoData, tasksData]) => {
+      getGunsmithTasks(gameMode, lang),
+      getStatus(gameMode, lang)
+    ]).then(([infoData, tasksData, statusData]) => {
       setGuns(infoData.guns)
       if (infoData.guns.length > 0) {
         setSelectedGunId(infoData.guns[0].id)
@@ -156,6 +184,7 @@ function App() {
       if (tasksData.tasks.length > 0) {
         setSelectedTaskName(tasksData.tasks[0].task_name)
       }
+      setLastUpdated(statusData.timestamp)
       setLoading(false)
     }).catch(err => {
       console.error("Failed to fetch data", err)
@@ -207,6 +236,15 @@ function App() {
     })
   }, [guns, selectedCategory, selectedCaliber])
 
+  const filteredTasks = useMemo(() => {
+    if (!taskSearch) return gunsmithTasks
+    const lower = taskSearch.toLowerCase()
+    return gunsmithTasks.filter(t => 
+      t.task_name.toLowerCase().includes(lower) || 
+      t.weapon_name.toLowerCase().includes(lower)
+    )
+  }, [gunsmithTasks, taskSearch])
+
   // Filtered mods for the search UI
   const searchedMods = useMemo(() => {
     if (!modSearch) return []
@@ -233,8 +271,8 @@ function App() {
       if (weaponDropdownRef.current && !weaponDropdownRef.current.contains(e.target as Node)) {
         setWeaponDropdownOpen(false)
       }
-      if (langDropdownRef.current && !langDropdownRef.current.contains(e.target as Node)) {
-        setLangDropdownOpen(false)
+      if (taskDropdownRef.current && !taskDropdownRef.current.contains(e.target as Node)) {
+        setTaskDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -424,8 +462,8 @@ function App() {
                     <Crosshair className="text-zinc-400 dark:text-zinc-700 h-6 w-6" />
                   )}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-zinc-900 dark:text-white text-sm truncate">{selectedGun.name}</div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <div className="font-medium text-zinc-900 dark:text-white text-sm truncate" title={selectedGun.name}>{selectedGun.name}</div>
                   <div className="text-[10px] text-zinc-500 font-mono">{selectedGun.category} • {selectedGun.caliber}</div>
                 </div>
                 <ChevronDown className={clsx("h-4 w-4 text-zinc-500 transition-transform", weaponDropdownOpen && "rotate-180")} />
@@ -454,7 +492,7 @@ function App() {
                   <Search className="absolute left-2.5 top-2 h-4 w-4 text-zinc-500" />
                   <input
                     type="text"
-                    placeholder="Search weapons..."
+                    placeholder={t('ui.search_weapons', 'Search weapons...')}
                     value={weaponSearch}
                     onChange={(e) => setWeaponSearch(e.target.value)}
                     className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md py-1.5 pl-8 pr-3 text-sm text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
@@ -489,8 +527,8 @@ function App() {
                           <Crosshair className="text-zinc-400 dark:text-zinc-700 h-5 w-5" />
                         )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm text-zinc-900 dark:text-white truncate">{gun.name}</div>
+                      <div className="flex-1 min-w-0 overflow-hidden">
+                        <div className="text-sm text-zinc-900 dark:text-white truncate" title={gun.name}>{gun.name}</div>
                         <div className="text-[10px] text-zinc-500 font-mono">{gun.category} • {gun.caliber}</div>
                       </div>
                     </button>
@@ -774,7 +812,7 @@ function App() {
                     : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                 )}
               >
-                PvP
+                {t('ui.pvp', 'PvP')}
               </button>
               <button
                 onClick={() => setGameMode('pve')}
@@ -785,7 +823,7 @@ function App() {
                     : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                 )}
               >
-                PvE
+                {t('ui.pve', 'PvE')}
               </button>
             </div>
             {/* Theme Toggle */}
@@ -798,7 +836,7 @@ function App() {
                     ? "bg-yellow-500 text-white shadow-sm"
                     : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                 )}
-                title="Light mode"
+                title={t('ui.light_mode', 'Light mode')}
               >
                 <Sun className="h-3.5 w-3.5" />
               </button>
@@ -810,7 +848,7 @@ function App() {
                     ? "bg-indigo-500 text-white shadow-sm"
                     : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                 )}
-                title="Dark mode"
+                title={t('ui.dark_mode', 'Dark mode')}
               >
                 <Moon className="h-3.5 w-3.5" />
               </button>
@@ -822,7 +860,7 @@ function App() {
                     ? "bg-zinc-600 text-white shadow-sm"
                     : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                 )}
-                title="System preference"
+                title={t('ui.system_preference', 'System preference')}
               >
                 <Monitor className="h-3.5 w-3.5" />
               </button>
@@ -863,9 +901,16 @@ function App() {
                 </div>
               )}
             </div>
-            <div className="text-xs font-mono text-zinc-500 flex items-center gap-2">
-              <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
-              {t('status.system_online', 'SYSTEM ONLINE')}
+            <div className="flex flex-col items-end">
+              <div className="text-xs font-mono text-zinc-500 flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse"></div>
+                {t('status.system_online', 'SYSTEM ONLINE')}
+              </div>
+              {lastUpdated > 0 && (
+                <div className="text-[10px] text-zinc-400 font-mono mt-0.5">
+                  {t('ui.last_updated', 'Last updated')}: {new Date(lastUpdated * 1000).toLocaleString(undefined, { year: 'numeric', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -878,7 +923,7 @@ function App() {
               <button
                 onClick={() => setActiveTab('optimize')}
                 className={clsx(
-                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 w-40 shrink-0 whitespace-nowrap overflow-hidden",
                   activeTab === 'optimize'
                     ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm"
                     : "text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -889,7 +934,7 @@ function App() {
               <button
                 onClick={() => setActiveTab('explore')}
                 className={clsx(
-                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 w-40 shrink-0 whitespace-nowrap overflow-hidden",
                   activeTab === 'explore'
                     ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm"
                     : "text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -900,7 +945,7 @@ function App() {
               <button
                 onClick={() => setActiveTab('gunsmith')}
                 className={clsx(
-                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center gap-2",
+                  "px-4 py-2 rounded-md text-sm font-medium transition-all flex items-center justify-center gap-2 w-40 shrink-0 whitespace-nowrap overflow-hidden",
                   activeTab === 'gunsmith'
                     ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm"
                     : "text-zinc-600 dark:text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300"
@@ -928,14 +973,14 @@ function App() {
           </div>
 
           {activeTab === 'optimize' && (
-            <div className="max-w-[1920px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
-              <div className="xl:col-span-4 2xl:col-span-3 space-y-6">
+            <div className="w-full max-w-[1920px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
+              <div className="xl:col-span-4 2xl:col-span-3 w-full space-y-6">
                 {renderWeaponSelector()}
                 {renderBuildPriorities()}
                 {renderAdvancedConstraints()}
               </div>
 
-              <div className="xl:col-span-8 2xl:col-span-9">
+              <div className="xl:col-span-8 2xl:col-span-9 w-full">
                 {result ? (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   {/* Status Banner */}
@@ -977,7 +1022,7 @@ function App() {
 
                          {/* Vertical Recoil */}
                          <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
-                            <div className="flex items-center gap-2 mb-2 text-green-600 dark:text-green-500/80">
+                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
                               <Anchor className="h-4 w-4" />
                               <span className="text-xs uppercase font-bold tracking-wider">{t('ui.vert_recoil', 'Vert. Recoil')}</span>
                             </div>
@@ -1010,7 +1055,7 @@ function App() {
 
                          {/* Cost */}
                          <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
-                            <div className="flex items-center gap-2 mb-2 text-yellow-600 dark:text-yellow-500/80">
+                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
                               <DollarSignIcon className="h-4 w-4" />
                               <span className="text-xs uppercase font-bold tracking-wider">{t('ui.total_cost', 'Total Cost')}</span>
                             </div>
@@ -1025,11 +1070,11 @@ function App() {
                         <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/10 p-4 rounded-xl">
                           <div className="flex items-center gap-4">
                             {/* Preset Image */}
-                            <div className="h-20 w-40 bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-300 dark:border-zinc-700/50 flex-shrink-0 p-2">
+                            <div className="h-24 w-48 bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-300 dark:border-zinc-700/50 flex-shrink-0 p-2">
                               {result.selected_preset.icon ? (
                                 <img src={result.selected_preset.icon} alt={result.selected_preset.name} className="max-w-full max-h-full object-contain" />
                               ) : (
-                                <ShoppingCart className="h-8 w-8 text-zinc-400" />
+                                <ShoppingCart className="h-10 w-10 text-zinc-400" />
                               )}
                             </div>
                             {/* Preset Info */}
@@ -1063,7 +1108,17 @@ function App() {
                             {t('ui.build_manifest', 'Build Manifest')}
                           </h3>
                           <div className="flex items-center gap-4">
-                            <button onClick={() => exportBuild('md')} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
+                                                        <button
+                                                          onClick={() => setCompactMode(!compactMode)}
+                                                          className={clsx(
+                                                            "flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all shadow-sm",
+                                                            compactMode 
+                                                              ? "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30" 
+                                                              : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-200"
+                                                          )}
+                                                        >
+                                                          <Monitor className="h-3.5 w-3.5" /> {compactMode ? t('ui.compact_on', 'COMPACT ON') : t('ui.compact_off', 'COMPACT OFF')}
+                                                        </button>                            <button onClick={() => exportBuild('md')} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
                               <FileText className="h-3 w-3" /> {t('ui.export_md', 'EXPORT MD')}
                             </button>
                             <button onClick={() => exportBuild('json')} className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors">
@@ -1073,8 +1128,11 @@ function App() {
                         </div>
 
                         {/* Table Header */}
-                        <div className="grid grid-cols-[80px_1fr_120px_150px_100px] gap-4 px-6 py-2 bg-zinc-100 dark:bg-zinc-950/30 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800/50 hidden md:grid">
-                          <div>{t('ui.table_image', 'Image')}</div>
+                        <div className={clsx(
+                          "gap-4 px-6 py-2 bg-zinc-100 dark:bg-zinc-950/30 text-[10px] font-semibold text-zinc-500 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800/50 hidden md:grid",
+                          compactMode ? "grid grid-cols-[1fr_150px_150px_100px]" : "grid grid-cols-[100px_1fr_120px_150px_100px]"
+                        )}>
+                          {!compactMode && <div>{t('ui.table_image', 'Image')}</div>}
                           <div>{t('table.name', 'Name')}</div>
                           <div>{t('ui.table_stats', 'Stats')}</div>
                           <div>{t('ui.table_source', 'Source')}</div>
@@ -1083,27 +1141,64 @@ function App() {
 
                         {result.selected_preset ? (
                             <>
-                              <div className="px-6 py-2 bg-zinc-100 dark:bg-zinc-950/50 text-[10px] font-bold text-orange-600 dark:text-orange-500 uppercase tracking-wider border-b border-zinc-200 dark:border-zinc-800/50">
-                                  {t('ui.new_changed_parts', 'New / Changed Parts')}
-                              </div>
-                              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
-                                  {result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).map(item => (
-                                    <ItemRow key={item.id} item={item} />
-                                  ))}
-                              </div>
+                              <button
+                                onClick={() => setShowNewParts(!showNewParts)}
+                                className="w-full flex items-center justify-between px-6 py-3 bg-orange-50/30 dark:bg-orange-500/5 hover:bg-orange-100/50 dark:hover:bg-orange-500/10 transition-all border-b border-zinc-300 dark:border-zinc-800 group/new"
+                              >
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1 rounded bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                                      <Zap className="h-3 w-3 fill-current" />
+                                    </div>
+                                    <span className="text-xs font-bold text-orange-700 dark:text-orange-400 uppercase tracking-wider">
+                                      {t('ui.new_changed_parts', 'New / Changed Parts')}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-bold text-orange-600 dark:text-orange-400 uppercase tracking-widest bg-white dark:bg-zinc-900 px-2 py-1 rounded shadow-sm border border-orange-200 dark:border-orange-500/20 group-hover/new:scale-105 transition-transform">
+                                      {showNewParts ? t('ui.hide', 'Hide Parts') : t('ui.show', 'Show Parts')}
+                                    </span>
+                                    <ChevronDown className={clsx("h-4 w-4 text-orange-500 transition-transform", showNewParts && "rotate-180")} />
+                                  </div>
+                              </button>
+                              
+                              {showNewParts && (
+                                <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+                                    {result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).map(item => (
+                                      <ItemRow key={item.id} item={item} compactMode={compactMode} />
+                                    ))}
+                                </div>
+                              )}
 
-                              <div className="px-6 py-2 bg-zinc-100 dark:bg-zinc-950/50 text-[10px] font-bold text-blue-600 dark:text-blue-500 uppercase tracking-wider border-b border-zinc-800/50 border-t border-zinc-200 dark:border-zinc-800/50">
-                                  {t('ui.retained_from_preset', 'Retained from Preset: {{name}}', { name: result.selected_preset.name })}
-                              </div>
-                              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
-                                  {result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).map(item => (
-                                    <ItemRow key={item.id} item={item} hidePrice />
-                                  ))}
-                              </div>
+                              <button 
+                                onClick={() => setShowRetained(!showRetained)}
+                                className="w-full flex items-center justify-between px-6 py-3 bg-blue-50/30 dark:bg-blue-500/5 hover:bg-blue-100/50 dark:hover:bg-blue-500/10 transition-all border-b border-zinc-300 dark:border-zinc-800 border-t border-zinc-300 dark:border-zinc-800 group/retained"
+                              >
+                                  <div className="flex items-center gap-2">
+                                    <div className="p-1 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                      <Plus className={clsx("h-3 w-3 transition-transform", showRetained && "rotate-45")} />
+                                    </div>
+                                    <span className="text-xs font-bold text-blue-700 dark:text-blue-400 uppercase tracking-wider">
+                                      {t('ui.retained_from_preset_short', 'Retained from Preset')}: <span className="text-zinc-600 dark:text-zinc-400 font-medium normal-case ml-1">{result.selected_preset.name}</span>
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest bg-white dark:bg-zinc-900 px-2 py-1 rounded shadow-sm border border-blue-200 dark:border-blue-500/20 group-hover/retained:scale-105 transition-transform">
+                                      {showRetained ? t('ui.hide', 'Hide Parts') : t('ui.show', 'Show Parts')}
+                                    </span>
+                                    <ChevronDown className={clsx("h-4 w-4 text-blue-500 transition-transform", showRetained && "rotate-180")} />
+                                  </div>
+                              </button>
+                              {showRetained && (
+                                <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+                                    {result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).map(item => (
+                                      <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />
+                                    ))}
+                                </div>
+                              )}
                             </>
                         ) : (
                             <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
-                              {result.selected_items.map(item => <ItemRow key={item.id} item={item} />)}
+                              {result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}
                             </div>
                         )}
                       </div>
@@ -1134,7 +1229,7 @@ function App() {
                       {optimizing ? t('status.optimizing', 'CALCULATING...') : t('optimize.generate_btn', 'GENERATE OPTIMAL BUILD')}
                     </button>
                   </div>
-                  <p className="text-xs text-zinc-400 mt-4">(Use the controls on the left to start)</p>
+                  <p className="text-xs text-zinc-400 mt-4">{t('optimize.use_controls_hint', '(Use the controls on the left to start)')}</p>
                 </div>
               )}
               </div>
@@ -1142,374 +1237,1793 @@ function App() {
           )}
 
           {activeTab === 'explore' && (
-            <div className="max-w-[1920px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
-               <div className="xl:col-span-4 2xl:col-span-3 space-y-6">
+            <div className="w-full max-w-[1920px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
+               <div className="xl:col-span-4 2xl:col-span-3 w-full space-y-6">
                  {renderWeaponSelector()}
-                 {/* Constraints for explore can be added here if needed in future */}
+                 {/* Explore Controls Card */}
+                 <div className="bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl overflow-hidden">
+                   <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center gap-2">
+                     <BarChart2 className="h-4 w-4 text-blue-500" />
+                     <h2 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm tracking-wide uppercase">{t('ui.pareto_exploration', 'Pareto Frontier Exploration')}</h2>
+                   </div>
+                   <div className="p-5 space-y-4">
+                     <p className="text-xs text-zinc-500">{t('ui.analyze_tradeoffs', 'Analyze trade-offs between key stats.')}</p>
+                     <div className="space-y-2">
+                       <label className="text-xs text-zinc-500 font-medium">{t('ui.tradeoff_strategy', 'Trade-off Strategy')}</label>
+                       <select
+                         value={exploreTradeoff}
+                         onChange={(e) => setExploreTradeoff(e.target.value as 'price' | 'recoil' | 'ergo')}
+                         className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md p-2 text-sm text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
+                       >
+                         <option value="price">{t('ui.tradeoff_ergo_vs_recoil', 'Ergo vs Recoil (Ignore Price)')}</option>
+                         <option value="recoil">{t('ui.tradeoff_ergo_vs_price', 'Ergo vs Price (Ignore Recoil)')}</option>
+                         <option value="ergo">{t('ui.tradeoff_recoil_vs_price', 'Recoil vs Price (Ignore Ergo)')}</option>
+                       </select>
+                     </div>
+                     <button
+                       onClick={handleExplore}
+                       disabled={exploring || !selectedGunId}
+                       className={clsx(
+                         "w-full px-4 py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-all",
+                         exploring || !selectedGunId
+                           ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                           : "bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white shadow-lg shadow-blue-900/20"
+                       )}
+                     >
+                       {exploring ? <Loader2 className="animate-spin h-4 w-4" /> : <BarChart2 className="h-4 w-4" />}
+                       {t('ui.run_analysis', 'RUN ANALYSIS')}
+                     </button>
+                   </div>
+                 </div>
                </div>
-               <div className="xl:col-span-8 2xl:col-span-9 flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex-1 flex flex-col bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl p-6">
-                  <div className="shrink-0 flex items-center justify-between mb-6">
-                    <div>
-                        <h2 className="text-lg font-bold text-zinc-900 dark:text-white">{t('ui.pareto_exploration', 'Pareto Frontier Exploration')}</h2>
-                        <p className="text-xs text-zinc-500">{t('ui.analyze_tradeoffs', 'Analyze trade-offs between key stats.')}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <select
-                          value={exploreTradeoff}
-                          onChange={(e) => setExploreTradeoff(e.target.value as any)}
-                          className="bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md p-2 text-xs text-zinc-900 dark:text-white outline-none focus:border-zinc-400 dark:focus:border-zinc-500"
-                        >
-                          <option value="price">{t('ui.tradeoff_ergo_vs_recoil', 'Ergo vs Recoil (Ignore Price)')}</option>
-                          <option value="recoil">{t('ui.tradeoff_ergo_vs_price', 'Ergo vs Price (Ignore Recoil)')}</option>
-                          <option value="ergo">{t('ui.tradeoff_recoil_vs_price', 'Recoil vs Price (Ignore Ergo)')}</option>
-                        </select>
-                        <button
-                          onClick={handleExplore}
-                          disabled={exploring || !selectedGunId}
-                          className={clsx(
-                            "px-4 py-2 rounded-md text-xs font-bold flex items-center gap-2 transition-all",
-                            exploring || !selectedGunId
-                              ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                              : "bg-blue-600 hover:bg-blue-500 text-white shadow-lg shadow-blue-900/20"
-                          )}
-                        >
-                          {exploring ? <Loader2 className="animate-spin h-3 w-3" /> : <BarChart2 className="h-3 w-3" />}
-                          RUN ANALYSIS
-                        </button>
-                    </div>
-                  </div>
-
-                  {exploreResult.length > 0 ? (
-                    <div className="flex-1 flex flex-col gap-6">
-                        <div className="flex-1 w-full min-h-[300px] bg-zinc-100 dark:bg-zinc-900/50 rounded-lg p-4 border border-zinc-300 dark:border-zinc-800">
-                          <ResponsiveContainer width="100%" height="100%">
-                              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
-                                <CartesianGrid strokeDasharray="3 3" stroke={document.documentElement.classList.contains('dark') ? '#333' : '#e4e4e7'} />
-                                <XAxis
-                                  type="number"
-                                  dataKey={resultTradeoff === 'recoil' ? 'ergo' : resultTradeoff === 'ergo' ? 'recoil_v' : 'ergo'}
-                                  name={resultTradeoff === 'recoil' ? t('ui.chart_ergonomics', 'Ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_recoil_v', 'Recoil V') : t('ui.chart_ergonomics', 'Ergonomics')}
-                                  stroke={document.documentElement.classList.contains('dark') ? '#666' : '#71717a'}
-                                  domain={['dataMin', 'dataMax']}
-                                  tick={{fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 10}}
-                                  label={{ value: resultTradeoff === 'recoil' ? t('ui.chart_ergonomics', 'Ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_vertical_recoil', 'Vertical Recoil') : t('ui.chart_ergonomics', 'Ergonomics'), position: 'bottom', fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 12, offset: 0 }}
-                                />
-                                <YAxis
-                                  type="number"
-                                  dataKey={resultTradeoff === 'price' ? 'recoil_v' : 'price'}
-                                  name={resultTradeoff === 'price' ? t('ui.chart_recoil_v', 'Recoil V') : t('ui.chart_price', 'Price')}
-                                  stroke={document.documentElement.classList.contains('dark') ? '#666' : '#71717a'}
-                                  domain={['dataMin', 'dataMax']}
-                                  tick={{fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 10}}
-                                  label={{ value: resultTradeoff === 'price' ? t('ui.chart_vertical_recoil', 'Vertical Recoil') : t('ui.chart_price_roubles', 'Price (₽)'), angle: -90, position: 'insideLeft', fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 12 }}
-                                />
-                                <ZAxis type="number" dataKey="recoil_pct" name={t('ui.chart_recoil_pct', 'Recoil %')} />
-                                <Tooltip
-                                  cursor={{ strokeDasharray: '3 3' }}
-                                  content={({ active, payload }) => {
-                                    if (active && payload && payload.length) {
-                                      const data = payload[0].payload;
-                                      return (
-                                        <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-3 rounded shadow-xl text-xs z-50">
-                                          <div className="font-bold mb-2 text-zinc-900 dark:text-white border-b border-zinc-200 dark:border-zinc-800 pb-1">{t('ui.build_stats', 'Build Stats')}</div>
-                                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                                              <div className="text-zinc-500">{t('ui.stat_ergo', 'Ergo:')}</div>
-                                              <div className="text-right text-blue-500 dark:text-blue-400 font-mono">{data.ergo.toFixed(1)}</div>
-
-                                              <div className="text-zinc-500">{t('ui.stat_recoil_v', 'Recoil V:')}</div>
-                                              <div className="text-right text-green-500 dark:text-green-400 font-mono">{data.recoil_v.toFixed(0)}</div>
-
-                                              <div className="text-zinc-500">{t('ui.stat_recoil_h', 'Recoil H:')}</div>
-                                              <div className="text-right text-zinc-600 dark:text-zinc-300 font-mono">{data.recoil_h.toFixed(0)}</div>
-
-                                              <div className="text-zinc-500">{t('ui.stat_price', 'Price:')}</div>
-                                              <div className="text-right text-yellow-600 dark:text-yellow-500 font-mono">₽{data.price.toLocaleString()}</div>
-                                          </div>
-                                        </div>
-                                      );
-                                    }
-                                    return null;
-                                  }}
-                                />
-                                <Scatter name="Builds" data={exploreResult} fill="#f97316" line shape="circle" />
-                              </ScatterChart>
-                          </ResponsiveContainer>
-                        </div>
-
-                        <div className="shrink-0 overflow-x-auto border border-zinc-300 dark:border-zinc-800 rounded-lg">
-                          <table className="w-full text-xs text-left">
-                              <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 font-medium uppercase border-b border-zinc-300 dark:border-zinc-800">
-                                <tr>
-                                    <th className="px-4 py-3">{t('sidebar.ergonomics', 'Ergonomics')}</th>
-                                    <th className="px-4 py-3">{t('sidebar.recoil_v', 'Recoil V')}</th>
-                                    <th className="px-4 py-3">{t('sidebar.recoil_h', 'Recoil H')}</th>
-                                    <th className="px-4 py-3">{t('sidebar.price', 'Price')}</th>
-                                    <th className="px-4 py-3 text-right">{t('ui.table_items', 'Items')}</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
-                                {exploreResult.map((pt, i) => (
-                                    <tr key={i} className="hover:bg-zinc-100 dark:hover:bg-zinc-800/30">
-                                      <td className="px-4 py-2 font-mono text-blue-600 dark:text-blue-400">{pt.ergo.toFixed(1)}</td>
-                                      <td className="px-4 py-2 font-mono text-green-600 dark:text-green-400">{pt.recoil_v.toFixed(0)}</td>
-                                      <td className="px-4 py-2 font-mono text-zinc-600 dark:text-zinc-400">{pt.recoil_h.toFixed(0)}</td>
-                                      <td className="px-4 py-2 font-mono text-yellow-600 dark:text-yellow-500">₽{pt.price.toLocaleString()}</td>
-                                      <td className="px-4 py-2 text-right text-zinc-500">{pt.selected_items.length} mods</td>
-                                    </tr>
-                                ))}
-                              </tbody>
-                          </table>
-                        </div>
-                    </div>
-                  ) : (
-                    <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-zinc-500 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-lg bg-zinc-50 dark:bg-zinc-900/10">
-                        <BarChart2 className="h-12 w-12 mb-4 opacity-20" />
-                        <p>{t('ui.explore_prompt', 'Select a tradeoff strategy and run analysis to visualize the Pareto frontier.')}</p>
-                    </div>
-                  )}
-                </div>
-               </div>
-            </div>
-          )}
-
-
-
-
-          {activeTab === 'gunsmith' && (
-            <div className="max-w-[1920px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
-              <div className="xl:col-span-4 2xl:col-span-3 space-y-6">
-                <div className="bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl overflow-hidden">
-                  <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center gap-2">
-                      <Wrench className="h-4 w-4 text-amber-500" />
-                      <h2 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm tracking-wide uppercase">{t('gunsmith.header', 'Gunsmith Tasks')}</h2>
-                  </div>
-
-                  <div className="p-5 space-y-6">
-                      {/* Task Selector */}
-                      <div className="space-y-2">
-                        <label className="text-xs text-zinc-500 font-medium">{t('gunsmith.select_task', 'Select Task')}</label>
-                        <select
-                            value={selectedTaskName}
-                            onChange={(e) => {
-                              setSelectedTaskName(e.target.value)
-                              setGunsmithResult(null)
-                            }}
-                            className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg p-3 text-sm text-zinc-900 dark:text-white outline-none focus:border-amber-500"
-                        >
-                            {gunsmithTasks.map(task => (
-                              <option key={task.task_name} value={task.task_name}>{task.task_name}</option>
-                            ))}
-                        </select>
-                      </div>
-
-                      {/* Task Details */}
-                      {selectedTask && (
-                        <div className="space-y-4">
-                            {/* Weapon Info */}
-                            <div className="flex items-center gap-4 bg-zinc-100 dark:bg-zinc-950/50 p-4 rounded-lg border border-zinc-300 dark:border-zinc-800/50">
-                              <div className="h-16 w-24 bg-zinc-200 dark:bg-zinc-800 rounded flex items-center justify-center overflow-hidden flex-shrink-0">
-                                  {selectedTask.weapon_image ? (
-                                    <img src={selectedTask.weapon_image} alt={selectedTask.weapon_name} className="w-full h-full object-contain" />
-                                  ) : (
-                                    <Crosshair className="text-zinc-400 dark:text-zinc-700 h-8 w-8" />
-                                  )}
-                              </div>
-                              <div>
-                                  <div className="font-medium text-zinc-900 dark:text-white text-lg">{selectedTask.weapon_name}</div>
-                                  <div className="text-xs text-zinc-500 font-mono">{selectedTask.task_name}</div>
-                              </div>
-                            </div>
-
-                            {/* Requirements Stack */}
-                            <div className="space-y-4">
-                              {/* Constraints */}
-                              <div className="bg-zinc-100 dark:bg-zinc-950/30 border border-zinc-300 dark:border-zinc-800/50 rounded-lg p-4">
-                                  <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <Target className="h-3 w-3" /> {t('gunsmith.task_requirements', 'Constraints')}
-                                  </h4>
-                                  <div className="space-y-2 text-sm">
-                                    {selectedTask.constraints.min_ergonomics !== undefined && selectedTask.constraints.min_ergonomics !== null && (
-                                        <div className="flex justify-between">
-                                          <span className="text-zinc-500">{t('ui.min_ergo_label', 'Min Ergonomics')}</span>
-                                          <span className="text-blue-600 dark:text-blue-400 font-mono">{selectedTask.constraints.min_ergonomics}</span>
-                                        </div>
-                                    )}
-                                    {selectedTask.constraints.max_recoil_sum !== undefined && selectedTask.constraints.max_recoil_sum !== null && (
-                                        <div className="flex justify-between">
-                                          <span className="text-zinc-500">{t('ui.max_recoil_sum_label', 'Max Recoil Sum')}</span>
-                                          <span className="text-green-600 dark:text-green-400 font-mono">{selectedTask.constraints.max_recoil_sum}</span>
-                                        </div>
-                                    )}
-                                    {selectedTask.constraints.min_mag_capacity !== undefined && selectedTask.constraints.min_mag_capacity !== null && (
-                                        <div className="flex justify-between">
-                                          <span className="text-zinc-500">{t('ui.min_mag_label', 'Min Mag Capacity')}</span>
-                                          <span className="text-purple-600 dark:text-purple-400 font-mono">{selectedTask.constraints.min_mag_capacity}</span>
-                                        </div>
-                                    )}
-                                    {selectedTask.constraints.min_sighting_range !== undefined && selectedTask.constraints.min_sighting_range !== null && (
-                                        <div className="flex justify-between">
-                                          <span className="text-zinc-500">{t('ui.min_sight_label', 'Min Sighting Range')}</span>
-                                          <span className="text-cyan-600 dark:text-cyan-400 font-mono">{selectedTask.constraints.min_sighting_range}m</span>
-                                        </div>
-                                    )}
-                                    {selectedTask.constraints.max_weight !== undefined && selectedTask.constraints.max_weight !== null && (
-                                        <div className="flex justify-between">
-                                          <span className="text-zinc-500">{t('ui.max_weight_label', 'Max Weight')}</span>
-                                          <span className="text-orange-600 dark:text-orange-400 font-mono">{selectedTask.constraints.max_weight}kg</span>
-                                        </div>
-                                    )}
-                                  </div>
-                              </div>
-
-                              {/* Required Items */}
-                              <div className="bg-zinc-100 dark:bg-zinc-950/30 border border-zinc-300 dark:border-zinc-800/50 rounded-lg p-4">
-                                  <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                    <CheckCircle className="h-3 w-3" /> {t('gunsmith.required_items', 'Required Items')}
-                                  </h4>
-                                  {selectedTask.required_item_names.length > 0 ? (
-                                    <ul className="space-y-1 text-sm">
-                                        {selectedTask.required_item_names.map((name, i) => (
-                                          <li key={i} className="text-green-600 dark:text-green-400 flex items-center gap-2">
-                                              <Plus className="h-3 w-3" />
-                                              <span className="truncate">{name}</span>
-                                          </li>
-                                        ))}
-                                    </ul>
-                                  ) : (
-                                    <p className="text-zinc-500 text-sm">{t('ui.no_items_required', 'No specific items required')}</p>
-                                  )}
-                                  {selectedTask.required_category_names.length > 0 && (
-                                    <div className="mt-3 pt-3 border-t border-zinc-300 dark:border-zinc-800">
-                                        <p className="text-xs text-zinc-500 mb-2">{t('ui.required_categories', 'Required Categories (one from each group):')}</p>
-                                        {selectedTask.required_category_names.map((group, i) => (
-                                          <div key={i} className="text-xs text-amber-600 dark:text-amber-400">
-                                              {group.join(' OR ')}
-                                          </div>
-                                        ))}
-                                    </div>
-                                  )}
-                              </div>
-                            </div>
-                        </div>
-                      )}
-                  </div>
-                </div>
-              </div>
-
-              <div className="xl:col-span-8 2xl:col-span-9">
-                {/* Gunsmith Results */}
-                {gunsmithResult ? (
+               <div className="xl:col-span-8 2xl:col-span-9 w-full">
+                {exploreResult.length > 0 ? (
                   <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                      {/* Status Banner */}
-                      <div className={clsx(
-                        "p-4 rounded-xl border flex items-center justify-between",
-                        gunsmithResult.status === 'optimal'
-                            ? "bg-green-100 dark:bg-green-500/10 border-green-300 dark:border-green-500/20 text-green-700 dark:text-green-400"
-                            : gunsmithResult.status === 'infeasible'
-                            ? "bg-red-100 dark:bg-red-500/10 border-red-300 dark:border-red-500/20 text-red-700 dark:text-red-400"
-                            : "bg-yellow-100 dark:bg-yellow-500/10 border-yellow-300 dark:border-yellow-500/20 text-yellow-700 dark:text-yellow-400"
-                      )}>
-                        <div className="flex items-center gap-3">
-                            {gunsmithResult.status === 'infeasible' ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
-                            <div>
-                              <h3 className="font-bold text-sm uppercase tracking-wide">
-                                  {gunsmithResult.status === 'optimal' ? t('ui.solution_found', 'Solution Found!') : gunsmithResult.status === 'infeasible' ? t('ui.no_solution', 'No Solution') : gunsmithResult.status}
-                              </h3>
-                              {gunsmithResult.reason && <p className="text-xs opacity-80 mt-1">{gunsmithResult.reason}</p>}
-                            </div>
-                        </div>
+                    {/* Chart Card */}
+                    <div className="bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl p-6">
+                      <div className="h-[400px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke={document.documentElement.classList.contains('dark') ? '#333' : '#e4e4e7'} />
+                            <XAxis
+                              type="number"
+                              dataKey={resultTradeoff === 'recoil' ? 'ergo' : resultTradeoff === 'ergo' ? 'recoil_v' : 'ergo'}
+                              name={resultTradeoff === 'recoil' ? t('ui.chart_ergonomics', 'Ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_recoil_v', 'Recoil V') : t('ui.chart_ergonomics', 'Ergonomics')}
+                              stroke={document.documentElement.classList.contains('dark') ? '#666' : '#71717a'}
+                              domain={['dataMin', 'dataMax']}
+                              tick={{fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 10}}
+                              label={{ value: resultTradeoff === 'recoil' ? t('ui.chart_ergonomics', 'Ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_vertical_recoil', 'Vertical Recoil') : t('ui.chart_ergonomics', 'Ergonomics'), position: 'bottom', fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 12, offset: 0 }}
+                            />
+                            <YAxis
+                              type="number"
+                              dataKey={resultTradeoff === 'price' ? 'recoil_v' : 'price'}
+                              name={resultTradeoff === 'price' ? t('ui.chart_recoil_v', 'Recoil V') : t('ui.chart_price', 'Price')}
+                              stroke={document.documentElement.classList.contains('dark') ? '#666' : '#71717a'}
+                              domain={['dataMin', 'dataMax']}
+                              tick={{fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 10}}
+                              label={{ value: resultTradeoff === 'price' ? t('ui.chart_vertical_recoil', 'Vertical Recoil') : t('ui.chart_price_roubles', 'Price (₽)'), angle: -90, position: 'insideLeft', fill: document.documentElement.classList.contains('dark') ? '#888' : '#71717a', fontSize: 12 }}
+                            />
+                            <ZAxis type="number" dataKey="recoil_pct" name={t('ui.chart_recoil_pct', 'Recoil %')} />
+                            <Tooltip
+                              cursor={{ strokeDasharray: '3 3' }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  const data = payload[0].payload;
+                                  return (
+                                    <div className="bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-zinc-700 p-3 rounded shadow-xl text-xs z-50">
+                                      <div className="font-bold mb-2 text-zinc-900 dark:text-white border-b border-zinc-200 dark:border-zinc-800 pb-1">{t('ui.build_stats', 'Build Stats')}</div>
+                                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                        <div className="text-zinc-500">{t('ui.stat_ergo', 'Ergo:')}</div>
+                                        <div className="text-right text-blue-500 dark:text-blue-400 font-mono">{data.ergo.toFixed(1)}</div>
+                                        <div className="text-zinc-500">{t('ui.stat_recoil_v', 'Recoil V:')}</div>
+                                        <div className="text-right text-green-500 dark:text-green-400 font-mono">{data.recoil_v.toFixed(0)}</div>
+                                        <div className="text-zinc-500">{t('ui.stat_recoil_h', 'Recoil H:')}</div>
+                                        <div className="text-right text-zinc-600 dark:text-zinc-300 font-mono">{data.recoil_h.toFixed(0)}</div>
+                                        <div className="text-zinc-500">{t('ui.stat_price', 'Price:')}</div>
+                                        <div className="text-right text-yellow-600 dark:text-yellow-500 font-mono">₽{data.price.toLocaleString()}</div>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Scatter name="Builds" data={exploreResult} fill="#f97316" line shape="circle" />
+                          </ScatterChart>
+                        </ResponsiveContainer>
                       </div>
+                    </div>
 
-                      {gunsmithResult.status !== 'infeasible' && gunsmithResult.final_stats && (
-                        <>
-                            {/* Stats Grid */}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
-                                  <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
-                                    <Settings2 className="h-4 w-4" />
-                                    <span className="text-xs uppercase font-bold tracking-wider">{t('sidebar.ergonomics', 'Ergonomics')}</span>
-                                  </div>
-                                  <div className="text-2xl font-mono text-zinc-900 dark:text-white">
-                                    {Math.min(100, Math.max(0, gunsmithResult.final_stats.ergonomics)).toFixed(1)}
-                                  </div>
-                              </div>
-                              <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
-                                  <div className="flex items-center gap-2 mb-2 text-green-600 dark:text-green-500/80">
-                                    <Anchor className="h-4 w-4" />
-                                    <span className="text-xs uppercase font-bold tracking-wider">{t('ui.recoil_sum', 'Recoil Sum')}</span>
-                                  </div>
-                                  <div className="text-2xl font-mono text-zinc-900 dark:text-white">
-                                    {(gunsmithResult.final_stats.recoil_vertical + gunsmithResult.final_stats.recoil_horizontal).toFixed(0)}
-                                  </div>
-                              </div>
-                              <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
-                                  <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
-                                    <Weight className="h-4 w-4" />
-                                    <span className="text-xs uppercase font-bold tracking-wider">{t('ui.weight_label', 'Weight')}</span>
-                                  </div>
-                                  <div className="text-2xl font-mono text-zinc-900 dark:text-white">
-                                    {gunsmithResult.final_stats.total_weight.toFixed(2)}kg
-                                  </div>
-                              </div>
-                              <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
-                                  <div className="flex items-center gap-2 mb-2 text-yellow-600 dark:text-yellow-500/80">
-                                    <DollarSignIcon className="h-4 w-4" />
-                                    <span className="text-xs uppercase font-bold tracking-wider">{t('ui.total_cost', 'Total Cost')}</span>
-                                  </div>
-                                  <div className="text-2xl font-mono text-zinc-900 dark:text-white">
-                                    ₽{gunsmithResult.final_stats.total_price.toLocaleString()}
-                                  </div>
-                              </div>
-                            </div>
-
-                            {/* Parts List */}
-                            <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-xl overflow-hidden">
-                              <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/80">
-                                  <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
-                                    <Wrench className="h-4 w-4 text-amber-500" />
-                                    {t('ui.build_for_task', 'Build for {{task}}', { task: selectedTask?.task_name })}
-                                  </h3>
-                              </div>
-                              <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
-                                  {gunsmithResult.selected_items.map(item => <ItemRow key={item.id} item={item} />)}
-                              </div>
-                            </div>
-                        </>
-                      )}
+                    {/* Results Table Card */}
+                    <div className="bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl overflow-hidden">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 font-medium uppercase border-b border-zinc-300 dark:border-zinc-800">
+                          <tr>
+                            <th className="px-4 py-3">{t('sidebar.ergonomics', 'Ergonomics')}</th>
+                            <th className="px-4 py-3">{t('sidebar.recoil_v', 'Recoil V')}</th>
+                            <th className="px-4 py-3">{t('sidebar.recoil_h', 'Recoil H')}</th>
+                            <th className="px-4 py-3">{t('sidebar.price', 'Price')}</th>
+                            <th className="px-4 py-3 text-right">{t('ui.table_items', 'Items')}</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+                          {exploreResult.map((pt, i) => (
+                            <tr key={i} className="hover:bg-zinc-100 dark:hover:bg-zinc-800/30">
+                              <td className="px-4 py-2 font-mono text-blue-600 dark:text-blue-400">{pt.ergo.toFixed(1)}</td>
+                              <td className="px-4 py-2 font-mono text-green-600 dark:text-green-400">{pt.recoil_v.toFixed(0)}</td>
+                              <td className="px-4 py-2 font-mono text-zinc-600 dark:text-zinc-400">{pt.recoil_h.toFixed(0)}</td>
+                              <td className="px-4 py-2 font-mono text-yellow-600 dark:text-yellow-500">₽{pt.price.toLocaleString()}</td>
+                              <td className="px-4 py-2 text-right text-zinc-500">{pt.selected_items.length} mods</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/20">
                     <div className="h-20 w-20 bg-zinc-200 dark:bg-zinc-900 rounded-full flex items-center justify-center mb-6 border border-zinc-300 dark:border-zinc-800 shadow-xl">
-                      <Wrench className="h-10 w-10 text-zinc-400" />
+                      <BarChart2 className="h-10 w-10 text-zinc-400" />
                     </div>
-                    <h3 className="text-xl font-bold text-zinc-700 dark:text-zinc-300 mb-2">{t('gunsmith.ready_title', 'Ready to Solve Gunsmith')}</h3>
+                    <h3 className="text-xl font-bold text-zinc-700 dark:text-zinc-300 mb-2">{t('explore.ready_title', 'Ready to Explore')}</h3>
                     <p className="text-zinc-500 max-w-md mb-8">
-                      {t('gunsmith.ready_description', 'Select a Gunsmith task on the left to see requirements and generate the cheapest solution.')}
+                      {t('explore.ready_description', 'Select a weapon and trade-off strategy to visualize the Pareto frontier of optimal builds.')}
                     </p>
-                    <div>
-                      <button
-                        onClick={handleGunsmithOptimize}
-                        disabled={optimizingGunsmith || !selectedTask}
-                        className={clsx(
-                          "px-8 py-4 rounded-xl font-bold text-lg tracking-wide transition-all shadow-xl flex items-center justify-center gap-3",
-                          optimizingGunsmith || !selectedTask
-                            ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                            : "bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-amber-900/20 active:scale-[0.98]"
-                        )}
-                      >
-                        {optimizingGunsmith ? <Loader2 className="animate-spin h-6 w-6" /> : <Wrench className="h-6 w-6" />}
-                        {optimizingGunsmith ? t('status.optimizing', 'SOLVING...') : t('gunsmith.optimize_btn', 'SOLVE GUNSMITH TASK')}
-                      </button>
-                    </div>
-                    <p className="text-xs text-zinc-400 mt-4">(Use the controls on the left to start)</p>
                   </div>
                 )}
-              </div>
+               </div>
             </div>
           )}
-      </main>
-    </div>
+
+
+
+
+                    {activeTab === 'gunsmith' && (
+
+
+
+
+                      <div className="w-full max-w-[1920px] mx-auto grid grid-cols-1 xl:grid-cols-12 gap-8">
+
+
+
+
+                        <div className="xl:col-span-4 2xl:col-span-3 w-full space-y-6">
+
+
+
+
+                          <div className="bg-white dark:bg-zinc-900/40 border border-zinc-300 dark:border-zinc-800 rounded-xl overflow-hidden">
+
+
+
+
+                            <div className="p-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 flex items-center gap-2">
+
+
+
+
+                                <Wrench className="h-4 w-4 text-amber-500" />
+
+
+
+
+                                <h2 className="font-semibold text-zinc-800 dark:text-zinc-100 text-sm tracking-wide uppercase">{t('gunsmith.header', 'Gunsmith Tasks')}</h2>
+
+
+
+
+                            </div>
+
+
+
+
+          
+
+
+
+
+                            <div className="p-5 space-y-6">
+
+
+
+
+                                {/* Task Selector */}
+
+
+
+
+                                <div className="space-y-2" ref={taskDropdownRef}>
+
+
+
+
+                                  <label className="text-xs text-zinc-500 font-medium">{t('gunsmith.select_task', 'Select Task')}</label>
+
+
+
+
+                                  
+
+
+
+
+                                  <button
+
+
+
+
+                                    ref={taskButtonRef}
+
+
+
+
+                                    onClick={() => {
+
+
+
+
+                                      if (!taskDropdownOpen && taskButtonRef.current) {
+
+
+
+
+                                        const rect = taskButtonRef.current.getBoundingClientRect()
+
+
+
+
+                                        setTaskDropdownPosition({
+
+
+
+
+                                          top: rect.bottom + 4,
+
+
+
+
+                                          left: rect.left,
+
+
+
+
+                                          width: rect.width
+
+
+
+
+                                        })
+
+
+
+
+                                      }
+
+
+
+
+                                      setTaskDropdownOpen(!taskDropdownOpen)
+
+
+
+
+                                    }}
+
+
+
+
+                                    className="w-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-750 border border-zinc-300 dark:border-zinc-700 rounded-lg p-2 text-left outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/50 transition-all cursor-pointer"
+
+
+
+
+                                  >
+
+
+
+
+                                    {selectedTask ? (
+
+
+
+
+                                      <div className="flex items-center gap-3">
+
+
+
+
+                                        <div className="h-14 w-24 bg-zinc-200 dark:bg-zinc-900 rounded flex items-center justify-center overflow-hidden flex-shrink-0 p-1">
+
+
+
+
+                                          {selectedTask.weapon_image ? (
+
+
+
+
+                                            <img src={selectedTask.weapon_image} alt={selectedTask.weapon_name} className="max-w-full max-h-full object-contain" />
+
+
+
+
+                                          ) : (
+
+
+
+
+                                            <Crosshair className="text-zinc-400 dark:text-zinc-700 h-6 w-6" />
+
+
+
+
+                                          )}
+
+
+
+
+                                        </div>
+
+
+
+
+                                        <div className="flex-1 min-w-0">
+
+
+
+
+                                          <div className="font-medium text-zinc-900 dark:text-white text-sm truncate">{selectedTask.task_name}</div>
+
+
+
+
+                                          <div className="text-[10px] text-zinc-500 font-mono">{selectedTask.weapon_name}</div>
+
+
+
+
+                                        </div>
+
+
+
+
+                                        <ChevronDown className={clsx("h-4 w-4 text-zinc-500 transition-transform", taskDropdownOpen && "rotate-180")} />
+
+
+
+
+                                      </div>
+
+
+
+
+                                    ) : (
+
+
+
+
+                                      <div className="flex items-center justify-between py-2 px-2">
+
+
+
+
+                                        <span className="text-zinc-500 text-sm">{t('gunsmith.select_task_prompt', 'Select a Gunsmith task...')}</span>
+
+
+
+
+                                        <ChevronDown className="h-4 w-4 text-zinc-500" />
+
+
+
+
+                                      </div>
+
+
+
+
+                                    )}
+
+
+
+
+                                  </button>
+
+
+
+
+          
+
+
+
+
+                                  {/* Dropdown Menu - Fixed Position */}
+
+
+
+
+                                  {taskDropdownOpen && (
+
+
+
+
+                                    <div
+
+
+
+
+                                      className="fixed z-[100] bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-700 rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-100"
+
+
+
+
+                                      style={{
+
+
+
+
+                                        top: taskDropdownPosition.top,
+
+
+
+
+                                        left: taskDropdownPosition.left,
+
+
+
+
+                                        width: Math.max(taskDropdownPosition.width, 350),
+
+
+
+
+                                      }}
+
+
+
+
+                                    >
+
+
+
+
+                                      {/* Search Input */}
+
+
+
+
+                                      <div className="p-3 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50">
+
+
+
+
+                                        <div className="relative">
+
+
+
+
+                                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-400" />
+
+
+
+
+                                          <input
+
+
+
+
+                                            autoFocus
+
+
+
+
+                                            type="text"
+
+
+
+
+                                            placeholder={t('ui.search_tasks_weapons', 'Search tasks or weapons...')}
+
+
+
+
+                                            className="w-full bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md py-1.5 pl-9 pr-3 text-sm outline-none focus:border-amber-500 transition-colors"
+
+
+
+
+                                            value={taskSearch}
+
+
+
+
+                                            onChange={(e) => setTaskSearch(e.target.value)}
+
+
+
+
+                                            onClick={(e) => e.stopPropagation()}
+
+
+
+
+                                          />
+
+
+
+
+                                        </div>
+
+
+
+
+                                      </div>
+
+
+
+
+          
+
+
+
+
+                                      {/* Task List */}
+
+
+
+
+                                      <div className="max-h-[400px] overflow-y-auto custom-scrollbar p-1">
+
+
+
+
+                                        {filteredTasks.length > 0 ? (
+
+
+
+
+                                          filteredTasks.map(task => (
+
+
+
+
+                                            <button
+
+
+
+
+                                              key={task.task_name}
+
+
+
+
+                                              onClick={() => {
+
+
+
+
+                                                setSelectedTaskName(task.task_name)
+
+
+
+
+                                                setGunsmithResult(null)
+
+
+
+
+                                                setTaskDropdownOpen(false)
+
+
+
+
+                                                setTaskSearch('')
+
+
+
+
+                                              }}
+
+
+
+
+                                              className={clsx(
+
+
+
+
+                                                "w-full flex items-center gap-3 p-2 rounded-md text-left transition-colors",
+
+
+
+
+                                                selectedTaskName === task.task_name
+
+
+
+
+                                                  ? "bg-amber-500/10 border border-amber-500/20"
+
+
+
+
+                                                  : "hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-transparent"
+
+
+
+
+                                              )}
+
+
+
+
+                                            >
+
+
+
+
+                                              <div className="h-12 w-20 bg-zinc-200 dark:bg-zinc-950 rounded flex items-center justify-center overflow-hidden flex-shrink-0 p-1">
+
+
+
+
+                                                {task.weapon_image ? (
+
+
+
+
+                                                  <img src={task.weapon_image} alt={task.weapon_name} className="max-w-full max-h-full object-contain" />
+
+
+
+
+                                                ) : (
+
+
+
+
+                                                  <Crosshair className="text-zinc-400 dark:text-zinc-800 h-5 w-5" />
+
+
+
+
+                                                )}
+
+
+
+
+                                              </div>
+
+
+
+
+                                              <div className="flex-1 min-w-0">
+
+
+
+
+                                                <div className={clsx("font-medium text-sm truncate", selectedTaskName === task.task_name ? "text-amber-600 dark:text-amber-400" : "text-zinc-900 dark:text-zinc-200")}>
+
+
+
+
+                                                  {task.task_name}
+
+
+
+
+                                                </div>
+
+
+
+
+                                                <div className="text-[10px] text-zinc-500 font-mono truncate">{task.weapon_name}</div>
+
+
+
+
+                                              </div>
+
+
+
+
+                                            </button>
+
+
+
+
+                                          ))
+
+
+
+
+                                        ) : (
+
+
+
+
+                                          <div className="p-4 text-center text-zinc-500 text-sm">{t('ui.no_tasks_found', 'No tasks found')}</div>
+
+
+
+
+                                        )}
+
+
+
+
+                                      </div>
+
+
+
+
+                                    </div>
+
+
+
+
+                                  )}
+
+
+
+
+                                </div>
+
+
+
+
+          
+
+
+
+
+                                {/* Task Details */}
+
+
+
+
+                                {selectedTask && (
+
+
+
+
+                                  <div className="space-y-4">
+
+
+
+
+                                      {/* Requirements Stack */}
+
+
+
+
+                                      <div className="space-y-4">
+
+
+
+
+                                        {/* Constraints */}
+
+
+
+
+                                        <div className="bg-zinc-100 dark:bg-zinc-950/30 border border-zinc-300 dark:border-zinc-800/50 rounded-lg p-4">
+
+
+
+
+                                            <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+
+
+
+
+                                              <Target className="h-3 w-3" /> {t('gunsmith.task_requirements', 'Constraints')}
+
+
+
+
+                                            </h4>
+
+
+
+
+                                            <div className="space-y-2 text-sm">
+
+
+
+
+                                              {selectedTask.constraints.min_ergonomics !== undefined && selectedTask.constraints.min_ergonomics !== null && (
+
+
+
+
+                                                  <div className="flex justify-between">
+
+
+
+
+                                                    <span className="text-zinc-500">{t('ui.min_ergo_label', 'Min Ergonomics')}</span>
+
+
+
+
+                                                    <span className="text-zinc-900 dark:text-white font-mono">{selectedTask.constraints.min_ergonomics}</span>
+
+
+
+
+                                                  </div>
+
+
+
+
+                                              )}
+
+
+
+
+                                              {selectedTask.constraints.max_recoil_sum !== undefined && selectedTask.constraints.max_recoil_sum !== null && (
+
+
+
+
+                                                  <div className="flex justify-between">
+
+
+
+
+                                                    <span className="text-zinc-500">{t('ui.max_recoil_sum_label', 'Max Recoil Sum')}</span>
+
+
+
+
+                                                    <span className="text-zinc-900 dark:text-white font-mono">{selectedTask.constraints.max_recoil_sum}</span>
+
+
+
+
+                                                  </div>
+
+
+
+
+                                              )}
+
+
+
+
+                                              {selectedTask.constraints.min_mag_capacity !== undefined && selectedTask.constraints.min_mag_capacity !== null && (
+
+
+
+
+                                                  <div className="flex justify-between">
+
+
+
+
+                                                    <span className="text-zinc-500">{t('ui.min_mag_label', 'Min Mag Capacity')}</span>
+
+
+
+
+                                                    <span className="text-zinc-900 dark:text-white font-mono">{selectedTask.constraints.min_mag_capacity}</span>
+
+
+
+
+                                                  </div>
+
+
+
+
+                                              )}
+
+
+
+
+                                              {selectedTask.constraints.min_sighting_range !== undefined && selectedTask.constraints.min_sighting_range !== null && (
+
+
+
+
+                                                  <div className="flex justify-between">
+
+
+
+
+                                                    <span className="text-zinc-500">{t('ui.min_sight_label', 'Min Sighting Range')}</span>
+
+
+
+
+                                                    <span className="text-zinc-900 dark:text-white font-mono">{selectedTask.constraints.min_sighting_range}m</span>
+
+
+
+
+                                                  </div>
+
+
+
+
+                                              )}
+
+
+
+
+                                              {selectedTask.constraints.max_weight !== undefined && selectedTask.constraints.max_weight !== null && (
+
+
+
+
+                                                  <div className="flex justify-between">
+
+
+
+
+                                                    <span className="text-zinc-500">{t('ui.max_weight_label', 'Max Weight')}</span>
+
+
+
+
+                                                    <span className="text-zinc-900 dark:text-white font-mono">{selectedTask.constraints.max_weight}kg</span>
+
+
+
+
+                                                  </div>
+
+
+
+
+                                              )}
+
+
+
+
+                                            </div>
+
+
+
+
+                                        </div>
+
+
+
+
+          
+
+
+
+
+                                        {/* Required Items */}
+
+
+
+
+                                        <div className="bg-zinc-100 dark:bg-zinc-950/30 border border-zinc-300 dark:border-zinc-800/50 rounded-lg p-4">
+
+
+
+
+                                            <h4 className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+
+
+
+
+                                              <CheckCircle className="h-3 w-3" /> {t('gunsmith.required_items', 'Required Items')}
+
+
+
+
+                                            </h4>
+
+
+
+
+                                            {selectedTask.required_item_names.length > 0 ? (
+
+
+
+
+                                              <ul className="space-y-1 text-sm">
+
+
+
+
+                                                  {selectedTask.required_item_names.map((name, i) => (
+
+
+
+
+                                                    <li key={i} className="text-green-600 dark:text-green-400 flex items-center gap-2">
+
+
+
+
+                                                        <Plus className="h-3 w-3" />
+
+
+
+
+                                                        <span className="truncate">{name}</span>
+
+
+
+
+                                                    </li>
+
+
+
+
+                                                  ))}
+
+
+
+
+                                              </ul>
+
+
+
+
+                                            ) : (
+
+
+
+
+                                              <p className="text-zinc-500 text-sm">{t('ui.no_items_required', 'No specific items required')}</p>
+
+
+
+
+                                            )}
+
+
+
+
+                                            {selectedTask.required_category_names.length > 0 && (
+
+
+
+
+                                              <div className="mt-3 pt-3 border-t border-zinc-300 dark:border-zinc-800">
+
+
+
+
+                                                  <p className="text-xs text-zinc-500 mb-2">{t('ui.required_categories', 'Required Categories (one from each group):')}</p>
+
+
+
+
+                                                  {selectedTask.required_category_names.map((group, i) => (
+
+
+
+
+                                                    <div key={i} className="text-xs text-amber-600 dark:text-amber-400">
+
+
+
+
+                                                        {group.join(' OR ')}
+
+
+
+
+                                                    </div>
+
+
+
+
+                                                  ))}
+
+
+
+
+                                              </div>
+
+
+
+
+                                            )}
+
+
+
+
+                                        </div>
+
+
+
+
+                                      </div>
+
+
+
+
+                                  </div>
+
+
+
+
+                                )}
+
+
+
+
+                            </div>
+
+
+
+
+                          </div>
+
+
+
+
+                        </div>
+
+
+
+
+          
+
+
+
+
+                        <div className="xl:col-span-8 2xl:col-span-9 w-full">
+
+
+
+
+                          {/* Gunsmith Results */}
+
+
+
+
+                          {gunsmithResult ? (
+
+
+
+
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+
+
+
+
+                                {/* Status Banner */}
+
+
+
+
+                                <div className={clsx(
+
+
+
+
+                                  "p-4 rounded-xl border flex items-center justify-between",
+
+
+
+
+                                  gunsmithResult.status === 'optimal'
+
+
+
+
+                                      ? "bg-green-100 dark:bg-green-500/10 border-green-300 dark:border-green-500/20 text-green-700 dark:text-green-400"
+
+
+
+
+                                      : gunsmithResult.status === 'infeasible'
+
+
+
+
+                                      ? "bg-red-100 dark:bg-red-500/10 border-red-300 dark:border-red-500/20 text-red-700 dark:text-red-400"
+
+
+
+
+                                      : "bg-yellow-100 dark:bg-yellow-500/10 border-yellow-300 dark:border-yellow-500/20 text-yellow-700 dark:text-yellow-400"
+
+
+
+
+                                )}>
+
+
+
+
+                                  <div className="flex items-center gap-3">
+
+
+
+
+                                      {gunsmithResult.status === 'infeasible' ? <AlertTriangle className="h-5 w-5" /> : <CheckCircle className="h-5 w-5" />}
+
+
+
+
+                                      <div>
+
+
+
+
+                                        <h3 className="font-bold text-sm uppercase tracking-wide">
+
+
+
+
+                                            {gunsmithResult.status === 'optimal' ? t('ui.solution_found', 'Solution Found!') : gunsmithResult.status === 'infeasible' ? t('ui.no_solution', 'No Solution') : gunsmithResult.status}
+
+
+
+
+                                        </h3>
+
+
+
+
+                                        {gunsmithResult.reason && <p className="text-xs opacity-80 mt-1">{gunsmithResult.reason}</p>}
+
+
+
+
+                                      </div>
+
+
+
+
+                                  </div>
+
+
+
+
+                                </div>
+
+
+
+
+          
+
+
+
+
+                                {gunsmithResult.status !== 'infeasible' && gunsmithResult.final_stats && (
+
+
+
+
+                                  <>
+
+
+
+
+                                      {/* Stats Grid */}
+
+
+
+
+                                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+
+
+
+
+                                        <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
+
+
+
+
+                                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
+
+
+
+
+                                              <Settings2 className="h-4 w-4" />
+
+
+
+
+                                              <span className="text-xs uppercase font-bold tracking-wider">{t('sidebar.ergonomics', 'Ergonomics')}</span>
+
+
+
+
+                                            </div>
+
+
+
+
+                                            <div className="text-2xl font-mono text-zinc-900 dark:text-white">
+
+
+
+
+                                              {Math.min(100, Math.max(0, gunsmithResult.final_stats.ergonomics)).toFixed(1)}
+
+
+
+
+                                            </div>
+
+
+
+
+                                        </div>
+
+
+
+
+                                        <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
+
+
+
+
+                                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
+
+
+
+
+                                              <Anchor className="h-4 w-4" />
+
+
+
+
+                                              <span className="text-xs uppercase font-bold tracking-wider">{t('ui.recoil_sum', 'Recoil Sum')}</span>
+
+
+
+
+                                            </div>
+
+
+
+
+                                            <div className="text-2xl font-mono text-zinc-900 dark:text-white">
+
+
+
+
+                                              {(gunsmithResult.final_stats.recoil_vertical + gunsmithResult.final_stats.recoil_horizontal).toFixed(0)}
+
+
+
+
+                                            </div>
+
+
+
+
+                                        </div>
+
+
+
+
+                                        <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
+
+
+
+
+                                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
+
+
+
+
+                                              <Weight className="h-4 w-4" />
+
+
+
+
+                                              <span className="text-xs uppercase font-bold tracking-wider">{t('ui.weight_label', 'Weight')}</span>
+
+
+
+
+                                            </div>
+
+
+
+
+                                            <div className="text-2xl font-mono text-zinc-900 dark:text-white">
+
+
+
+
+                                              {gunsmithResult.final_stats.total_weight.toFixed(2)}kg
+
+
+
+
+                                            </div>
+
+
+
+
+                                        </div>
+
+
+
+
+                                        <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
+
+
+
+
+                                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
+
+
+
+
+                                              <DollarSignIcon className="h-4 w-4" />
+
+
+
+
+                                              <span className="text-xs uppercase font-bold tracking-wider">{t('ui.total_cost', 'Total Cost')}</span>
+
+
+
+
+                                            </div>
+
+
+
+
+                                            <div className="text-2xl font-mono text-zinc-900 dark:text-white">
+
+
+
+
+                                              ₽{gunsmithResult.final_stats.total_price.toLocaleString()}
+
+
+
+
+                                            </div>
+
+
+
+
+                                        </div>
+
+
+
+
+                                      </div>
+
+
+
+
+          
+
+
+
+
+                                      {/* Parts List */}
+
+
+
+
+                                      <div className="bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-zinc-800 rounded-xl overflow-hidden">
+
+
+
+
+                                        <div className="px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between bg-zinc-50 dark:bg-zinc-900/80">
+
+
+
+
+                                            <h3 className="font-semibold text-zinc-800 dark:text-zinc-100 flex items-center gap-2">
+
+
+
+
+                                              <Wrench className="h-4 w-4 text-amber-500" />
+
+
+
+
+                                              {t('ui.build_for_task', 'Build for {{task}}', { task: selectedTask?.task_name })}
+
+
+
+
+                                            </h3>
+
+
+
+
+                                            <button
+
+
+
+
+                                              onClick={() => setCompactMode(!compactMode)}
+
+
+
+
+                                              className={clsx(
+
+
+
+
+                                                "flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all shadow-sm",
+
+
+
+
+                                                compactMode 
+
+
+
+
+                                                  ? "bg-blue-100 dark:bg-blue-500/20 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-500/30" 
+
+
+
+
+                                                  : "bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-300 dark:border-zinc-700 hover:text-zinc-900 dark:hover:text-zinc-200"
+
+
+
+
+                                              )}
+
+
+
+
+                                            >
+
+
+
+
+                                              <Monitor className="h-3.5 w-3.5" /> {compactMode ? t('ui.compact_on', 'COMPACT ON') : t('ui.compact_off', 'COMPACT OFF')}
+
+
+
+
+                                            </button>
+
+
+
+
+                                        </div>
+
+
+
+
+                                        <div className="divide-y divide-zinc-200 dark:divide-zinc-800/50">
+
+
+
+
+                                            {gunsmithResult.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}
+
+
+
+
+                                        </div>
+
+
+
+
+                                      </div>
+
+
+
+
+                                  </>
+
+
+
+
+                                )}
+
+
+
+
+                            </div>
+
+
+
+
+                          ) : (
+
+
+
+
+                            <div className="flex-1 min-h-[400px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-zinc-300 dark:border-zinc-800 rounded-xl bg-zinc-50 dark:bg-zinc-900/20">
+
+
+
+
+                              <div className="h-20 w-20 bg-zinc-200 dark:bg-zinc-900 rounded-full flex items-center justify-center mb-6 border border-zinc-300 dark:border-zinc-800 shadow-xl">
+
+
+
+
+                                <Wrench className="h-10 w-10 text-zinc-400" />
+
+
+
+
+                              </div>
+
+
+
+
+                              <h3 className="text-xl font-bold text-zinc-700 dark:text-zinc-300 mb-2">{t('gunsmith.ready_title', 'Ready to Solve Gunsmith')}</h3>
+
+
+
+
+                              <p className="text-zinc-500 max-w-md mb-8">
+
+
+
+
+                                {t('gunsmith.ready_description', 'Select a Gunsmith task on the left to see requirements and generate the cheapest solution.')}
+
+
+
+
+                              </p>
+
+
+
+
+                              <div>
+
+
+
+
+                                <button
+
+
+
+
+                                  onClick={handleGunsmithOptimize}
+
+
+
+
+                                  disabled={optimizingGunsmith || !selectedTask}
+
+
+
+
+                                  className={clsx(
+
+
+
+
+                                    "px-8 py-4 rounded-xl font-bold text-lg tracking-wide transition-all shadow-xl flex items-center justify-center gap-3",
+
+
+
+
+                                    optimizingGunsmith || !selectedTask
+
+
+
+
+                                      ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
+
+
+
+
+                                      : "bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-amber-900/20 active:scale-[0.98]"
+
+
+
+
+                                  )}
+
+
+
+
+                                >
+
+
+
+
+                                  {optimizingGunsmith ? <Loader2 className="animate-spin h-6 w-6" /> : <Wrench className="h-6 w-6" />}
+
+
+
+
+                                  {optimizingGunsmith ? t('status.optimizing', 'SOLVING...') : t('gunsmith.optimize_btn', 'SOLVE GUNSMITH TASK')}
+
+
+
+
+                                </button>
+
+
+
+
+                                                </div>
+
+
+
+
+                                                <p className="text-xs text-zinc-400 mt-4">{t('optimize.use_controls_hint', '(Use the controls on the left to start)')}</p>
+
+
+
+
+                                              </div>
+
+
+
+
+                                            )}
+
+
+
+
+                                            </div>
+
+
+
+
+                                          </div>
+
+
+
+
+                                        )}
+
+
+
+
+                                    </main>
+
+
+
+
+                            <footer className="w-full py-6 text-center text-[10px] text-zinc-400 dark:text-zinc-600 border-t border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950/50">
+
+
+
+
+                              <p>
+
+
+
+
+                                {t('ui.footer_data', 'Data provided by')} <a href="https://tarkov.dev/" target="_blank" rel="noopener noreferrer" className="hover:text-orange-500 underline">tarkov.dev</a>
+
+
+
+
+                              </p>
+
+
+
+
+                              <p className="mt-1">
+
+
+
+
+                                {t('ui.footer_copyright', '© 2026 AhaiMk01')} • <a href="https://github.com/AhaiMk01/tarkov-weapon-optimizer" target="_blank" rel="noopener noreferrer" className="hover:text-orange-500 underline">GitHub</a>
+
+
+
+
+                              </p>
+
+
+
+
+                            </footer>    </div>
   )
 }
 
@@ -1539,19 +3053,24 @@ function DollarSignIcon({ className }: { className?: string }) {
   )
 }
 
-function ItemRow({ item, hidePrice = false }: { item: any, hidePrice?: boolean }) {
+function ItemRow({ item, hidePrice = false, compactMode = false }: { item: ItemDetail, hidePrice?: boolean, compactMode?: boolean }) {
   const { t } = useTranslation()
   return (
-    <div className="grid grid-cols-1 md:grid-cols-[80px_1fr_120px_150px_100px] gap-4 px-6 py-4 items-center hover:bg-zinc-100 dark:hover:bg-zinc-800/30 transition-colors group">
+    <div className={clsx(
+      "grid gap-4 px-6 items-center hover:bg-zinc-100 dark:hover:bg-zinc-800/30 transition-colors group",
+      compactMode ? "grid-cols-[1fr_150px_150px_100px] py-1" : "grid-cols-1 md:grid-cols-[100px_1fr_120px_150px_100px] py-4"
+    )}>
        {/* Icon */}
-       <div className="h-16 w-16 bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-300 dark:border-zinc-700/50 p-1 flex-shrink-0">
-         {item.icon ? <img src={item.icon} alt={item.name} className="w-full h-full object-contain" /> : <Settings2 className="h-8 w-8 text-zinc-400" />}
-       </div>
+       {!compactMode && (
+         <div className="h-20 w-20 bg-zinc-200 dark:bg-zinc-800 rounded-lg flex items-center justify-center overflow-hidden border border-zinc-300 dark:border-zinc-700/50 p-1 flex-shrink-0">
+           {item.icon ? <img src={item.icon} alt={item.name} className="w-full h-full object-contain" /> : <Settings2 className="h-10 w-10 text-zinc-400" />}
+         </div>
+       )}
 
        {/* Name */}
        <div className="min-w-0">
-         <div className="text-sm font-medium text-zinc-900 dark:text-zinc-200 truncate">{item.name}</div>
-         <div className="text-[10px] text-zinc-500 font-mono mt-1 opacity-0 group-hover:opacity-100 transition-opacity">{t('ui.id_label', 'ID:')} {item.id}</div>
+         <div className="font-medium text-zinc-900 dark:text-zinc-200 truncate text-sm">{item.name}</div>
+         {!compactMode && <div className="text-[10px] text-zinc-500 font-mono mt-1 opacity-0 group-hover:opacity-100 transition-opacity">{t('ui.id_label', 'ID:')} {item.id}</div>}
        </div>
 
        {/* Stats */}
@@ -1570,7 +3089,7 @@ function ItemRow({ item, hidePrice = false }: { item: any, hidePrice?: boolean }
        </div>
 
        {/* Source */}
-       <div className="text-sm text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
+       <div className="text-zinc-600 dark:text-zinc-400 flex items-center gap-2 text-sm">
           {hidePrice ? (
             <span className="text-zinc-500 text-xs italic">{t('ui.included_in_preset', 'Included in preset')}</span>
           ) : (
