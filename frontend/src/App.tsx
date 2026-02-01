@@ -922,7 +922,7 @@ function App() {
                 )}
               >
                 {optimizing ? <Loader2 className="animate-spin h-3 w-3" /> : <Zap className="h-3 w-3 fill-current" />}
-                {optimizing ? t('status.optimizing', 'RE-CALCULATING...') : t('optimize.optimize_btn', 'RE-ASSEMBLE BUILD')}
+                {optimizing ? t('status.optimizing', 'RE-CALCULATING...') : t('optimize.reoptimize_btn', 'RE-OPTIMIZE BUILD')}
               </button>
             )}
           </div>
@@ -933,22 +933,6 @@ function App() {
                 {renderWeaponSelector()}
                 {renderBuildPriorities()}
                 {renderAdvancedConstraints()}
-                
-                <div className="flex justify-center pt-2">
-                  <button
-                    onClick={handleOptimize}
-                    disabled={optimizing || !selectedGunId || filteredGuns.length === 0}
-                    className={clsx(
-                      "px-8 py-4 rounded-xl font-bold text-lg tracking-wide transition-all shadow-xl flex items-center justify-center gap-3 w-full",
-                      optimizing || !selectedGunId
-                        ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                        : "bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white shadow-orange-900/40 hover:scale-[1.02] active:scale-[0.98]"
-                    )}
-                  >
-                    {optimizing ? <Loader2 className="animate-spin h-6 w-6" /> : <Zap className="h-6 w-6 fill-current text-orange-200" />}
-                    {optimizing ? t('status.optimizing', 'CALCULATING...') : t('optimize.generate_btn', 'GENERATE OPTIMAL BUILD')}
-                  </button>
-                </div>
               </div>
 
               <div className="xl:col-span-8 2xl:col-span-9">
@@ -979,7 +963,7 @@ function App() {
                   {result.status !== 'infeasible' && result.final_stats && (
                     <>
                       {/* Detailed Stats Grid */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                          {/* Ergonomics */}
                          <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
                             <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
@@ -1013,6 +997,17 @@ function App() {
                             </div>
                          </div>
 
+                         {/* Weight */}
+                         <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
+                            <div className="flex items-center gap-2 mb-2 text-zinc-500 dark:text-zinc-400">
+                              <Weight className="h-4 w-4" />
+                              <span className="text-xs uppercase font-bold tracking-wider">{t('ui.weight_label', 'Weight')}</span>
+                            </div>
+                            <div className="text-2xl font-mono text-zinc-900 dark:text-white">
+                              {result.final_stats.total_weight.toFixed(2)} kg
+                            </div>
+                         </div>
+
                          {/* Cost */}
                          <div className="bg-white dark:bg-zinc-900/50 border border-zinc-300 dark:border-zinc-800 p-4 rounded-xl">
                             <div className="flex items-center gap-2 mb-2 text-yellow-600 dark:text-yellow-500/80">
@@ -1022,13 +1017,6 @@ function App() {
                             <div className="text-2xl font-mono text-zinc-900 dark:text-white">
                               ₽{result.final_stats.total_price.toLocaleString()}
                             </div>
-                         </div>
-                      </div>
-
-                      <div className="flex gap-4">
-                         <div className="bg-zinc-100 dark:bg-zinc-900/30 border border-zinc-300 dark:border-zinc-800/50 p-2 px-4 rounded-lg flex items-center gap-2 text-zinc-500 text-xs font-mono">
-                            <Weight className="h-3 w-3" />
-                            {t('ui.weight_kg', 'Weight: {{value}} kg', { value: result.final_stats.total_weight.toFixed(2) })}
                          </div>
                       </div>
 
@@ -1131,10 +1119,19 @@ function App() {
                   <p className="text-zinc-500 max-w-md mb-8">
                     {t('optimize.ready_description', 'Select a weapon platform and adjust your priorities to generate the mathematically perfect build for your budget.')}
                   </p>
-                  <div className="opacity-50 pointer-events-none">
-                    <button disabled className="px-8 py-4 rounded-xl font-bold text-lg bg-zinc-300 dark:bg-zinc-800 text-zinc-500 flex items-center gap-2">
-                        <Zap className="h-6 w-6 fill-current" />
-                        {t('optimize.generate_btn', 'GENERATE OPTIMAL BUILD')}
+                  <div>
+                    <button
+                      onClick={handleOptimize}
+                      disabled={optimizing || !selectedGunId || filteredGuns.length === 0}
+                      className={clsx(
+                        "px-8 py-4 rounded-xl font-bold text-lg tracking-wide transition-all shadow-xl flex items-center justify-center gap-3",
+                        optimizing || !selectedGunId
+                          ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                          : "bg-gradient-to-r from-orange-600 to-orange-500 hover:from-orange-500 hover:to-orange-400 text-white shadow-orange-900/40 hover:scale-[1.02] active:scale-[0.98]"
+                      )}
+                    >
+                      {optimizing ? <Loader2 className="animate-spin h-6 w-6" /> : <Zap className="h-6 w-6 fill-current text-orange-200" />}
+                      {optimizing ? t('status.optimizing', 'CALCULATING...') : t('optimize.generate_btn', 'GENERATE OPTIMAL BUILD')}
                     </button>
                   </div>
                   <p className="text-xs text-zinc-400 mt-4">(Use the controls on the left to start)</p>
@@ -1394,21 +1391,6 @@ function App() {
                                   )}
                               </div>
                             </div>
-
-                            {/* Optimize Button */}
-                            <button
-                              onClick={handleGunsmithOptimize}
-                              disabled={optimizingGunsmith}
-                              className={clsx(
-                                  "w-full px-6 py-4 rounded-xl font-bold text-sm tracking-wide transition-all shadow-lg flex items-center justify-center gap-3",
-                                  optimizingGunsmith
-                                    ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
-                                    : "bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-amber-900/20 active:scale-[0.98]"
-                              )}
-                            >
-                              {optimizingGunsmith ? <Loader2 className="animate-spin h-5 w-5" /> : <Wrench className="h-5 w-5" />}
-                              {optimizingGunsmith ? t('status.optimizing', 'SOLVING...') : t('gunsmith.optimize_btn', 'SOLVE GUNSMITH TASK')}
-                            </button>
                         </div>
                       )}
                   </div>
@@ -1505,12 +1487,22 @@ function App() {
                     <p className="text-zinc-500 max-w-md mb-8">
                       {t('gunsmith.ready_description', 'Select a Gunsmith task on the left to see requirements and generate the cheapest solution.')}
                     </p>
-                    <div className="opacity-50 pointer-events-none">
-                      <button disabled className="px-8 py-4 rounded-xl font-bold text-lg bg-zinc-300 dark:bg-zinc-800 text-zinc-500 flex items-center gap-2">
-                          <Wrench className="h-6 w-6" />
-                          {t('gunsmith.optimize_btn', 'SOLVE GUNSMITH TASK')}
+                    <div>
+                      <button
+                        onClick={handleGunsmithOptimize}
+                        disabled={optimizingGunsmith || !selectedTask}
+                        className={clsx(
+                          "px-8 py-4 rounded-xl font-bold text-lg tracking-wide transition-all shadow-xl flex items-center justify-center gap-3",
+                          optimizingGunsmith || !selectedTask
+                            ? "bg-zinc-300 dark:bg-zinc-800 text-zinc-500 cursor-not-allowed"
+                            : "bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-500 hover:to-amber-400 text-white shadow-amber-900/20 active:scale-[0.98]"
+                        )}
+                      >
+                        {optimizingGunsmith ? <Loader2 className="animate-spin h-6 w-6" /> : <Wrench className="h-6 w-6" />}
+                        {optimizingGunsmith ? t('status.optimizing', 'SOLVING...') : t('gunsmith.optimize_btn', 'SOLVE GUNSMITH TASK')}
                       </button>
                     </div>
+                    <p className="text-xs text-zinc-400 mt-4">(Use the controls on the left to start)</p>
                   </div>
                 )}
               </div>

@@ -93,6 +93,7 @@
     "manual_weights": "Manual Weight Adjustment",
     "weight_info": "Weights are relative and will be normalized automatically.",
     "optimize_btn": "Optimize Build",
+    "reoptimize_btn": "RE-OPTIMIZE BUILD",
     "how_it_works": "How it works:",
     "how_step_1": "Set your priority weights using the triangle chart (click grid points)",
     "how_step_2": "Optionally set hard constraints (budget, min ergo, max recoil)",

@@ -1278,7 +1278,18 @@ def explore_pareto(
                 unique.append(point)
         return unique
 
-    return sorted(list(points_map.values()), key=lambda p: p["price"])
+    # Sort based on the chart's X-axis to ensure the line is drawn correctly
+    if ignore == "price" or ignore == "recoil":
+        # X-axis is Ergo
+        sort_key = lambda p: p["ergo"]
+    elif ignore == "ergo":
+        # X-axis is Recoil Vertical
+        sort_key = lambda p: p["recoil_v"]
+    else:
+        # Default fallback
+        sort_key = lambda p: p["price"]
+
+    return sorted(list(points_map.values()), key=sort_key)
 
 def _build_frontier_point(stats, result):
     return {
