@@ -1,0 +1,20 @@
+[project]
+name = "tarkov-weapon-optimizer"
+version = "1.0.0"
+description = "Tarkov Weapon Mod Optimizer using constraint programming"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "requests>=2.32.0",
+    "ortools>=9.10.0",
+    "loguru>=0.7.0",
+    "pydantic>=2.10.0",
+    "pydantic-settings>=2.7.0",
+    "python-multipart>=0.0.20",
+    "python-dotenv>=1.0.0",
+    "redis>=5.0.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=8.0.0"]

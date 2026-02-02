@@ -1,0 +1,16 @@
+[Unit]
+Description=Tarkov Weapon Optimizer API Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/tarkov-weapon-optimizer
+Environment=PATH=/root/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/root/.local/bin/uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 15000
+Restart=always
+RestartSec=5
+MemoryMax=2G
+
+[Install]
+WantedBy=multi-user.target

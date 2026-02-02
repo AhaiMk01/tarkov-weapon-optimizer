@@ -83,6 +83,7 @@ export interface OptimizeResponse {
   objective_value: number;
   reason?: string;
   final_stats?: FinalStats;
+  solve_time_ms?: number;
 }
 
 export type GameMode = 'regular' | 'pve';

@@ -15,7 +15,7 @@ Tarkov Weapon Mod Optimizer is a FastAPI + React application that uses **constra
 npm run install:all
 
 # Or manually:
-pip install -r backend/requirements.txt
+uv sync
 npm install --prefix frontend
 ```
 
@@ -24,14 +24,20 @@ npm install --prefix frontend
 **Development (with backend hot-reload):**
 ```bash
 npm run build:frontend && npm run dev:backend
-# Access http://localhost:8000
+# Access http://localhost:15000
 # After frontend changes: npm run build:frontend (then refresh browser)
 ```
 
 **Production Deployment:**
 ```bash
+# Start Redis first
+docker compose up -d
+
+# Start backend with systemd
+sudo systemctl start tarkov-optimizer
+
+# Or manually
 npm start
-# or: npm run build && npm run serve
 ```
 
 ### Building & Linting
@@ -49,32 +55,53 @@ npm run lint --prefix frontend
 
 ```bash
 # Backend tests
-python backend/test_service.py
+uv run python backend/test_service.py
 ```
-
-Note: Frontend has no unit tests currently. Backend uses FastAPI's automatic OpenAPI validation.
 
 ## Architecture
 
 **Backend**: FastAPI server (`backend/`)
 - Constraint programming optimization engine (CP-SAT solver)
 - GraphQL client for Tarkov.dev API
-- Multi-level caching (GraphQL responses + processed data)
-- Lazy loading of language/game-mode specific data
+- Pydantic Settings for configuration (`config.py`)
+- Redis caching with memory fallback (`state.py`)
+- Modular API routes (`api/` directory)
 
 **Frontend**: React 19 + TypeScript (`frontend/`)
-- Vite build tool, Tailwind CSS 4 styling
-- Monolithic state management in App.tsx
+- Vite build tool
+- Ant Design 5 component library with theme switching (light/dark/auto)
 - Interactive ternary plot for weight adjustment (barycentric coordinates)
 - 16-language support via i18next
 
-**Legacy**: Original Streamlit app (`legacy/`) - deprecated, not maintained
+**Package Management**:
+- Backend: uv + pyproject.toml
+- Frontend: npm + package.json
 
 ## Key Architectural Concepts
 
+### Backend: Modular Structure
+
+```
+backend/app/
+├── main.py          # FastAPI app lifecycle, static files
+├── config.py        # Pydantic Settings (env-based config)
+├── state.py         # State management, Redis caching
+├── api/
+│   ├── __init__.py  # Router registration
+│   ├── info.py      # GET /api/info, /api/info/{id}/mods
+│   ├── optimize.py  # POST /api/optimize
+│   ├── explore.py   # POST /api/explore
+│   ├── gunsmith.py  # GET /api/gunsmith/tasks
+│   └── status.py    # GET /api/status
+├── models/
+│   └── schemas.py   # Pydantic request/response models
+└── services/
+    └── optimizer.py # CP-SAT solver, data processing
+```
+
 ### Backend: Two-Phase Optimization
 
-**Phase 1: BFS Compatibility Mapping** (`optimizer.py:414-462`)
+**Phase 1: BFS Compatibility Mapping** (`optimizer.py`)
 - Breadth-first search from base weapon to discover all reachable mods
 - Returns `compatibility_map` with:
   - `reachable_items`: All accessible mods
@@ -82,7 +109,7 @@ Note: Frontend has no unit tests currently. Backend uses FastAPI's automatic Ope
   - `item_to_slots`: Maps item_id → slots it owns
   - `slot_owner`: Maps slot_id → parent item_id
 
-**Phase 2: CP-SAT Constraint Solving** (`optimizer.py:560-1101`)
+**Phase 2: CP-SAT Constraint Solving** (`optimizer.py`)
 
 The CP-SAT solver models weapon modding as an integer linear program:
 
@@ -93,7 +120,7 @@ The CP-SAT solver models weapon modding as an integer linear program:
 
 **Constraints:**
 1. **Slot System**: Each slot holds max 1 item, items only go in compatible slots
-2. **Connectivity**: Items must be reachable through weapon's slot hierarchy (parent items required for child items)
+2. **Connectivity**: Items must be reachable through weapon's slot hierarchy
 3. **Conflicts**: Items with `conflictingItems` cannot be selected together
 4. **Base Selection**: Exactly one base (naked gun or preset) required
 5. **Availability**: Items filtered by trader levels, flea market, player level
@@ -104,40 +131,30 @@ The CP-SAT solver models weapon modding as an integer linear program:
 (ergo_weight × ergonomics_capped) + (-recoil_weight × recoil) + (-price_weight × price) - (parsimony_penalty × num_items)
 ```
 
-Where:
-- Scale factor: 1000× for decimal precision in CP-SAT
-- Ergonomics: soft-capped at [0, 100]
-- Recoil: negative weight (minimize)
-- Price: negative weight (minimize)
-- Parsimony penalty: 100 points per item (encourages simpler builds)
+### Backend: Configuration
 
-**Example Weight Profiles:**
-```python
-# Lowest recoil build
-ergo_weight=0.001, recoil_weight=100.0
+Environment-based configuration via Pydantic Settings (`config.py`):
 
-# Highest ergonomics build
-ergo_weight=2.0, recoil_weight=0.5
-
-# Budget build
-max_price=500000, price_weight=0.5
+```bash
+# .env file
+API_HOST=0.0.0.0
+API_PORT=15000
+CORS_ORIGINS=*
+CACHE_DIR=.cache
+CACHE_TTL=3600
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=
+LOG_LEVEL=INFO
 ```
 
-**Stat Calculation:**
-- **Ergonomics**: Additive (base + sum of mod bonuses), soft-capped at [0, 100]
-- **Recoil**: Multiplicative (base × (1 + sum of mod modifiers))
+### Backend: Caching Strategy
 
-**Critical Implementation Details:**
-- Integer scaling (SCALE=1000) required for decimal coefficients in CP-SAT
-- Preset items have cost=0 if preset is selected (prevents double-counting)
-- Items >100M roubles only available through presets
-- 30-second solver timeout for web requests
-- Compatibility maps built via BFS traversal of slot hierarchy
-
-**Pareto Frontier Exploration** (`explore_pareto`):
-- Generates trade-off curves (e.g., Recoil vs Price while minimizing hidden dimension)
-- Three modes: ignore="price", "recoil", or "ergo"
-- Deduplicates overlapping solutions, filters to Pareto-optimal frontier
+1. **Redis Cache** (primary): TTL-based caching for API responses
+2. **Memory Fallback**: Automatic fallback when Redis unavailable
+3. **File Cache**: `.cache/` directory for GraphQL responses
+4. **In-Memory Maps**: Compatibility maps built on-demand per weapon
 
 ### Backend: Data Flow
 
@@ -150,31 +167,15 @@ build_compatibility_map(weapon_id) → BFS slot traversal
   ↓
 optimize_weapon() → Build CP-SAT model, solve
   ↓
-OptimizeResponse (selected items, stats, status)
+OptimizeResponse (selected items, stats, status, solve_time_ms)
 ```
-
-**Data Structures:**
-- `item_lookup`: `item_id → {type, data, slots, stats, conflicting_items}`
-- Stats normalized during extraction for API inconsistencies
-
-**Caching Strategy:**
-1. **GraphQL Response Cache**: 1-hour TTL, MD5-hashed query keys
-2. **Processed Data Cache**: Serialized `item_lookup` (expensive to build)
-3. **In-Memory Compatibility Maps**: Built on-demand per weapon session
-
-**State Management:**
-- Global `AppState.data` dict: `(lang, game_mode) -> {guns, mods, item_lookup, compat_maps}`
-- English/regular mode loaded on startup, others lazy-loaded
-- Cache version (CACHE_VERSION=7) invalidates on breaking changes
-- Cache location: `.cache/` directory
 
 ### Frontend: Component Architecture
 
-**Monolithic Design:**
-- `App.tsx` (116KB): All business logic, state, API calls
-- Hundreds of state variables managed via `useState`
-- Helper render functions for different UI sections
-- Consider refactoring to Context API or custom hooks if adding major features
+**Ant Design Based:**
+- `App.tsx`: Main layout with ConfigProvider for theming
+- Uses antd components: Layout, Card, Select, Slider, Table, Tag, etc.
+- Theme switching: light/dark/auto with localStorage persistence
 
 **Key Components:**
 - `TernaryPlot.tsx`: Interactive 3-axis weight adjustment using barycentric coordinates
@@ -188,11 +189,9 @@ OptimizeResponse (selected items, stats, status)
 - Compact mode toggle → localStorage
 - Language preference → i18next localStorage
 
-**Styling:** TailwindCSS 4 with `@tailwindcss/postcss`
-
 **API Client** (`frontend/src/api/client.ts`):
 - Axios instance with relative paths (same origin)
-- 6 endpoints: getInfo, getWeaponMods, optimize, explore, getGunsmithTasks, getStatus
+- Endpoints: getInfo, getWeaponMods, optimize, explore, getGunsmithTasks, getStatus
 
 ### Internationalization
 
@@ -200,9 +199,8 @@ OptimizeResponse (selected items, stats, status)
 en, ru, zh, es, de, fr, it, ja, ko, pl, pt, tr, cs, hu, ro, sk
 
 **Setup:**
-- i18next with HTTP backend loading from `frontend/public/locales/{{lng}}.json`
-- Auto-detection: localStorage → navigator language → fallback 'en'
-- Usage: `const { t } = useTranslation()` → `t('key', 'fallback')`
+- i18next for business text (sidebar, results, etc.)
+- antd ConfigProvider for component locales (DatePicker, Pagination, etc.)
 
 ### API Endpoints
 
@@ -220,24 +218,64 @@ en, ru, zh, es, de, fr, it, ja, ko, pl, pt, tr, cs, hu, ro, sk
 ## Important File Locations
 
 ### Backend
-- `backend/app/main.py`: FastAPI app, routes, state management, caching
-- `backend/app/services/optimizer.py`: CP-SAT solver logic, Pareto frontier, data processing
-- `backend/app/services/queries.py`: GraphQL queries for Tarkov.dev API
+- `backend/app/main.py`: FastAPI app lifecycle, static files
+- `backend/app/config.py`: Pydantic Settings configuration
+- `backend/app/state.py`: State management, Redis caching
+- `backend/app/api/`: Modular API routes (5 files)
+- `backend/app/services/optimizer.py`: CP-SAT solver logic, data processing
 - `backend/app/models/schemas.py`: Pydantic request/response models
-- `backend/requirements.txt`: Python dependencies
 
 ### Frontend
-- `frontend/src/App.tsx`: Main application component (all UI logic)
+- `frontend/src/App.tsx`: Main application component (antd layout)
 - `frontend/src/api/client.ts`: API client with Axios
 - `frontend/src/components/TernaryPlot.tsx`: Interactive weight visualization
+- `frontend/src/components/ItemRow.tsx`: Mod/item display component
 - `frontend/src/i18n.ts`: i18next configuration
 - `frontend/public/locales/`: Translation JSON files
-- `frontend/package.json`: Node dependencies and scripts
 
 ### Configuration
+- `pyproject.toml` (root): uv package configuration
 - `package.json` (root): npm scripts for dev/build
-- `pixi.toml`: Pixi configuration (outdated, references legacy app)
-- `tasks.json`: Gunsmith task definitions (loaded by backend)
+- `.env.example`: Environment variable template
+- `docker-compose.yml`: Redis service configuration
+- `deploy/`: Deployment scripts and systemd service
+
+## Deployment
+
+### systemd Service
+
+```bash
+# Install and enable
+sudo cp deploy/tarkov-optimizer.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable tarkov-optimizer
+sudo systemctl start tarkov-optimizer
+
+# Check status
+sudo systemctl status tarkov-optimizer
+```
+
+### Redis (via Docker Compose)
+
+```bash
+# Start Redis
+docker compose up -d
+
+# Check status
+docker compose ps
+```
+
+### Deploy Scripts
+
+```bash
+# Full deployment
+./deploy/deploy.sh install
+
+# Start/stop/restart
+./deploy/start.sh
+./deploy/stop.sh
+./deploy/deploy.sh restart
+```
 
 ## Development Guidelines
 
@@ -245,75 +283,62 @@ en, ru, zh, es, de, fr, it, ja, ko, pl, pt, tr, cs, hu, ro, sk
 
 **Adding New Constraints:**
 1. Add Pydantic field to `OptimizeRequest` in `schemas.py`
-2. Update constraint building logic in `optimizer.py` (lines 600-980)
-3. Add feasibility check if needed (lines 497-564)
+2. Update constraint building logic in `optimizer.py`
+3. Add feasibility check if needed
 4. Test with various weapons and edge cases
 
-**Modifying Optimization Logic:**
-- Solver configuration: lines 984-987 in `optimizer.py`
-- Objective function: lines 962-981
-- Be careful with integer scaling (SCALE constants)
-- Test infeasible scenarios (no valid solution exists)
-
 **Adding API Endpoints:**
-1. Define Pydantic models in `schemas.py`
-2. Add route in `main.py` with `@app.get/post` decorator
-3. Use `get_state(lang, game_mode)` dependency for data access
-4. Handle errors with HTTPException
+1. Create new file in `api/` directory
+2. Define router with `APIRouter()`
+3. Import and include router in `api/__init__.py`
+4. Use `get_state(lang, game_mode)` for data access
 
-**GraphQL Schema Changes:**
-- Update queries in `queries.py` (GUNS_QUERY, MODS_QUERY)
-- Increment `CACHE_VERSION` to invalidate old caches
-- Update `build_item_lookup` processing logic
+**Configuration Changes:**
+1. Add field to `Settings` class in `config.py`
+2. Add default value to `.env.example`
+3. Access via `get_settings()` function
 
 ### Frontend Development
 
 **Adding UI Features:**
-- State in `App.tsx` (useState, useMemo for computed values)
-- Extract helper render functions for clarity
-- Use Tailwind CSS classes for styling
-- Add i18n keys to `frontend/public/locales/en.json` (then translate)
+- Use antd components for consistency
+- Access theme tokens via `const { token } = theme.useToken()`
+- Add i18n keys to `frontend/public/locales/en.json`
 
-**API Integration:**
-- Add method to `client.ts` with proper TypeScript types
-- Call from App.tsx with try-catch error handling
-- Update loading/error states appropriately
-
-**Styling Conventions:**
-- Theme: zinc color palette, orange-500 accents
-- Dark mode: zinc-950 backgrounds, zinc-200 text
-- Icons: Lucide React library
-- Responsive: mobile-first, `md:` breakpoint for desktop
+**Styling:**
+- Use antd theme tokens (token.colorPrimary, token.colorBgContainer, etc.)
+- Avoid hardcoded colors for theme compatibility
+- Inline styles with token references for dynamic theming
 
 **Adding Translations:**
 1. Add key to `frontend/public/locales/en.json`
-2. Copy to other language files (use same English value if not translated)
+2. Copy to other language files
 3. Use in component: `t('namespace.key', 'Fallback Text')`
 
 ## Common Pitfalls
 
 ### Backend
-- **Forgetting integer scaling**: CP-SAT requires integer coefficients, use SCALE constants for decimals
-- **Cache invalidation**: Bump `CACHE_VERSION` when changing data processing logic
+- **Forgetting integer scaling**: CP-SAT requires integer coefficients
+- **Cache invalidation**: Bump `CACHE_VERSION` when changing data processing
 - **Preset handling**: Items in presets have cost=0 to prevent double-counting
-- **Conflict resolution**: Items conflicting with base weapon excluded during compatibility map building (line 446)
+- **Redis unavailable**: Code must handle fallback to memory cache
 
 ### Frontend
+- **Hardcoded colors**: Use antd theme tokens for dark/light mode compatibility
 - **Missing translations**: Always add to all locale files or provide fallback
-- **State bloat**: App.tsx is already large (116KB), consider refactoring before adding major features
 - **Type safety**: Ensure API client types match backend Pydantic models
-- **Environment variables**: Must be prefixed with `VITE_` to be exposed to frontend
+- **Environment variables**: Must be prefixed with `VITE_`
 
 ## Performance Considerations
 
 - **Backend**: CP-SAT typically solves in <1 second, 30-second timeout for safety
 - **Frontend**: Memoization (`useMemo`) prevents unnecessary re-computations
-- **Caching**: 1-hour TTL for Tarkov.dev API to avoid rate limiting
-- **Lazy Loading**: Languages loaded on-demand, not all at startup
+- **Caching**: Redis for fast API response caching
+- **Lazy Loading**: Languages loaded on-demand
 
 ## Data Source
 
-All weapon/mod data fetched from **Tarkov.dev GraphQL API** (https://api.tarkov.dev/graphql). Do not hardcode game data - always fetch from API to ensure accuracy.
+All weapon/mod data fetched from **Tarkov.dev GraphQL API** (https://api.tarkov.dev/graphql).
 
 **Game modes:** `regular`, `pve`
 **Languages:** `en`, `ru`, `zh`, `es`, `de`, `fr`, `it`, `ja`, `ko`, `pl`, `pt`, `tr`, `cs`, `hu`, `ro`, `sk`

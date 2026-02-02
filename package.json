@@ -1,13 +1,13 @@
 {
-  "name": "tarkov-weapon-optimizer-v2",
+  "name": "tarkov-weapon-optimizer",
   "version": "1.0.0",
   "scripts": {
     "dev:frontend": "npm run dev --prefix frontend",
-    "dev:backend": "python -m uvicorn backend.app.main:app --reload",
-    "install:all": "npm install --prefix frontend && pip install -r backend/requirements.txt",
+    "dev:backend": "uv run uvicorn backend.app.main:app --reload --port 15000",
+    "install:all": "uv sync && npm install --prefix frontend",
     "build:frontend": "npm run build --prefix frontend",
     "build": "npm run build:frontend",
-    "start": "npm run build && python -m uvicorn backend.app.main:app --host 0.0.0.0",
-    "serve": "python -m uvicorn backend.app.main:app --host 0.0.0.0"
+    "start": "npm run build && uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 15000",
+    "serve": "uv run uvicorn backend.app.main:app --host 0.0.0.0 --port 15000"
   }
 }

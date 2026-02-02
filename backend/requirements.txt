@@ -1,7 +1,0 @@
-fastapi
-uvicorn
-requests
-ortools
-loguru
-pydantic
-python-multipart

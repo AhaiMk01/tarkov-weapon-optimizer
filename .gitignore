@@ -56,7 +56,13 @@ api_cache_debug.json
 # API cache
 .cache/
 
+# Node
+node_modules/
+frontend/dist/
+
 # Logs
 logs/
 
+# Lock files
 pixi.lock
+uv.lock

@@ -13,22 +13,22 @@ from loguru import logger
 from ortools.sat.python import cp_model
 import requests
 
-# Use relative import for queries within the same package
 from .queries import GUNS_QUERY, MODS_QUERY
+from ..config import get_settings
 
-# Cache configuration
-# In a real production app, we might use Redis, but for now we keep file-based cache 
-# but point it to a temp dir or a dedicated cache dir.
-CACHE_DIR = os.path.join(os.path.dirname(__file__), "..", "..", ".cache")
-CACHE_TTL = 3600  # 1 hour
 CACHE_VERSION = 7
+
+def _get_cache_dir() -> str:
+    return get_settings().cache_dir
+
+def _get_cache_ttl() -> int:
+    return get_settings().cache_ttl
 
 API_URL = "https://api.tarkov.dev/graphql"
 
 def _get_cache_path(query, variables):
-    """Generate a cache file path based on query hash."""
     key = hashlib.md5((query + json.dumps(variables or {}, sort_keys=True)).encode()).hexdigest()
-    return os.path.join(CACHE_DIR, f"{key}.json")
+    return os.path.join(_get_cache_dir(), f"{key}.json")
 
 def _load_cache(cache_path):
     if not os.path.exists(cache_path):
@@ -38,14 +38,14 @@ def _load_cache(cache_path):
             cached = json.load(f)
         if cached.get("version") != CACHE_VERSION:
             return None
-        if time.time() - cached.get("timestamp", 0) < CACHE_TTL:
+        if time.time() - cached.get("timestamp", 0) < _get_cache_ttl():
             return cached.get("data")
     except Exception:
         pass
     return None
 
 def _save_cache(cache_path, data):
-    os.makedirs(CACHE_DIR, exist_ok=True)
+    os.makedirs(_get_cache_dir(), exist_ok=True)
     with open(cache_path, "w", encoding="utf-8") as f:
         json.dump({"timestamp": time.time(), "version": CACHE_VERSION, "data": data}, f)
 

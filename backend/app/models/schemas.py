@@ -57,12 +57,13 @@ class PresetDetail(BaseModel):
 
 class OptimizeResponse(BaseModel):
     status: str
-    selected_items: List[ItemDetail]  # Changed from List[str] to detailed list
+    selected_items: List[ItemDetail]
     selected_preset: Optional[PresetDetail] = None
     fallback_base: Optional[Dict[str, Any]] = None
     objective_value: float
     reason: Optional[str] = None
-    final_stats: Optional[FinalStats] = None  # New field
+    final_stats: Optional[FinalStats] = None
+    solve_time_ms: Optional[float] = None
 
 class ExploreRequest(OptimizeRequest):
     ignore: str = "price"  # "price", "recoil", or "ergo"
