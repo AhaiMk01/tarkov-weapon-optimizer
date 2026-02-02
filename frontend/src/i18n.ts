@@ -3,6 +3,8 @@ import { initReactI18next } from 'react-i18next';
 import HttpApi from 'i18next-http-backend';
 import LanguageDetector from 'i18next-browser-languagedetector';
 
+declare const __BUILD_TIME__: string;
+
 const supportedLngs = ['en', 'ru', 'zh', 'es', 'de', 'fr', 'it', 'ja', 'ko', 'pl', 'pt', 'tr', 'cs', 'hu', 'ro', 'sk'];
 
 i18n
@@ -22,7 +24,7 @@ i18n
       escapeValue: false,
     },
     backend: {
-      loadPath: '/locales/{{lng}}.json',
+      loadPath: `/locales/{{lng}}.json?v=${__BUILD_TIME__}`,
     },
     react: {
       useSuspense: false,

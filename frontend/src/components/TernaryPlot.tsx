@@ -1,8 +1,7 @@
 import { useState, useRef, useCallback } from 'react'
-import { Typography, theme } from 'antd'
+import { theme } from 'antd'
 import { useTranslation } from 'react-i18next'
 
-const { Text } = Typography
 const { useToken } = theme
 
 interface TernaryPlotProps {
@@ -141,9 +140,6 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
         </g>
         <circle cx={displaySVG.x} cy={displaySVG.y} r={6} fill={token.colorWarning} stroke={token.colorBgContainer} strokeWidth={2} />
       </svg>
-      <Text type="secondary" style={{ display: 'block', textAlign: 'center', marginTop: 8, fontSize: 12 }}>
-        {t('optimize.triangle_hint', '点击三角形调整权重')}
-      </Text>
     </div>
   )
 }

@@ -1,8 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ConfigProvider, Layout, Button, Select, Slider, InputNumber, Switch, Card, Statistic, Table, Tag, Space, Spin, Alert, Typography, Segmented, Input, Collapse, Divider, Row, Col, message, App as AntApp, Tabs, theme } from 'antd'
-import zhCN from 'antd/locale/zh_CN'
-import { AimOutlined, ThunderboltOutlined, BarChartOutlined, ToolOutlined, SettingOutlined, UserOutlined, SearchOutlined, PlusOutlined, MinusOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, SyncOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
+import { ConfigProvider, Layout, Button, Select, Slider, InputNumber, Switch, Card, Statistic, Table, Tag, Space, Spin, Alert, Typography, Segmented, Collapse, Divider, Row, Col, message, App as AntApp, Tabs, theme } from 'antd'
+import { AimOutlined, ThunderboltOutlined, BarChartOutlined, ToolOutlined, SettingOutlined, UserOutlined, PlusOutlined, MinusOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, SyncOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ExplorePoint, GunsmithTask, GameMode } from './api/client'
@@ -160,10 +159,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
         flea_available: fleaAvailable,
       }, gameMode, i18n.language || 'en')
       setResult(res)
-      messageApi.success('优化完成')
+      messageApi.success(t('toast.optimize_success', 'Optimization complete'))
     } catch (err) {
       console.error('Optimization failed', err)
-      messageApi.error('优化失败')
+      messageApi.error(t('toast.optimize_failed', 'Optimization failed'))
     } finally {
       setOptimizing(false)
     }
@@ -189,10 +188,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       }, gameMode, i18n.language || 'en')
       setExploreResult(res.points)
       setResultTradeoff(exploreTradeoff)
-      messageApi.success('探索完成')
+      messageApi.success(t('toast.explore_success', 'Exploration complete'))
     } catch (err) {
       console.error('Exploration failed', err)
-      messageApi.error('探索失败')
+      messageApi.error(t('toast.explore_failed', 'Exploration failed'))
     } finally {
       setExploring(false)
     }
@@ -219,10 +218,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
         flea_available: fleaAvailable,
       }, gameMode, i18n.language || 'en')
       setGunsmithResult(res)
-      messageApi.success('枪匠任务优化完成')
+      messageApi.success(t('toast.gunsmith_success', 'Gunsmith optimization complete'))
     } catch (err) {
       console.error('Gunsmith optimization failed', err)
-      messageApi.error('枪匠任务优化失败')
+      messageApi.error(t('toast.gunsmith_failed', 'Gunsmith optimization failed'))
     } finally {
       setOptimizingGunsmith(false)
     }
@@ -231,16 +230,18 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const copyBuild = () => {
     if (!result || !result.final_stats) return
     const lines = [
-      `${selectedGun?.name} 优化构建`,
+      `${selectedGun?.name} - ${t('ui.build_manifest', 'Build Manifest')}`,
       '',
-      `人机: ${result.final_stats.ergonomics.toFixed(1)} | 垂直后坐: ${result.final_stats.recoil_vertical.toFixed(0)} | 水平后坐: ${result.final_stats.recoil_horizontal.toFixed(0)} | 重量: ${result.final_stats.total_weight.toFixed(2)}kg | 总价: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
+      `${t('sidebar.ergonomics', 'Ergo')}: ${result.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil', 'V.Recoil')}: ${result.final_stats.recoil_vertical.toFixed(0)} | ${t('ui.horiz_recoil', 'H.Recoil')}: ${result.final_stats.recoil_horizontal.toFixed(0)} | ${t('ui.weight_label', 'Weight')}: ${result.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost', 'Total')}: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
       '',
-      '配件列表:',
+      `${t('ui.table_items', 'Items')}:`,
       ...result.selected_items.map(i => i.name)
     ]
     const content = lines.join('\n')
+    const successMsg = t('toast.copied', 'Copied')
+    const failMsg = t('toast.copy_failed', 'Copy failed')
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(content).then(() => messageApi.success('已复制')).catch(() => fallbackCopy(content))
+      navigator.clipboard.writeText(content).then(() => messageApi.success(successMsg)).catch(() => fallbackCopy(content))
     } else {
       fallbackCopy(content)
     }
@@ -253,9 +254,9 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       textArea.select()
       try {
         document.execCommand('copy')
-        messageApi.success('已复制')
+        messageApi.success(successMsg)
       } catch {
-        messageApi.error('复制失败')
+        messageApi.error(failMsg)
       }
       document.body.removeChild(textArea)
     }
@@ -278,7 +279,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   const siderContent = (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'auto' }}>
-      <Card title={<span style={{ userSelect: 'none' }}><AimOutlined /> {t('sidebar.select_weapon', '选择武器')}</span>} size="small">
+      <Card title={<span style={{ userSelect: 'none' }}><AimOutlined /> {t('sidebar.select_weapon', '武器选择')}</span>} size="small">
         <Space direction="vertical" style={{ width: '100%' }}>
           <Row gutter={8}>
             <Col span={12}>
@@ -307,7 +308,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
           />
         </Space>
       </Card>
-      <Card title={<span style={{ userSelect: 'none' }}><SettingOutlined /> {t('optimize.header', '构建优先级')}</span>} size="small">
+      <Card title={<span style={{ userSelect: 'none' }}><SettingOutlined /> {t('optimize.header', '权重调整')}</span>} size="small">
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space>
             <Button size="small" onClick={() => applyPreset(0, 100, 0)}>{t('optimize.preset_recoil', '后坐')}</Button>
@@ -344,37 +345,63 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       <Collapse size="small" items={[
         {
           key: 'mods',
-          label: <><PlusOutlined /> {t('sidebar.include_exclude', '包含/排除配件')}</>,
+          label: <span style={{ userSelect: 'none' }}><PlusOutlined /> {t('sidebar.include_exclude', '配件筛选')}</span>,
           children: (
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Input size="small" placeholder={t('sidebar.require_categories', '搜索类别...')} prefix={<SearchOutlined />} value={categorySearch} onChange={e => setCategorySearch(e.target.value)} />
-              {searchedCategories.length > 0 && categorySearch && searchedCategories.slice(0, 5).map(cat => (
-                <Space key={cat} style={{ width: '100%', justifyContent: 'space-between' }}>
-                  <Text style={{ fontSize: 12 }}>{cat}</Text>
-                  <Space>
-                    <Button size="small" type="text" icon={<PlusOutlined />} onClick={() => { setIncludedCategories([...includedCategories, cat]); setCategorySearch('') }} style={{ color: token.colorSuccess }} />
-                    <Button size="small" type="text" icon={<MinusOutlined />} onClick={() => { setExcludedCategories([...excludedCategories, cat]); setCategorySearch('') }} style={{ color: token.colorError }} />
-                  </Space>
-                </Space>
-              ))}
+              <Select
+                size="small"
+                showSearch
+                style={{ width: '100%' }}
+                placeholder={t('sidebar.require_categories', '搜索类别...')}
+                value={null}
+                searchValue={categorySearch}
+                onSearch={setCategorySearch}
+                filterOption={false}
+                notFoundContent={null}
+                options={searchedCategories.slice(0, 10).map(cat => ({ value: cat, label: cat }))}
+                optionRender={(option) => (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{option.label}</span>
+                    <Space size={4}>
+                      <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); setIncludedCategories([...includedCategories, option.value as string]); setCategorySearch('') }} style={{ color: token.colorSuccess }} />
+                      <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); setExcludedCategories([...excludedCategories, option.value as string]); setCategorySearch('') }} style={{ color: token.colorError }} />
+                    </Space>
+                  </div>
+                )}
+              />
               <Space wrap>
                 {includedCategories.map(cat => <Tag key={cat} color="success" closable onClose={() => setIncludedCategories(includedCategories.filter(c => c !== cat))}>{cat}</Tag>)}
                 {excludedCategories.map(cat => <Tag key={cat} color="error" closable onClose={() => setExcludedCategories(excludedCategories.filter(c => c !== cat))}>{cat}</Tag>)}
               </Space>
               <Divider style={{ margin: '8px 0' }} />
-              <Input size="small" placeholder={t('sidebar.require_items', '搜索配件...')} prefix={<SearchOutlined />} value={modSearch} onChange={e => setModSearch(e.target.value)} suffix={loadingMods && <SyncOutlined spin />} />
-              {searchedMods.map(m => (
-                <Space key={m.id} style={{ width: '100%', justifyContent: 'space-between' }}>
-                  <Space>
-                    {m.icon && <img src={m.icon} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />}
-                    <Text style={{ fontSize: 12 }}>{m.name}</Text>
-                  </Space>
-                  <Space>
-                    <Button size="small" type="text" icon={<PlusOutlined />} onClick={() => { setIncludedModIds([...includedModIds, m.id]); setModSearch('') }} style={{ color: token.colorSuccess }} />
-                    <Button size="small" type="text" icon={<MinusOutlined />} onClick={() => { setExcludedModIds([...excludedModIds, m.id]); setModSearch('') }} style={{ color: token.colorError }} />
-                  </Space>
-                </Space>
-              ))}
+              <Select
+                size="small"
+                showSearch
+                style={{ width: '100%' }}
+                placeholder={t('sidebar.require_items', '搜索配件...')}
+                value={null}
+                searchValue={modSearch}
+                onSearch={setModSearch}
+                filterOption={false}
+                notFoundContent={null}
+                loading={loadingMods}
+                options={searchedMods.map(m => ({ value: m.id, label: m.name, icon: m.icon }))}
+                optionRender={(option) => {
+                  const mod = searchedMods.find(m => m.id === option.value)
+                  return (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Space>
+                        {mod?.icon && <img src={mod.icon} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />}
+                        <span>{option.label}</span>
+                      </Space>
+                      <Space size={4}>
+                        <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); setIncludedModIds([...includedModIds, option.value as string]); setModSearch('') }} style={{ color: token.colorSuccess }} />
+                        <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); setExcludedModIds([...excludedModIds, option.value as string]); setModSearch('') }} style={{ color: token.colorError }} />
+                      </Space>
+                    </div>
+                  )
+                }}
+              />
               <Space wrap>
                 {includedModIds.map(id => <Tag key={id} color="success" closable onClose={() => setIncludedModIds(includedModIds.filter(i => i !== id))}>{availableMods.find(m => m.id === id)?.name}</Tag>)}
                 {excludedModIds.map(id => <Tag key={id} color="error" closable onClose={() => setExcludedModIds(excludedModIds.filter(i => i !== id))}>{availableMods.find(m => m.id === id)?.name}</Tag>)}
@@ -384,7 +411,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
         },
         {
           key: 'market',
-          label: <><UserOutlined /> {t('sidebar.player_trader_access', '市场访问')}</>,
+          label: <span style={{ userSelect: 'none' }}><UserOutlined /> {t('sidebar.player_trader_access', '等级配置')}</span>,
           children: (
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space><Switch checked={fleaAvailable} onChange={setFleaAvailable} size="small" /><Text>{t('sidebar.flea_market_access', '跳蚤市场')}</Text></Space>
@@ -394,9 +421,9 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
               </div>
               <Divider style={{ margin: '8px 0' }} />
               {(Object.keys(traderLevels) as Array<keyof typeof traderLevels>).map(trader => (
-                <div key={trader}>
-                  <Text type="secondary" style={{ fontSize: 12, textTransform: 'capitalize' }}>{trader}: LL{traderLevels[trader]}</Text>
-                  <Slider value={traderLevels[trader]} onChange={(v) => setTraderLevels(prev => ({ ...prev, [trader]: v }))} min={1} max={4} />
+                <div key={trader} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <Text type="secondary" style={{ fontSize: 12, textTransform: 'capitalize', minWidth: 70 }}>{trader}</Text>
+                  <Segmented size="small" value={traderLevels[trader]} onChange={(v) => setTraderLevels(prev => ({ ...prev, [trader]: v as number }))} options={[{ label: 'LL 1', value: 1 }, { label: 'LL 2', value: 2 }, { label: 'LL 3', value: 3 }, { label: 'LL 4', value: 4 }]} />
                 </div>
               ))}
             </Space>
@@ -409,17 +436,17 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const tabItems = [
     {
       key: 'optimize',
-      label: <><ThunderboltOutlined /> {t('tabs.optimize', '优化')}</>,
+      label: <span style={{ userSelect: 'none' }}><ThunderboltOutlined /> {t('tabs.optimize', '改枪优化')}</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           {result ? (
             <>
               <Alert
                 type={result.status === 'optimal' ? 'success' : result.status === 'infeasible' ? 'error' : 'warning'}
-                message={<><Text strong>{t('results.optimization_status', '优化状态')}: {result.status}</Text>{result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}{result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}</>}
+                message={<><Text strong>{t('results.optimization_status', '优化状态')}: {t(`results.status_${result.status}`, result.status)}</Text>{result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}{result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}</>}
                 icon={result.status === 'optimal' ? <CheckCircleOutlined /> : result.status === 'infeasible' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
                 showIcon
-                action={<Space><Button size="small" icon={<CopyOutlined />} onClick={copyBuild}>复制</Button><Button size="small" type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize}>重新优化</Button></Space>}
+                action={<Space><Button size="small" icon={<CopyOutlined />} onClick={copyBuild}>{t('ui.copy_btn', 'Copy')}</Button><Button size="small" type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize}>{t('ui.reoptimize_btn', 'Re-optimize')}</Button></Space>}
               />
               {result.status !== 'infeasible' && result.final_stats && (
                 <>
@@ -435,15 +462,17 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                       <Space>
                         {result.selected_preset.icon && <img src={result.selected_preset.icon} alt="" style={{ width: 80, height: 48, objectFit: 'contain' }} />}
                         <div>
-                          <Text type="secondary">{t('ui.base_preset_used', '使用预设')}</Text>
+                          <Space size={4}>
+                            <Text type="secondary">{t('ui.base_preset_used', '使用预设')}</Text>
+                            <Tag color="gold" style={{ margin: 0 }}>₽{result.selected_preset.price.toLocaleString()}</Tag>
+                            {result.selected_preset.source && <Tag style={{ margin: 0 }}>{result.selected_preset.source}</Tag>}
+                          </Space>
                           <Title level={5} style={{ margin: 0 }}>{result.selected_preset.name}</Title>
-                          <Tag color="gold">₽{result.selected_preset.price.toLocaleString()}</Tag>
-                          {result.selected_preset.source && <Tag>{result.selected_preset.source}</Tag>}
                         </div>
                       </Space>
                     </Card>
                   )}
-                  <Card title={<Space style={{ userSelect: 'none' }}><SettingOutlined />{t('ui.build_manifest', '构建清单')}<Switch checked={compactMode} onChange={setCompactMode} checkedChildren="紧凑" unCheckedChildren="详细" /></Space>} size="small">
+                  <Card title={<Space style={{ userSelect: 'none' }}><SettingOutlined />{t('ui.build_manifest', '构建清单')}<Segmented size="small" value={compactMode ? 'compact' : 'detailed'} onChange={(v) => setCompactMode(v === 'compact')} options={[{ label: t('ui.detailed', 'Detailed'), value: 'detailed' }, { label: t('ui.compact', 'Compact'), value: 'compact' }]} /></Space>} size="small">
                     {result.selected_preset ? (
                       <>
                         <Collapse
@@ -455,14 +484,14 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                               label: <Space style={{ userSelect: 'none' }}><Text type="warning">{t('ui.new_changed_parts', '新增/更换配件')}</Text><Tag color="orange">{result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length}</Tag></Space>,
                               children: result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length > 0
                                 ? result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
-                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>无</Text>,
+                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none', 'None')}</Text>,
                             },
                             {
                               key: 'retained',
                               label: <Space style={{ userSelect: 'none' }}><Text type="secondary">{t('ui.retained_from_preset_short', '预设保留配件')}</Text><Tag color="blue">{result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length}</Tag></Space>,
                               children: result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length > 0
                                 ? result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)
-                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>无</Text>,
+                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none', 'None')}</Text>,
                             },
                           ]}
                         />
@@ -489,7 +518,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     },
     {
       key: 'explore',
-      label: <><BarChartOutlined /> {t('tabs.explore', '探索')}</>,
+      label: <span style={{ userSelect: 'none' }}><BarChartOutlined /> {t('tabs.explore', '探索分析')}</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card size="small">
@@ -552,7 +581,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     },
     {
       key: 'gunsmith',
-      label: <><ToolOutlined /> {t('tabs.gunsmith', '枪匠')}</>,
+      label: <span style={{ userSelect: 'none' }}><ToolOutlined /> {t('tabs.gunsmith', '枪匠')}</span>,
       children: (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <Card size="small">
@@ -597,7 +626,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
           )}
           {gunsmithResult && (
             <>
-              <Alert type={gunsmithResult.status === 'optimal' ? 'success' : gunsmithResult.status === 'infeasible' ? 'error' : 'warning'} message={`${t('results.optimization_status', '优化状态')}: ${gunsmithResult.status}`} showIcon />
+              <Alert type={gunsmithResult.status === 'optimal' ? 'success' : gunsmithResult.status === 'infeasible' ? 'error' : 'warning'} message={`${t('results.optimization_status', '优化状态')}: ${t(`results.status_${gunsmithResult.status}`, gunsmithResult.status)}`} showIcon />
               {gunsmithResult.status !== 'infeasible' && gunsmithResult.final_stats && (
                 <>
                   <Row gutter={16}>
@@ -630,7 +659,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
           </div>
           <Space>
             <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
-            <Segmented value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: 'Auto', value: 'auto' }]} />
+            <Segmented value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: <SyncOutlined />, value: 'auto' }]} />
             <Select style={{ width: 140 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
           </Space>
         </Header>
@@ -657,7 +686,6 @@ function App() {
   const isDark = themeMode === 'dark' || (themeMode === 'auto' && systemDark)
   return (
     <ConfigProvider
-      locale={zhCN}
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {

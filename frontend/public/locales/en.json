@@ -106,7 +106,6 @@
     "ready_title": "Ready to Optimize",
     "ready_description": "Select a weapon platform and adjust your priorities to generate the mathematically perfect build for your budget.",
     "generate_btn": "GENERATE OPTIMAL BUILD",
-    "triangle_hint": "Click on the triangle to adjust weights",
     "use_controls_hint": "(Use the controls on the left to start)",
     "ternary_chart": "Ternary Weight Chart"
   },
@@ -134,8 +133,21 @@
     "ergo_ge": "Ergo ≥ {{value}}",
     "recoil_le": "Recoil ≤ {{value}}"
   },
+  "toast": {
+    "optimize_success": "Optimization complete",
+    "optimize_failed": "Optimization failed",
+    "explore_success": "Exploration complete",
+    "explore_failed": "Exploration failed",
+    "gunsmith_success": "Gunsmith optimization complete",
+    "gunsmith_failed": "Gunsmith optimization failed",
+    "copied": "Copied",
+    "copy_failed": "Copy failed"
+  },
   "results": {
     "optimization_status": "Optimization",
+    "status_optimal": "Optimal",
+    "status_feasible": "Feasible",
+    "status_infeasible": "Infeasible",
     "optimal": "OPTIMAL",
     "feasible": "FEASIBLE",
     "infeasible": "No feasible solution found. Try adjusting constraints or budget.",
@@ -277,7 +289,17 @@
     "tradeoff_strategy": "Trade-off Strategy",
     "compact_on": "COMPACT ON",
     "compact_off": "COMPACT OFF",
-    "last_updated": "Last updated"
+    "last_updated": "Last updated",
+    "copy_btn": "Copy",
+    "reoptimize_btn": "Re-optimize",
+    "compact": "Compact",
+    "detailed": "Detailed",
+    "none": "None",
+    "unknown": "Unknown"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Recoil"
   },
   "error": {
     "application_error": "Application Error",
