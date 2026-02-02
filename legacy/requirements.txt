@@ -1,7 +1,0 @@
-requests
-ortools
-streamlit
-plotly
-pandas
-altair
-loguru
