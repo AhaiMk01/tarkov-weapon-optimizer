@@ -55,6 +55,9 @@ async def serve_root():
 async def serve_spa_catchall(full_path: str):
     if full_path.startswith("api"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
+    file_path = FRONTEND_DIST / full_path
+    if file_path.exists() and file_path.is_file():
+        return FileResponse(str(file_path))
     index_path = FRONTEND_DIST / "index.html"
     if index_path.exists():
         return FileResponse(str(index_path))

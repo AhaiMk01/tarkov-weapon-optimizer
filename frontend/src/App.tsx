@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ConfigProvider, Layout, Button, Select, Slider, InputNumber, Switch, Card, Statistic, Table, Tag, Space, Spin, Alert, Typography, Segmented, Input, Collapse, Divider, Row, Col, message, App as AntApp, Tabs, Badge, theme } from 'antd'
+import { ConfigProvider, Layout, Button, Select, Slider, InputNumber, Switch, Card, Statistic, Table, Tag, Space, Spin, Alert, Typography, Segmented, Input, Collapse, Divider, Row, Col, message, App as AntApp, Tabs, theme } from 'antd'
 import zhCN from 'antd/locale/zh_CN'
-import { AimOutlined, ThunderboltOutlined, BarChartOutlined, ToolOutlined, SettingOutlined, UserOutlined, SearchOutlined, PlusOutlined, MinusOutlined, DownloadOutlined, FileTextOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, SyncOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
+import { AimOutlined, ThunderboltOutlined, BarChartOutlined, ToolOutlined, SettingOutlined, UserOutlined, SearchOutlined, PlusOutlined, MinusOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, SyncOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
-import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, getStatus } from './api/client'
+import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ExplorePoint, GunsmithTask, GameMode } from './api/client'
 import { TernaryPlot } from './components/TernaryPlot'
 import { ItemRow } from './components/ItemRow'
@@ -73,25 +73,31 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [selectedTaskName, setSelectedTaskName] = useState<string>('')
   const [gunsmithResult, setGunsmithResult] = useState<OptimizeResponse | null>(null)
   const [optimizingGunsmith, setOptimizingGunsmith] = useState(false)
-  const [lastUpdated, setLastUpdated] = useState<number>(0)
 
   useEffect(() => { localStorage.setItem('gameMode', gameMode) }, [gameMode])
   useEffect(() => { localStorage.setItem('compactMode', String(compactMode)) }, [compactMode])
   useEffect(() => { localStorage.setItem('themeMode', themeMode) }, [themeMode])
+  useEffect(() => {
+    document.title = t('app.title', 'Tarkov Weapon Optimizer')
+    document.documentElement.lang = i18n.language?.split('-')[0] || 'en'
+  }, [t, i18n.language])
 
   useEffect(() => {
     setLoading(true)
     setResult(null)
     setGunsmithResult(null)
     const lang = i18n.language || 'en'
-    Promise.all([getInfo(gameMode, lang), getGunsmithTasks(gameMode, lang), getStatus(gameMode, lang)])
-      .then(([infoData, tasksData, statusData]) => {
+    const startTime = Date.now()
+    const minLoadTime = 500
+    Promise.all([getInfo(gameMode, lang), getGunsmithTasks(gameMode, lang)])
+      .then(([infoData, tasksData]) => {
         setGuns(infoData.guns)
         if (infoData.guns.length > 0) setSelectedGunId(infoData.guns[0].id)
         setGunsmithTasks(tasksData.tasks)
         if (tasksData.tasks.length > 0) setSelectedTaskName(tasksData.tasks[0].task_name)
-        setLastUpdated(statusData.timestamp)
-        setLoading(false)
+        const elapsed = Date.now() - startTime
+        const remaining = Math.max(0, minLoadTime - elapsed)
+        setTimeout(() => setLoading(false), remaining)
       })
       .catch(err => { console.error('Failed to fetch data', err); setLoading(false) })
   }, [gameMode, i18n.language])
@@ -222,17 +228,37 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     }
   }
 
-  const exportBuild = (type: 'json' | 'md') => {
-    if (!result) return
-    const content = type === 'json'
-      ? JSON.stringify(result, null, 2)
-      : `# ${selectedGun?.name} 优化构建\n\n## 属性\n- 人机: ${result.final_stats?.ergonomics.toFixed(1)}\n- 后坐: ${result.final_stats?.recoil_vertical.toFixed(0)}\n- 价格: ₽${result.final_stats?.total_price.toLocaleString()}\n\n## 配件\n` + result.selected_items.map(i => `- ${i.name} (₽${i.price.toLocaleString()})`).join('\n')
-    const blob = new Blob([content], { type: type === 'json' ? 'application/json' : 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `build_${selectedGun?.name.replace(/\s+/g, '_')}.${type}`
-    a.click()
+  const copyBuild = () => {
+    if (!result || !result.final_stats) return
+    const lines = [
+      `${selectedGun?.name} 优化构建`,
+      '',
+      `人机: ${result.final_stats.ergonomics.toFixed(1)} | 垂直后坐: ${result.final_stats.recoil_vertical.toFixed(0)} | 水平后坐: ${result.final_stats.recoil_horizontal.toFixed(0)} | 重量: ${result.final_stats.total_weight.toFixed(2)}kg | 总价: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
+      '',
+      '配件列表:',
+      ...result.selected_items.map(i => i.name)
+    ]
+    const content = lines.join('\n')
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(content).then(() => messageApi.success('已复制')).catch(() => fallbackCopy(content))
+    } else {
+      fallbackCopy(content)
+    }
+    function fallbackCopy(text: string) {
+      const textArea = document.createElement('textarea')
+      textArea.value = text
+      textArea.style.position = 'fixed'
+      textArea.style.left = '-9999px'
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        messageApi.success('已复制')
+      } catch {
+        messageApi.error('复制失败')
+      }
+      document.body.removeChild(textArea)
+    }
   }
 
   const applyPreset = (ergo: number, recoil: number, price: number) => {
@@ -243,7 +269,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, background: token.colorBgContainer }}>
         <Spin size="large" />
         <Text type="secondary">{t('ui.initializing', '正在初始化...')}</Text>
       </div>
@@ -252,7 +278,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
 
   const siderContent = (
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'auto' }}>
-      <Card title={<><AimOutlined /> {t('sidebar.select_weapon', '选择武器')}</>} size="small">
+      <Card title={<span style={{ userSelect: 'none' }}><AimOutlined /> {t('sidebar.select_weapon', '选择武器')}</span>} size="small">
         <Space direction="vertical" style={{ width: '100%' }}>
           <Row gutter={8}>
             <Col span={12}>
@@ -281,7 +307,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
           />
         </Space>
       </Card>
-      <Card title={<><SettingOutlined /> {t('optimize.header', '构建优先级')}</>} size="small">
+      <Card title={<span style={{ userSelect: 'none' }}><SettingOutlined /> {t('optimize.header', '构建优先级')}</span>} size="small">
         <Space direction="vertical" style={{ width: '100%' }}>
           <Space>
             <Button size="small" onClick={() => applyPreset(0, 100, 0)}>{t('optimize.preset_recoil', '后坐')}</Button>
@@ -393,7 +419,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                 message={<><Text strong>{t('results.optimization_status', '优化状态')}: {result.status}</Text>{result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}{result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}</>}
                 icon={result.status === 'optimal' ? <CheckCircleOutlined /> : result.status === 'infeasible' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
                 showIcon
-                action={<Space><Button size="small" icon={<FileTextOutlined />} onClick={() => exportBuild('md')}>MD</Button><Button size="small" icon={<DownloadOutlined />} onClick={() => exportBuild('json')}>JSON</Button></Space>}
+                action={<Space><Button size="small" icon={<CopyOutlined />} onClick={copyBuild}>复制</Button><Button size="small" type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize}>重新优化</Button></Space>}
               />
               {result.status !== 'infeasible' && result.final_stats && (
                 <>
@@ -417,21 +443,29 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                       </Space>
                     </Card>
                   )}
-                  <Card title={<Space><SettingOutlined />{t('ui.build_manifest', '构建清单')}<Switch checked={compactMode} onChange={setCompactMode} checkedChildren="紧凑" unCheckedChildren="详细" /></Space>} size="small">
+                  <Card title={<Space style={{ userSelect: 'none' }}><SettingOutlined />{t('ui.build_manifest', '构建清单')}<Switch checked={compactMode} onChange={setCompactMode} checkedChildren="紧凑" unCheckedChildren="详细" /></Space>} size="small">
                     {result.selected_preset ? (
                       <>
-                        <Collapse size="small" defaultActiveKey={['new']} items={[
-                          {
-                            key: 'new',
-                            label: <Badge count={result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length} color="orange"><Text type="warning">{t('ui.new_changed_parts', '新增/更换配件')}</Text></Badge>,
-                            children: result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />),
-                          },
-                          {
-                            key: 'retained',
-                            label: <Badge count={result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length} color="blue"><Text type="secondary">{t('ui.retained_from_preset_short', '预设保留配件')}</Text></Badge>,
-                            children: result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />),
-                          },
-                        ]} />
+                        <Collapse
+                          size="small"
+                          defaultActiveKey={result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length > 0 ? ['new'] : []}
+                          items={[
+                            {
+                              key: 'new',
+                              label: <Space style={{ userSelect: 'none' }}><Text type="warning">{t('ui.new_changed_parts', '新增/更换配件')}</Text><Tag color="orange">{result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length}</Tag></Space>,
+                              children: result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length > 0
+                                ? result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
+                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>无</Text>,
+                            },
+                            {
+                              key: 'retained',
+                              label: <Space style={{ userSelect: 'none' }}><Text type="secondary">{t('ui.retained_from_preset_short', '预设保留配件')}</Text><Tag color="blue">{result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length}</Tag></Space>,
+                              children: result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length > 0
+                                ? result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)
+                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>无</Text>,
+                            },
+                          ]}
+                        />
                       </>
                     ) : (
                       result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
@@ -449,11 +483,6 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                 <Button type="primary" size="large" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize} disabled={!selectedGunId}>{t('optimize.generate_btn', '生成最优构建')}</Button>
               </div>
             </Card>
-          )}
-          {result && (
-            <div style={{ textAlign: 'center' }}>
-              <Button type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize}>{t('optimize.reoptimize_btn', '重新优化')}</Button>
-            </div>
           )}
         </div>
       ),
@@ -504,10 +533,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                 </div>
               </Card>
               <Table size="small" dataSource={exploreResult.map((pt, i) => ({ ...pt, key: i }))} pagination={false} columns={[
-                { title: t('sidebar.ergonomics', '人机'), dataIndex: 'ergo', render: (v: number) => <Text style={{ color: token.colorPrimary, fontFamily: 'monospace' }}>{v.toFixed(1)}</Text> },
-                { title: t('sidebar.recoil_v', '后坐V'), dataIndex: 'recoil_v', render: (v: number) => <Text style={{ color: token.colorSuccess, fontFamily: 'monospace' }}>{v.toFixed(0)}</Text> },
-                { title: t('sidebar.recoil_h', '后坐H'), dataIndex: 'recoil_h', render: (v: number) => <Text style={{ fontFamily: 'monospace' }}>{v.toFixed(0)}</Text> },
-                { title: t('sidebar.price', '价格'), dataIndex: 'price', render: (v: number) => <Text style={{ color: token.colorWarning, fontFamily: 'monospace' }}>₽{v.toLocaleString()}</Text> },
+                { title: t('sidebar.ergonomics', '人机'), dataIndex: 'ergo', render: (v: number) => <Text style={{ color: token.colorPrimary }}>{v.toFixed(1)}</Text> },
+                { title: t('sidebar.recoil_v', '后坐V'), dataIndex: 'recoil_v', render: (v: number) => <Text style={{ color: token.colorSuccess }}>{v.toFixed(0)}</Text> },
+                { title: t('sidebar.recoil_h', '后坐H'), dataIndex: 'recoil_h', render: (v: number) => <Text>{v.toFixed(0)}</Text> },
+                { title: t('sidebar.price', '价格'), dataIndex: 'price', render: (v: number) => <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text> },
                 { title: t('ui.table_items', '配件'), dataIndex: 'selected_items', render: (items: unknown[]) => `${items.length} 个` },
               ]} />
             </>
@@ -533,7 +562,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
             </Space>
           </Card>
           {selectedTask && (
-            <Card size="small" title={selectedTask.task_name}>
+            <Card size="small" title={<span style={{ userSelect: 'none' }}>{selectedTask.task_name}</span>}>
               <Row gutter={16}>
                 <Col span={8}>
                   {selectedTask.weapon_image && <img src={selectedTask.weapon_image} alt="" style={{ width: '100%', maxHeight: 120, objectFit: 'contain' }} />}
@@ -577,7 +606,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                     <Col span={6}><Card size="small"><Statistic title={t('ui.weight_label', '重量')} value={gunsmithResult.final_stats.total_weight.toFixed(2)} suffix="kg" /></Card></Col>
                     <Col span={6}><Card size="small"><Statistic title={t('ui.total_cost', '总价')} value={gunsmithResult.final_stats.total_price.toLocaleString()} prefix="₽" /></Card></Col>
                   </Row>
-                  <Card title={t('ui.build_manifest', '构建清单')} size="small">
+                  <Card title={<span style={{ userSelect: 'none' }}>{t('ui.build_manifest', '构建清单')}</span>} size="small">
                     {gunsmithResult.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}
                   </Card>
                 </>
@@ -594,16 +623,15 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       {contextHolder}
       <Layout style={{ height: '100vh' }}>
         <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-          <Space>
-            <AimOutlined style={{ fontSize: 24, color: token.colorWarning }} />
-            <Title level={4} style={{ margin: 0 }}>{t('app.title', 'Tarkov 优化器')}</Title>
-            <Tag color="orange">v2</Tag>
-          </Space>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }} onClick={() => window.location.reload()}>
+            <img src="/favicon.svg" alt="logo" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
+            <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1 }}>{t('app.title', '塔科夫改枪优化器')}</span>
+            <Tag color="orange" style={{ margin: 0 }}>v2</Tag>
+          </div>
           <Space>
             <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
             <Segmented value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: 'Auto', value: 'auto' }]} />
-            <Select style={{ width: 120 }} value={i18n.language} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
-            <Badge status="success" text={<Text type="secondary" style={{ fontSize: 12 }}>{lastUpdated > 0 && new Date(lastUpdated * 1000).toLocaleString()}</Text>} />
+            <Select style={{ width: 140 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
           </Space>
         </Header>
         <Layout>
@@ -628,7 +656,15 @@ function App() {
   }, [])
   const isDark = themeMode === 'dark' || (themeMode === 'auto' && systemDark)
   return (
-    <ConfigProvider locale={zhCN} theme={{ algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm }}>
+    <ConfigProvider
+      locale={zhCN}
+      theme={{
+        algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
+        token: {
+          fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
+        },
+      }}
+    >
       <AppContent themeMode={themeMode} setThemeMode={setThemeMode} />
     </ConfigProvider>
   )
