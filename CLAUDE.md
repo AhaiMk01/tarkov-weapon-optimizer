@@ -303,7 +303,7 @@ docker compose ps
 **Adding UI Features:**
 - Use antd components for consistency
 - Access theme tokens via `const { token } = theme.useToken()`
-- Add i18n keys to `frontend/public/locales/en.json`
+- Add i18n keys to `frontend/public/locales/zh.json` and sync to all locales
 
 **Styling:**
 - Use antd theme tokens (token.colorPrimary, token.colorBgContainer, etc.)
@@ -311,9 +311,14 @@ docker compose ps
 - Inline styles with token references for dynamic theming
 
 **Adding Translations:**
-1. Add key to `frontend/public/locales/en.json`
-2. Copy to other language files
-3. Use in component: `t('namespace.key', 'Fallback Text')`
+1. Add key to `frontend/public/locales/zh.json` (source of truth)
+2. Synchronize to all 16 language files
+3. Use in component: `t('namespace.key', '中文回退文本')`
+
+**Translation Files:**
+- `zh.json` is the reference file (~100 keys)
+- All 16 files share identical structure
+- Languages: en, ru, zh, es, de, fr, it, ja, ko, pl, pt, tr, cs, hu, ro, sk
 
 ## Common Pitfalls
 
@@ -325,7 +330,7 @@ docker compose ps
 
 ### Frontend
 - **Hardcoded colors**: Use antd theme tokens for dark/light mode compatibility
-- **Missing translations**: Always add to all locale files or provide fallback
+- **Missing translations**: Add to zh.json first, then sync to all 16 locale files
 - **Type safety**: Ensure API client types match backend Pydantic models
 - **Environment variables**: Must be prefixed with `VITE_`
 

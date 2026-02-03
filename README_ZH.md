@@ -15,8 +15,7 @@
 本项目采用现代化的 **FastAPI + React/TypeScript** 架构：
 
 - **后端** (`backend/`): FastAPI 服务器，处理数据获取和优化计算
-- **前端** (`frontend/`): React 19 + TypeScript + Vite + TailwindCSS 网页界面
-- **遗留代码** (`legacy/`): 原始 Streamlit 应用（已弃用）
+- **前端** (`frontend/`): React 19 + TypeScript + Vite + Ant Design 5 网页界面
 
 ## 主要功能
 
@@ -25,13 +24,13 @@
 - **硬性约束**: 设置预算、最低人机工效、最大后坐力、弹匣容量、瞄准距离、重量限制
 - **智能可用性过滤**: 根据 PMC 等级、跳蚤市场访问权限、商人忠诚度等级 (LL1-LL4) 过滤
 - **匠心任务**: 游戏内所有匠心任务列表及优化解决方案
-- **多语言支持**: 支持 14 种语言（英语、俄语、中文、西班牙语、德语、法语等）
+- **多语言支持**: 支持 16 种语言（英语、俄语、中文、西班牙语、德语、法语、意大利语、日语、韩语、波兰语、葡萄牙语、土耳其语、捷克语、匈牙利语、罗马尼亚语、斯洛伐克语）
 - **导出功能**: 将改装方案保存为 JSON 或 Markdown 格式分享
 
 ## 技术栈
 
 - **后端**: FastAPI, Google OR-Tools (CP-SAT), Pydantic, Loguru
-- **前端**: React 19, TypeScript, Vite, TailwindCSS 4, i18next, Recharts
+- **前端**: React 19, TypeScript, Vite, Ant Design 5, i18next, Recharts
 - **数据源**: Tarkov.dev GraphQL API
 
 ## 快速开始
@@ -63,25 +62,13 @@ npm install --prefix frontend
 
 ### 运行应用
 
-1. **启动后端:**
-   ```bash
-   npm run dev:backend
-   ```
-   API 服务于 `http://localhost:8000`
-
-2. **启动前端:**
-   ```bash
-   npm run dev:frontend
-   ```
-   网页界面于 `http://localhost:5173`
-
-### 使用 Pixi
-
-如果您已安装 [pixi](https://pixi.sh/):
+**开发模式（推荐）:**
 ```bash
-pixi run dev:backend  # 启动后端
-pixi run dev:frontend # 启动前端（需另开终端）
+npm run build:frontend && npm run dev:backend
 ```
+访问 `http://localhost:15000`
+
+前端代码修改后，运行 `npm run build:frontend` 并刷新浏览器。
 
 ## API 端点
 
@@ -99,23 +86,22 @@ pixi run dev:frontend # 启动前端（需另开终端）
 tarkov-weapon-optimizer/
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # API 路由
-│   │   ├── core/         # 核心工具
+│   │   ├── api/          # API 路由 (info, optimize, explore, gunsmith, status)
 │   │   ├── models/       # Pydantic 模型
-│   │   ├── services/     # 优化器和数据服务
+│   │   ├── services/     # CP-SAT 优化器
+│   │   ├── config.py     # Pydantic Settings 配置
+│   │   ├── state.py      # 状态管理, Redis 缓存
 │   │   └── main.py       # FastAPI 应用入口
-│   └── requirements.txt
+│   └── pyproject.toml
 ├── frontend/
 │   ├── src/
-│   │   ├── components/   # React 组件
-│   │   ├── hooks/        # 自定义 React 钩子
-│   │   ├── i18n/         # 国际化
-│   │   ├── pages/        # 页面组件
-│   │   ├── services/     # API 客户端
-│   │   └── types/        # TypeScript 类型定义
+│   │   ├── components/   # React 组件 (common, explore, gunsmith, optimize)
+│   │   ├── layouts/      # 布局组件
+│   │   ├── api/          # API 客户端
+│   │   └── App.tsx       # 主应用
+│   ├── public/locales/   # 16 种语言翻译文件
 │   └── package.json
-├── legacy/               # 原始 Streamlit 应用（已弃用）
-├── tasks.json            # 匠心任务定义
+├── deploy/               # 部署脚本和 systemd 服务
 └── package.json          # 根目录脚本
 ```
 

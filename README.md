@@ -15,8 +15,7 @@ An advanced weapon build optimizer for Escape from Tarkov. This tool uses **cons
 This project uses a modern **FastAPI + React/TypeScript** architecture:
 
 - **Backend** (`backend/`): FastAPI server handling data fetching and optimization
-- **Frontend** (`frontend/`): React 19 + TypeScript + Vite + TailwindCSS web UI
-- **Legacy** (`legacy/`): Original Streamlit application (deprecated)
+- **Frontend** (`frontend/`): React 19 + TypeScript + Vite + Ant Design 5 web UI
 
 ## Key Features
 
@@ -25,13 +24,13 @@ This project uses a modern **FastAPI + React/TypeScript** architecture:
 - **Hard Constraints**: Set budget, minimum ergonomics, maximum recoil, magazine capacity, sighting range, weight
 - **Smart Availability Filters**: Filter by PMC level, flea market access, trader loyalty levels (LL1-LL4)
 - **Gunsmith Tasks**: Complete list of in-game gunsmith missions with optimized solutions
-- **Multi-language Support**: 14 languages (English, Russian, Chinese, Spanish, German, French, etc.)
+- **Multi-language Support**: 16 languages (English, Russian, Chinese, Spanish, German, French, Italian, Japanese, Korean, Polish, Portuguese, Turkish, Czech, Hungarian, Romanian, Slovak)
 - **Exporting**: Save builds as JSON or Markdown for sharing
 
 ## Tech Stack
 
 - **Backend**: FastAPI, Google OR-Tools (CP-SAT), Pydantic, Loguru
-- **Frontend**: React 19, TypeScript, Vite, TailwindCSS 4, i18next, Recharts
+- **Frontend**: React 19, TypeScript, Vite, Ant Design 5, i18next, Recharts
 - **Data Source**: Tarkov.dev GraphQL API
 
 ## Getting Started
@@ -63,25 +62,13 @@ npm install --prefix frontend
 
 ### Running the Application
 
-1. **Start the Backend:**
-   ```bash
-   npm run dev:backend
-   ```
-   API available at `http://localhost:8000`
-
-2. **Start the Frontend:**
-   ```bash
-   npm run dev:frontend
-   ```
-   Web UI available at `http://localhost:5173`
-
-### Alternative: Pixi
-
-If you have [pixi](https://pixi.sh/) installed:
+**Development (recommended):**
 ```bash
-pixi run dev:backend  # Start backend
-pixi run dev:frontend # Start frontend (separate terminal)
+npm run build:frontend && npm run dev:backend
 ```
+Access at `http://localhost:15000`
+
+After frontend changes, run `npm run build:frontend` and refresh the browser.
 
 ## API Endpoints
 
@@ -99,23 +86,22 @@ pixi run dev:frontend # Start frontend (separate terminal)
 tarkov-weapon-optimizer/
 ├── backend/
 │   ├── app/
-│   │   ├── api/          # API routes
-│   │   ├── core/         # Core utilities
+│   │   ├── api/          # API routes (info, optimize, explore, gunsmith, status)
 │   │   ├── models/       # Pydantic schemas
-│   │   ├── services/     # Optimizer and data services
+│   │   ├── services/     # CP-SAT optimizer
+│   │   ├── config.py     # Pydantic Settings
+│   │   ├── state.py      # State management, Redis caching
 │   │   └── main.py       # FastAPI application
-│   └── requirements.txt
+│   └── pyproject.toml
 ├── frontend/
 │   ├── src/
-│   │   ├── components/   # React components
-│   │   ├── hooks/        # Custom React hooks
-│   │   ├── i18n/         # Internationalization
-│   │   ├── pages/        # Page components
-│   │   ├── services/     # API client
-│   │   └── types/        # TypeScript types
+│   │   ├── components/   # React components (common, explore, gunsmith, optimize)
+│   │   ├── layouts/      # Layout components
+│   │   ├── api/          # API client
+│   │   └── App.tsx       # Main application
+│   ├── public/locales/   # 16 language translation files
 │   └── package.json
-├── legacy/               # Original Streamlit app (deprecated)
-├── tasks.json            # Gunsmith task definitions
+├── deploy/               # Deployment scripts and systemd service
 └── package.json          # Root scripts
 ```
 
