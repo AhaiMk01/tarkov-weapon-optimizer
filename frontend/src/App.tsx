@@ -631,7 +631,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                 <>
                   <Row gutter={16}>
                     <Col span={6}><Card size="small"><Statistic title={t('sidebar.ergonomics', '人机')} value={gunsmithResult.final_stats.ergonomics.toFixed(1)} /></Card></Col>
-                    <Col span={6}><Card size="small"><Statistic title={t('ui.vert_recoil', '垂直后坐')} value={gunsmithResult.final_stats.recoil_vertical.toFixed(0)} /></Card></Col>
+                    <Col span={6}><Card size="small"><Statistic title={t('ui.recoil_sum', '后坐力')} value={`${gunsmithResult.final_stats.recoil_vertical.toFixed(0)} + ${gunsmithResult.final_stats.recoil_horizontal.toFixed(0)} = ${(gunsmithResult.final_stats.recoil_vertical + gunsmithResult.final_stats.recoil_horizontal).toFixed(0)}`} /></Card></Col>
                     <Col span={6}><Card size="small"><Statistic title={t('ui.weight_label', '重量')} value={gunsmithResult.final_stats.total_weight.toFixed(2)} suffix="kg" /></Card></Col>
                     <Col span={6}><Card size="small"><Statistic title={t('ui.total_cost', '总价')} value={gunsmithResult.final_stats.total_price.toLocaleString()} prefix="₽" /></Card></Col>
                   </Row>

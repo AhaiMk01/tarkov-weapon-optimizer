@@ -65,6 +65,7 @@
     "horiz_recoil": "水平后坐",
     "total_cost": "总价",
     "weight_label": "重量",
+    "recoil_sum": "后坐力",
     "base_preset_used": "使用预设",
     "build_manifest": "构建清单",
     "new_changed_parts": "新增/更换配件",
