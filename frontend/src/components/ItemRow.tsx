@@ -86,7 +86,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
   const unknownLabel = t('ui.unknown', 'Unknown')
   if (compactMode) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(200px, 1fr) auto auto 64px', gap: 8, padding: '8px 16px', alignItems: 'center' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto 64px', gap: 8, padding: '8px 16px', alignItems: 'center', minWidth: 480 }}>
         <div style={{ minWidth: 200 }}>
           <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
         </div>
@@ -110,7 +110,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
     )
   }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '64px minmax(200px, 1fr) auto 64px 64px', gap: 8, padding: 16, alignItems: 'center' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr auto 64px 64px', gap: 8, padding: 16, alignItems: 'center', minWidth: 520 }}>
       <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
         {item.icon ? (
           <img src={item.icon} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />

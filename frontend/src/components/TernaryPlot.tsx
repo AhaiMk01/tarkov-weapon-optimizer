@@ -11,17 +11,19 @@ interface TernaryPlotProps {
   onChange: (ergo: number, recoil: number, price: number) => void
 }
 
-const size = 300
-const padding = 70
-const sideLength = size - padding * 2
-const height = sideLength * (Math.sqrt(3) / 2)
-const verticalOffset = (sideLength - height) / 2
-const topX = size / 2
-const topY = padding + verticalOffset
-const leftX = padding
-const leftY = topY + height
-const rightX = size - padding
-const rightY = topY + height
+const width = 300
+const paddingX = 50
+const paddingTop = 30
+const paddingBottom = 25
+const sideLength = width - paddingX * 2
+const triangleHeight = sideLength * (Math.sqrt(3) / 2)
+const height = paddingTop + triangleHeight + paddingBottom
+const topX = width / 2
+const topY = paddingTop
+const leftX = paddingX
+const leftY = paddingTop + triangleHeight
+const rightX = width - paddingX
+const rightY = paddingTop + triangleHeight
 
 export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }: TernaryPlotProps) {
   const { t } = useTranslation()
@@ -54,25 +56,23 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const svg = svgRef.current
     if (!svg) return
     const rect = svg.getBoundingClientRect()
-    const scaleX = size / rect.width
-    const scaleY = size / rect.height
+    const scaleX = width / rect.width
+    const scaleY = height / rect.height
     const x = (ev.clientX - rect.left) * scaleX
     const y = (ev.clientY - rect.top) * scaleY
     const { e: ergo, r: recoil, p: price } = toBarycentric(x, y)
     const total = ergo + recoil + price
     const ergoNorm = Math.round((ergo / total) * 100)
     const recoilNorm = Math.round((recoil / total) * 100)
-    const finalPrice = 100 - ergoNorm - recoilNorm
-    const finalErgo = Math.max(1, Math.min(98, ergoNorm))
-    const finalRecoil = Math.max(1, Math.min(98, recoilNorm))
-    onChange(finalErgo, finalRecoil, finalPrice)
+    const priceNorm = 100 - ergoNorm - recoilNorm
+    onChange(ergoNorm, recoilNorm, priceNorm)
   }, [onChange, toBarycentric])
   const handleMouseMove = useCallback((ev: React.MouseEvent<SVGSVGElement>) => {
     const svg = svgRef.current
     if (!svg) return
     const rect = svg.getBoundingClientRect()
-    const scaleX = size / rect.width
-    const scaleY = size / rect.height
+    const scaleX = width / rect.width
+    const scaleY = height / rect.height
     const x = (ev.clientX - rect.left) * scaleX
     const y = (ev.clientY - rect.top) * scaleY
     const { e: ergo, r: recoil, p: price } = toBarycentric(x, y)
@@ -105,7 +105,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        viewBox={`0 0 ${size} ${size}`}
+        viewBox={`0 0 ${width} ${height}`}
         style={{ width: '100%', height: 'auto', cursor: 'crosshair', userSelect: 'none' }}
         onClick={handleClick}
         onMouseMove={handleMouseMove}

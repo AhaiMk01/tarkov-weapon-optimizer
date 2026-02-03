@@ -1,15 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ConfigProvider, Layout, Button, Select, Slider, InputNumber, Switch, Card, Statistic, Table, Tag, Space, Spin, Alert, Typography, Segmented, Collapse, Divider, Row, Col, message, App as AntApp, Tabs, theme } from 'antd'
-import { AimOutlined, ThunderboltOutlined, BarChartOutlined, ToolOutlined, SettingOutlined, UserOutlined, PlusOutlined, MinusOutlined, CopyOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, SyncOutlined, SunOutlined, MoonOutlined } from '@ant-design/icons'
-import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
+import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, Tabs, theme, Typography, Tag, Space, Grid, Dropdown, Button } from 'antd'
+import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, SunOutlined, MoonOutlined, SyncOutlined, MenuOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ExplorePoint, GunsmithTask, GameMode } from './api/client'
-import { TernaryPlot } from './components/TernaryPlot'
-import { ItemRow } from './components/ItemRow'
+import { ResponsiveLayout } from './layouts/ResponsiveLayout'
+import { OptimizePanel } from './components/optimize/OptimizePanel'
+import { OptimizeResult } from './components/optimize/OptimizeResult'
+import { ExplorePanel } from './components/explore/ExplorePanel'
+import { ExploreResult } from './components/explore/ExploreResult'
+import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
+import { GunsmithResult } from './components/gunsmith/GunsmithResult'
 
-const { Header, Content, Sider } = Layout
-const { Text, Title } = Typography
+const { Header, Content } = Layout
+const { Text } = Typography
 const { useToken } = theme
 
 const languages = [
@@ -36,6 +40,8 @@ type ThemeMode = 'light' | 'dark' | 'auto'
 function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThemeMode: (mode: ThemeMode) => void }) {
   const { t, i18n } = useTranslation()
   const { token } = useToken()
+  const screens = Grid.useBreakpoint()
+  const isMobile = !screens.md
   const [messageApi, contextHolder] = message.useMessage()
   const [gameMode, setGameMode] = useState<GameMode>(() => (localStorage.getItem('gameMode') as GameMode) || 'regular')
   const [guns, setGuns] = useState<Gun[]>([])
@@ -117,19 +123,16 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     }
   }, [selectedGunId, gameMode, i18n.language])
 
-  const categories = useMemo(() => ['All', ...new Set(guns.map(g => g.category))].sort(), [guns])
-  const calibers = useMemo(() => ['All', ...new Set(guns.map(g => g.caliber))].sort(), [guns])
+  const categories = useMemo(() => {
+    const filtered = selectedCaliber === 'All' ? guns : guns.filter(g => g.caliber === selectedCaliber)
+    return ['All', ...new Set(filtered.map(g => g.category))].sort()
+  }, [guns, selectedCaliber])
+  const calibers = useMemo(() => {
+    const filtered = selectedCategory === 'All' ? guns : guns.filter(g => g.category === selectedCategory)
+    return ['All', ...new Set(filtered.map(g => g.caliber))].sort()
+  }, [guns, selectedCategory])
   const modCategories = useMemo(() => [...new Set(availableMods.map(m => m.category).filter(Boolean))].sort(), [availableMods])
-  const searchedCategories = useMemo(() => {
-    const lower = categorySearch.toLowerCase()
-    return modCategories.filter(c => c.toLowerCase().includes(lower) && !includedCategories.includes(c) && !excludedCategories.includes(c))
-  }, [modCategories, categorySearch, includedCategories, excludedCategories])
   const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
-  const searchedMods = useMemo(() => {
-    if (!modSearch) return []
-    const lower = modSearch.toLowerCase()
-    return availableMods.filter(m => m.name.toLowerCase().includes(lower) && !includedModIds.includes(m.id) && !excludedModIds.includes(m.id)).slice(0, 10)
-  }, [availableMods, modSearch, includedModIds, excludedModIds])
   const selectedGun = guns.find(g => g.id === selectedGunId)
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
@@ -138,6 +141,16 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
       setSelectedGunId(filteredGuns[0].id)
     }
   }, [filteredGuns, selectedGunId])
+  useEffect(() => {
+    if (selectedCategory !== 'All' && !categories.includes(selectedCategory)) {
+      setSelectedCategory('All')
+    }
+  }, [categories, selectedCategory])
+  useEffect(() => {
+    if (selectedCaliber !== 'All' && !calibers.includes(selectedCaliber)) {
+      setSelectedCaliber('All')
+    }
+  }, [calibers, selectedCaliber])
 
   const handleOptimize = async () => {
     if (!selectedGunId) return
@@ -227,17 +240,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     }
   }
 
-  const copyBuild = () => {
-    if (!result || !result.final_stats) return
-    const lines = [
-      `${selectedGun?.name} - ${t('ui.build_manifest', 'Build Manifest')}`,
-      '',
-      `${t('sidebar.ergonomics', 'Ergo')}: ${result.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil', 'V.Recoil')}: ${result.final_stats.recoil_vertical.toFixed(0)} | ${t('ui.horiz_recoil', 'H.Recoil')}: ${result.final_stats.recoil_horizontal.toFixed(0)} | ${t('ui.weight_label', 'Weight')}: ${result.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost', 'Total')}: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
-      '',
-      `${t('ui.table_items', 'Items')}:`,
-      ...result.selected_items.map(i => i.name)
-    ]
-    const content = lines.join('\n')
+  const copyToClipboard = (content: string) => {
     const successMsg = t('toast.copied', 'Copied')
     const failMsg = t('toast.copy_failed', 'Copy failed')
     if (navigator.clipboard && window.isSecureContext) {
@@ -262,10 +265,35 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     }
   }
 
-  const applyPreset = (ergo: number, recoil: number, price: number) => {
-    setErgoWeight(ergo)
-    setRecoilWeight(recoil)
-    setPriceWeight(price)
+  const copyBuild = () => {
+    if (!result || !result.final_stats) return
+    const lines = [
+      `${selectedGun?.name} - ${t('ui.build_manifest', 'Build Manifest')}`,
+      '',
+      `${t('sidebar.ergonomics', 'Ergo')}: ${result.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil', 'V.Recoil')}: ${result.final_stats.recoil_vertical.toFixed(0)} | ${t('ui.horiz_recoil', 'H.Recoil')}: ${result.final_stats.recoil_horizontal.toFixed(0)} | ${t('ui.weight_label', 'Weight')}: ${result.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost', 'Total')}: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
+      '',
+      `${t('ui.table_items', 'Items')}:`,
+      ...result.selected_items.map(i => i.name)
+    ]
+    copyToClipboard(lines.join('\n'))
+  }
+
+  const copyGunsmithBuild = () => {
+    if (!gunsmithResult || !gunsmithResult.final_stats || !selectedTask) return
+    const lines = [
+      `${selectedTask.task_name} - ${selectedTask.weapon_name}`,
+      '',
+      `${t('sidebar.ergonomics', 'Ergo')}: ${gunsmithResult.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil', 'V.Recoil')}: ${gunsmithResult.final_stats.recoil_vertical.toFixed(0)} | ${t('ui.horiz_recoil', 'H.Recoil')}: ${gunsmithResult.final_stats.recoil_horizontal.toFixed(0)} | ${t('ui.weight_label', 'Weight')}: ${gunsmithResult.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost', 'Total')}: ~ ₽${gunsmithResult.final_stats.total_price.toLocaleString()}`,
+      '',
+      `${t('ui.table_items', 'Items')}:`,
+      ...gunsmithResult.selected_items.map(i => i.name)
+    ]
+    copyToClipboard(lines.join('\n'))
+  }
+
+  const handleGunChange = (id: string) => {
+    setSelectedGunId(id)
+    setResult(null)
   }
 
   if (loading) {
@@ -277,372 +305,130 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
     )
   }
 
-  const siderContent = (
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 16, height: '100%', overflow: 'auto' }}>
-      <Card title={<span style={{ userSelect: 'none' }}><AimOutlined /> {t('sidebar.select_weapon', '武器选择')}</span>} size="small">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Row gutter={8}>
-            <Col span={12}>
-              <Select size="small" style={{ width: '100%' }} value={selectedCategory} onChange={setSelectedCategory} options={categories.map(c => ({ value: c, label: c }))} placeholder="类型" />
-            </Col>
-            <Col span={12}>
-              <Select size="small" style={{ width: '100%' }} value={selectedCaliber} onChange={setSelectedCaliber} options={calibers.map(c => ({ value: c, label: c }))} placeholder="口径" />
-            </Col>
-          </Row>
-          <Select
-            showSearch
-            style={{ width: '100%' }}
-            value={selectedGunId}
-            onChange={(v) => { setSelectedGunId(v); setResult(null) }}
-            filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-            options={filteredGuns.map(g => ({ value: g.id, label: g.name }))}
-            optionRender={(option) => {
-              const gun = filteredGuns.find(g => g.id === option.value)
-              return (
-                <Space>
-                  {gun?.image && <img src={gun.image} alt="" style={{ width: 48, height: 32, objectFit: 'contain' }} />}
-                  <span>{option.label}</span>
-                </Space>
-              )
-            }}
-          />
-        </Space>
-      </Card>
-      <Card title={<span style={{ userSelect: 'none' }}><SettingOutlined /> {t('optimize.header', '权重调整')}</span>} size="small">
-        <Space direction="vertical" style={{ width: '100%' }}>
-          <Space>
-            <Button size="small" onClick={() => applyPreset(0, 100, 0)}>{t('optimize.preset_recoil', '后坐')}</Button>
-            <Button size="small" onClick={() => applyPreset(100, 0, 0)}>{t('optimize.preset_ergo', '人机')}</Button>
-            <Button size="small" onClick={() => applyPreset(33, 34, 33)}>{t('optimize.preset_balanced', '平衡')}</Button>
-          </Space>
-          <TernaryPlot ergoWeight={ergoWeight} recoilWeight={recoilWeight} priceWeight={priceWeight} onChange={(e, r, p) => { setErgoWeight(e); setRecoilWeight(r); setPriceWeight(p) }} />
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.ergonomics', '人机')}: {ergoWeight}%</Text>
-            <Slider value={ergoWeight} onChange={setErgoWeight} />
-          </div>
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>{t('optimize.preset_recoil', '后坐')}: {recoilWeight}%</Text>
-            <Slider value={recoilWeight} onChange={setRecoilWeight} />
-          </div>
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.price', '价格')}: {priceWeight}%</Text>
-            <Slider value={priceWeight} onChange={setPriceWeight} />
-          </div>
-          <Divider style={{ margin: '8px 0' }} />
-          <Space>
-            <Switch checked={useBudget} onChange={setUseBudget} size="small" />
-            <Text>{t('constraints.budget_limit', '预算限制')}</Text>
-          </Space>
-          {useBudget && (
-            <InputNumber style={{ width: '100%' }} value={maxPrice} onChange={(v) => setMaxPrice(v || 0)} min={10000} max={1000000} step={10000} addonBefore="₽" />
-          )}
-          <div>
-            <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.min_ergo', '最低人机')}: {minErgo}</Text>
-            <Slider value={minErgo} onChange={setMinErgo} max={100} />
-          </div>
-        </Space>
-      </Card>
-      <Collapse size="small" items={[
-        {
-          key: 'mods',
-          label: <span style={{ userSelect: 'none' }}><PlusOutlined /> {t('sidebar.include_exclude', '配件筛选')}</span>,
-          children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Select
-                size="small"
-                showSearch
-                style={{ width: '100%' }}
-                placeholder={t('sidebar.require_categories', '搜索类别...')}
-                value={null}
-                searchValue={categorySearch}
-                onSearch={setCategorySearch}
-                filterOption={false}
-                notFoundContent={null}
-                options={searchedCategories.slice(0, 10).map(cat => ({ value: cat, label: cat }))}
-                optionRender={(option) => (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>{option.label}</span>
-                    <Space size={4}>
-                      <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); setIncludedCategories([...includedCategories, option.value as string]); setCategorySearch('') }} style={{ color: token.colorSuccess }} />
-                      <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); setExcludedCategories([...excludedCategories, option.value as string]); setCategorySearch('') }} style={{ color: token.colorError }} />
-                    </Space>
-                  </div>
-                )}
-              />
-              <Space wrap>
-                {includedCategories.map(cat => <Tag key={cat} color="success" closable onClose={() => setIncludedCategories(includedCategories.filter(c => c !== cat))}>{cat}</Tag>)}
-                {excludedCategories.map(cat => <Tag key={cat} color="error" closable onClose={() => setExcludedCategories(excludedCategories.filter(c => c !== cat))}>{cat}</Tag>)}
-              </Space>
-              <Divider style={{ margin: '8px 0' }} />
-              <Select
-                size="small"
-                showSearch
-                style={{ width: '100%' }}
-                placeholder={t('sidebar.require_items', '搜索配件...')}
-                value={null}
-                searchValue={modSearch}
-                onSearch={setModSearch}
-                filterOption={false}
-                notFoundContent={null}
-                loading={loadingMods}
-                options={searchedMods.map(m => ({ value: m.id, label: m.name, icon: m.icon }))}
-                optionRender={(option) => {
-                  const mod = searchedMods.find(m => m.id === option.value)
-                  return (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Space>
-                        {mod?.icon && <img src={mod.icon} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />}
-                        <span>{option.label}</span>
-                      </Space>
-                      <Space size={4}>
-                        <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); setIncludedModIds([...includedModIds, option.value as string]); setModSearch('') }} style={{ color: token.colorSuccess }} />
-                        <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); setExcludedModIds([...excludedModIds, option.value as string]); setModSearch('') }} style={{ color: token.colorError }} />
-                      </Space>
-                    </div>
-                  )
-                }}
-              />
-              <Space wrap>
-                {includedModIds.map(id => <Tag key={id} color="success" closable onClose={() => setIncludedModIds(includedModIds.filter(i => i !== id))}>{availableMods.find(m => m.id === id)?.name}</Tag>)}
-                {excludedModIds.map(id => <Tag key={id} color="error" closable onClose={() => setExcludedModIds(excludedModIds.filter(i => i !== id))}>{availableMods.find(m => m.id === id)?.name}</Tag>)}
-              </Space>
-            </Space>
-          ),
-        },
-        {
-          key: 'market',
-          label: <span style={{ userSelect: 'none' }}><UserOutlined /> {t('sidebar.player_trader_access', '等级配置')}</span>,
-          children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
-              <Space><Switch checked={fleaAvailable} onChange={setFleaAvailable} size="small" /><Text>{t('sidebar.flea_market_access', '跳蚤市场')}</Text></Space>
-              <div>
-                <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.player_level', '玩家等级')}: {playerLevel}</Text>
-                <Slider value={playerLevel} onChange={setPlayerLevel} min={1} max={79} />
-              </div>
-              <Divider style={{ margin: '8px 0' }} />
-              {(Object.keys(traderLevels) as Array<keyof typeof traderLevels>).map(trader => (
-                <div key={trader} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                  <Text type="secondary" style={{ fontSize: 12, textTransform: 'capitalize', minWidth: 70 }}>{trader}</Text>
-                  <Segmented size="small" value={traderLevels[trader]} onChange={(v) => setTraderLevels(prev => ({ ...prev, [trader]: v as number }))} options={[{ label: 'LL 1', value: 1 }, { label: 'LL 2', value: 2 }, { label: 'LL 3', value: 3 }, { label: 'LL 4', value: 4 }]} />
-                </div>
-              ))}
-            </Space>
-          ),
-        },
-      ]} />
-    </div>
-  )
+  const commonPanelProps = {
+    guns,
+    selectedGunId,
+    onGunChange: handleGunChange,
+    selectedCategory,
+    onCategoryChange: setSelectedCategory,
+    selectedCaliber,
+    onCaliberChange: setSelectedCaliber,
+    categories,
+    calibers,
+    filteredGuns,
+    availableMods,
+    loadingMods,
+    modCategories,
+    includedCategories,
+    excludedCategories,
+    onIncludedCategoriesChange: setIncludedCategories,
+    onExcludedCategoriesChange: setExcludedCategories,
+    includedModIds,
+    excludedModIds,
+    onIncludedModIdsChange: setIncludedModIds,
+    onExcludedModIdsChange: setExcludedModIds,
+    categorySearch,
+    onCategorySearchChange: setCategorySearch,
+    modSearch,
+    onModSearchChange: setModSearch,
+    fleaAvailable,
+    onFleaChange: setFleaAvailable,
+    playerLevel,
+    onPlayerLevelChange: setPlayerLevel,
+    traderLevels,
+    onTraderLevelsChange: setTraderLevels,
+  }
 
   const tabItems = [
     {
       key: 'optimize',
       label: <span style={{ userSelect: 'none' }}><ThunderboltOutlined /> {t('tabs.optimize', '改枪优化')}</span>,
       children: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {result ? (
-            <>
-              <Alert
-                type={result.status === 'optimal' ? 'success' : result.status === 'infeasible' ? 'error' : 'warning'}
-                message={<><Text strong>{t('results.optimization_status', '优化状态')}: {t(`results.status_${result.status}`, result.status)}</Text>{result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}{result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}</>}
-                icon={result.status === 'optimal' ? <CheckCircleOutlined /> : result.status === 'infeasible' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
-                showIcon
-                action={<Space><Button size="small" icon={<CopyOutlined />} onClick={copyBuild}>{t('ui.copy_btn', 'Copy')}</Button><Button size="small" type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize}>{t('ui.reoptimize_btn', 'Re-optimize')}</Button></Space>}
-              />
-              {result.status !== 'infeasible' && result.final_stats && (
-                <>
-                  <Row gutter={16}>
-                    <Col span={4}><Card size="small"><Statistic title={t('sidebar.ergonomics', '人机')} value={Math.min(100, Math.max(0, result.final_stats.ergonomics)).toFixed(1)} /></Card></Col>
-                    <Col span={4}><Card size="small"><Statistic title={t('ui.vert_recoil', '垂直后坐')} value={result.final_stats.recoil_vertical.toFixed(0)} /></Card></Col>
-                    <Col span={4}><Card size="small"><Statistic title={t('ui.horiz_recoil', '水平后坐')} value={result.final_stats.recoil_horizontal.toFixed(0)} /></Card></Col>
-                    <Col span={4}><Card size="small"><Statistic title={t('ui.weight_label', '重量')} value={result.final_stats.total_weight.toFixed(2)} suffix="kg" /></Card></Col>
-                    <Col span={8}><Card size="small"><Statistic title={t('ui.total_cost', '总价')} value={result.final_stats.total_price.toLocaleString()} prefix="₽" valueStyle={{ color: token.colorWarning }} /></Card></Col>
-                  </Row>
-                  {result.selected_preset && (
-                    <Card size="small">
-                      <Space>
-                        {result.selected_preset.icon && <img src={result.selected_preset.icon} alt="" style={{ width: 80, height: 48, objectFit: 'contain' }} />}
-                        <div>
-                          <Space size={4}>
-                            <Text type="secondary">{t('ui.base_preset_used', '使用预设')}</Text>
-                            <Tag color="gold" style={{ margin: 0 }}>₽{result.selected_preset.price.toLocaleString()}</Tag>
-                            {result.selected_preset.source && <Tag style={{ margin: 0 }}>{result.selected_preset.source}</Tag>}
-                          </Space>
-                          <Title level={5} style={{ margin: 0 }}>{result.selected_preset.name}</Title>
-                        </div>
-                      </Space>
-                    </Card>
-                  )}
-                  <Card title={<Space style={{ userSelect: 'none' }}><SettingOutlined />{t('ui.build_manifest', '构建清单')}<Segmented size="small" value={compactMode ? 'compact' : 'detailed'} onChange={(v) => setCompactMode(v === 'compact')} options={[{ label: t('ui.detailed', 'Detailed'), value: 'detailed' }, { label: t('ui.compact', 'Compact'), value: 'compact' }]} /></Space>} size="small">
-                    {result.selected_preset ? (
-                      <>
-                        <Collapse
-                          size="small"
-                          defaultActiveKey={result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length > 0 ? ['new'] : []}
-                          items={[
-                            {
-                              key: 'new',
-                              label: <Space style={{ userSelect: 'none' }}><Text type="warning">{t('ui.new_changed_parts', '新增/更换配件')}</Text><Tag color="orange">{result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length}</Tag></Space>,
-                              children: result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).length > 0
-                                ? result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
-                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none', 'None')}</Text>,
-                            },
-                            {
-                              key: 'retained',
-                              label: <Space style={{ userSelect: 'none' }}><Text type="secondary">{t('ui.retained_from_preset_short', '预设保留配件')}</Text><Tag color="blue">{result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length}</Tag></Space>,
-                              children: result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).length > 0
-                                ? result.selected_items.filter(i => result.selected_preset!.items.includes(i.id)).map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)
-                                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none', 'None')}</Text>,
-                            },
-                          ]}
-                        />
-                      </>
-                    ) : (
-                      result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
-                    )}
-                  </Card>
-                </>
-              )}
-            </>
-          ) : (
-            <Card style={{ textAlign: 'center', padding: 48 }}>
-              <ThunderboltOutlined style={{ fontSize: 64, color: token.colorTextQuaternary, marginBottom: 24 }} />
-              <Title level={4}>{t('optimize.ready_title', '准备优化')}</Title>
-              <Text type="secondary">{t('optimize.ready_description', '选择武器并调整优先级，生成数学最优构建')}</Text>
-              <div style={{ marginTop: 24 }}>
-                <Button type="primary" size="large" icon={<ThunderboltOutlined />} loading={optimizing} onClick={handleOptimize} disabled={!selectedGunId}>{t('optimize.generate_btn', '生成最优构建')}</Button>
-              </div>
-            </Card>
-          )}
-        </div>
+        <ResponsiveLayout
+          left={
+            <OptimizePanel
+              {...commonPanelProps}
+              ergoWeight={ergoWeight}
+              recoilWeight={recoilWeight}
+              priceWeight={priceWeight}
+              onWeightChange={(e, r, p) => { setErgoWeight(e); setRecoilWeight(r); setPriceWeight(p) }}
+              useBudget={useBudget}
+              onUseBudgetChange={setUseBudget}
+              maxPrice={maxPrice}
+              onMaxPriceChange={setMaxPrice}
+              minErgo={minErgo}
+              onMinErgoChange={setMinErgo}
+            />
+          }
+          right={
+            <OptimizeResult
+              result={result}
+              compactMode={compactMode}
+              onCompactModeChange={setCompactMode}
+              optimizing={optimizing}
+              onOptimize={handleOptimize}
+              onCopy={copyBuild}
+              disabled={!selectedGunId}
+            />
+          }
+        />
       ),
     },
     {
       key: 'explore',
       label: <span style={{ userSelect: 'none' }}><BarChartOutlined /> {t('tabs.explore', '探索分析')}</span>,
       children: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Card size="small">
-            <Space>
-              <Select style={{ width: 240 }} value={exploreTradeoff} onChange={setExploreTradeoff} options={[
-                { value: 'price', label: t('ui.tradeoff_ergo_vs_recoil', '人机 vs 后坐 (忽略价格)') },
-                { value: 'recoil', label: t('ui.tradeoff_ergo_vs_price', '人机 vs 价格 (忽略后坐)') },
-                { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price', '后坐 vs 价格 (忽略人机)') },
-              ]} />
-              <Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={handleExplore} disabled={!selectedGunId}>{t('ui.run_analysis', '运行分析')}</Button>
-            </Space>
-          </Card>
-          {exploreResult.length > 0 ? (
-            <>
-              <Card size="small">
-                <div style={{ height: 400 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis type="number" dataKey={resultTradeoff === 'recoil' ? 'ergo' : resultTradeoff === 'ergo' ? 'recoil_v' : 'ergo'} name={resultTradeoff === 'recoil' ? t('ui.chart_ergonomics', '人机') : resultTradeoff === 'ergo' ? t('ui.chart_recoil_v', '后坐V') : t('ui.chart_ergonomics', '人机')} domain={['dataMin', 'dataMax']} />
-                      <YAxis type="number" dataKey={resultTradeoff === 'price' ? 'recoil_v' : 'price'} name={resultTradeoff === 'price' ? t('ui.chart_recoil_v', '后坐V') : t('ui.chart_price', '价格')} domain={['dataMin', 'dataMax']} />
-                      <ZAxis type="number" dataKey="recoil_pct" />
-                      <Tooltip content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload
-                          return (
-                            <Card size="small">
-                              <Space direction="vertical">
-                                <Text>人机: <Text strong style={{ color: token.colorPrimary }}>{data.ergo.toFixed(1)}</Text></Text>
-                                <Text>后坐V: <Text strong style={{ color: token.colorSuccess }}>{data.recoil_v.toFixed(0)}</Text></Text>
-                                <Text>价格: <Text strong style={{ color: token.colorWarning }}>₽{data.price.toLocaleString()}</Text></Text>
-                              </Space>
-                            </Card>
-                          )
-                        }
-                        return null
-                      }} />
-                      <Scatter name="构建" data={exploreResult} fill={token.colorWarning} line />
-                    </ScatterChart>
-                  </ResponsiveContainer>
-                </div>
-              </Card>
-              <Table size="small" dataSource={exploreResult.map((pt, i) => ({ ...pt, key: i }))} pagination={false} columns={[
-                { title: t('sidebar.ergonomics', '人机'), dataIndex: 'ergo', render: (v: number) => <Text style={{ color: token.colorPrimary }}>{v.toFixed(1)}</Text> },
-                { title: t('sidebar.recoil_v', '后坐V'), dataIndex: 'recoil_v', render: (v: number) => <Text style={{ color: token.colorSuccess }}>{v.toFixed(0)}</Text> },
-                { title: t('sidebar.recoil_h', '后坐H'), dataIndex: 'recoil_h', render: (v: number) => <Text>{v.toFixed(0)}</Text> },
-                { title: t('sidebar.price', '价格'), dataIndex: 'price', render: (v: number) => <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text> },
-                { title: t('ui.table_items', '配件'), dataIndex: 'selected_items', render: (items: unknown[]) => `${items.length} 个` },
-              ]} />
-            </>
-          ) : (
-            <Card style={{ textAlign: 'center', padding: 48 }}>
-              <BarChartOutlined style={{ fontSize: 64, color: token.colorTextQuaternary, marginBottom: 24 }} />
-              <Title level={4}>{t('explore.ready_title', '准备探索')}</Title>
-              <Text type="secondary">{t('explore.ready_description', '选择武器和权衡策略，可视化帕累托前沿')}</Text>
-            </Card>
-          )}
-        </div>
+        <ResponsiveLayout
+          left={
+            <ExplorePanel
+              {...commonPanelProps}
+              exploreTradeoff={exploreTradeoff}
+              onExploreTradeoffChange={setExploreTradeoff}
+            />
+          }
+          right={
+            <ExploreResult
+              exploreResult={exploreResult}
+              resultTradeoff={resultTradeoff}
+              exploring={exploring}
+              onExplore={handleExplore}
+              disabled={!selectedGunId}
+            />
+          }
+        />
       ),
     },
     {
       key: 'gunsmith',
       label: <span style={{ userSelect: 'none' }}><ToolOutlined /> {t('tabs.gunsmith', '枪匠')}</span>,
       children: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Card size="small">
-            <Space>
-              <Select showSearch style={{ width: 400 }} value={selectedTaskName} onChange={setSelectedTaskName} filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())} options={gunsmithTasks.map(t => ({ value: t.task_name, label: `${t.task_name} - ${t.weapon_name}` }))} />
-              <Button type="primary" icon={<ToolOutlined />} loading={optimizingGunsmith} onClick={handleGunsmithOptimize} disabled={!selectedTask}>{t('gunsmith.optimize_btn', '优化枪匠任务')}</Button>
-            </Space>
-          </Card>
-          {selectedTask && (
-            <Card size="small" title={<span style={{ userSelect: 'none' }}>{selectedTask.task_name}</span>}>
-              <Row gutter={16}>
-                <Col span={8}>
-                  {selectedTask.weapon_image && <img src={selectedTask.weapon_image} alt="" style={{ width: '100%', maxHeight: 120, objectFit: 'contain' }} />}
-                  <Title level={5}>{selectedTask.weapon_name}</Title>
-                </Col>
-                <Col span={16}>
-                  <Space direction="vertical">
-                    <Text strong>{t('gunsmith.constraints', '约束条件')}:</Text>
-                    <Space wrap>
-                      {selectedTask.constraints.min_ergonomics && <Tag color="blue">人机 ≥ {selectedTask.constraints.min_ergonomics}</Tag>}
-                      {selectedTask.constraints.max_recoil_sum && <Tag color="green">后坐和 ≤ {selectedTask.constraints.max_recoil_sum}</Tag>}
-                      {selectedTask.constraints.min_mag_capacity && <Tag color="purple">弹匣 ≥ {selectedTask.constraints.min_mag_capacity}</Tag>}
-                      {selectedTask.constraints.min_sighting_range && <Tag color="cyan">瞄准距离 ≥ {selectedTask.constraints.min_sighting_range}</Tag>}
-                      {selectedTask.constraints.max_weight && <Tag color="orange">重量 ≤ {selectedTask.constraints.max_weight}kg</Tag>}
-                    </Space>
-                    {selectedTask.required_item_names.length > 0 && (
-                      <>
-                        <Text strong>{t('gunsmith.required_items', '必需配件')}:</Text>
-                        <Space wrap>{selectedTask.required_item_names.map((name, i) => <Tag key={i}>{name}</Tag>)}</Space>
-                      </>
-                    )}
-                    {selectedTask.required_category_names.length > 0 && (
-                      <>
-                        <Text strong>{t('gunsmith.required_categories', '必需类别')}:</Text>
-                        <Space wrap>{selectedTask.required_category_names.map((group, i) => <Tag key={i}>{group.join(' / ')}</Tag>)}</Space>
-                      </>
-                    )}
-                  </Space>
-                </Col>
-              </Row>
-            </Card>
-          )}
-          {gunsmithResult && (
-            <>
-              <Alert type={gunsmithResult.status === 'optimal' ? 'success' : gunsmithResult.status === 'infeasible' ? 'error' : 'warning'} message={`${t('results.optimization_status', '优化状态')}: ${t(`results.status_${gunsmithResult.status}`, gunsmithResult.status)}`} showIcon />
-              {gunsmithResult.status !== 'infeasible' && gunsmithResult.final_stats && (
-                <>
-                  <Row gutter={16}>
-                    <Col span={6}><Card size="small"><Statistic title={t('sidebar.ergonomics', '人机')} value={gunsmithResult.final_stats.ergonomics.toFixed(1)} /></Card></Col>
-                    <Col span={6}><Card size="small"><Statistic title={t('ui.recoil_sum', '后坐力')} value={`${gunsmithResult.final_stats.recoil_vertical.toFixed(0)} + ${gunsmithResult.final_stats.recoil_horizontal.toFixed(0)} = ${(gunsmithResult.final_stats.recoil_vertical + gunsmithResult.final_stats.recoil_horizontal).toFixed(0)}`} /></Card></Col>
-                    <Col span={6}><Card size="small"><Statistic title={t('ui.weight_label', '重量')} value={gunsmithResult.final_stats.total_weight.toFixed(2)} suffix="kg" /></Card></Col>
-                    <Col span={6}><Card size="small"><Statistic title={t('ui.total_cost', '总价')} value={gunsmithResult.final_stats.total_price.toLocaleString()} prefix="₽" /></Card></Col>
-                  </Row>
-                  <Card title={<span style={{ userSelect: 'none' }}>{t('ui.build_manifest', '构建清单')}</span>} size="small">
-                    {gunsmithResult.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}
-                  </Card>
-                </>
-              )}
-            </>
-          )}
-        </div>
+        <ResponsiveLayout
+          left={
+            <GunsmithPanel
+              gunsmithTasks={gunsmithTasks}
+              selectedTaskName={selectedTaskName}
+              onTaskNameChange={setSelectedTaskName}
+              selectedTask={selectedTask}
+              fleaAvailable={fleaAvailable}
+              onFleaChange={setFleaAvailable}
+              playerLevel={playerLevel}
+              onPlayerLevelChange={setPlayerLevel}
+              traderLevels={traderLevels}
+              onTraderLevelsChange={setTraderLevels}
+            />
+          }
+          right={
+            <GunsmithResult
+              result={gunsmithResult}
+              compactMode={compactMode}
+              onCompactModeChange={setCompactMode}
+              optimizing={optimizingGunsmith}
+              onOptimize={handleGunsmithOptimize}
+              onCopy={copyGunsmithBuild}
+              disabled={!selectedTask}
+            />
+          }
+        />
       ),
     },
   ]
@@ -650,25 +436,44 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   return (
     <AntApp>
       {contextHolder}
-      <Layout style={{ height: '100vh' }}>
-        <Header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 24px', background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+      <Layout style={{ height: '100vh', overflow: 'hidden' }}>
+        <Header style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', padding: '12px 24px', height: 'auto', lineHeight: 'normal', background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }} onClick={() => window.location.reload()}>
             <img src="/favicon.svg" alt="logo" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
             <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1 }}>{t('app.title', '塔科夫改枪优化器')}</span>
             <Tag color="orange" style={{ margin: 0 }}>v2</Tag>
           </div>
-          <Space>
-            <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
-            <Segmented value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: <SyncOutlined />, value: 'auto' }]} />
-            <Select style={{ width: 140 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
-          </Space>
+          <div style={{ flex: '1 1 auto', display: 'flex', justifyContent: 'flex-end' }}>
+            {isMobile ? (
+              <Dropdown
+                trigger={['click']}
+                dropdownRender={() => (
+                  <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
+                    <Segmented block value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: <SyncOutlined />, value: 'auto' }]} />
+                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
+                  </div>
+                )}
+              >
+                <Button icon={<MenuOutlined />} />
+              </Dropdown>
+            ) : (
+              <Space wrap style={{ justifyContent: 'flex-end' }}>
+                <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
+                <Segmented value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: <SyncOutlined />, value: 'auto' }]} />
+                <Select style={{ width: 140 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
+              </Space>
+            )}
+          </div>
         </Header>
-        <Layout>
-          <Sider width={360} style={{ overflow: 'auto', background: token.colorBgContainer, borderRight: `1px solid ${token.colorBorderSecondary}` }}>{siderContent}</Sider>
-          <Content style={{ padding: 24, overflow: 'auto', background: token.colorBgLayout }}>
-            <Tabs items={tabItems} activeKey={activeTab} onChange={setActiveTab} />
-          </Content>
-        </Layout>
+        <Content className="main-content" style={{ padding: 16, overflow: 'auto', background: token.colorBgLayout }}>
+          <Tabs
+            items={tabItems}
+            activeKey={activeTab}
+            onChange={setActiveTab}
+            tabBarStyle={{ margin: '0 0 16px 0', padding: '0 8px', background: token.colorBgContainer, borderRadius: 8 }}
+          />
+        </Content>
       </Layout>
     </AntApp>
   )
@@ -684,6 +489,9 @@ function App() {
     return () => mediaQuery.removeEventListener('change', handler)
   }, [])
   const isDark = themeMode === 'dark' || (themeMode === 'auto' && systemDark)
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [isDark])
   return (
     <ConfigProvider
       theme={{
