@@ -1,4 +1,3 @@
-import time
 import traceback
 from fastapi import APIRouter, HTTPException
 from loguru import logger
@@ -23,7 +22,6 @@ def run_optimization(req: OptimizeRequest, lang: str = "en", game_mode: str = "r
     compat_map = compat_maps[req.weapon_id]
     trader_levels_dict = req.trader_levels.dict() if req.trader_levels else None
     try:
-        start_time = time.time()
         result = optimize_weapon(
             weapon_id=req.weapon_id,
             item_lookup=item_lookup,
@@ -46,8 +44,6 @@ def run_optimization(req: OptimizeRequest, lang: str = "en", game_mode: str = "r
             flea_available=req.flea_available,
             player_level=req.player_level
         )
-        solve_time_ms = (time.time() - start_time) * 1000
-        result["solve_time_ms"] = round(solve_time_ms, 2)
         return OptimizeResponse(**result)
     except Exception as e:
         logger.error(f"Optimization error: {e}")

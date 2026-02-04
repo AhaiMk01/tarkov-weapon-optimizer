@@ -1,7 +1,9 @@
+import time
 import traceback
 from fastapi import APIRouter, HTTPException
 from loguru import logger
 
+from ..config import get_settings
 from ..models.schemas import ExploreRequest, ExploreResponse, ExplorePoint
 from ..state import get_state
 from ..services.optimizer import build_compatibility_map, explore_pareto
@@ -11,6 +13,7 @@ router = APIRouter()
 
 @router.post("", response_model=ExploreResponse)
 def run_exploration(req: ExploreRequest, lang: str = "en", game_mode: str = "regular"):
+    settings = get_settings()
     current_state = get_state(lang, game_mode)
     item_lookup = current_state["item_lookup"]
     compat_maps = current_state["compat_maps"]
@@ -20,7 +23,12 @@ def run_exploration(req: ExploreRequest, lang: str = "en", game_mode: str = "reg
         compat_maps[req.weapon_id] = build_compatibility_map(req.weapon_id, item_lookup)
     compat_map = compat_maps[req.weapon_id]
     trader_levels_dict = req.trader_levels.dict() if req.trader_levels else None
+
+    parallel = req.parallel if req.parallel is not None else settings.explore_parallel
+    max_workers = req.max_workers if req.max_workers is not None else (settings.explore_max_workers or None)
+
     try:
+        start_time = time.perf_counter()
         frontier = explore_pareto(
             weapon_id=req.weapon_id,
             item_lookup=item_lookup,
@@ -40,9 +48,12 @@ def run_exploration(req: ExploreRequest, lang: str = "en", game_mode: str = "reg
             exclude_categories=set(req.exclude_categories) if req.exclude_categories else None,
             trader_levels=trader_levels_dict,
             flea_available=req.flea_available,
-            player_level=req.player_level
+            player_level=req.player_level,
+            parallel=parallel,
+            max_workers=max_workers
         )
-        return ExploreResponse(points=[ExplorePoint(**p) for p in frontier])
+        total_time = round((time.perf_counter() - start_time) * 1000, 2)
+        return ExploreResponse(points=[ExplorePoint(**p) for p in frontier], total_solve_time_ms=total_time)
     except Exception as e:
         logger.error(f"Exploration error: {e}")
         logger.error(traceback.format_exc())

@@ -9,6 +9,8 @@ import os
 import sys
 import time
 from collections import deque
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import cpu_count
 from loguru import logger
 from ortools.sat.python import cp_model
 import requests
@@ -572,6 +574,7 @@ def optimize_weapon(
     ergo_weight=1.0, recoil_weight=1.0, price_weight=0.0,
     trader_levels=None, flea_available=True, player_level=None
 ):
+    start_time = time.perf_counter()
     if trader_levels is None:
         trader_levels = DEFAULT_TRADER_LEVELS
 
@@ -592,6 +595,7 @@ def optimize_weapon(
             "selected_items": [],
             "selected_preset": None,
             "objective_value": 0,
+            "solve_time_ms": round((time.perf_counter() - start_time) * 1000, 2),
         }
 
     reachable = compatibility_map["reachable_items"]
@@ -1094,7 +1098,8 @@ def optimize_weapon(
             "selected_preset": selected_preset,
             "fallback_base": fallback_base,
             "objective_value": solver.ObjectiveValue(),
-            "final_stats": final_stats
+            "final_stats": final_stats,
+            "solve_time_ms": round((time.perf_counter() - start_time) * 1000, 2),
         }
     else:
         reason = "No valid configuration found"
@@ -1104,7 +1109,25 @@ def optimize_weapon(
             "selected_items": [],
             "selected_preset": None,
             "objective_value": 0,
+            "solve_time_ms": round((time.perf_counter() - start_time) * 1000, 2),
         }
+
+
+def _pareto_solve_task(args):
+    (weapon_id, item_lookup, compat_map, weights, constraint_kwargs,
+     target_ergo, target_recoil, max_price) = args
+
+    run_kwargs = constraint_kwargs.copy()
+    run_kwargs.update(weights)
+    if max_price is not None:
+        run_kwargs["max_price"] = max_price
+    if target_ergo is not None:
+        run_kwargs["min_ergonomics"] = target_ergo
+    if target_recoil is not None:
+        run_kwargs["max_recoil_v"] = target_recoil
+
+    return optimize_weapon(weapon_id, item_lookup, compat_map, **run_kwargs)
+
 
 def explore_pareto(
     weapon_id, item_lookup, compatibility_map,
@@ -1123,7 +1146,9 @@ def explore_pareto(
     steps=10,
     trader_levels=None,
     flea_available=True,
-    player_level=None
+    player_level=None,
+    parallel=False,
+    max_workers=None
 ):
     weapon_stats = item_lookup[weapon_id]["stats"]
     naked_recoil_v = weapon_stats.get("naked_recoil_v", 100)
@@ -1181,12 +1206,29 @@ def explore_pareto(
         if range_max <= range_min: range_max = range_min + 1
         step_size = (range_max - range_min) / (steps - 1) if steps > 1 else 0
 
-        for i in range(steps):
-            target = int(range_min + i * step_size)
-            result = _get_result(RECOIL_WEIGHTS, max_price=max_price, min_ergonomics=target, max_recoil_v=max_recoil_v)
-            if result["status"] != "infeasible":
-                stats = result["final_stats"]
-                frontier.append(_build_frontier_point(stats, result))
+        if parallel:
+            tasks = []
+            for i in range(steps):
+                target = int(range_min + i * step_size)
+                tasks.append((
+                    weapon_id, item_lookup, compatibility_map,
+                    RECOIL_WEIGHTS, constraint_kwargs,
+                    target, max_recoil_v, max_price
+                ))
+            workers = max_workers if max_workers else min(steps, cpu_count())
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(_pareto_solve_task, tasks))
+            for result in results:
+                if result["status"] != "infeasible":
+                    stats = result["final_stats"]
+                    frontier.append(_build_frontier_point(stats, result))
+        else:
+            for i in range(steps):
+                target = int(range_min + i * step_size)
+                result = _get_result(RECOIL_WEIGHTS, max_price=max_price, min_ergonomics=target, max_recoil_v=max_recoil_v)
+                if result["status"] != "infeasible":
+                    stats = result["final_stats"]
+                    frontier.append(_build_frontier_point(stats, result))
 
     elif ignore == "recoil":
         result_low = _get_result(PRICE_WEIGHTS, max_price=max_price, max_recoil_v=max_recoil_v)
@@ -1208,12 +1250,29 @@ def explore_pareto(
         if range_max <= range_min: range_max = range_min + 1
         step_size = (range_max - range_min) / (steps - 1) if steps > 1 else 0
 
-        for i in range(steps):
-            target = int(range_min + i * step_size)
-            result = _get_result(PRICE_WEIGHTS, max_price=max_price, min_ergonomics=target, max_recoil_v=max_recoil_v)
-            if result["status"] != "infeasible":
-                stats = result["final_stats"]
-                frontier.append(_build_frontier_point(stats, result))
+        if parallel:
+            tasks = []
+            for i in range(steps):
+                target = int(range_min + i * step_size)
+                tasks.append((
+                    weapon_id, item_lookup, compatibility_map,
+                    PRICE_WEIGHTS, constraint_kwargs,
+                    target, max_recoil_v, max_price
+                ))
+            workers = max_workers if max_workers else min(steps, cpu_count())
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(_pareto_solve_task, tasks))
+            for result in results:
+                if result["status"] != "infeasible":
+                    stats = result["final_stats"]
+                    frontier.append(_build_frontier_point(stats, result))
+        else:
+            for i in range(steps):
+                target = int(range_min + i * step_size)
+                result = _get_result(PRICE_WEIGHTS, max_price=max_price, min_ergonomics=target, max_recoil_v=max_recoil_v)
+                if result["status"] != "infeasible":
+                    stats = result["final_stats"]
+                    frontier.append(_build_frontier_point(stats, result))
 
     elif ignore == "ergo":
         result_low = _get_result(RECOIL_WEIGHTS, max_price=max_price, min_ergonomics=min_ergonomics)
@@ -1233,12 +1292,29 @@ def explore_pareto(
         if range_max <= range_min: range_max = range_min + 1
         step_size = (range_max - range_min) / (steps - 1) if steps > 1 else 0
 
-        for i in range(steps):
-            target = range_min + i * step_size
-            result = _get_result(PRICE_WEIGHTS, max_price=max_price, min_ergonomics=min_ergonomics, max_recoil_v=target)
-            if result["status"] != "infeasible":
-                stats = result["final_stats"]
-                frontier.append(_build_frontier_point(stats, result))
+        if parallel:
+            tasks = []
+            for i in range(steps):
+                target = range_min + i * step_size
+                tasks.append((
+                    weapon_id, item_lookup, compatibility_map,
+                    PRICE_WEIGHTS, constraint_kwargs,
+                    min_ergonomics, target, max_price
+                ))
+            workers = max_workers if max_workers else min(steps, cpu_count())
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                results = list(executor.map(_pareto_solve_task, tasks))
+            for result in results:
+                if result["status"] != "infeasible":
+                    stats = result["final_stats"]
+                    frontier.append(_build_frontier_point(stats, result))
+        else:
+            for i in range(steps):
+                target = range_min + i * step_size
+                result = _get_result(PRICE_WEIGHTS, max_price=max_price, min_ergonomics=min_ergonomics, max_recoil_v=target)
+                if result["status"] != "infeasible":
+                    stats = result["final_stats"]
+                    frontier.append(_build_frontier_point(stats, result))
 
     # Deduplicate logic based on the trade-off strategy
     # We collapse points that overlap on the visible 2D chart by picking the best value for the 3rd (hidden) dimension.
@@ -1339,4 +1415,5 @@ def _build_frontier_point(stats, result):
         "selected_items": result["selected_items"],
         "selected_preset": result.get("selected_preset"),
         "status": result["status"],
+        "solve_time_ms": result.get("solve_time_ms"),
     }

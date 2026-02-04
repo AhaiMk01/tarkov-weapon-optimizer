@@ -124,10 +124,12 @@ export interface ExplorePoint {
   selected_items: ItemDetail[];
   selected_preset?: PresetDetail;
   status: string;
+  solve_time_ms?: number;
 }
 
 export interface ExploreResponse {
   points: ExplorePoint[];
+  total_solve_time_ms?: number;
 }
 
 export const explore = async (request: ExploreRequest, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<ExploreResponse> => {

@@ -72,6 +72,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [compactMode, setCompactMode] = useState<boolean>(() => localStorage.getItem('compactMode') === 'true')
   const [exploring, setExploring] = useState(false)
   const [exploreResult, setExploreResult] = useState<ExplorePoint[]>([])
+  const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
   const [resultTradeoff, setResultTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
   const [gunsmithTasks, setGunsmithTasks] = useState<GunsmithTask[]>([])
@@ -200,6 +201,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
         flea_available: fleaAvailable,
       }, gameMode, i18n.language || 'en')
       setExploreResult(res.points)
+      setExploreSolveTime(res.total_solve_time_ms)
       setResultTradeoff(exploreTradeoff)
       messageApi.success(t('toast.explore_success', 'Exploration complete'))
     } catch (err) {
@@ -389,6 +391,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
           right={
             <ExploreResult
               exploreResult={exploreResult}
+              solveTime={exploreSolveTime}
               resultTradeoff={resultTradeoff}
               exploring={exploring}
               onExplore={handleExplore}

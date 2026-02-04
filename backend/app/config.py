@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     redis_port: int = 6379
     redis_db: int = 0
     redis_password: str = ""
+    explore_parallel: bool = True
+    explore_max_workers: int = 0
 
     @property
     def cors_origins_list(self) -> list[str]:

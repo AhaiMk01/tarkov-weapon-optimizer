@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Table, Typography, theme } from 'antd'
-import { BarChartOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Table, Tag, Typography, theme } from 'antd'
+import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { EmptyState } from '../common/EmptyState'
 import type { ExplorePoint } from '../../api/client'
@@ -10,13 +10,14 @@ const { useToken } = theme
 
 interface ExploreResultProps {
   exploreResult: ExplorePoint[]
+  solveTime?: number
   resultTradeoff: 'price' | 'recoil' | 'ergo'
   exploring: boolean
   onExplore: () => void
   disabled: boolean
 }
 
-export function ExploreResult({ exploreResult, resultTradeoff, exploring, onExplore, disabled }: ExploreResultProps) {
+export function ExploreResult({ exploreResult, solveTime, resultTradeoff, exploring, onExplore, disabled }: ExploreResultProps) {
   const { t } = useTranslation()
   const { token } = useToken()
   if (exploreResult.length === 0) {
@@ -32,8 +33,16 @@ export function ExploreResult({ exploreResult, resultTradeoff, exploring, onExpl
       />
     )
   }
+  const allOptimal = exploreResult.every(p => p.status === 'optimal')
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <Alert
+        type={allOptimal ? 'success' : 'warning'}
+        message={<><Text>{t('results.optimization_status', '优化状态')}: {allOptimal ? t('results.status_optimal', '最优解') : t('results.status_feasible', '可行解')}</Text>{solveTime != null && <Tag color="blue" style={{ marginLeft: 8 }}>{solveTime.toFixed(0)} ms</Tag>}</>}
+        icon={allOptimal ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
+        showIcon
+        action={<Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={onExplore}>{t('ui.run_analysis', '开始分析')}</Button>}
+      />
       <Card size="small">
         <div style={{ height: 400 }}>
           <ResponsiveContainer width="100%" height="100%">

@@ -68,6 +68,8 @@ class OptimizeResponse(BaseModel):
 class ExploreRequest(OptimizeRequest):
     ignore: str = "price"  # "price", "recoil", or "ergo"
     steps: int = 10
+    parallel: Optional[bool] = None
+    max_workers: Optional[int] = None
 
 class ExplorePoint(BaseModel):
     ergo: float
@@ -78,9 +80,11 @@ class ExplorePoint(BaseModel):
     selected_items: List[ItemDetail]
     selected_preset: Optional[PresetDetail] = None
     status: str
+    solve_time_ms: Optional[float] = None
 
 class ExploreResponse(BaseModel):
     points: List[ExplorePoint]
+    total_solve_time_ms: Optional[float] = None
 
 class Gun(BaseModel):
     id: str
