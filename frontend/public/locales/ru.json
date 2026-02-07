@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Оптимизатор модов оружия Таркова"
+  },
+  "sidebar": {
+    "select_weapon": "Выбор оружия",
+    "ergonomics": "Эргономика",
+    "recoil_v": "Вертикальная отдача",
+    "recoil_h": "Горизонтальная отдача",
+    "price": "Цена",
+    "player_trader_access": "Настройка уровней",
+    "player_level": "Уровень игрока",
+    "flea_market_access": "Барахолка",
+    "include_exclude": "Фильтр модов",
+    "require_categories": "Поиск категорий...",
+    "require_items": "Поиск модов..."
+  },
+  "tabs": {
+    "explore": "Анализ",
+    "optimize": "Оптимизация",
+    "gunsmith": "Оружейник"
+  },
+  "gunsmith": {
+    "select_task": "Выбрать задание",
+    "optimize_btn": "Начать оптимизацию",
+    "constraints": "Ограничения",
+    "required_items": "Необходимые предметы",
+    "required_categories": "Необходимые категории",
+    "ready_description": "Выберите задание оружейника для создания сборки"
+  },
+  "explore": {
+    "tradeoff_strategy": "Стратегия компромиссов",
+    "ready_description": "Выберите оружие и стратегию анализа, исследуйте границу Парето"
+  },
+  "optimize": {
+    "header": "Настройка весов",
+    "preset_recoil": "Отдача",
+    "preset_ergo": "Эрго",
+    "preset_balanced": "Баланс",
+    "generate_btn": "Начать оптимизацию",
+    "ready_description": "Выберите оружие и настройте приоритеты для оптимальной сборки"
+  },
+  "constraints": {
+    "budget_limit": "Лимит бюджета",
+    "min_ergo": "Мин. эргономика",
+    "min_ergo_tag": "Эрго >=",
+    "max_recoil_sum_tag": "Сумма отдачи <=",
+    "min_mag_capacity_tag": "Магазин >=",
+    "min_sighting_range_tag": "Дальность прицела >=",
+    "max_weight_tag": "Вес <="
+  },
+  "results": {
+    "optimization_status": "Статус оптимизации",
+    "status_optimal": "Оптимально",
+    "status_feasible": "Возможно",
+    "status_infeasible": "Невозможно"
+  },
+  "toast": {
+    "optimize_success": "Оптимизация завершена",
+    "optimize_failed": "Ошибка оптимизации",
+    "explore_success": "Анализ завершён",
+    "explore_failed": "Ошибка анализа",
+    "gunsmith_success": "Оптимизация оружейника завершена",
+    "gunsmith_failed": "Ошибка оптимизации оружейника",
+    "copied": "Скопировано",
+    "copy_failed": "Ошибка копирования"
+  },
+  "ui": {
+    "initializing": "Инициализация...",
+    "weapon_category": "Категория оружия",
+    "caliber_type": "Калибр",
+    "vert_recoil": "Верт. отдача",
+    "horiz_recoil": "Гориз. отдача",
+    "total_cost": "Общая стоимость",
+    "weight_label": "Вес",
+    "recoil_sum": "Отдача",
+    "base_preset_used": "Используемый пресет",
+    "build_manifest": "Манифест сборки",
+    "new_changed_parts": "Новые/изменённые детали",
+    "retained_from_preset_short": "Сохранено из пресета",
+    "tradeoff_ergo_vs_recoil": "Эрго vs Отдача (без цены)",
+    "tradeoff_ergo_vs_price": "Эрго vs Цена (без отдачи)",
+    "tradeoff_recoil_vs_price": "Отдача vs Цена (без эрго)",
+    "run_analysis": "Начать анализ",
+    "table_items": "Предметы",
+    "chart_ergonomics": "Эрго",
+    "chart_recoil_v": "Отдача V",
+    "chart_price": "Цена",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Копировать",
+    "reoptimize_btn": "Переоптимизировать",
+    "compact": "Компактно",
+    "detailed": "Подробно",
+    "none": "Нет",
+    "unknown": "Неизвестно",
+    "builds": "Сборки",
+    "item_count": "{{count}} шт."
+  },
+  "error": {
+    "title": "Произошла ошибка",
+    "retry": "Повторить"
+  },
+  "item": {
+    "ergo": "Эрго",
+    "recoil": "Отдача"
+  }
+}

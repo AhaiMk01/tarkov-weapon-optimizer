@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Optymalizator Modów Broni Tarkov"
+  },
+  "sidebar": {
+    "select_weapon": "Wybierz broń",
+    "ergonomics": "Ergonomia",
+    "recoil_v": "Odrzut Pionowy",
+    "recoil_h": "Odrzut Poziomy",
+    "price": "Cena",
+    "player_trader_access": "Konfiguracja Poziomów",
+    "player_level": "Poziom Gracza",
+    "flea_market_access": "Pchli Targ",
+    "include_exclude": "Filtr Modów",
+    "require_categories": "Szukaj kategorii...",
+    "require_items": "Szukaj modów..."
+  },
+  "tabs": {
+    "explore": "Analiza",
+    "optimize": "Optymalizacja",
+    "gunsmith": "Rusznikarz"
+  },
+  "gunsmith": {
+    "select_task": "Wybierz zadanie",
+    "optimize_btn": "Rozpocznij Optymalizację",
+    "constraints": "Ograniczenia",
+    "required_items": "Wymagane Przedmioty",
+    "required_categories": "Wymagane Kategorie",
+    "ready_description": "Wybierz zadanie rusznikarza, aby wygenerować build"
+  },
+  "explore": {
+    "tradeoff_strategy": "Strategia Kompromisu",
+    "ready_description": "Wybierz broń i strategię analizy, eksploruj granicę Pareto"
+  },
+  "optimize": {
+    "header": "Dostosowanie Wag",
+    "preset_recoil": "Odrzut",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Zbalansowany",
+    "generate_btn": "Rozpocznij Optymalizację",
+    "ready_description": "Wybierz broń i dostosuj priorytety dla optymalnej konfiguracji"
+  },
+  "constraints": {
+    "budget_limit": "Limit Budżetu",
+    "min_ergo": "Min. Ergonomia",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Suma Odrzutu <=",
+    "min_mag_capacity_tag": "Magazynek >=",
+    "min_sighting_range_tag": "Zasięg Celowania >=",
+    "max_weight_tag": "Waga <="
+  },
+  "results": {
+    "optimization_status": "Status Optymalizacji",
+    "status_optimal": "Optymalny",
+    "status_feasible": "Wykonalny",
+    "status_infeasible": "Brak rozwiązania"
+  },
+  "toast": {
+    "optimize_success": "Optymalizacja zakończona",
+    "optimize_failed": "Optymalizacja nieudana",
+    "explore_success": "Analiza zakończona",
+    "explore_failed": "Analiza nieudana",
+    "gunsmith_success": "Optymalizacja rusznikarza zakończona",
+    "gunsmith_failed": "Optymalizacja rusznikarza nieudana",
+    "copied": "Skopiowano",
+    "copy_failed": "Kopiowanie nieudane"
+  },
+  "ui": {
+    "initializing": "Inicjalizacja...",
+    "weapon_category": "Kategoria Broni",
+    "caliber_type": "Kaliber",
+    "vert_recoil": "Odrzut Pion.",
+    "horiz_recoil": "Odrzut Poz.",
+    "total_cost": "Całkowity Koszt",
+    "weight_label": "Waga",
+    "recoil_sum": "Odrzut",
+    "base_preset_used": "Użyty Preset",
+    "build_manifest": "Manifest Buildu",
+    "new_changed_parts": "Nowe/Zmienione Części",
+    "retained_from_preset_short": "Zachowane z Presetu",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Odrzut (Ignoruj Cenę)",
+    "tradeoff_ergo_vs_price": "Ergo vs Cena (Ignoruj Odrzut)",
+    "tradeoff_recoil_vs_price": "Odrzut vs Cena (Ignoruj Ergo)",
+    "run_analysis": "Rozpocznij Analizę",
+    "table_items": "Przedmioty",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Odrzut V",
+    "chart_price": "Cena",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Kopiuj",
+    "reoptimize_btn": "Ponowna Optymalizacja",
+    "compact": "Kompaktowy",
+    "detailed": "Szczegółowy",
+    "none": "Brak",
+    "unknown": "Nieznany",
+    "builds": "Buildy",
+    "item_count": "{{count}} szt."
+  },
+  "error": {
+    "title": "Wystąpił błąd",
+    "retry": "Ponów"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Odrzut"
+  }
+}

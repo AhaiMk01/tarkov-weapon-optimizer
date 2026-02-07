@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Optimizador de Mods de Armas de Tarkov"
+  },
+  "sidebar": {
+    "select_weapon": "Seleccionar Arma",
+    "ergonomics": "Ergonomía",
+    "recoil_v": "Retroceso Vertical",
+    "recoil_h": "Retroceso Horizontal",
+    "price": "Precio",
+    "player_trader_access": "Config. de Niveles",
+    "player_level": "Nivel de Jugador",
+    "flea_market_access": "Mercadillo",
+    "include_exclude": "Filtro de Mods",
+    "require_categories": "Buscar categorías...",
+    "require_items": "Buscar mods..."
+  },
+  "tabs": {
+    "explore": "Explorar",
+    "optimize": "Optimizar",
+    "gunsmith": "Armero"
+  },
+  "gunsmith": {
+    "select_task": "Seleccionar Tarea",
+    "optimize_btn": "Iniciar Optimización",
+    "constraints": "Restricciones",
+    "required_items": "Artículos Requeridos",
+    "required_categories": "Categorías Requeridas",
+    "ready_description": "Selecciona una tarea de armero para generar una configuración"
+  },
+  "explore": {
+    "tradeoff_strategy": "Estrategia de Compensación",
+    "ready_description": "Selecciona arma y estrategia de análisis, explora frontera de Pareto"
+  },
+  "optimize": {
+    "header": "Ajuste de Pesos",
+    "preset_recoil": "Retroceso",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Equilibrado",
+    "generate_btn": "Iniciar Optimización",
+    "ready_description": "Selecciona arma y ajusta prioridades para generar build óptima"
+  },
+  "constraints": {
+    "budget_limit": "Límite de Presupuesto",
+    "min_ergo": "Ergonomía Mínima",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Suma Retroceso <=",
+    "min_mag_capacity_tag": "Cargador >=",
+    "min_sighting_range_tag": "Alcance Mira >=",
+    "max_weight_tag": "Peso <="
+  },
+  "results": {
+    "optimization_status": "Estado de Optimización",
+    "status_optimal": "Óptimo",
+    "status_feasible": "Viable",
+    "status_infeasible": "Sin solución"
+  },
+  "toast": {
+    "optimize_success": "Optimización completada",
+    "optimize_failed": "Optimización fallida",
+    "explore_success": "Exploración completada",
+    "explore_failed": "Exploración fallida",
+    "gunsmith_success": "Optimización de armero completada",
+    "gunsmith_failed": "Optimización de armero fallida",
+    "copied": "Copiado",
+    "copy_failed": "Error al copiar"
+  },
+  "ui": {
+    "initializing": "Inicializando...",
+    "weapon_category": "Categoría de Arma",
+    "caliber_type": "Calibre",
+    "vert_recoil": "Retroceso Vert.",
+    "horiz_recoil": "Retroceso Horiz.",
+    "total_cost": "Costo Total",
+    "weight_label": "Peso",
+    "recoil_sum": "Retroceso",
+    "base_preset_used": "Preset Usado",
+    "build_manifest": "Manifiesto de Build",
+    "new_changed_parts": "Partes Nuevas/Cambiadas",
+    "retained_from_preset_short": "Retenido del Preset",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Retroceso (Ignorar Precio)",
+    "tradeoff_ergo_vs_price": "Ergo vs Precio (Ignorar Retroceso)",
+    "tradeoff_recoil_vs_price": "Retroceso vs Precio (Ignorar Ergo)",
+    "run_analysis": "Iniciar Análisis",
+    "table_items": "Artículos",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Retroceso V",
+    "chart_price": "Precio",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Copiar",
+    "reoptimize_btn": "Re-optimizar",
+    "compact": "Compacto",
+    "detailed": "Detallado",
+    "none": "Ninguno",
+    "unknown": "Desconocido",
+    "builds": "Builds",
+    "item_count": "{{count}} artículos"
+  },
+  "error": {
+    "title": "Ocurrió un error",
+    "retry": "Reintentar"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Retroceso"
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Optimizator de Moduri Arme Tarkov"
+  },
+  "sidebar": {
+    "select_weapon": "Selectează Arma",
+    "ergonomics": "Ergonomie",
+    "recoil_v": "Recul Vertical",
+    "recoil_h": "Recul Orizontal",
+    "price": "Preț",
+    "player_trader_access": "Setări Nivele",
+    "player_level": "Nivel Jucător",
+    "flea_market_access": "Flea Market",
+    "include_exclude": "Filtru Moduri",
+    "require_categories": "Caută categorii...",
+    "require_items": "Caută moduri..."
+  },
+  "tabs": {
+    "explore": "Analiză",
+    "optimize": "Optimizare",
+    "gunsmith": "Armurier"
+  },
+  "gunsmith": {
+    "select_task": "Selectează Sarcina",
+    "optimize_btn": "Pornește Optimizarea",
+    "constraints": "Constrângeri",
+    "required_items": "Obiecte Necesare",
+    "required_categories": "Categorii Necesare",
+    "ready_description": "Selectează o sarcină de armurier pentru a genera o configurație"
+  },
+  "explore": {
+    "tradeoff_strategy": "Strategie de Compromis",
+    "ready_description": "Selectează arma și strategia de analiză, explorează frontiera Pareto"
+  },
+  "optimize": {
+    "header": "Ajustare Ponderi",
+    "preset_recoil": "Recul",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Echilibrat",
+    "generate_btn": "Pornește Optimizarea",
+    "ready_description": "Selectează arma și ajustează prioritățile pentru configurație optimă"
+  },
+  "constraints": {
+    "budget_limit": "Limită Buget",
+    "min_ergo": "Ergonomie Min.",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Sumă Recul <=",
+    "min_mag_capacity_tag": "Încărcător >=",
+    "min_sighting_range_tag": "Rază Vizare >=",
+    "max_weight_tag": "Greutate <="
+  },
+  "results": {
+    "optimization_status": "Stare Optimizare",
+    "status_optimal": "Optim",
+    "status_feasible": "Fezabil",
+    "status_infeasible": "Fără soluție"
+  },
+  "toast": {
+    "optimize_success": "Optimizare finalizată",
+    "optimize_failed": "Optimizare eșuată",
+    "explore_success": "Analiză finalizată",
+    "explore_failed": "Analiză eșuată",
+    "gunsmith_success": "Optimizare armurier finalizată",
+    "gunsmith_failed": "Optimizare armurier eșuată",
+    "copied": "Copiat",
+    "copy_failed": "Copiere eșuată"
+  },
+  "ui": {
+    "initializing": "Se inițializează...",
+    "weapon_category": "Categorie Armă",
+    "caliber_type": "Calibru",
+    "vert_recoil": "Recul Vert.",
+    "horiz_recoil": "Recul Oriz.",
+    "total_cost": "Cost Total",
+    "weight_label": "Greutate",
+    "recoil_sum": "Recul",
+    "base_preset_used": "Preset Folosit",
+    "build_manifest": "Manifest Build",
+    "new_changed_parts": "Părți Noi/Modificate",
+    "retained_from_preset_short": "Păstrat din Preset",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Recul (Ignoră Preț)",
+    "tradeoff_ergo_vs_price": "Ergo vs Preț (Ignoră Recul)",
+    "tradeoff_recoil_vs_price": "Recul vs Preț (Ignoră Ergo)",
+    "run_analysis": "Pornește Analiza",
+    "table_items": "Obiecte",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Recul V",
+    "chart_price": "Preț",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Copiază",
+    "reoptimize_btn": "Re-optimizare",
+    "compact": "Compact",
+    "detailed": "Detaliat",
+    "none": "Niciunul",
+    "unknown": "Necunoscut",
+    "builds": "Configurații",
+    "item_count": "{{count}} obiecte"
+  },
+  "error": {
+    "title": "A apărut o eroare",
+    "retry": "Reîncearcă"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Recul"
+  }
+}

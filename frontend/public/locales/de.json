@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Tarkov Waffen-Mod-Optimierer"
+  },
+  "sidebar": {
+    "select_weapon": "Waffe auswählen",
+    "ergonomics": "Ergonomie",
+    "recoil_v": "Vertikaler Rückstoß",
+    "recoil_h": "Horizontaler Rückstoß",
+    "price": "Preis",
+    "player_trader_access": "Level-Konfiguration",
+    "player_level": "Spielerstufe",
+    "flea_market_access": "Flohmarkt",
+    "include_exclude": "Mod-Filter",
+    "require_categories": "Kategorien suchen...",
+    "require_items": "Mods suchen..."
+  },
+  "tabs": {
+    "explore": "Erkunden",
+    "optimize": "Optimieren",
+    "gunsmith": "Gunsmith"
+  },
+  "gunsmith": {
+    "select_task": "Aufgabe auswählen",
+    "optimize_btn": "Optimierung starten",
+    "constraints": "Einschränkungen",
+    "required_items": "Benötigte Gegenstände",
+    "required_categories": "Benötigte Kategorien",
+    "ready_description": "Wählen Sie eine Gunsmith-Aufgabe, um eine Build zu generieren"
+  },
+  "explore": {
+    "tradeoff_strategy": "Kompromiss-Strategie",
+    "ready_description": "Waffe und Analysestrategie wählen, Pareto-Grenze erkunden"
+  },
+  "optimize": {
+    "header": "Gewichtsanpassung",
+    "preset_recoil": "Rückstoß",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Ausgewogen",
+    "generate_btn": "Optimierung starten",
+    "ready_description": "Waffe wählen und Prioritäten anpassen für optimales Build"
+  },
+  "constraints": {
+    "budget_limit": "Budgetlimit",
+    "min_ergo": "Min. Ergonomie",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Rückstoßsumme <=",
+    "min_mag_capacity_tag": "Magazin >=",
+    "min_sighting_range_tag": "Visierreichweite >=",
+    "max_weight_tag": "Gewicht <="
+  },
+  "results": {
+    "optimization_status": "Optimierungsstatus",
+    "status_optimal": "Optimal",
+    "status_feasible": "Machbar",
+    "status_infeasible": "Keine Lösung"
+  },
+  "toast": {
+    "optimize_success": "Optimierung abgeschlossen",
+    "optimize_failed": "Optimierung fehlgeschlagen",
+    "explore_success": "Erkundung abgeschlossen",
+    "explore_failed": "Erkundung fehlgeschlagen",
+    "gunsmith_success": "Gunsmith-Optimierung abgeschlossen",
+    "gunsmith_failed": "Gunsmith-Optimierung fehlgeschlagen",
+    "copied": "Kopiert",
+    "copy_failed": "Kopieren fehlgeschlagen"
+  },
+  "ui": {
+    "initializing": "Initialisierung...",
+    "weapon_category": "Waffenkategorie",
+    "caliber_type": "Kaliber",
+    "vert_recoil": "Vert. Rückstoß",
+    "horiz_recoil": "Horiz. Rückstoß",
+    "total_cost": "Gesamtkosten",
+    "weight_label": "Gewicht",
+    "recoil_sum": "Rückstoß",
+    "base_preset_used": "Verwendetes Preset",
+    "build_manifest": "Build-Manifest",
+    "new_changed_parts": "Neue/geänderte Teile",
+    "retained_from_preset_short": "Vom Preset beibehalten",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Rückstoß (Preis ignorieren)",
+    "tradeoff_ergo_vs_price": "Ergo vs Preis (Rückstoß ignorieren)",
+    "tradeoff_recoil_vs_price": "Rückstoß vs Preis (Ergo ignorieren)",
+    "run_analysis": "Analyse starten",
+    "table_items": "Gegenstände",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Rückstoß V",
+    "chart_price": "Preis",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Kopieren",
+    "reoptimize_btn": "Neu optimieren",
+    "compact": "Kompakt",
+    "detailed": "Detailliert",
+    "none": "Keine",
+    "unknown": "Unbekannt",
+    "builds": "Builds",
+    "item_count": "{{count}} Stück"
+  },
+  "error": {
+    "title": "Ein Fehler ist aufgetreten",
+    "retry": "Wiederholen"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Rückstoß"
+  }
+}

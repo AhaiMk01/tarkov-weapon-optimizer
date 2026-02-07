@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Tarkov Weapon Mod Optimizer"
+  },
+  "sidebar": {
+    "select_weapon": "Select Weapon",
+    "ergonomics": "Ergonomics",
+    "recoil_v": "Vertical Recoil",
+    "recoil_h": "Horizontal Recoil",
+    "price": "Price",
+    "player_trader_access": "Level Config",
+    "player_level": "Player Level",
+    "flea_market_access": "Flea Market",
+    "include_exclude": "Mod Filter",
+    "require_categories": "Search categories...",
+    "require_items": "Search mods..."
+  },
+  "tabs": {
+    "explore": "Explore",
+    "optimize": "Optimize",
+    "gunsmith": "Gunsmith"
+  },
+  "gunsmith": {
+    "select_task": "Select Task",
+    "optimize_btn": "Start Optimization",
+    "constraints": "Constraints",
+    "required_items": "Required Items",
+    "required_categories": "Required Categories",
+    "ready_description": "Select a gunsmith task to generate a build that meets constraints"
+  },
+  "explore": {
+    "tradeoff_strategy": "Trade-off Strategy",
+    "ready_description": "Select weapon and analysis strategy, explore Pareto frontier"
+  },
+  "optimize": {
+    "header": "Weight Adjustment",
+    "preset_recoil": "Recoil",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Balanced",
+    "generate_btn": "Start Optimization",
+    "ready_description": "Select weapon and adjust priorities to generate optimal build"
+  },
+  "constraints": {
+    "budget_limit": "Budget Limit",
+    "min_ergo": "Min Ergonomics",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Recoil Sum <=",
+    "min_mag_capacity_tag": "Magazine >=",
+    "min_sighting_range_tag": "Sighting Range >=",
+    "max_weight_tag": "Weight <="
+  },
+  "results": {
+    "optimization_status": "Optimization Status",
+    "status_optimal": "Optimal",
+    "status_feasible": "Feasible",
+    "status_infeasible": "Infeasible"
+  },
+  "toast": {
+    "optimize_success": "Optimization complete",
+    "optimize_failed": "Optimization failed",
+    "explore_success": "Exploration complete",
+    "explore_failed": "Exploration failed",
+    "gunsmith_success": "Gunsmith optimization complete",
+    "gunsmith_failed": "Gunsmith optimization failed",
+    "copied": "Copied",
+    "copy_failed": "Copy failed"
+  },
+  "ui": {
+    "initializing": "Initializing...",
+    "weapon_category": "Weapon Category",
+    "caliber_type": "Caliber",
+    "vert_recoil": "Vert. Recoil",
+    "horiz_recoil": "Horiz. Recoil",
+    "total_cost": "Total Cost",
+    "weight_label": "Weight",
+    "recoil_sum": "Recoil",
+    "base_preset_used": "Using Preset",
+    "build_manifest": "Build Manifest",
+    "new_changed_parts": "New/Changed Parts",
+    "retained_from_preset_short": "Retained from Preset",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Recoil (Ignore Price)",
+    "tradeoff_ergo_vs_price": "Ergo vs Price (Ignore Recoil)",
+    "tradeoff_recoil_vs_price": "Recoil vs Price (Ignore Ergo)",
+    "run_analysis": "Run Analysis",
+    "table_items": "Items",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Recoil V",
+    "chart_price": "Price",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Copy",
+    "reoptimize_btn": "Re-optimize",
+    "compact": "Compact",
+    "detailed": "Detailed",
+    "none": "None",
+    "unknown": "Unknown",
+    "builds": "Builds",
+    "item_count": "{{count}} items"
+  },
+  "error": {
+    "title": "An error occurred",
+    "retry": "Retry"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Recoil"
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Ottimizzatore Mod Armi Tarkov"
+  },
+  "sidebar": {
+    "select_weapon": "Seleziona Arma",
+    "ergonomics": "Ergonomia",
+    "recoil_v": "Rinculo Verticale",
+    "recoil_h": "Rinculo Orizzontale",
+    "price": "Prezzo",
+    "player_trader_access": "Config. Livelli",
+    "player_level": "Livello Giocatore",
+    "flea_market_access": "Mercato Pulci",
+    "include_exclude": "Filtro Mod",
+    "require_categories": "Cerca categorie...",
+    "require_items": "Cerca mod..."
+  },
+  "tabs": {
+    "explore": "Esplora",
+    "optimize": "Ottimizza",
+    "gunsmith": "Armaiolo"
+  },
+  "gunsmith": {
+    "select_task": "Seleziona Compito",
+    "optimize_btn": "Avvia Ottimizzazione",
+    "constraints": "Vincoli",
+    "required_items": "Oggetti Richiesti",
+    "required_categories": "Categorie Richieste",
+    "ready_description": "Seleziona un compito armaiolo per generare una build"
+  },
+  "explore": {
+    "tradeoff_strategy": "Strategia di Compromesso",
+    "ready_description": "Seleziona arma e strategia di analisi, esplora frontiera di Pareto"
+  },
+  "optimize": {
+    "header": "Regolazione Pesi",
+    "preset_recoil": "Rinculo",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Bilanciato",
+    "generate_btn": "Avvia Ottimizzazione",
+    "ready_description": "Seleziona arma e regola priorità per generare build ottimale"
+  },
+  "constraints": {
+    "budget_limit": "Limite Budget",
+    "min_ergo": "Ergonomia Min.",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Somma Rinculo <=",
+    "min_mag_capacity_tag": "Caricatore >=",
+    "min_sighting_range_tag": "Portata Mira >=",
+    "max_weight_tag": "Peso <="
+  },
+  "results": {
+    "optimization_status": "Stato Ottimizzazione",
+    "status_optimal": "Ottimale",
+    "status_feasible": "Fattibile",
+    "status_infeasible": "Nessuna soluzione"
+  },
+  "toast": {
+    "optimize_success": "Ottimizzazione completata",
+    "optimize_failed": "Ottimizzazione fallita",
+    "explore_success": "Esplorazione completata",
+    "explore_failed": "Esplorazione fallita",
+    "gunsmith_success": "Ottimizzazione armaiolo completata",
+    "gunsmith_failed": "Ottimizzazione armaiolo fallita",
+    "copied": "Copiato",
+    "copy_failed": "Copia fallita"
+  },
+  "ui": {
+    "initializing": "Inizializzazione...",
+    "weapon_category": "Categoria Arma",
+    "caliber_type": "Calibro",
+    "vert_recoil": "Rinculo Vert.",
+    "horiz_recoil": "Rinculo Oriz.",
+    "total_cost": "Costo Totale",
+    "weight_label": "Peso",
+    "recoil_sum": "Rinculo",
+    "base_preset_used": "Preset Usato",
+    "build_manifest": "Manifesto Build",
+    "new_changed_parts": "Parti Nuove/Cambiate",
+    "retained_from_preset_short": "Mantenuto dal Preset",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Rinculo (Ignora Prezzo)",
+    "tradeoff_ergo_vs_price": "Ergo vs Prezzo (Ignora Rinculo)",
+    "tradeoff_recoil_vs_price": "Rinculo vs Prezzo (Ignora Ergo)",
+    "run_analysis": "Avvia Analisi",
+    "table_items": "Oggetti",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Rinculo V",
+    "chart_price": "Prezzo",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Copia",
+    "reoptimize_btn": "Ri-ottimizza",
+    "compact": "Compatto",
+    "detailed": "Dettagliato",
+    "none": "Nessuno",
+    "unknown": "Sconosciuto",
+    "builds": "Build",
+    "item_count": "{{count}} oggetti"
+  },
+  "error": {
+    "title": "Si è verificato un errore",
+    "retry": "Riprova"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Rinculo"
+  }
+}

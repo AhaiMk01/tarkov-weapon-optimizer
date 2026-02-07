@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "타르코프 무기 모드 최적화 도구"
+  },
+  "sidebar": {
+    "select_weapon": "무기 선택",
+    "ergonomics": "인체공학",
+    "recoil_v": "수직 반동",
+    "recoil_h": "수평 반동",
+    "price": "가격",
+    "player_trader_access": "레벨 설정",
+    "player_level": "플레이어 레벨",
+    "flea_market_access": "플리마켓",
+    "include_exclude": "모드 필터",
+    "require_categories": "카테고리 검색...",
+    "require_items": "모드 검색..."
+  },
+  "tabs": {
+    "explore": "분석",
+    "optimize": "최적화",
+    "gunsmith": "건스미스"
+  },
+  "gunsmith": {
+    "select_task": "과제 선택",
+    "optimize_btn": "최적화 시작",
+    "constraints": "제약 조건",
+    "required_items": "필수 아이템",
+    "required_categories": "필수 카테고리",
+    "ready_description": "건스미스 과제를 선택하여 빌드 생성"
+  },
+  "explore": {
+    "tradeoff_strategy": "절충 전략",
+    "ready_description": "무기와 분석 전략을 선택하여 파레토 경계 탐색"
+  },
+  "optimize": {
+    "header": "가중치 조정",
+    "preset_recoil": "반동",
+    "preset_ergo": "에르고",
+    "preset_balanced": "균형",
+    "generate_btn": "최적화 시작",
+    "ready_description": "무기 선택 및 우선순위 조정으로 최적 빌드 생성"
+  },
+  "constraints": {
+    "budget_limit": "예산 한도",
+    "min_ergo": "최소 에르고",
+    "min_ergo_tag": "에르고 >=",
+    "max_recoil_sum_tag": "반동 합계 <=",
+    "min_mag_capacity_tag": "탄창 >=",
+    "min_sighting_range_tag": "조준 거리 >=",
+    "max_weight_tag": "무게 <="
+  },
+  "results": {
+    "optimization_status": "최적화 상태",
+    "status_optimal": "최적",
+    "status_feasible": "실행 가능",
+    "status_infeasible": "해 없음"
+  },
+  "toast": {
+    "optimize_success": "최적화 완료",
+    "optimize_failed": "최적화 실패",
+    "explore_success": "분석 완료",
+    "explore_failed": "분석 실패",
+    "gunsmith_success": "건스미스 최적화 완료",
+    "gunsmith_failed": "건스미스 최적화 실패",
+    "copied": "복사됨",
+    "copy_failed": "복사 실패"
+  },
+  "ui": {
+    "initializing": "초기화 중...",
+    "weapon_category": "무기 카테고리",
+    "caliber_type": "구경",
+    "vert_recoil": "수직 반동",
+    "horiz_recoil": "수평 반동",
+    "total_cost": "총 비용",
+    "weight_label": "무게",
+    "recoil_sum": "반동",
+    "base_preset_used": "사용된 프리셋",
+    "build_manifest": "빌드 매니페스트",
+    "new_changed_parts": "새로운/변경된 부품",
+    "retained_from_preset_short": "프리셋에서 유지",
+    "tradeoff_ergo_vs_recoil": "에르고 vs 반동 (가격 무시)",
+    "tradeoff_ergo_vs_price": "에르고 vs 가격 (반동 무시)",
+    "tradeoff_recoil_vs_price": "반동 vs 가격 (에르고 무시)",
+    "run_analysis": "분석 시작",
+    "table_items": "아이템",
+    "chart_ergonomics": "에르고",
+    "chart_recoil_v": "반동V",
+    "chart_price": "가격",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "복사",
+    "reoptimize_btn": "재최적화",
+    "compact": "컴팩트",
+    "detailed": "상세",
+    "none": "없음",
+    "unknown": "알 수 없음",
+    "builds": "빌드",
+    "item_count": "{{count}} 개"
+  },
+  "error": {
+    "title": "오류가 발생했습니다",
+    "retry": "재시도"
+  },
+  "item": {
+    "ergo": "에르고",
+    "recoil": "반동"
+  }
+}

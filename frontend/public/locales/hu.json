@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Tarkov Fegyver Mod Optimalizáló"
+  },
+  "sidebar": {
+    "select_weapon": "Fegyver kiválasztása",
+    "ergonomics": "Ergonómia",
+    "recoil_v": "Függőleges visszarúgás",
+    "recoil_h": "Vízszintes visszarúgás",
+    "price": "Ár",
+    "player_trader_access": "Szint beállítások",
+    "player_level": "Játékos szint",
+    "flea_market_access": "Bolhapiac",
+    "include_exclude": "Mod szűrő",
+    "require_categories": "Kategóriák keresése...",
+    "require_items": "Modok keresése..."
+  },
+  "tabs": {
+    "explore": "Elemzés",
+    "optimize": "Optimalizálás",
+    "gunsmith": "Fegyverkovács"
+  },
+  "gunsmith": {
+    "select_task": "Feladat kiválasztása",
+    "optimize_btn": "Optimalizálás indítása",
+    "constraints": "Korlátozások",
+    "required_items": "Szükséges tárgyak",
+    "required_categories": "Szükséges kategóriák",
+    "ready_description": "Válasszon fegyverkovács feladatot egy build létrehozásához"
+  },
+  "explore": {
+    "tradeoff_strategy": "Kompromisszum stratégia",
+    "ready_description": "Válasszon fegyvert és elemzési stratégiát, fedezze fel a Pareto-határt"
+  },
+  "optimize": {
+    "header": "Súlyok beállítása",
+    "preset_recoil": "Visszarúgás",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Kiegyensúlyozott",
+    "generate_btn": "Optimalizálás indítása",
+    "ready_description": "Válasszon fegyvert és állítsa be a prioritásokat az optimális buildhez"
+  },
+  "constraints": {
+    "budget_limit": "Költségvetési korlát",
+    "min_ergo": "Min. ergonómia",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Visszarúgás összeg <=",
+    "min_mag_capacity_tag": "Tár >=",
+    "min_sighting_range_tag": "Célzási táv >=",
+    "max_weight_tag": "Súly <="
+  },
+  "results": {
+    "optimization_status": "Optimalizálás állapota",
+    "status_optimal": "Optimális",
+    "status_feasible": "Megvalósítható",
+    "status_infeasible": "Nincs megoldás"
+  },
+  "toast": {
+    "optimize_success": "Optimalizálás kész",
+    "optimize_failed": "Optimalizálás sikertelen",
+    "explore_success": "Elemzés kész",
+    "explore_failed": "Elemzés sikertelen",
+    "gunsmith_success": "Fegyverkovács optimalizálás kész",
+    "gunsmith_failed": "Fegyverkovács optimalizálás sikertelen",
+    "copied": "Másolva",
+    "copy_failed": "Másolás sikertelen"
+  },
+  "ui": {
+    "initializing": "Inicializálás...",
+    "weapon_category": "Fegyver kategória",
+    "caliber_type": "Kaliber",
+    "vert_recoil": "Függ. visszarúgás",
+    "horiz_recoil": "Vízsz. visszarúgás",
+    "total_cost": "Teljes költség",
+    "weight_label": "Súly",
+    "recoil_sum": "Visszarúgás",
+    "base_preset_used": "Használt preset",
+    "build_manifest": "Build manifest",
+    "new_changed_parts": "Új/módosított alkatrészek",
+    "retained_from_preset_short": "Presetből megtartva",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Visszarúgás (Ár figyelmen kívül)",
+    "tradeoff_ergo_vs_price": "Ergo vs Ár (Visszarúgás figyelmen kívül)",
+    "tradeoff_recoil_vs_price": "Visszarúgás vs Ár (Ergo figyelmen kívül)",
+    "run_analysis": "Elemzés indítása",
+    "table_items": "Tárgyak",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Visszarúgás V",
+    "chart_price": "Ár",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Másolás",
+    "reoptimize_btn": "Újraoptimalizálás",
+    "compact": "Kompakt",
+    "detailed": "Részletes",
+    "none": "Nincs",
+    "unknown": "Ismeretlen",
+    "builds": "Buildek",
+    "item_count": "{{count}} db"
+  },
+  "error": {
+    "title": "Hiba történt",
+    "retry": "Újra"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Visszarúgás"
+  }
+}

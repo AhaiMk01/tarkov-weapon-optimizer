@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Tarkov Silah Mod Optimize Edici"
+  },
+  "sidebar": {
+    "select_weapon": "Silah Seç",
+    "ergonomics": "Ergonomi",
+    "recoil_v": "Dikey Geri Tepme",
+    "recoil_h": "Yatay Geri Tepme",
+    "price": "Fiyat",
+    "player_trader_access": "Seviye Ayarları",
+    "player_level": "Oyuncu Seviyesi",
+    "flea_market_access": "Bit Pazarı",
+    "include_exclude": "Mod Filtresi",
+    "require_categories": "Kategori ara...",
+    "require_items": "Mod ara..."
+  },
+  "tabs": {
+    "explore": "Analiz",
+    "optimize": "Optimize Et",
+    "gunsmith": "Silah Ustası"
+  },
+  "gunsmith": {
+    "select_task": "Görev Seç",
+    "optimize_btn": "Optimizasyonu Başlat",
+    "constraints": "Kısıtlamalar",
+    "required_items": "Gerekli Öğeler",
+    "required_categories": "Gerekli Kategoriler",
+    "ready_description": "Bir build oluşturmak için silah ustası görevi seçin"
+  },
+  "explore": {
+    "tradeoff_strategy": "Ödünleşim Stratejisi",
+    "ready_description": "Silah ve analiz stratejisi seçin, Pareto sınırını keşfedin"
+  },
+  "optimize": {
+    "header": "Ağırlık Ayarı",
+    "preset_recoil": "Geri Tepme",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Dengeli",
+    "generate_btn": "Optimizasyonu Başlat",
+    "ready_description": "Silah seçin ve öncelikleri ayarlayarak optimal build oluşturun"
+  },
+  "constraints": {
+    "budget_limit": "Bütçe Limiti",
+    "min_ergo": "Min. Ergonomi",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Geri Tepme Toplamı <=",
+    "min_mag_capacity_tag": "Şarjör >=",
+    "min_sighting_range_tag": "Nişan Mesafesi >=",
+    "max_weight_tag": "Ağırlık <="
+  },
+  "results": {
+    "optimization_status": "Optimizasyon Durumu",
+    "status_optimal": "Optimal",
+    "status_feasible": "Uygulanabilir",
+    "status_infeasible": "Çözüm yok"
+  },
+  "toast": {
+    "optimize_success": "Optimizasyon tamamlandı",
+    "optimize_failed": "Optimizasyon başarısız",
+    "explore_success": "Analiz tamamlandı",
+    "explore_failed": "Analiz başarısız",
+    "gunsmith_success": "Silah ustası optimizasyonu tamamlandı",
+    "gunsmith_failed": "Silah ustası optimizasyonu başarısız",
+    "copied": "Kopyalandı",
+    "copy_failed": "Kopyalama başarısız"
+  },
+  "ui": {
+    "initializing": "Başlatılıyor...",
+    "weapon_category": "Silah Kategorisi",
+    "caliber_type": "Kalibre",
+    "vert_recoil": "Dikey Geri Tepme",
+    "horiz_recoil": "Yatay Geri Tepme",
+    "total_cost": "Toplam Maliyet",
+    "weight_label": "Ağırlık",
+    "recoil_sum": "Geri Tepme",
+    "base_preset_used": "Kullanılan Ön Ayar",
+    "build_manifest": "Build Manifestosu",
+    "new_changed_parts": "Yeni/Değişen Parçalar",
+    "retained_from_preset_short": "Ön Ayardan Korunan",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Geri Tepme (Fiyat Yoksay)",
+    "tradeoff_ergo_vs_price": "Ergo vs Fiyat (Geri Tepme Yoksay)",
+    "tradeoff_recoil_vs_price": "Geri Tepme vs Fiyat (Ergo Yoksay)",
+    "run_analysis": "Analizi Başlat",
+    "table_items": "Öğeler",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Geri Tepme V",
+    "chart_price": "Fiyat",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Kopyala",
+    "reoptimize_btn": "Yeniden Optimize Et",
+    "compact": "Kompakt",
+    "detailed": "Detaylı",
+    "none": "Yok",
+    "unknown": "Bilinmiyor",
+    "builds": "Buildler",
+    "item_count": "{{count}} adet"
+  },
+  "error": {
+    "title": "Bir hata oluştu",
+    "retry": "Tekrar Dene"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Geri Tepme"
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Tarkov 武器MODオプティマイザー"
+  },
+  "sidebar": {
+    "select_weapon": "武器を選択",
+    "ergonomics": "エルゴノミクス",
+    "recoil_v": "垂直反動",
+    "recoil_h": "水平反動",
+    "price": "価格",
+    "player_trader_access": "レベル設定",
+    "player_level": "プレイヤーレベル",
+    "flea_market_access": "フリーマーケット",
+    "include_exclude": "MODフィルター",
+    "require_categories": "カテゴリを検索...",
+    "require_items": "MODを検索..."
+  },
+  "tabs": {
+    "explore": "分析",
+    "optimize": "最適化",
+    "gunsmith": "ガンスミス"
+  },
+  "gunsmith": {
+    "select_task": "タスクを選択",
+    "optimize_btn": "最適化開始",
+    "constraints": "制約",
+    "required_items": "必須アイテム",
+    "required_categories": "必須カテゴリ",
+    "ready_description": "ガンスミスタスクを選択してビルドを生成"
+  },
+  "explore": {
+    "tradeoff_strategy": "トレードオフ戦略",
+    "ready_description": "武器と分析戦略を選択、パレート境界を探索"
+  },
+  "optimize": {
+    "header": "重み調整",
+    "preset_recoil": "反動",
+    "preset_ergo": "エルゴ",
+    "preset_balanced": "バランス",
+    "generate_btn": "最適化開始",
+    "ready_description": "武器を選択し優先度を調整、最適なビルドを生成"
+  },
+  "constraints": {
+    "budget_limit": "予算制限",
+    "min_ergo": "最小エルゴ",
+    "min_ergo_tag": "エルゴ >=",
+    "max_recoil_sum_tag": "反動合計 <=",
+    "min_mag_capacity_tag": "マガジン >=",
+    "min_sighting_range_tag": "照準距離 >=",
+    "max_weight_tag": "重量 <="
+  },
+  "results": {
+    "optimization_status": "最適化状態",
+    "status_optimal": "最適",
+    "status_feasible": "実現可能",
+    "status_infeasible": "解なし"
+  },
+  "toast": {
+    "optimize_success": "最適化完了",
+    "optimize_failed": "最適化失敗",
+    "explore_success": "分析完了",
+    "explore_failed": "分析失敗",
+    "gunsmith_success": "ガンスミス最適化完了",
+    "gunsmith_failed": "ガンスミス最適化失敗",
+    "copied": "コピーしました",
+    "copy_failed": "コピー失敗"
+  },
+  "ui": {
+    "initializing": "初期化中...",
+    "weapon_category": "武器カテゴリ",
+    "caliber_type": "口径",
+    "vert_recoil": "垂直反動",
+    "horiz_recoil": "水平反動",
+    "total_cost": "総コスト",
+    "weight_label": "重量",
+    "recoil_sum": "反動",
+    "base_preset_used": "使用プリセット",
+    "build_manifest": "ビルドマニフェスト",
+    "new_changed_parts": "新規/変更パーツ",
+    "retained_from_preset_short": "プリセットから保持",
+    "tradeoff_ergo_vs_recoil": "エルゴ vs 反動 (価格無視)",
+    "tradeoff_ergo_vs_price": "エルゴ vs 価格 (反動無視)",
+    "tradeoff_recoil_vs_price": "反動 vs 価格 (エルゴ無視)",
+    "run_analysis": "分析開始",
+    "table_items": "アイテム",
+    "chart_ergonomics": "エルゴ",
+    "chart_recoil_v": "反動V",
+    "chart_price": "価格",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "コピー",
+    "reoptimize_btn": "再最適化",
+    "compact": "コンパクト",
+    "detailed": "詳細",
+    "none": "なし",
+    "unknown": "不明",
+    "builds": "ビルド",
+    "item_count": "{{count}} 個"
+  },
+  "error": {
+    "title": "エラーが発生しました",
+    "retry": "再試行"
+  },
+  "item": {
+    "ergo": "エルゴ",
+    "recoil": "反動"
+  }
+}

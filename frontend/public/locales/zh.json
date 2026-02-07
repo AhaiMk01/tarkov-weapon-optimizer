@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "塔科夫改枪优化器"
+  },
+  "sidebar": {
+    "select_weapon": "武器选择",
+    "ergonomics": "人机工效",
+    "recoil_v": "垂直后坐力",
+    "recoil_h": "水平后坐力",
+    "price": "价格",
+    "player_trader_access": "等级配置",
+    "player_level": "玩家等级",
+    "flea_market_access": "跳蚤市场",
+    "include_exclude": "配件筛选",
+    "require_categories": "搜索类别...",
+    "require_items": "搜索配件..."
+  },
+  "tabs": {
+    "explore": "探索分析",
+    "optimize": "改枪优化",
+    "gunsmith": "枪匠任务"
+  },
+  "gunsmith": {
+    "select_task": "选择任务",
+    "optimize_btn": "开始优化",
+    "constraints": "约束条件",
+    "required_items": "必需配件",
+    "required_categories": "必需类别",
+    "ready_description": "选择枪匠任务，生成满足约束的构建"
+  },
+  "explore": {
+    "tradeoff_strategy": "权衡策略",
+    "ready_description": "选择武器和分析策略，探索帕累托前沿"
+  },
+  "optimize": {
+    "header": "权重调整",
+    "preset_recoil": "后坐",
+    "preset_ergo": "人机",
+    "preset_balanced": "平衡",
+    "generate_btn": "开始优化",
+    "ready_description": "选择武器并调整优先级，生成数学最优构建"
+  },
+  "constraints": {
+    "budget_limit": "预算限制",
+    "min_ergo": "最低人机",
+    "min_ergo_tag": "人机 ≥",
+    "max_recoil_sum_tag": "后坐和 ≤",
+    "min_mag_capacity_tag": "弹匣 ≥",
+    "min_sighting_range_tag": "瞄准距离 ≥",
+    "max_weight_tag": "重量 ≤"
+  },
+  "results": {
+    "optimization_status": "优化状态",
+    "status_optimal": "最优解",
+    "status_feasible": "可行解",
+    "status_infeasible": "无解"
+  },
+  "toast": {
+    "optimize_success": "优化完成",
+    "optimize_failed": "优化失败",
+    "explore_success": "探索完成",
+    "explore_failed": "探索失败",
+    "gunsmith_success": "枪匠任务优化完成",
+    "gunsmith_failed": "枪匠任务优化失败",
+    "copied": "已复制",
+    "copy_failed": "复制失败"
+  },
+  "ui": {
+    "initializing": "正在初始化...",
+    "weapon_category": "武器类别",
+    "caliber_type": "子弹口径",
+    "vert_recoil": "垂直后坐",
+    "horiz_recoil": "水平后坐",
+    "total_cost": "总价",
+    "weight_label": "重量",
+    "recoil_sum": "后坐力",
+    "base_preset_used": "使用预设",
+    "build_manifest": "构建清单",
+    "new_changed_parts": "新增/更换配件",
+    "retained_from_preset_short": "预设保留配件",
+    "tradeoff_ergo_vs_recoil": "人机 vs 后坐 (忽略价格)",
+    "tradeoff_ergo_vs_price": "人机 vs 价格 (忽略后坐)",
+    "tradeoff_recoil_vs_price": "后坐 vs 价格 (忽略人机)",
+    "run_analysis": "开始分析",
+    "table_items": "配件",
+    "chart_ergonomics": "人机",
+    "chart_recoil_v": "后坐V",
+    "chart_price": "价格",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "复制",
+    "reoptimize_btn": "重新优化",
+    "compact": "紧凑",
+    "detailed": "详细",
+    "none": "无",
+    "unknown": "未知",
+    "builds": "构建",
+    "item_count": "{{count}} 个"
+  },
+  "error": {
+    "title": "发生错误",
+    "retry": "重试"
+  },
+  "item": {
+    "ergo": "人机",
+    "recoil": "后坐"
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "app": {
+    "title": "Optimalizátor modifikácií zbraní Tarkov"
+  },
+  "sidebar": {
+    "select_weapon": "Vybrať zbraň",
+    "ergonomics": "Ergonómia",
+    "recoil_v": "Vertikálny spätný ráz",
+    "recoil_h": "Horizontálny spätný ráz",
+    "price": "Cena",
+    "player_trader_access": "Nastavenie úrovní",
+    "player_level": "Úroveň hráča",
+    "flea_market_access": "Blší trh",
+    "include_exclude": "Filter modov",
+    "require_categories": "Hľadať kategórie...",
+    "require_items": "Hľadať mody..."
+  },
+  "tabs": {
+    "explore": "Analýza",
+    "optimize": "Optimalizácia",
+    "gunsmith": "Gunsmith"
+  },
+  "gunsmith": {
+    "select_task": "Vybrať úlohu",
+    "optimize_btn": "Spustiť optimalizáciu",
+    "constraints": "Obmedzenia",
+    "required_items": "Vyžadované položky",
+    "required_categories": "Vyžadované kategórie",
+    "ready_description": "Vyberte úlohu gunsmithe pre vygenerovanie zostavy"
+  },
+  "explore": {
+    "tradeoff_strategy": "Stratégia kompromisov",
+    "ready_description": "Vyberte zbraň a stratégiu analýzy, preskúmajte Pareto hranicu"
+  },
+  "optimize": {
+    "header": "Úprava váh",
+    "preset_recoil": "Spätný ráz",
+    "preset_ergo": "Ergo",
+    "preset_balanced": "Vyvážené",
+    "generate_btn": "Spustiť optimalizáciu",
+    "ready_description": "Vyberte zbraň a upravte priority pre optimálnu zostavu"
+  },
+  "constraints": {
+    "budget_limit": "Rozpočtový limit",
+    "min_ergo": "Min. ergonómia",
+    "min_ergo_tag": "Ergo >=",
+    "max_recoil_sum_tag": "Súčet spät. rázu <=",
+    "min_mag_capacity_tag": "Zásobník >=",
+    "min_sighting_range_tag": "Dosah mieridiel >=",
+    "max_weight_tag": "Hmotnosť <="
+  },
+  "results": {
+    "optimization_status": "Stav optimalizácie",
+    "status_optimal": "Optimálny",
+    "status_feasible": "Uskutočniteľný",
+    "status_infeasible": "Bez riešenia"
+  },
+  "toast": {
+    "optimize_success": "Optimalizácia dokončená",
+    "optimize_failed": "Optimalizácia zlyhala",
+    "explore_success": "Analýza dokončená",
+    "explore_failed": "Analýza zlyhala",
+    "gunsmith_success": "Optimalizácia gunsmithe dokončená",
+    "gunsmith_failed": "Optimalizácia gunsmithe zlyhala",
+    "copied": "Skopírované",
+    "copy_failed": "Kopírovanie zlyhalo"
+  },
+  "ui": {
+    "initializing": "Inicializácia...",
+    "weapon_category": "Kategória zbrane",
+    "caliber_type": "Kaliber",
+    "vert_recoil": "Vert. spätný ráz",
+    "horiz_recoil": "Horiz. spätný ráz",
+    "total_cost": "Celková cena",
+    "weight_label": "Hmotnosť",
+    "recoil_sum": "Spätný ráz",
+    "base_preset_used": "Použitý preset",
+    "build_manifest": "Manifest zostavy",
+    "new_changed_parts": "Nové/zmenené diely",
+    "retained_from_preset_short": "Zachované z presetu",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Spätný ráz (Ignorovať cenu)",
+    "tradeoff_ergo_vs_price": "Ergo vs Cena (Ignorovať spätný ráz)",
+    "tradeoff_recoil_vs_price": "Spätný ráz vs Cena (Ignorovať ergo)",
+    "run_analysis": "Spustiť analýzu",
+    "table_items": "Položky",
+    "chart_ergonomics": "Ergo",
+    "chart_recoil_v": "Spätný ráz V",
+    "chart_price": "Cena",
+    "pvp": "PvP",
+    "pve": "PvE",
+    "copy_btn": "Kopírovať",
+    "reoptimize_btn": "Znovu optimalizovať",
+    "compact": "Kompaktný",
+    "detailed": "Detailný",
+    "none": "Žiadne",
+    "unknown": "Neznáme",
+    "builds": "Zostavy",
+    "item_count": "{{count}} ks"
+  },
+  "error": {
+    "title": "Vyskytla sa chyba",
+    "retry": "Opakovať"
+  },
+  "item": {
+    "ergo": "Ergo",
+    "recoil": "Spätný ráz"
+  }
+}
