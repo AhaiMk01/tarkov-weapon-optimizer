@@ -250,6 +250,10 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
 
 function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
+    if (typeof indexedDB === 'undefined') {
+      reject(new Error('IndexedDB not available'));
+      return;
+    }
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -463,7 +467,7 @@ function extractGunStats(gun: RawItem): GunStats {
     if (traderOffers.length) {
       const minOffer = traderOffers.reduce((min: RawItem, o: RawItem) =>
         (o.priceRUB ?? Infinity) < (min.priceRUB ?? Infinity) ? o : min
-      , traderOffers[0]);
+        , traderOffers[0]);
       lowestPrice = minOffer.priceRUB ?? 0;
       priceSource = minOffer.source ?? 'market';
     }
@@ -672,7 +676,7 @@ interface LoadedState {
   loadedAt: number;
 }
 
-const VALID_LANGS = new Set(['en','ru','zh','es','de','fr','it','ja','ko','pl','pt','tr','cs','hu','ro','sk']);
+const VALID_LANGS = new Set(['en', 'ru', 'zh', 'es', 'de', 'fr', 'it', 'ja', 'ko', 'pl', 'pt', 'tr', 'cs', 'hu', 'ro', 'sk']);
 
 /** Normalize "en-US" → "en", "zh-CN" → "zh", etc. */
 function normalizeLang(lang: string): string {

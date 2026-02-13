@@ -1,72 +1,86 @@
-# Tarkov Weapon Mod Optimizer 🔫
+# Tarkov Weapon Mod Optimizer (Web Version) 🔫
 
 [English](README.md) | [中文](README_ZH.md)
 
-An advanced weapon build optimizer for Escape from Tarkov. This tool uses **constraint programming** (via Google OR-Tools CP-SAT solver) to find the mathematically optimal set of modifications for any weapon based on your priorities and constraints.
+An advanced, **client-side** weapon build optimizer for Escape from Tarkov. This tool runs entirely in your browser using **WebAssembly (WASM)** and the **HiGHS Solver** to find the mathematically optimal set of modifications for any weapon based on your priorities and constraints.
+
+> **Zero Backend Required**: All logic, including the heavy optimization math, runs locally on your machine via WASM.
 
 ![Project Overview](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue.svg)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.30%2B-red.svg)
-![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey.svg)
-[![GitHub Actions](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions/workflows/build.yml/badge.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/actions)
-[![Download](https://img.shields.io/badge/Download-Releases-green.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
-[![Github All Releases](https://img.shields.io/github/downloads/AhaiMk01/tarkov-weapon-optimizer/total.svg)](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases)
+![React](https://img.shields.io/badge/React-18%2B-blue.svg)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)
+![Vite](https://img.shields.io/badge/Vite-5.0%2B-purple.svg)
+![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
 ## 🚀 Key Features
 
-- **Optimal Build Finder**: Uses a weighted objective function to balance **Ergonomics**, **Recoil**, and **Price**.
-- **Pareto Frontier Exploration**: Visualize the trade-off curves between different stats (e.g., Recoil vs. Price) to understand what is achievable before optimizing.
-- **Hard Constraints**: Set strict requirements for:
+- **🚀 Instant Optimization**: Runs directly in your browser with no server latency.
+- **🧠 Advanced Solver**: Uses the **HiGHS** linear programming solver compiled to WebAssembly for industrial-grade optimization.
+- **🎯 Optimal Build Finder**: Balances **Ergonomics**, **Recoil**, and **Price** based on your custom weights.
+- **📊 Pareto Frontier Exploration**: Visualizes the trade-off curve (e.g., Ergo vs Recoil) to help you make informed decisions.
+- **💡 Smart Rounding**: Implements a robust "Greedy Rounding" algorithm to ensure valid, conflict-free, and integer-optimal loadouts from the fractional LP relaxation.
+- **🛡️ Hard Constraints**:
     - Budget Limit (₽)
     - Minimum Ergonomics
     - Maximum Vertical Recoil
     - Minimum Magazine Capacity
     - Minimum Sighting Range
     - Maximum Weight (kg)
-- **Smart Availability Filters**:
-    - Filter by PMC level.
-    - Toggle Flea Market access.
-    - Set individual Trader Loyalty Levels (LL1-LL4).
-- **Presets Support**: Handles weapon presets (bundles) and identifies the cheapest way to build your weapon.
-- **Multi-language Support**: Fully localized in **English**, **Русский**, and **中文**.
-- **Exporting**: Save your builds as JSON for data analysis or Markdown for sharing on Discord/Forums.
+- **🛒 Smart Filters**:
+    - PMC Level & Trader Loyalty settings.
+    - Flea Market toggle.
+- **🌍 Multi-language**: Fully localized in **English**, **Русский**, and **中文**.
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: [Streamlit](https://streamlit.io/)
-- **Solver**: [Google OR-Tools (CP-SAT)](https://developers.google.com/optimization)
-- **Data Source**: [Tarkov.dev GraphQL API](https://tarkov.dev/api/)
-- **Visuals**: Plotly, Altair, and Pandas
+- **Frontend**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
+- **Solver**: [HiGHS](https://highs.dev/) (via WebAssembly)
+    - *Strategy*: Linear Programming Relaxation + Perturbation + Greedy Rounding
+- **Data**: [Tarkov.dev API](https://tarkov.dev/api/) (GraphQL)
+- **Styling**: [TailwindCSS](https://tailwindcss.com/)
 
-## 📥 Installation
+## 📥 Installation & Running
 
-### Download Pre-built Executable
-Download the latest release from the [**Releases Page**](https://github.com/AhaiMk01/tarkov-weapon-optimizer/releases). No installation required - just run the executable.
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v18 or higher)
+- [npm](https://www.npmjs.com/) (usually comes with Node.js)
 
-### Using Pixi (Recommended)
-If you have [pixi](https://pixi.sh/) installed:
-```bash
-pixi run start
-```
+### Steps
 
-### Using pip
-1. Clone the repository.
-2. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
-3. Run the application:
-```bash
-streamlit run app.py
-```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/AhaiMk01/tarkov-weapon-optimizer.git
+   cd tarkov-weapon-optimizer
+   ```
 
-## 📖 How it Works
+2. **Navigate to the frontend directory**:
+   ```bash
+   cd frontend
+   ```
 
-1. **Select a Weapon**: Choose from the list of available weapons in the sidebar.
-2. **Configure Access**: Set your PMC level and trader levels to ensure the optimizer only suggests items you can actually buy.
-3. **Set Constraints**: Use the **Hard Constraints** sidebar to set your budget or performance requirements.
-4. **Choose Weights**: In the **Optimize Build** tab, use the triangular weight selector to prioritize Ergo, Recoil, or Price.
-5. **Optimize**: Click **Optimize Build** to run the solver. In seconds, you'll have the best possible configuration.
+3. **Install dependencies**:
+   ```bash
+   npm install
+   ```
+   *Note: This will verify the `highs` WASM package is correctly installed.*
+
+4. **Start the development server**:
+   ```bash
+   npm run dev
+   ```
+
+5. **Open in Browser**:
+   Visit `http://localhost:5173` (or the URL shown in your terminal).
+
+## 🧪 Verification & Testing
+
+This project includes a rigorous verification suite to ensure the stability and correctness of the WASM solver.
+
+- **Run Verification Script**:
+  ```bash
+  npx tsx test_multi_weapon_verification.ts
+  ```
+  This script tests the optimizer against complex real-world weapons (e.g., AK-74, M4A1) to ensure it generates valid, integer-optimal loadouts without crashing.
 
 ## 🤝 Contributing
 

@@ -146,3 +146,26 @@ export interface WorkerResponse {
   id: number;
   payload: unknown;
 }
+
+export interface SolveParams {
+  weaponId: string;
+  itemLookup: ItemLookup;
+  compatibilityMap: CompatibilityMap;
+  maxPrice?: number | null;
+  minErgonomics?: number | null;
+  maxRecoilV?: number | null;
+  maxRecoilSum?: number | null;
+  minMagCapacity?: number | null;
+  minSightingRange?: number | null;
+  maxWeight?: number | null;
+  includeItems?: string[] | null;
+  excludeItems?: string[] | null;
+  includeCategories?: string[][] | null;
+  excludeCategories?: string[] | null;
+  ergoWeight?: number;
+  recoilWeight?: number;
+  priceWeight?: number;
+  traderLevels?: TraderLevels | null;
+  fleaAvailable?: boolean;
+  playerLevel?: number | null;
+}
