@@ -30,27 +30,26 @@ export function WeightAdjuster({
   onMinErgoChange,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
+
+  // Each slider moves independently — no forced sum=100.
+  // The ternary plot normalizes automatically.
+  // The solver's lpBuilder applies tiebreaker weights for any zero values.
   const handleErgoChange = (value: number) => {
-    const remaining = 100 - value
-    const ratio = recoilWeight + priceWeight > 0 ? recoilWeight / (recoilWeight + priceWeight) : 0.5
-    const newRecoil = Math.round(remaining * ratio)
-    const newPrice = remaining - newRecoil
-    onWeightChange(value, newRecoil, newPrice)
+    onWeightChange(value, recoilWeight, priceWeight)
   }
   const handleRecoilChange = (value: number) => {
-    const remaining = 100 - value
-    const ratio = ergoWeight + priceWeight > 0 ? ergoWeight / (ergoWeight + priceWeight) : 0.5
-    const newErgo = Math.round(remaining * ratio)
-    const newPrice = remaining - newErgo
-    onWeightChange(newErgo, value, newPrice)
+    onWeightChange(ergoWeight, value, priceWeight)
   }
   const handlePriceChange = (value: number) => {
-    const remaining = 100 - value
-    const ratio = ergoWeight + recoilWeight > 0 ? ergoWeight / (ergoWeight + recoilWeight) : 0.5
-    const newErgo = Math.round(remaining * ratio)
-    const newRecoil = remaining - newErgo
-    onWeightChange(newErgo, newRecoil, value)
+    onWeightChange(ergoWeight, recoilWeight, value)
   }
+
+  // Display normalized percentages for the labels
+  const total = ergoWeight + recoilWeight + priceWeight
+  const pctErgo = total > 0 ? Math.round(ergoWeight / total * 100) : 33
+  const pctRecoil = total > 0 ? Math.round(recoilWeight / total * 100) : 34
+  const pctPrice = total > 0 ? 100 - pctErgo - pctRecoil : 33
+
   return (
     <Collapse size="small" defaultActiveKey={['weight']} items={[
       {
@@ -65,15 +64,15 @@ export function WeightAdjuster({
             </Space>
             <TernaryPlot ergoWeight={ergoWeight} recoilWeight={recoilWeight} priceWeight={priceWeight} onChange={onWeightChange} />
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.ergonomics', '人机')}: {ergoWeight}%</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.ergonomics', '人机')}: {ergoWeight} ({pctErgo}%)</Text>
               <Slider value={ergoWeight} onChange={handleErgoChange} min={0} max={100} />
             </div>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>{t('optimize.preset_recoil', '后坐')}: {recoilWeight}%</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('optimize.preset_recoil', '后坐')}: {recoilWeight} ({pctRecoil}%)</Text>
               <Slider value={recoilWeight} onChange={handleRecoilChange} min={0} max={100} />
             </div>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.price', '价格')}: {priceWeight}%</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.price', '价格')}: {priceWeight} ({pctPrice}%)</Text>
               <Slider value={priceWeight} onChange={handlePriceChange} min={0} max={100} />
             </div>
             <Divider style={{ margin: '8px 0' }} />

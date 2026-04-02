@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, Tabs, theme, Typography, Tag, Space, Grid, Dropdown, Button } from 'antd'
+import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, Tabs, theme, Typography, Tag, Space, Grid, Dropdown, Button, Switch, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, SunOutlined, MoonOutlined, SyncOutlined, MenuOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ExplorePoint, GunsmithTask, GameMode } from './api/client'
@@ -67,6 +67,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
   const [categorySearch, setCategorySearch] = useState('')
   const [playerLevel, setPlayerLevel] = useState(60)
   const [fleaAvailable, setFleaAvailable] = useState(true)
+  const [preciseMode, setPreciseMode] = useState(false)
   const [traderLevels, setTraderLevels] = useState({ prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4 })
   const [activeTab, setActiveTab] = useState<string>('optimize')
   const [compactMode, setCompactMode] = useState<boolean>(() => localStorage.getItem('compactMode') === 'true')
@@ -171,6 +172,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
         trader_levels: traderLevels,
         player_level: playerLevel,
         flea_available: fleaAvailable,
+        precise_mode: preciseMode,
       }, gameMode, i18n.language || 'en')
       setResult(res)
       messageApi.success(t('toast.optimize_success', 'Optimization complete'))
@@ -453,6 +455,10 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
                 dropdownRender={() => (
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Tooltip title={t('sidebar.precise_mode_tooltip', 'Uses placement variables for multi-slot items. More accurate but much slower (30-60s vs <1s).')}><span style={{ fontSize: 13 }}>{t('sidebar.precise_mode', 'Precise Mode')}</span></Tooltip>
+                      <Switch size="small" checked={preciseMode} onChange={setPreciseMode} />
+                    </div>
                     <Segmented block value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: <SyncOutlined />, value: 'auto' }]} />
                     <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
                   </div>
@@ -463,6 +469,7 @@ function AppContent({ themeMode, setThemeMode }: { themeMode: ThemeMode; setThem
             ) : (
               <Space wrap style={{ justifyContent: 'flex-end' }}>
                 <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp', 'PvP'), value: 'regular' }, { label: t('ui.pve', 'PvE'), value: 'pve' }]} />
+                <Tooltip title={t('sidebar.precise_mode_tooltip', 'Uses placement variables for multi-slot items. More accurate but much slower (30-60s vs <1s).')}><Switch checkedChildren={t('sidebar.precise', 'Precise')} unCheckedChildren={t('sidebar.fast', 'Fast')} checked={preciseMode} onChange={setPreciseMode} /></Tooltip>
                 <Segmented value={themeMode} onChange={(v) => setThemeMode(v as ThemeMode)} options={[{ label: <SunOutlined />, value: 'light' }, { label: <MoonOutlined />, value: 'dark' }, { label: <SyncOutlined />, value: 'auto' }]} />
                 <Select style={{ width: 140 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
               </Space>

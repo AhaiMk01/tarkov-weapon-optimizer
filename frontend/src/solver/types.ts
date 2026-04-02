@@ -168,4 +168,5 @@ export interface SolveParams {
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   playerLevel?: number | null;
+  preciseMode?: boolean;
 }

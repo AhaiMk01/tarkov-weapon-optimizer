@@ -28,6 +28,7 @@ export interface ParetoParams {
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   playerLevel?: number | null;
+  preciseMode?: boolean;
 }
 
 function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight' | 'maxRecoilV' | 'minErgonomics' | 'maxPrice'> {
@@ -46,6 +47,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     traderLevels: p.traderLevels,
     fleaAvailable: p.fleaAvailable ?? true,
     playerLevel: p.playerLevel,
+    preciseMode: p.preciseMode,
   };
 }
 
@@ -72,20 +74,24 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
     });
   }
 
-  const RECOIL_WEIGHTS = { ergoWeight: 0, recoilWeight: 1, priceWeight: 0 };
-  const ERGO_WEIGHTS = { ergoWeight: 1, recoilWeight: 0, priceWeight: 0 };
-  const PRICE_WEIGHTS = { ergoWeight: 0, recoilWeight: 0, priceWeight: 1 };
+  // Tiny tiebreaker on secondary weights prevents multi-slot over-constraint
+  // from blocking items (see lpBuilder.ts slot mutex). Must be small enough
+  // not to collapse the Pareto frontier.
+  const TB = 0.0001;
+  const RECOIL_WEIGHTS = { ergoWeight: TB, recoilWeight: 1, priceWeight: TB };
+  const ERGO_WEIGHTS = { ergoWeight: 1, recoilWeight: TB, priceWeight: TB };
+  const PRICE_WEIGHTS = { ergoWeight: TB, recoilWeight: TB, priceWeight: 1 };
 
   function addPoint(result: OptimizeResponse) {
     if (result.status === 'infeasible' || !result.final_stats) return;
     const stats = result.final_stats;
     const recoilMultiplier = nakedRecoilV > 0 ? stats.recoil_vertical / nakedRecoilV : 1;
     frontier.push({
-      ergo: Math.floor(stats.ergonomics),
+      ergo: Math.round(stats.ergonomics * 10) / 10,
       recoil_pct: Math.round((recoilMultiplier - 1) * 1000) / 10,
       recoil_v: Math.round(stats.recoil_vertical * 10) / 10,
       recoil_h: Math.round(stats.recoil_horizontal * 10) / 10,
-      price: Math.floor(stats.total_price),
+      price: Math.round(stats.total_price),
       selected_items: result.selected_items,
       selected_preset: result.selected_preset,
       status: result.status,

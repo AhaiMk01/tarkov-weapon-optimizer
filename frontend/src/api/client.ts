@@ -42,6 +42,7 @@ export interface OptimizeRequest {
   };
   flea_available?: boolean;
   player_level?: number;
+  precise_mode?: boolean;
 }
 
 export interface ItemDetail {

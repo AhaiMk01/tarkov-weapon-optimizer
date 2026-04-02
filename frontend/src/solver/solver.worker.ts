@@ -8,9 +8,6 @@ import { solve } from './solver.ts';
 import { explorePareto } from './paretoExplorer.ts';
 import type { ItemLookup, CompatibilityMap, TraderLevels } from './types.ts';
 import type { OptimizeRequest, ExploreRequest, OptimizeResponse, ExploreResponse, ExplorePoint } from '../api/client.ts';
-import { Mutex } from 'async-mutex';
-
-const workerMutex = new Mutex();
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type RawItem = Record<string, any>;
@@ -59,13 +56,12 @@ interface WorkerMessage {
 }
 
 self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-  await workerMutex.runExclusive(async () => {
-    const { type, id, payload } = event.data;
-    const lang = payload.lang ?? 'en';
-    const gameMode = payload.gameMode ?? 'regular';
+  const { type, id, payload } = event.data;
+  const lang = payload.lang ?? 'en';
+  const gameMode = payload.gameMode ?? 'regular';
 
-    try {
-      switch (type) {
+  try {
+    switch (type) {
         case 'loadData': {
           await getOrLoadData(lang, gameMode);
           self.postMessage({ type: 'dataLoaded', id, payload: null });
@@ -140,6 +136,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             playerLevel: req.player_level,
+            preciseMode: req.precise_mode ?? false,
           });
 
           self.postMessage({ type: 'result', id, payload: result });
@@ -172,6 +169,7 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             playerLevel: req.player_level,
+            preciseMode: req.precise_mode ?? false,
           });
 
           const result: ExploreResponse = {
@@ -245,9 +243,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         default:
           self.postMessage({ type: 'error', id, payload: `Unknown message type: ${type}` });
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : String(error);
-      self.postMessage({ type: 'error', id, payload: msg });
-    }
-  });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    self.postMessage({ type: 'error', id, payload: msg });
+  }
 };
