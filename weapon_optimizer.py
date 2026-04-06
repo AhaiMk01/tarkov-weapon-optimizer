@@ -186,11 +186,21 @@ def fetch_all_data(lang="en", game_mode="regular"):
 
 
 def has_valid_price(item):
-    """Check if an item has at least one valid buyFor offer with price > 0."""
+    """Check if an item has at least one valid buyFor offer, or a BSG reference price.
+
+    Matches the TypeScript frontend's hasValidPrice: includes mods with
+    basePrice or avg24hPrice even if they have no buyFor offers (these are
+    marked as non-purchasable but still participate in the solver model).
+    """
     buy_for = item.get("buyFor", []) or []
     for offer in buy_for:
         if isinstance(offer, dict) and (offer.get("priceRUB") or 0) > 0:
             return True
+    # Include mods with a BSG reference price (non-purchasable)
+    if (item.get("avg24hPrice") or 0) > 0:
+        return True
+    if (item.get("basePrice") or 0) > 0:
+        return True
     return False
 
 
@@ -745,7 +755,11 @@ def build_compatibility_map(weapon_id, item_lookup):
     }
 
 
-def calculate_total_stats(weapon_stats, selected_mods, item_lookup):
+def calculate_total_stats(weapon_stats, selected_mods, item_lookup,
+                          bought_items=None, selected_preset=None,
+                          weapon_entry=None, fallback_base=None,
+                          trader_levels=None, flea_available=True,
+                          player_level=None):
     """
     Calculate total weapon stats with selected mods.
 
@@ -753,10 +767,12 @@ def calculate_total_stats(weapon_stats, selected_mods, item_lookup):
     - Ergonomics: naked + sum(mod ergonomics)  [flat addition]
     - Recoil: naked * (1 + sum(mod recoil_modifiers))  [percentage]
     - Weight: naked + sum(mod weights)  [flat addition]
+    - Price: base price + sum(individually purchased mod prices)
+             When bought_items is provided, only those mods count toward
+             the price (matching the TS frontend's buy-variable approach).
     """
     total_ergo = weapon_stats["naked_ergonomics"]
     total_recoil_mod = 0.0
-    total_price = 0
     total_weight = weapon_stats.get("weight", 0)  # Include base weapon weight
 
     for mod_id in selected_mods:
@@ -764,8 +780,47 @@ def calculate_total_stats(weapon_stats, selected_mods, item_lookup):
             stats = item_lookup[mod_id]["stats"]
             total_ergo += stats.get("ergonomics", 0)
             total_recoil_mod += stats.get("recoil_modifier", 0)
-            total_price += stats.get("price", 0)
             total_weight += stats.get("weight", 0)
+
+    # Price: use buy variables when available (matches TS solver.ts)
+    if bought_items is not None:
+        buy_price = 0
+        for mod_id in bought_items:
+            if mod_id in item_lookup and item_lookup[mod_id].get("type") == "mod":
+                stats = item_lookup[mod_id]["stats"]
+                price, _, _ = get_available_price(
+                    stats, trader_levels or DEFAULT_TRADER_LEVELS,
+                    flea_available, player_level,
+                )
+                buy_price += price
+
+        # Base price (naked gun or preset)
+        base_price = 0
+        if selected_preset and weapon_entry:
+            is_fallback = fallback_base and fallback_base.get("type") == "preset"
+            if not is_fallback:
+                preset = next(
+                    (p for p in weapon_entry.get("all_presets", [])
+                     if p["id"] == selected_preset), None
+                )
+                if preset:
+                    p, _, _ = get_available_price(
+                        preset, trader_levels or DEFAULT_TRADER_LEVELS,
+                        flea_available, player_level,
+                    )
+                    base_price = p
+        else:
+            naked_price = weapon_stats.get("price", 0)
+            if naked_price < 100_000_000:
+                base_price = naked_price
+
+        total_price = base_price + buy_price
+    else:
+        # Legacy fallback: sum all mod prices (no buy/preset distinction)
+        total_price = sum(
+            item_lookup[m]["stats"].get("price", 0)
+            for m in selected_mods if m in item_lookup
+        )
 
     # Apply recoil modifier to naked recoil
     recoil_multiplier = 1 + total_recoil_mod
@@ -773,7 +828,7 @@ def calculate_total_stats(weapon_stats, selected_mods, item_lookup):
     final_recoil_h = weapon_stats["naked_recoil_h"] * recoil_multiplier
 
     return {
-        "ergonomics": total_ergo,
+        "ergonomics": max(0, min(100, total_ergo)),
         "recoil_vertical": final_recoil_v,
         "recoil_horizontal": final_recoil_h,
         "recoil_multiplier": recoil_multiplier,
@@ -827,11 +882,24 @@ def explore_pareto(
     Returns:
         List of dicts with keys: ergo, recoil_pct, recoil_v, recoil_h, price, ...
     """
-    weapon_stats = item_lookup[weapon_id]["stats"]
+    weapon_entry = item_lookup[weapon_id]
+    weapon_stats = weapon_entry["stats"]
     naked_recoil_v = weapon_stats.get("naked_recoil_v", 100)
 
     logger.info(f"Exploring Pareto frontier (ignore={ignore}, steps={steps})")
     frontier = []
+
+    def _calc_stats(result):
+        return calculate_total_stats(
+            weapon_stats, result["selected_items"], item_lookup,
+            bought_items=result.get("bought_items"),
+            selected_preset=result.get("selected_preset"),
+            weapon_entry=weapon_entry,
+            fallback_base=result.get("fallback_base"),
+            trader_levels=trader_levels,
+            flea_available=flea_available,
+            player_level=player_level,
+        )
 
     # Common kwargs for all constraints
     constraint_kwargs = {
@@ -869,11 +937,11 @@ def explore_pareto(
         if result_low["status"] == "infeasible":
             return []
 
-        stats_low = calculate_total_stats(weapon_stats, result_low["selected_items"], item_lookup)
+        stats_low = _calc_stats(result_low)
         range_min = int(stats_low["ergonomics"])
 
         if result_high["status"] != "infeasible":
-            stats_high = calculate_total_stats(weapon_stats, result_high["selected_items"], item_lookup)
+            stats_high = _calc_stats(result_high)
             range_max = int(stats_high["ergonomics"])
         else:
             range_max = 100
@@ -898,7 +966,7 @@ def explore_pareto(
                 **RECOIL_WEIGHTS, **constraint_kwargs
             )
             if result["status"] != "infeasible":
-                stats = calculate_total_stats(weapon_stats, result["selected_items"], item_lookup)
+                stats = _calc_stats(result)
                 frontier.append(_build_frontier_point(stats, result))
 
     elif ignore == "recoil":
@@ -918,11 +986,11 @@ def explore_pareto(
         if result_low["status"] == "infeasible":
             return []
 
-        stats_low = calculate_total_stats(weapon_stats, result_low["selected_items"], item_lookup)
+        stats_low = _calc_stats(result_low)
         range_min = int(stats_low["ergonomics"])
 
         if result_high["status"] != "infeasible":
-            stats_high = calculate_total_stats(weapon_stats, result_high["selected_items"], item_lookup)
+            stats_high = _calc_stats(result_high)
             range_max = int(stats_high["ergonomics"])
         else:
             range_max = 100
@@ -947,7 +1015,7 @@ def explore_pareto(
                 **PRICE_WEIGHTS, **constraint_kwargs
             )
             if result["status"] != "infeasible":
-                stats = calculate_total_stats(weapon_stats, result["selected_items"], item_lookup)
+                stats = _calc_stats(result)
                 frontier.append(_build_frontier_point(stats, result))
 
     elif ignore == "ergo":
@@ -967,11 +1035,11 @@ def explore_pareto(
         if result_low["status"] == "infeasible":
             return []
 
-        stats_low = calculate_total_stats(weapon_stats, result_low["selected_items"], item_lookup)
+        stats_low = _calc_stats(result_low)
         range_min = stats_low["recoil_vertical"]
 
         if result_high["status"] != "infeasible":
-            stats_high = calculate_total_stats(weapon_stats, result_high["selected_items"], item_lookup)
+            stats_high = _calc_stats(result_high)
             range_max = stats_high["recoil_vertical"]
         else:
             range_max = naked_recoil_v
@@ -993,7 +1061,7 @@ def explore_pareto(
                 **PRICE_WEIGHTS, **constraint_kwargs
             )
             if result["status"] != "infeasible":
-                stats = calculate_total_stats(weapon_stats, result["selected_items"], item_lookup)
+                stats = _calc_stats(result)
                 frontier.append(_build_frontier_point(stats, result))
 
     # Remove duplicates while preserving order
@@ -1152,6 +1220,13 @@ def optimize_weapon(
     if trader_levels is None:
         trader_levels = DEFAULT_TRADER_LEVELS
 
+    # Tiny tiebreaker so no dimension is completely ignored — matches the
+    # TypeScript frontend (TIEBREAK = 0.01 in lpBuilder.ts).
+    TIEBREAK = 0.01
+    ergo_weight = max(ergo_weight, TIEBREAK)
+    recoil_weight = max(recoil_weight, TIEBREAK)
+    price_weight = max(price_weight, TIEBREAK)
+
     weapon = item_lookup[weapon_id]
     weapon_name = weapon["data"].get("name", weapon_id)
     logger.info(f"Starting optimization for {weapon_name}")
@@ -1254,7 +1329,14 @@ def optimize_weapon(
             price = 0
             is_available = False
 
-        if not is_available and not in_preset:
+        # Non-purchasable mods (no buyFor offers but have basePrice/avg24hPrice)
+        # stay in the model — they can be freely selected (matching the TS frontend).
+        # A large stand-in price is added to the objective so the solver avoids them
+        # when price matters, but they remain available for builds that ignore price.
+        is_fir_mod = (item_lookup[item_id]["type"] == "mod"
+                      and not is_available and len(stats.get("offers", [])) == 0)
+
+        if not is_available and not in_preset and not is_fir_mod:
             continue
 
         available_items[item_id] = reachable[item_id]
@@ -1277,7 +1359,7 @@ def optimize_weapon(
     # Create base selection variables (naked gun OR one preset)
     base_vars = {}
     naked_gun_price_raw = weapon["stats"].get("price", 0)
-    naked_gun_purchasable = naked_gun_price_raw < 100_000_000
+    naked_gun_purchasable = naked_gun_price_raw > 0 and naked_gun_price_raw < 100_000_000
     fallback_base = None  # Track if we're using a fallback base with price=0
 
     if naked_gun_purchasable:
@@ -1353,11 +1435,20 @@ def optimize_weapon(
                              if pid in base_vars]
 
         if not is_individually_available:
-            if containing_presets:
+            # Non-purchasable mods without offers (FiR items) can be freely
+            # selected — matching the TS frontend which skips the availability
+            # constraint for these items.  Check FiR BEFORE preset membership,
+            # because a FiR mod that happens to be in a preset should still be
+            # freely selectable (not restricted to preset-only).
+            is_fir = (item_lookup[item_id]["type"] == "mod"
+                      and len(item_lookup[item_id]["stats"].get("offers", [])) == 0)
+            if is_fir:
+                pass  # Freely selectable
+            elif containing_presets:
                 # Only available via preset - x[i] <= sum of containing preset vars
                 model.Add(x[item_id] <= sum(containing_presets))
             else:
-                # Not available at all (shouldn't happen due to earlier filtering)
+                # Not available at all
                 model.Add(x[item_id] == 0)
 
     # Create buy[i] = "we pay for item i individually" variables
@@ -1414,9 +1505,14 @@ def optimize_weapon(
                 model.Add(0 == 1)
 
     # Constraint: Availability (Item <= Presets if not individually available)
+    # FiR mods (non-purchasable, no offers) are freely selectable — skip constraint.
     for item_id, var in item_vars.items():
         is_avail = item_prices[item_id][2]
         if not is_avail:
+            is_fir = (item_lookup[item_id]["type"] == "mod"
+                      and len(item_lookup[item_id]["stats"].get("offers", [])) == 0)
+            if is_fir:
+                continue  # Freely selectable
             containing = [preset_vars[pid] for pid in item_to_presets.get(item_id, []) if pid in preset_vars]
             if containing:
                 model.Add(var <= sum(containing))
@@ -1629,15 +1725,16 @@ def optimize_weapon(
     total_ergo_scaled_var = model.NewIntVar(-2000, 3000, "total_ergo_scaled")
     model.Add(total_ergo_scaled_var == weapon_naked_ergo * ERGO_SCALE + sum(ergo_terms))
 
-    # Convert back to regular ergo for constraints
+    # Convert back to regular ergo for constraints (integer — used for minErgonomics)
     total_ergo_var = model.NewIntVar(-200, 300, "total_ergo")
     model.AddDivisionEquality(total_ergo_var, total_ergo_scaled_var, ERGO_SCALE)
 
-    # Capped ergo for objective (game caps at 0-100)
-    ergo_capped_at_100 = model.NewIntVar(-200, 100, "ergo_capped_at_100")
-    model.AddMinEquality(ergo_capped_at_100, [total_ergo_var, model.NewConstant(100)])
-    capped_ergo_var = model.NewIntVar(0, 100, "capped_ergo")
-    model.AddMaxEquality(capped_ergo_var, [ergo_capped_at_100, model.NewConstant(0)])
+    # Capped ergo in SCALED units for objective (matches TS capped_ergo in [0, 1000])
+    # Using scaled units avoids integer division truncation that loses 0.x ergo precision.
+    ergo_capped_at_1000 = model.NewIntVar(-2000, 1000, "ergo_capped_at_1000")
+    model.AddMinEquality(ergo_capped_at_1000, [total_ergo_scaled_var, model.NewConstant(100 * ERGO_SCALE)])
+    capped_ergo_scaled_var = model.NewIntVar(0, 1000, "capped_ergo_scaled")
+    model.AddMaxEquality(capped_ergo_scaled_var, [ergo_capped_at_1000, model.NewConstant(0)])
 
     # === RECOIL VARIABLE ===
     recoil_terms = []
@@ -1741,37 +1838,65 @@ def optimize_weapon(
     objective_terms = []
 
     # === COMBINED WEIGHTED OBJECTIVE ===
-    # Ergonomics: higher is better (use capped value)
-    objective_terms.append(int(ergo_weight * SCALE) * capped_ergo_var)
+    # Coefficients match the TS LP builder (up to a constant factor).
+    # TS uses raw weights (no SCALE pre-multiplication) to keep HiGHS
+    # coefficients small.  CP-SAT needs integers, so we use int(w * SCALE)
+    # which is 1000× the TS coefficient — a constant factor that doesn't
+    # affect the optimum.
+    # CP-SAT needs integer coefficients, so we scale by SCALE (1000) more
+    # than the TS LP builder to keep tiebreaker weights (0.01) non-zero.
+    # The extra ×SCALE is a constant factor that doesn't change the optimum.
+    #   PY ergo:   ew * SCALE * SCALE                * capped_ergo_scaled
+    #   PY recoil: rw * SCALE * SCALE * ERGO_SCALE   * total_recoil
+    #   PY price:  pw * SCALE * ERGO_SCALE            * item_price
+    #   Parsimony: -1 per selected item
+    ergo_obj_coeff = int(ergo_weight * SCALE * SCALE)  # ew * 1,000,000
+    objective_terms.append(ergo_obj_coeff * capped_ergo_scaled_var)
 
     # Recoil: more negative is better (negate to maximize reduction)
-    objective_terms.append(int(-recoil_weight * SCALE) * total_recoil_var)
+    recoil_obj_coeff = int(-recoil_weight * SCALE * SCALE * ERGO_SCALE)  # -rw * 10,000,000
+    objective_terms.append(recoil_obj_coeff * total_recoil_var)
+
+    # Parsimony: -1 per selected item (matches TS's `combined = recoilCoeff - 1`)
+    for item_id in available_items:
+        if item_id in item_vars:
+            objective_terms.append(-1 * item_vars[item_id])
 
     # Price: lower is better (subtract from objective)
     # Uses the new model: base cost + buy[i] for individual items
-    if price_weight > 0:
+    pw_obj = int(round(price_weight * SCALE * ERGO_SCALE))  # pw * 10,000
+    if pw_obj > 0:
         # Base cost (naked gun or preset)
         # Use fallback price=0 if we're in fallback mode
         if fallback_base and fallback_base["type"] == "naked":
             naked_gun_price = 0  # Fallback naked gun has price=0
         else:
             naked_gun_price = int(weapon["stats"].get("price", 0))
-        if "naked" in base_vars:
-            objective_terms.append(int(-price_weight * naked_gun_price) * base_vars["naked"])
+        if "naked" in base_vars and naked_gun_price > 0:
+            objective_terms.append(-pw_obj * naked_gun_price * base_vars["naked"])
 
         for pid in preset_prices_map:
             if pid in base_vars:
                 p_price = int(preset_prices_map.get(pid, 0))
                 if p_price > 0:
-                    objective_terms.append(int(-price_weight * p_price) * base_vars[pid])
+                    objective_terms.append(-pw_obj * p_price * base_vars[pid])
 
         # Individual item costs (only pay if not covered by preset)
+        # Non-purchasable mods get a 50M RUB stand-in (matches TS frontend's
+        # UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB) so the solver avoids them
+        # when price matters but still considers them for non-price objectives.
+        UNPURCHASABLE_STAND_IN = 50_000_000
         for item_id in available_items:
             if item_id not in buy:
                 continue
             item_price = int(item_prices.get(item_id, (0, None))[0])
+            if item_price <= 0:
+                # Use stand-in for non-purchasable mods
+                stats_i = item_lookup[item_id]["stats"]
+                if len(stats_i.get("offers", [])) == 0:
+                    item_price = UNPURCHASABLE_STAND_IN
             if item_price > 0:
-                objective_terms.append(int(-price_weight * item_price) * buy[item_id])
+                objective_terms.append(-pw_obj * item_price * buy[item_id])
 
     model.Maximize(sum(objective_terms))
 
@@ -1793,6 +1918,12 @@ def optimize_weapon(
             if solver.Value(var) == 1:
                 selected.append(item_id)
 
+        # Get individually purchased items (buy[i] = 1)
+        bought = []
+        for item_id, var in buy.items():
+            if solver.Value(var) == 1:
+                bought.append(item_id)
+
         # Check which base was selected (naked or preset)
         selected_preset = None
         selected_base = None
@@ -1812,6 +1943,7 @@ def optimize_weapon(
         return {
             "status": status_str,
             "selected_items": selected,
+            "bought_items": bought,
             "selected_preset": selected_preset,
             "fallback_base": fallback_base,  # Info about fallback base if used (price=0)
             "objective_value": solver.ObjectiveValue(),
