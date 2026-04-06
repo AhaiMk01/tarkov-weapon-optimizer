@@ -50,6 +50,10 @@ export interface ModStats {
   recoil_modifier: number;
   accuracy_modifier: number;
   offers: OfferInfo[];
+  /** False when API has no buyFor prices (barter-only / unlisted); build may still use x_i=1 (FiR) with buy_i=0 */
+  purchasable: boolean;
+  /** BSG base / avg24h when not purchasable — display reference only, not used in spend constraints */
+  reference_price_rub?: number;
   price: number;
   price_source: string;
   weight: number;
@@ -60,6 +64,10 @@ export interface ModStats {
   sighting_range: number;
   category: string;
   category_id: string;
+  /** BSG `bsgCategory.normalizedName` (e.g. `auxiliary-mod`). */
+  category_normalized?: string;
+  /** Child category ids under `bsgCategory` in the handbook tree (when non-empty, this node is not a taxonomy leaf). */
+  category_child_ids?: string[];
 }
 
 // --- Slot Info ---

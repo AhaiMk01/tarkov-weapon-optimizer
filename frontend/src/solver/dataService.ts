@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 7;
+const CACHE_VERSION = 10;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -241,6 +241,10 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
     bsgCategory {
       id
       name
+      normalizedName
+      children {
+        id
+      }
     }
   }
 }
@@ -350,6 +354,11 @@ function hasValidPrice(item: RawItem): boolean {
       return true;
     }
   }
+  // Include mods listed in API without buyFor when they have a BSG reference price (still not "purchasable")
+  const ap = item.avg24hPrice;
+  const bp = item.basePrice;
+  if (typeof ap === 'number' && ap > 0) return true;
+  if (typeof bp === 'number' && bp > 0) return true;
   return false;
 }
 
@@ -474,20 +483,11 @@ function extractGunStats(gun: RawItem): GunStats {
   }
 
   if (lowestPrice === 0) {
-    const presetsData = props.presets ?? [];
-    let hasPreset = false;
-    for (const preset of presetsData) {
-      if (typeof preset !== 'object' || !preset) continue;
-      const presetBuyFor = preset.buyFor ?? [];
-      const presetTraderOffers = presetBuyFor.filter(
-        (offer: RawItem) => typeof offer === 'object' && offer?.source !== 'fleaMarket'
-      );
-      if (presetTraderOffers.length) { hasPreset = true; break; }
-    }
-    if (hasPreset || !presetsData.length) {
-      lowestPrice = 999999999;
-      priceSource = 'not_available';
-    }
+    // No direct trader offers for naked gun — mark as not purchasable.
+    // Matches Python extract_gun_stats: naked gun is only purchasable via
+    // direct trader offers; flea-only guns must use preset bases instead.
+    lowestPrice = 999999999;
+    priceSource = 'not_available';
   }
 
   const defaultPreset = props.defaultPreset ?? {};
@@ -567,16 +567,26 @@ function extractModStats(mod: RawItem): ModStats {
     });
   }
   offers.sort((a, b) => a.price - b.price);
-  if (offers.length) {
+  const purchasable = offers.length > 0;
+  if (purchasable) {
     lowestPrice = offers[0].price;
     priceSource = offers[0].source;
+  } else {
+    lowestPrice = 0;
+    priceSource = 'not_purchasable';
   }
+
+  const refAp = typeof mod.avg24hPrice === 'number' && mod.avg24hPrice > 0 ? mod.avg24hPrice : 0;
+  const refBp = typeof mod.basePrice === 'number' && mod.basePrice > 0 ? mod.basePrice : 0;
+  const referencePriceRub = refAp || refBp || undefined;
 
   return {
     ergonomics: ergo,
     recoil_modifier: recoilMod,
     accuracy_modifier: mod.accuracyModifier ?? 0,
     offers,
+    purchasable,
+    reference_price_rub: !purchasable ? referencePriceRub : undefined,
     price: lowestPrice,
     price_source: priceSource,
     weight: mod.weight ?? 0,
@@ -587,6 +597,10 @@ function extractModStats(mod: RawItem): ModStats {
     sighting_range: props.sightingRange ?? 0,
     category: mod.bsgCategory?.name ?? '',
     category_id: mod.bsgCategory?.id ?? '',
+    category_normalized: mod.bsgCategory?.normalizedName ?? '',
+    category_child_ids: (mod.bsgCategory?.children ?? [])
+      .map((c: { id?: string }) => c.id)
+      .filter((id: string | undefined): id is string => Boolean(id)),
   };
 }
 
@@ -619,11 +633,21 @@ export function buildItemLookup(guns: RawItem[], mods: RawItem[]): ItemLookup {
 // --- Price Availability ---
 
 export function getAvailablePrice(
-  stats: { offers?: OfferInfo[]; price?: number; price_source?: string; min_level_flea?: number },
+  stats: {
+    purchasable?: boolean;
+    offers?: OfferInfo[];
+    price?: number;
+    price_source?: string;
+    min_level_flea?: number;
+  },
   traderLevels: TraderLevels = DEFAULT_TRADER_LEVELS,
   fleaAvailable = true,
   playerLevel: number | null = null,
-): [number, string | null, boolean] {
+): [number, string | null, boolean, string | null] {
+  if (stats.purchasable === false) {
+    return [0, 'not_purchasable', false, null];
+  }
+
   const minLevelFlea = stats.min_level_flea ?? 0;
   const offers = stats.offers;
 
@@ -631,15 +655,16 @@ export function getAvailablePrice(
     const defaultPrice = stats.price ?? 0;
     if (defaultPrice > 0 && fleaAvailable) {
       if (playerLevel !== null && minLevelFlea > playerLevel) {
-        return [0, null, false];
+        return [0, null, false, null];
       }
-      return [defaultPrice, stats.price_source ?? 'market', true];
+      return [defaultPrice, stats.price_source ?? 'market', true, null];
     }
-    return [0, null, false];
+    return [0, null, false, null];
   }
 
   let bestPrice: number | null = null;
   let bestSource: string | null = null;
+  let bestLabel: string | null = null;
 
   for (const offer of offers) {
     const price = offer.price;
@@ -658,13 +683,17 @@ export function getAvailablePrice(
     if (bestPrice === null || price < bestPrice) {
       bestPrice = price;
       bestSource = source;
+      bestLabel =
+        source === 'fleaMarket'
+          ? 'Flea Market'
+          : (offer.vendor_name || offer.vendor_normalized || source);
     }
   }
 
   if (bestPrice !== null) {
-    return [bestPrice, bestSource, true];
+    return [bestPrice, bestSource, true, bestLabel];
   }
-  return [0, null, false];
+  return [0, null, false, null];
 }
 
 // --- State Cache ---
