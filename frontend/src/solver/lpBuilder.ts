@@ -12,6 +12,7 @@ import type {
   SolveParams,
   GunLookupEntry,
   ModLookupEntry,
+  ModStats,
   PresetInfo,
 } from './types';
 import { getAvailablePrice } from './dataService';
@@ -36,6 +37,9 @@ export interface LPResult {
 const ERGO_SCALE = 10;   // Ergo decimal precision (0.5 ergo → 5)
 const SCALE = 1000;       // Recoil modifier precision (-0.05 → -50)
 
+/** RUB cost in objective when mod has no buyFor (scaled by price weight). Not counted toward maxPrice. */
+const UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB = 50_000_000;
+
 // ---------------------------------------------------------------------------
 // buildLP — pure function: SolveParams → LPResult
 // ---------------------------------------------------------------------------
@@ -53,18 +57,21 @@ export function buildLP(params: SolveParams): LPResult {
   const slotItems = cmap.slot_items;
   const slotOwner = cmap.slot_owner;
 
-  // Use provided weights. The Pareto explorer provides its own tiebreakers.
-  // Only guard against all-zero (degenerate objective).
+  // Use provided weights with tiny tiebreakers so no dimension is completely
+  // ignored.  A zero-weight dimension can produce degenerate solutions where
+  // the solver makes arbitrary choices (e.g. price=0 → needlessly expensive).
+  const TIEBREAK = 0.01;
   const ewRaw = params.ergoWeight ?? 1;
   const rwRaw = params.recoilWeight ?? 1;
   const pwRaw = params.priceWeight ?? 0;
-  const ew = (ewRaw === 0 && rwRaw === 0 && pwRaw === 0) ? 1 : ewRaw;
-  const rw = (ewRaw === 0 && rwRaw === 0 && pwRaw === 0) ? 1 : rwRaw;
-  const pw = pwRaw;
+  const ew = Math.max(ewRaw, TIEBREAK);
+  const rw = Math.max(rwRaw, TIEBREAK);
+  const pw = Math.max(pwRaw, TIEBREAK);
 
   // Exclusion sets from params
   const excludeItemSet = new Set(params.excludeItems ?? []);
   const excludeCatSet = new Set(params.excludeCategories ?? []);
+  const includeItemSet = new Set(params.includeItems ?? []);
 
   // ========================================================================
   // 1. Build preset maps (mirrors CP-SAT)
@@ -113,15 +120,25 @@ export function buildLP(params: SolveParams): LPResult {
       if (catId && excludeCatSet.has(catId)) continue;
     }
 
-    const [price, source, isAvail] = getAvailablePrice(
-      stats,
-      params.traderLevels ?? undefined,
-      params.fleaAvailable ?? true,
-      params.playerLevel ?? null,
-    );
+    let price: number;
+    let source: string | null;
+    let canBuyAtSettings: boolean;
+    if (entry.type === 'mod' && !(stats as ModStats).purchasable) {
+      price = 0;
+      source = 'not_purchasable';
+      canBuyAtSettings = false;
+    } else {
+      [price, source, canBuyAtSettings] = getAvailablePrice(
+        stats,
+        params.traderLevels ?? undefined,
+        params.fleaAvailable ?? true,
+        params.playerLevel ?? null,
+      );
+    }
 
     const inPreset = itemId in itemToPresets;
     const defaultPrice = stats.price ?? 0;
+    const isFiRMod = entry.type === 'mod' && !(stats as ModStats).purchasable;
 
     // Items >100M price can only come via preset
     if (defaultPrice > 100_000_000) {
@@ -131,10 +148,13 @@ export function buildLP(params: SolveParams): LPResult {
       continue;
     }
 
-    if (!isAvail && !inPreset) continue;
+    // User-required mods stay in the model even when not purchasable at current trader/flea settings
+    // (connectivity + buy variables still apply; avoids silently dropping x_i = 1 constraints).
+    const userMustInclude = includeItemSet.has(itemId);
+    if (!canBuyAtSettings && !inPreset && !isFiRMod && !userMustInclude) continue;
 
     availableItems[itemId] = true;
-    itemPrices[itemId] = [price, source, isAvail];
+    itemPrices[itemId] = [price, source, canBuyAtSettings];
   }
 
   // ========================================================================
@@ -178,7 +198,7 @@ export function buildLP(params: SolveParams): LPResult {
   const baseIsNaked: number[] = [];
 
   const nakedGunPriceRaw = weaponStats.price ?? 0;
-  const nakedGunPurchasable = nakedGunPriceRaw < 100_000_000;
+  const nakedGunPurchasable = nakedGunPriceRaw > 0 && nakedGunPriceRaw < 100_000_000;
   if (nakedGunPurchasable) {
     baseIds.push('naked');
     basePrices.push(nakedGunPriceRaw);
@@ -237,7 +257,8 @@ export function buildLP(params: SolveParams): LPResult {
 
   const item_ergo: number[] = [0];
   const item_recoil: number[] = [0];
-  const item_price: number[] = [0];
+  const item_price_budget: number[] = [0]; // real spend / maxPrice cap only
+  const item_price_objective: number[] = [0]; // includes large stand-in for unpurchasable mods
   const item_available: number[] = [0];
   const item_weight_g: number[] = [0]; // weight in grams for weight constraint
   const item_capacity: number[] = [0]; // magazine capacity
@@ -252,7 +273,15 @@ export function buildLP(params: SolveParams): LPResult {
       const ms = stats as import('./types').ModStats;
       item_ergo.push(Math.round(ms.ergonomics * ERGO_SCALE));
       item_recoil.push(Math.round(ms.recoil_modifier * SCALE));
-      item_price.push(Math.round(itemPrices[iid]?.[0] ?? 0));
+      const listedRub = Math.round(itemPrices[iid]?.[0] ?? 0);
+      if (ms.purchasable) {
+        item_price_budget.push(listedRub);
+        item_price_objective.push(listedRub);
+      } else {
+        item_price_budget.push(0);
+        const ref = ms.reference_price_rub ?? 0;
+        item_price_objective.push(Math.round(Math.max(ref, UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB)));
+      }
       item_available.push(itemPrices[iid]?.[2] ? 1 : 0);
       item_weight_g.push(Math.round((ms.weight ?? 0) * 1000));
       item_capacity.push(ms.capacity ?? 0);
@@ -260,7 +289,8 @@ export function buildLP(params: SolveParams): LPResult {
     } else {
       item_ergo.push(0);
       item_recoil.push(0);
-      item_price.push(0);
+      item_price_budget.push(0);
+      item_price_objective.push(0);
       item_available.push(0);
       item_weight_g.push(0);
       item_capacity.push(0);
@@ -367,7 +397,9 @@ export function buildLP(params: SolveParams): LPResult {
     const s = slot_of_member[m];
     const i = item_of_member[m];
     if (!slotToItemIndices.has(s)) slotToItemIndices.set(s, []);
-    slotToItemIndices.get(s)!.push(i);
+    const slotItemsArr = slotToItemIndices.get(s)!;
+    // HiGHS rejects duplicate columns in one row; cmap may list the same item twice per slot.
+    if (!slotItemsArr.includes(i)) slotItemsArr.push(i);
     if (!itemToSlotIndices.has(i)) itemToSlotIndices.set(i, []);
     if (!itemToSlotIndices.get(i)!.includes(s)) itemToSlotIndices.get(i)!.push(s);
   }
@@ -420,9 +452,19 @@ export function buildLP(params: SolveParams): LPResult {
   // 11. Objective weights
   // ========================================================================
 
-  const ergo_w = Math.round(ew * SCALE);            // e.g., 1000 for ew=1
-  const rw_scaled = Math.round(rw * SCALE);          // e.g., 1000 for rw=1
-  const pw_obj = Math.round(pw * SCALE * ERGO_SCALE); // e.g., 10000 for pw=1
+  // Objective weight coefficients.
+  // The original formulation multiplied weights by SCALE (1000) to make
+  // tiebreaker 0.01 into integer 10 — needed for CP-SAT but not for HiGHS.
+  // Dividing all coefficients uniformly by SCALE keeps the same ratios
+  // while capping magnitudes at ~10^8 instead of ~10^11.
+  //
+  // Resulting coefficient magnitudes (for weight=100, max item_recoil≈210):
+  //   ergo:   ew * SCALE * capped_ergo                ≈ 100 * 1000 * 1000  = 10^8
+  //   recoil: rw * SCALE * ERGO_SCALE * item_recoil   ≈ 100 * 10000 * 210  = 2×10^8
+  //   price:  pw * ERGO_SCALE * item_price             ≈ 100 * 10 * 100000  = 10^8
+  const ergo_w = ew;                                   // raw weight (0–100)
+  const rw_obj = rw * SCALE * ERGO_SCALE;              // rw * 10,000
+  const pw_obj = pw * ERGO_SCALE;                      // pw * 10
 
   const weapon_naked_ergo_scaled = Math.round(weaponStats.naked_ergonomics * ERGO_SCALE);
   const nakedRecoilV = weaponStats.naked_recoil_v;
@@ -440,28 +482,26 @@ export function buildLP(params: SolveParams): LPResult {
   // ------ OBJECTIVE ------
   L('Maximize');
 
-  // Build objective terms
   const objTerms: string[] = [];
 
-  // Ergo term: ergo_w * SCALE * capped_ergo (skip if zero)
+  // Ergo term: ew * SCALE * capped_ergo
   const ergoObjCoeff = ergo_w * SCALE;
   if (ergoObjCoeff !== 0) {
     objTerms.push(`${ergoObjCoeff} capped_ergo`);
   }
 
-  // Recoil terms per item: (-rw_scaled) * SCALE * ERGO_SCALE * item_recoil[i] * x_i
-  // = -rw_scaled * SCALE * ERGO_SCALE * item_recoil[i]
-  // item_recoil is negative for recoil reduction, so the overall coefficient becomes positive
+  // Recoil + parsimony terms per item.  Parsimony (-1 per selected item) is
+  // merged into the recoil coefficient so that each x_i appears only once —
+  // HiGHS's CPLEX LP reader rejects duplicate variables in a constraint row.
   for (let i = 1; i <= n_items; i++) {
-    const recoilCoeff = -rw_scaled * SCALE * ERGO_SCALE * item_recoil[i];
-    if (recoilCoeff !== 0) {
-      objTerms.push(`${recoilCoeff} x_${i}`);
-    }
+    const recoilCoeff = -rw_obj * item_recoil[i];
+    const combined = recoilCoeff - 1; // parsimony penalty
+    objTerms.push(`${combined} x_${i}`);
   }
 
-  // Price terms for buy variables: (-pw_obj) * item_price[i] * buy_i
+  // Price terms for buy variables: (-pw_obj) * item_price_objective[i] * buy_i
   for (let i = 1; i <= n_items; i++) {
-    const priceCoeff = -pw_obj * item_price[i];
+    const priceCoeff = -pw_obj * item_price_objective[i];
     if (priceCoeff !== 0) {
       objTerms.push(`${priceCoeff} buy_${i}`);
     }
@@ -473,11 +513,6 @@ export function buildLP(params: SolveParams): LPResult {
     if (priceCoeff !== 0) {
       objTerms.push(`${priceCoeff} base_${b + 1}`);
     }
-  }
-
-  // Parsimony: small penalty per selected item to prefer simpler builds
-  for (let i = 1; i <= n_items; i++) {
-    objTerms.push(`-1 x_${i}`);
   }
 
   // HiGHS WASM has issues parsing long objective lines. Use an auxiliary
@@ -594,16 +629,19 @@ export function buildLP(params: SolveParams): LPResult {
     L(`  conf_${c}: x_${conflict_a[c]} + x_${conflict_b[c]} <= 1`);
   }
 
-  // --- 6. Item availability: preset-only items ---
+  // --- 6. Item availability: preset-only items; FiR-only mods (no API buy path) skip x_i=0 ---
   for (let i = 1; i <= n_items; i++) {
-    if (item_available[i] === 0) {
-      const presetBases = itemToPresetBases.get(i);
-      if (presetBases && presetBases.length > 0) {
-        const expr = presetBases.map(b => `base_${b}`).join(' + ');
-        L(`  avail_${i}: x_${i} - ${expr} <= 0`);
-      } else {
-        L(`  avail_${i}: x_${i} = 0`);
-      }
+    const iid = indexToItem[i];
+    const entry = itemLookup[iid];
+    const fiR = entry.type === 'mod' && !(entry.stats as ModStats).purchasable;
+
+    if (item_available[i] === 1) continue;
+    const presetBases = itemToPresetBases.get(i);
+    if (presetBases && presetBases.length > 0) {
+      const expr = presetBases.map(b => `base_${b}`).join(' + ');
+      L(`  avail_${i}: x_${i} - ${expr} <= 0`);
+    } else if (!fiR) {
+      L(`  avail_${i}: x_${i} = 0`);
     }
   }
 
@@ -622,7 +660,7 @@ export function buildLP(params: SolveParams): LPResult {
       const presetSum = presetBases.map(b => `base_${b}`).join(' + ');
       L(`  buy_ge_${i}: buy_${i} - x_${i} + ${presetSum} >= 0`);
     } else {
-      // Not in any preset — buy = x
+      // Not in any preset — buy = x (unpurchasable mods use stand-in objective price only)
       L(`  buy_eq_${i}: buy_${i} - x_${i} = 0`);
     }
   }
@@ -669,8 +707,8 @@ export function buildLP(params: SolveParams): LPResult {
       }
     }
     for (let i = 1; i <= n_items; i++) {
-      if (item_price[i] !== 0) {
-        priceTerms.push(`${item_price[i]} buy_${i}`);
+      if (item_price_budget[i] !== 0) {
+        priceTerms.push(`${item_price_budget[i]} buy_${i}`);
       }
     }
     if (priceTerms.length > 0) {
@@ -768,7 +806,7 @@ export function buildLP(params: SolveParams): LPResult {
     }
   }
 
-  // includeItems: force specific items to be selected
+  // includeItems: force specific items from params (implicit deps are UI-only; see requiredItemDeps + worker)
   if (params.includeItems) {
     for (const iid of params.includeItems) {
       const idx = itemIndex.get(iid);
