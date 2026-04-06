@@ -7,6 +7,26 @@ declare const __BUILD_TIME__: string;
 
 const supportedLngs = ['en', 'ru', 'zh', 'es', 'de', 'fr', 'it', 'ja', 'ko', 'pl', 'pt', 'tr', 'cs', 'hu', 'ro', 'sk'];
 
+const LANG_STORAGE_KEY = 'lang';
+
+/** Prefer `lang`; copy from legacy `i18nextLng` once if present. */
+function migrateLangLocalStorage() {
+  if (typeof window === 'undefined') return;
+  try {
+    if (localStorage.getItem(LANG_STORAGE_KEY)) return;
+    const legacy = localStorage.getItem('i18nextLng');
+    if (!legacy) return;
+    const code = legacy.replace(/^["']|["']$/g, '').split('-')[0];
+    if (supportedLngs.includes(code)) {
+      localStorage.setItem(LANG_STORAGE_KEY, code);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+migrateLangLocalStorage();
+
 i18n
   .use(HttpApi)
   .use(LanguageDetector)
@@ -18,13 +38,14 @@ i18n
     debug: false,
     detection: {
       order: ['localStorage', 'navigator'],
+      lookupLocalStorage: LANG_STORAGE_KEY,
       caches: ['localStorage'],
     },
     interpolation: {
       escapeValue: false,
     },
     backend: {
-      loadPath: `/locales/{{lng}}.json?v=${__BUILD_TIME__}`,
+      loadPath: `${import.meta.env.BASE_URL}locales/{{lng}}.json?v=${__BUILD_TIME__}`,
     },
     react: {
       useSuspense: false,
