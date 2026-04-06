@@ -10,18 +10,19 @@ const { useToken } = theme
 const PRICE_COLUMN = 'minmax(11rem, max-content)'
 const priceCellWrapStyle = { textAlign: 'right' as const, whiteSpace: 'nowrap' as const, justifySelf: 'end' as const }
 
+const base = import.meta.env.BASE_URL || '/'
 const traderIcons: Record<string, { icon: string; name: string }> = {
-  'prapor': { icon: '/traders/prapor.webp', name: 'Prapor' },
-  'therapist': { icon: '/traders/therapist.webp', name: 'Therapist' },
-  'fence': { icon: '/traders/fence.webp', name: 'Fence' },
-  'skier': { icon: '/traders/skier.webp', name: 'Skier' },
-  'peacekeeper': { icon: '/traders/peacekeeper.webp', name: 'Peacekeeper' },
-  'mechanic': { icon: '/traders/mechanic.webp', name: 'Mechanic' },
-  'ragman': { icon: '/traders/ragman.webp', name: 'Ragman' },
-  'jaeger': { icon: '/traders/jaeger.webp', name: 'Jaeger' },
-  'lightkeeper': { icon: '/traders/lightkeeper.webp', name: 'Lightkeeper' },
-  'ref': { icon: '/traders/ref.webp', name: 'Ref' },
-  'fleamarket': { icon: '/traders/flea-market-portrait.png', name: 'Flea Market' },
+  'prapor': { icon: base + 'traders/prapor.webp', name: 'Prapor' },
+  'therapist': { icon: base + 'traders/therapist.webp', name: 'Therapist' },
+  'fence': { icon: base + 'traders/fence.webp', name: 'Fence' },
+  'skier': { icon: base + 'traders/skier.webp', name: 'Skier' },
+  'peacekeeper': { icon: base + 'traders/peacekeeper.webp', name: 'Peacekeeper' },
+  'mechanic': { icon: base + 'traders/mechanic.webp', name: 'Mechanic' },
+  'ragman': { icon: base + 'traders/ragman.webp', name: 'Ragman' },
+  'jaeger': { icon: base + 'traders/jaeger.webp', name: 'Jaeger' },
+  'lightkeeper': { icon: base + 'traders/lightkeeper.webp', name: 'Lightkeeper' },
+  'ref': { icon: base + 'traders/ref.webp', name: 'Ref' },
+  'fleamarket': { icon: base + 'traders/flea-market-portrait.png', name: 'Flea Market' },
 }
 
 export function TraderIcon({ source, unknownLabel, compact }: { source: string | undefined; unknownLabel: string; compact?: boolean }) {
