@@ -1,24 +1,44 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Collapse, Tag, Space, Segmented, Button, Typography } from 'antd'
-import { CopyOutlined } from '@ant-design/icons'
+import { Card, Collapse, Tag, Space, Segmented, Button, Typography, App } from 'antd'
+import { CopyOutlined, ExportOutlined } from '@ant-design/icons'
+import { compressToEncodedURIComponent } from 'lz-string'
 import { ItemRow } from '../ItemRow'
 import type { OptimizeResponse } from '../../api/client'
 
 const { Text } = Typography
+
+const EFTFORGE_URL = 'https://www.eftforge.com'
 
 interface BuildManifestProps {
   result: OptimizeResponse
   compactMode: boolean
   onCompactModeChange: (v: boolean) => void
   onCopy?: () => void
+  weaponId?: string
 }
 
-export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy }: BuildManifestProps) {
+export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy, weaponId }: BuildManifestProps) {
   const { t } = useTranslation()
+  const { message } = App.useApp()
+
+  const handleOpenInEFTForge = () => {
+    if (!weaponId || !result.slot_pairs?.length) return
+    const payload = { v: 1, g: weaponId, p: result.slot_pairs }
+    const code = compressToEncodedURIComponent(JSON.stringify(payload))
+    navigator.clipboard.writeText(code).then(
+      () => message.success(t('ui.eftforge_code_copied', { defaultValue: 'Build code copied — paste it in EFTForge\'s import dialog' })),
+      () => message.error(t('ui.clipboard_failed', { defaultValue: 'Failed to copy to clipboard' })),
+    )
+    window.open(EFTFORGE_URL, '_blank')
+  }
+
   const titleContent = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
       <span style={{ userSelect: 'none' }}>{t('ui.build_manifest')}</span>
       <Space>
+        {weaponId && result.slot_pairs && result.slot_pairs.length > 0 && (
+          <Button size="small" icon={<ExportOutlined />} onClick={handleOpenInEFTForge}>EFTForge</Button>
+        )}
         {onCopy && <Button size="small" icon={<CopyOutlined />} onClick={onCopy}>{t('ui.copy_btn')}</Button>}
         <Segmented
           size="small"

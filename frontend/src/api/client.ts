@@ -94,6 +94,8 @@ export interface OptimizeResponse {
   solve_time_ms?: number;
   precision_request?: SolverPrecisionMode;
   precision_resolved?: 'fast' | 'precise';
+  /** Slot-item pairs [slotId, itemId][] for EFTForge build export */
+  slot_pairs?: [string, string][];
 }
 
 export type GameMode = 'regular' | 'pve';

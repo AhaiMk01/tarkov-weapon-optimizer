@@ -17,13 +17,14 @@ interface OptimizeResultProps {
   onOptimize: () => void
   onCopy: () => void
   disabled: boolean
+  weaponId?: string
 }
 
 function precisionResolvedLabel(t: (k: string, opts?: Record<string, string>) => string, mode: 'fast' | 'precise'): string {
   return mode === 'precise' ? t('sidebar.precise') : t('sidebar.fast')
 }
 
-export function OptimizeResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled }: OptimizeResultProps) {
+export function OptimizeResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled, weaponId }: OptimizeResultProps) {
   const { t } = useTranslation()
   if (!result) {
     return (
@@ -70,7 +71,7 @@ export function OptimizeResult({ result, compactMode, onCompactModeChange, optim
             price={result.final_stats.total_price}
           />
           {result.selected_preset && <UsingPresetCard preset={result.selected_preset} />}
-          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} />
+          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} />
         </>
       )}
     </div>

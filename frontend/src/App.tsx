@@ -602,6 +602,7 @@ function AppContent({
               onOptimize={handleOptimize}
               onCopy={copyBuild}
               disabled={!selectedGunId}
+              weaponId={selectedGunId}
             />
           }
         />
@@ -661,6 +662,7 @@ function AppContent({
               onOptimize={handleGunsmithOptimize}
               onCopy={copyGunsmithBuild}
               disabled={!selectedTask}
+              weaponId={selectedTask?.weapon_id}
             />
           }
         />

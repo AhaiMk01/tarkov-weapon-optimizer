@@ -15,9 +15,10 @@ interface GunsmithResultProps {
   onOptimize: () => void
   onCopy: () => void
   disabled: boolean
+  weaponId?: string
 }
 
-export function GunsmithResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled }: GunsmithResultProps) {
+export function GunsmithResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled, weaponId }: GunsmithResultProps) {
   const { t } = useTranslation()
   if (!result) {
     return (
@@ -50,7 +51,7 @@ export function GunsmithResult({ result, compactMode, onCompactModeChange, optim
             price={result.final_stats.total_price}
           />
           {result.selected_preset && <UsingPresetCard preset={result.selected_preset} />}
-          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} />
+          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} />
         </>
       )}
     </div>

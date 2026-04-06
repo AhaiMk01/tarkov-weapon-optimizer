@@ -199,6 +199,53 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       total_weight: totalWeight,
     };
 
+    // Reconstruct slot-item pairs for EFTForge build export.
+    // For multi-slot items (precise mode), read p_{item}_{slot} placement
+    // variables to get exact slot assignments. For single-slot items, use
+    // BFS with greedy matching.
+    const selectedSet = new Set(selectedIds);
+    // Pre-resolve placement for multi-slot items via p_ variables
+    const itemSlotPlacement = new Map<string, Set<string>>(); // itemId → assigned slotIds
+    for (const itemIdx of lp.multiSlotItemIndices) {
+      const itemId = lp.indexToItem[itemIdx];
+      if (!selectedSet.has(itemId)) continue;
+      const slotIndices = lp.itemToSlotIndices.get(itemIdx);
+      if (!slotIndices) continue;
+      for (const slotIdx of slotIndices) {
+        const pVar = columns[`p_${itemIdx}_${slotIdx}`];
+        if (pVar && pVar.Primal > 0.5) {
+          if (!itemSlotPlacement.has(itemId)) itemSlotPlacement.set(itemId, new Set());
+          itemSlotPlacement.get(itemId)!.add(lp.indexToSlot[slotIdx]);
+        }
+      }
+    }
+    // BFS from weapon root in parent-before-child order
+    const slotPairs: [string, string][] = [];
+    const placedItems = new Set<string>(); // each item ID placed at most once
+    const queue = [lp.weaponId];
+    const visited = new Set<string>();
+    while (queue.length > 0) {
+      const ownerId = queue.shift()!;
+      if (visited.has(ownerId)) continue;
+      visited.add(ownerId);
+      for (const [slotId, owner] of Object.entries(lp.slotOwnerMap)) {
+        if (owner !== ownerId) continue;
+        const candidates = lp.slotItemsMap[slotId];
+        if (!candidates) continue;
+        for (const itemId of candidates) {
+          if (!selectedSet.has(itemId)) continue;
+          if (placedItems.has(itemId)) continue;
+          // For multi-slot items, only assign to the slot the solver chose
+          const placements = itemSlotPlacement.get(itemId);
+          if (placements && !placements.has(slotId)) continue;
+          placedItems.add(itemId);
+          slotPairs.push([slotId, itemId]);
+          queue.push(itemId);
+          break;
+        }
+      }
+    }
+
     return {
       status: 'optimal',
       selected_items: detailedItems,
@@ -206,6 +253,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       objective_value: result.ObjectiveValue || 0,
       final_stats: finalStats,
       solve_time_ms: performance.now() - startTime,
+      slot_pairs: slotPairs,
     };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message

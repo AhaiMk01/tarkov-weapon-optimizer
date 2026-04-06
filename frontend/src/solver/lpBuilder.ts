@@ -24,10 +24,19 @@ import { getAvailablePrice } from './dataService';
 export interface LPResult {
   lpString: string;
   indexToItem: string[];   // 1-indexed: indexToItem[1] = first item ID
+  indexToSlot: string[];   // 1-indexed: indexToSlot[1] = first slot ID
   baseIds: string[];       // 0-indexed: baseIds[0] = 'naked' or preset ID
   nItems: number;
   nBases: number;
   weaponId: string;
+  /** For each slot ID, the list of available item IDs that can go in it */
+  slotItemsMap: Record<string, string[]>;
+  /** For each slot ID, the item ID that owns (provides) that slot */
+  slotOwnerMap: Record<string, string>;
+  /** Item indices that have p_{item}_{slot} placement variables (precise mode) */
+  multiSlotItemIndices: Set<number>;
+  /** For each item index, the slot indices it can appear in */
+  itemToSlotIndices: Map<number, number[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -880,13 +889,29 @@ export function buildLP(params: SolveParams): LPResult {
   // ------ END ------
   L('End');
 
+  // Build filtered slotItems map (only slots/items that are in the LP)
+  const filteredSlotItems: Record<string, string[]> = {};
+  const filteredSlotOwner: Record<string, string> = {};
+  for (const slotId of slotIdsSorted) {
+    const items = slotItems[slotId].filter(iid => itemIndex.has(iid));
+    if (items.length > 0) {
+      filteredSlotItems[slotId] = items;
+      filteredSlotOwner[slotId] = slotOwner[slotId];
+    }
+  }
+
   return {
     lpString: lines.join('\n'),
     indexToItem,
+    indexToSlot,
     baseIds,
     nItems: n_items,
     nBases: n_bases,
     weaponId,
+    slotItemsMap: filteredSlotItems,
+    slotOwnerMap: filteredSlotOwner,
+    multiSlotItemIndices: multiSlotItems,
+    itemToSlotIndices,
   };
 }
 
