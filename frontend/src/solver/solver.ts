@@ -25,12 +25,21 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
   try {
     if (!highs || highsCorrupted) {
       const isBrowser = typeof window !== 'undefined' || typeof self !== 'undefined';
-      const opts = isBrowser ? {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const opts: Record<string, any> | undefined = isBrowser ? {
         locateFile: (file: string) => {
           if (file.endsWith('.wasm')) return (import.meta.env.BASE_URL || '/') + file;
           return file;
         },
       } : undefined;
+      // GitHub Pages serves .wasm with Content-Encoding: gzip, which can
+      // corrupt WebAssembly.instantiateStreaming().  Pre-fetch the binary
+      // so the Emscripten loader receives an uncompressed ArrayBuffer.
+      if (isBrowser && opts) {
+        const wasmUrl = (import.meta.env.BASE_URL || '/') + 'highs.wasm';
+        const resp = await fetch(wasmUrl);
+        opts.wasmBinary = new Uint8Array(await resp.arrayBuffer());
+      }
       highs = await highsLoader(opts);
       highsCorrupted = false;
     }
@@ -185,7 +194,9 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       solve_time_ms: performance.now() - startTime,
     };
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : 'Unknown solver error';
+    const msg = e instanceof Error ? e.message
+      : typeof e === 'number' ? `HiGHS WASM exception (code ${e})`
+      : `Unknown solver error: ${String(e)}`;
     console.error('HiGHS Solve Error:', e);
     // Mark as corrupted so next solve reinitializes WASM
     highsCorrupted = true;
