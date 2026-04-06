@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><body>
+<pre id="log">Testing HiGHS in browser main thread...</pre>
+<script>
+const log = s => { document.getElementById('log').textContent += '\n' + s; console.log(s); };
+// Provide CJS shims so highs.js can export
+var exports = {};
+var module = { exports: exports };
+</script>
+<script src="/node_modules/highs/build/highs.js"></script>
+<script>
+(async () => {
+  try {
+    // Module is set by highs.js (IIFE that assigns to module.exports)
+    const highsLoader = module.exports;
+    log('Loader type: ' + typeof highsLoader);
+
+    const resp = await fetch('/highs.wasm');
+    const wasmBinary = new Uint8Array(await resp.arrayBuffer());
+    log('WASM: ' + wasmBinary.length + ' bytes');
+
+    const highs = await highsLoader({ wasmBinary });
+    log('HiGHS initialized OK');
+
+    const lp = 'Maximize\n  obj: 10 x\nSubject To\n  c1: x <= 5\nBounds\n  0 <= x <= 10\nEnd';
+    const r = highs.solve(lp);
+    log('Solve result: ' + r.Status + ' obj=' + r.ObjectiveValue);
+  } catch(e) {
+    log('ERROR: ' + (typeof e === 'number' ? 'WASM code ' + e : (e.message || String(e))));
+  }
+})();
+</script>
+</body></html>

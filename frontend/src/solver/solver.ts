@@ -9,38 +9,52 @@ export type { SolveParams } from './types';
 import { buildLP } from './lpBuilder';
 import { getAvailablePrice } from './dataService';
 
-// Custom build of highs-js with INITIAL_MEMORY=64MB to handle large LP models.
-// See vendor/highs/README.md for build instructions.
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore — highs has no type declarations
-import highsLoader from 'highs';
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let highs: any = null;
 let highsCorrupted = false;
+
+// Load HiGHS module.  In Node (tests), use the npm package directly.
+// In browser workers, Vite's ES module bundling corrupts the Emscripten
+// runtime, so we load highs.js from public/ at runtime instead.
+async function loadHiGHS() {
+  const base = import.meta.env?.BASE_URL || '/';
+
+  // Node / test environment
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  if (typeof (globalThis as any).WorkerGlobalScope === 'undefined' && typeof (globalThis as any).window === 'undefined') {
+    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+    // @ts-ignore — dynamic require for Node
+    const loader = (await import('highs')).default;
+    return loader();
+  }
+
+  // Browser: fetch both WASM binary and highs.js source, then evaluate
+  // highs.js with CJS shims.  Vite's ES module bundling corrupts the
+  // Emscripten runtime, so we bypass the bundler entirely.
+  const [wasmResp, jsResp] = await Promise.all([
+    fetch(base + 'highs.wasm'),
+    fetch(base + 'highs.js'),
+  ]);
+  const wasmBinary = new Uint8Array(await wasmResp.arrayBuffer());
+  const jsSource = await jsResp.text();
+
+  // Evaluate highs.js with CJS module/exports shims
+  const exports = {} as Record<string, unknown>;
+  const module = { exports };
+  const fn = new Function('module', 'exports', jsSource);
+  fn(module, exports);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const loader = module.exports as any;
+
+  return loader({ wasmBinary });
+}
 
 export async function solve(params: SolveParams): Promise<OptimizeResponse> {
   const startTime = performance.now();
 
   try {
     if (!highs || highsCorrupted) {
-      const isBrowser = typeof window !== 'undefined' || typeof self !== 'undefined';
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const opts: Record<string, any> | undefined = isBrowser ? {
-        locateFile: (file: string) => {
-          if (file.endsWith('.wasm')) return (import.meta.env.BASE_URL || '/') + file;
-          return file;
-        },
-      } : undefined;
-      // GitHub Pages serves .wasm with Content-Encoding: gzip, which can
-      // corrupt WebAssembly.instantiateStreaming().  Pre-fetch the binary
-      // so the Emscripten loader receives an uncompressed ArrayBuffer.
-      if (isBrowser && opts) {
-        const wasmUrl = (import.meta.env.BASE_URL || '/') + 'highs.wasm';
-        const resp = await fetch(wasmUrl);
-        opts.wasmBinary = new Uint8Array(await resp.arrayBuffer());
-      }
-      highs = await highsLoader(opts);
+      highs = await loadHiGHS();
       highsCorrupted = false;
     }
 
