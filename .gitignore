@@ -1,24 +1,23 @@
-# Python
+# --- Python ---
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
 wheels/
+pip-wheel-metadata/
+share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+MANIFEST
 
 # Virtual environments
 venv/
@@ -26,37 +25,72 @@ ENV/
 env/
 .venv/
 
-# IDE
+# Packaging / build (repo root; see also Node `dist/` below)
+/build/
+/dist/
+*.manifest
+*.spec.bak
+
+# Test & type tooling
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+*.cover
+.cache/
+
+# Pixi (keep pixi.toml + pixi.lock; ignore local env)
+.pixi/
+
+# --- Node.js / frontend ---
+node_modules/
+frontend/node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-store/
+
+# Vite / TypeScript
+frontend/dist/
+*.tsbuildinfo
+
+# --- IDE / editors ---
 .idea/
 .vscode/
 *.swp
 *.swo
 *~
 
-# Jupyter
+# Local agent / MCP caches (not project rules)
+.claude/
+.playwright-mcp/
+
+# --- Jupyter ---
 .ipynb_checkpoints/
 
-# Environment variables
+# --- Environment & secrets ---
 .env
-.env.local
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Streamlit
+.env.*
+!.env.example
 .streamlit/secrets.toml
 
-# Tests
-tests/
+# --- OS & junk ---
+.DS_Store
+Thumbs.db
+Desktop.ini
+nul
+NUL
 
-# Debug files
+# --- Project-specific ---
 api_cache_debug.json
-
-# API cache
-.cache/
-
-# Logs
 logs/
 
-pixi.lock
+# Debug / local docs scratch (uncomment if you keep notes out of repo)
+# docs/

@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Tarkov Weapon Mod Optimizer finds mathematically optimal weapon builds for Escape from Tarkov using constraint programming. It models slot compatibility, item conflicts, and multi-objective optimization (ergonomics, recoil, price) as a Mixed Integer Program.
+Tarkov Weapon Mod Optimizer finds mathematically optimal weapon builds for Escape from Tarkov using constraint optimization. It models slot compatibility, item conflicts, and multi-objective tradeoffs (ergonomics, recoil, price) as a **linear program with integrality-like structure**, solved in the browser via **HiGHS**.
 
 The project has **two parallel implementations**:
-1. **Streamlit app** (root-level Python) — OR-Tools CP-SAT solver, distributable as PyInstaller executable
-2. **React frontend** (`frontend/`) — Z3 WASM solver running client-side in a Web Worker, no backend needed, deployed to GitHub Pages
+1. **Streamlit app** (root-level Python) — OR-Tools **CP-SAT** solver, distributable as PyInstaller executable
+2. **React frontend** (`frontend/`) — **HiGHS WASM** running client-side in a Web Worker (no backend), deployed to GitHub Pages
 
 ## Development Commands
 
@@ -30,8 +30,8 @@ npm run preview --prefix frontend # Preview production build
 
 ### Verification Tests
 ```bash
-cd frontend && npx tsx test_multi_weapon_verification.ts   # Solver correctness against real weapons
-cd frontend && npx tsx test_recoil_maximizer.ts            # Recoil optimization tests
+cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
+cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
 ```
 
 ### PyInstaller Executable
@@ -48,7 +48,7 @@ The frontend runs entirely in the browser with no backend:
 
 **Data Flow:**
 ```
-UI Component → api/client.ts → Web Worker (solver.worker.ts) → Z3 WASM solver
+UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts → HiGHS WASM
                                      ↕
                               dataService.ts → Tarkov.dev GraphQL API (via fetch)
                                      ↕
@@ -58,12 +58,14 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → Z3 WASM sol
 **Solver Pipeline (`frontend/src/solver/`):**
 1. `dataService.ts` — Fetches guns/mods from Tarkov.dev GraphQL API, builds `ItemLookup`, caches in IndexedDB
 2. `compatibilityMap.ts` — BFS traversal from weapon to discover all reachable mods and slot relationships
-3. `z3Solver.ts` — Builds Z3 Boolean/Int/Real constraints directly (slot mutex, connectivity, conflicts, objective), calls `opt.check()`, decodes model back to items
-4. `solver.ts` — Thin facade that delegates to `z3Solver.ts`
-5. `solver.worker.ts` — Web Worker wrapper; handles `optimize`, `explore`, `getInfo`, `getWeaponMods`, `getGunsmithTasks` messages; uses `async-mutex` for serialized access
-6. `paretoExplorer.ts` — Sweeps one stat axis to generate Pareto frontier points
+3. `lpBuilder.ts` — Builds a **CPLEX LP format** string (`buildLP`): binary-style decisions as a continuous LP with constraints matching the CP-SAT model (scaled ergo/recoil/price coefficients; auxiliary objective variable for long lines HiGHS parses poorly)
+4. `solver.ts` — Loads **HiGHS** (`highs` npm package / WASM), runs `highs.solve(lpString)`, reads column primals for `x_*`, `base_*`, `buy_*`, assembles `OptimizeResponse` and final stats
+5. `solver.worker.ts` — Web Worker wrapper; handles `loadData`, `optimize`, `explore`, `getInfo`, `getWeaponMods`, `getGunsmithTasks`, `getStatus` messages
+6. `paretoExplorer.ts` — Sweeps one objective axis (price / recoil / ergo ignored) to approximate Pareto frontier points; each point is a full `solve()` call
 
-**API Client (`api/client.ts`):** All `getInfo`, `optimize`, `explore` etc. functions communicate via `postMessage` to the Web Worker instead of HTTP — function signatures are kept identical so UI code doesn't care about the transport.
+**API Client (`api/client.ts`):** All `getInfo`, `optimize`, `explore`, etc. communicate via `postMessage` to the Web Worker — not HTTP. Signatures stay stable so UI code does not depend on transport.
+
+**HiGHS WASM assets:** `solver.ts` passes `locateFile` so `*.wasm` loads from the site origin (`/`). For very large LPs, a **custom WASM build** with higher initial memory may be used; see `frontend/vendor/highs/README.md` (upstream highs-js with increased `INITIAL_MEMORY` / stack).
 
 **UI Stack:**
 - React 19 + TypeScript + Vite
@@ -90,11 +92,11 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → Z3 WASM sol
 
 ### Solver Model (Both Implementations)
 
-**Decision Variables:** Binary `x[item]` (selected), `base[preset]` (which base/preset selected)
+**Decision Variables:** Binary selections for items and base/preset (`x[item]`, `base[...]` in the LP; purchase tracking via `buy_*` columns where applicable).
 
-**Constraints:** Slot capacity (max 1 per slot), connectivity (child item requires at least one parent selected), conflict exclusion (`conflictingItems` → mutual implication `x_A ⇒ ¬x_B`), base selection (exactly one naked gun or preset), availability (trader levels, flea market, player level), physical limits (price, ergo, recoil, mag capacity, sighting range, weight)
+**Constraints:** Slot capacity, connectivity (child requires a selected parent along the slot graph), conflict exclusion, exactly one naked gun or preset base, availability (trader levels, flea market, player level), and limits on price, ergonomics, vertical recoil, recoil sum, mag capacity, sighting range, weight.
 
-**Objective:** `maximize (ergo_weight * ergo) + (-100 * recoil_weight * recoil_mod) + (-0.01 * price_weight * price)`
+**Objective:** Weighted combination of ergonomics, recoil modifier contribution, and price. Coefficients are **scaled** in `lpBuilder.ts` (`ERGO_SCALE`, `SCALE`) for numeric stability; see comments there for the exact linear form.
 
 ## Data Source
 
@@ -117,12 +119,10 @@ When adding translations, add keys to `zh.json` first (source of truth), then sy
 
 ## Common Pitfalls
 
-- **Z3 WASM threading**: Z3 internal parallelism is disabled (`parallel.enable=false`) to avoid pthread crashes in browsers. The `z3-solver` package is excluded from Vite's `optimizeDeps` to prevent bundling issues.
-- **COOP/COEP headers**: Vite dev server sets `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` — required for Z3 WASM's SharedArrayBuffer support.
-- **Z3 rational output**: Z3 returns rationals as S-expressions (e.g., `(/ 1 2)`, `(- (/ 3 4))`). The `parseZ3Num` helper in `z3Solver.ts` handles recursive parsing — don't use `parseFloat` directly on Z3 model output.
-- **Solver concurrency**: Both the Z3 context (`z3Mutex`) and the worker (`workerMutex`) use `async-mutex` to serialize solve calls — Z3 WASM is not reentrant.
-- **Recoil is a modifier, not absolute**: Z3 optimizes `totalRecoilMod` (a sum of percentage modifiers). Final recoil = `naked_recoil * (1 + totalRecoilMod)`. Constraints on `maxRecoilV` must be converted: `reqMod = (limit / baseV) - 1`.
-- **Preset handling**: Items in presets have cost=0 to avoid double-counting purchase price. Base price comes from the preset variable selection.
+- **HiGHS WASM memory / failures**: Large models can exhaust default WASM memory; use the custom build documented under `frontend/vendor/highs/`. On solve exceptions, `solver.ts` sets a **corrupted** flag and re-instantiates HiGHS on the next call.
+- **Recoil is a modifier, not absolute**: The model optimizes summed **recoil modifiers**; displayed vertical/horizontal recoil are `naked_recoil * (1 + totalRecoilMod)`. Hard caps on final vertical recoil must be converted when building constraints.
+- **Preset handling**: Preset-contained items avoid double-counting purchase price; base cost comes from the selected preset / naked base in the LP.
+- **LP vs CP-SAT parity**: Frontend LP is ported to align with `weapon_optimizer.py`; when changing constraints or objective, update both or re-run `test_multi_weapon_verification.ts` against known weapons.
 - **Hardcoded colors**: Use antd theme tokens (`token.colorPrimary`, etc.) for dark/light mode compatibility.
 - **Worker state**: The Web Worker caches data per `lang:gameMode` key — changing language/mode triggers a fresh data load.
 - **`backend/` directory is empty/legacy** — actual backend logic is in root-level Python files, not in `backend/app/`.
