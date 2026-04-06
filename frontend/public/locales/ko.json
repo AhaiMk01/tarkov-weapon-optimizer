@@ -13,7 +13,13 @@
     "flea_market_access": "플리마켓",
     "include_exclude": "모드 필터",
     "require_categories": "카테고리 검색...",
-    "require_items": "모드 검색..."
+    "require_items": "모드 검색...",
+    "mod_filter_categories_hint": "카테고리: 해당 유형의 모드를 필수(+) 또는 금지(−).",
+    "mod_filter_mods_hint": "개별 모드: 특정 모드 강제(+) 또는 금지(−).",
+    "fast": "빠름",
+    "auto": "자동",
+    "precise": "정밀",
+    "solver_precision_tooltip": "자동: 트리가 작으면 정밀, 크면 빠름. 빠름: 큰 모드 트리용 빠른 LP. 정밀: 전체 배치 변수로 느리지만 다중 슬롯에 정확."
   },
   "tabs": {
     "explore": "분석",
@@ -25,6 +31,7 @@
     "optimize_btn": "최적화 시작",
     "constraints": "제약 조건",
     "required_items": "필수 아이템",
+    "implicit_required_items": "지지 개조부품 (필수 아이템과 함께 자동 포함)",
     "required_categories": "필수 카테고리",
     "ready_description": "건스미스 과제를 선택하여 빌드 생성"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "반동",
     "preset_ergo": "에르고",
     "preset_balanced": "균형",
+    "preset_price": "최소 운용",
+    "preset_performance": "성능 우선",
+    "preset_recoil_focus": "반동 우선",
+    "preset_ergo_focus": "인체공학 우선",
+    "weight_ui_label": "가중치",
+    "weight_ui_triangle": "삼각",
+    "weight_ui_sliders": "슬라이더",
     "generate_btn": "최적화 시작",
     "ready_description": "무기 선택 및 우선순위 조정으로 최적 빌드 생성"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "최적화 상태",
     "status_optimal": "최적",
     "status_feasible": "실행 가능",
-    "status_infeasible": "해 없음"
+    "status_infeasible": "해 없음",
+    "precision_auto_ran": "자동 → {{mode}}"
   },
   "toast": {
     "optimize_success": "최적화 완료",
@@ -63,7 +78,12 @@
     "gunsmith_success": "건스미스 최적화 완료",
     "gunsmith_failed": "건스미스 최적화 실패",
     "copied": "복사됨",
-    "copy_failed": "복사 실패"
+    "copy_failed": "복사 실패",
+    "load_failed": "게임 데이터를 불러오지 못했습니다",
+    "optimize_infeasible": "현재 제약으로는 유효한 구성이 없습니다",
+    "explore_empty": "현재 제약으로는 프론티어 점이 없습니다",
+    "gunsmith_infeasible": "건스미스 과제를 만족할 수 없습니다",
+    "optimize_non_optimal": "솔버 상태: {{status}}"
   },
   "ui": {
     "initializing": "초기화 중...",
@@ -75,6 +95,8 @@
     "weight_label": "무게",
     "recoil_sum": "반동",
     "base_preset_used": "사용된 프리셋",
+    "preset_purchase_at": "프리셋 구매처",
+    "preset_source_unknown": "현재 설정에서 구매처 불명",
     "build_manifest": "빌드 매니페스트",
     "new_changed_parts": "새로운/변경된 부품",
     "retained_from_preset_short": "프리셋에서 유지",
@@ -95,7 +117,18 @@
     "none": "없음",
     "unknown": "알 수 없음",
     "builds": "빌드",
-    "item_count": "{{count}} 개"
+    "item_count": "{{count}} 개",
+    "theme_light_primer": "라이트 — Primer",
+    "theme_light_paper": "라이트 — 웜 페이퍼",
+    "theme_light_latte": "라이트 — Catppuccin Latte",
+    "theme_dark_onedark": "다크 — One Dark (고대비)",
+    "theme_dark_github": "다크 — GitHub 고대비",
+    "theme_dark_tokyo": "다크 — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "시스템 설정 따름",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "데이터:"
   },
   "error": {
     "title": "오류가 발생했습니다",

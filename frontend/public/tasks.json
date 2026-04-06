@@ -2,7 +2,7 @@
   {
     "task_name": "Gunsmith - Part 1 (MP-133)",
     "constraints": {
-      "min_ergonomics": 47,
+      "min_ergonomics": 45,
       "max_recoil_sum": 850,
       "min_mag_capacity": 5
     },
@@ -20,7 +20,7 @@
   {
     "task_name": "Gunsmith - Part 2 (AKS-74U)",
     "constraints": {
-      "min_ergonomics": 59,
+      "min_ergonomics": 56,
       "max_recoil_sum": 550,
       "min_sighting_range": 100,
       "min_mag_capacity": 60,
@@ -35,7 +35,7 @@
     "task_name": "Gunsmith - Part 3 (MP5)",
     "constraints": {
       "min_ergonomics": 45,
-      "max_recoil_sum": 210,
+      "max_recoil_sum": 240,
       "min_sighting_range": 200,
       "max_weight": 4.0,
       "min_mag_capacity": 50
@@ -93,7 +93,7 @@
   {
     "task_name": "Gunsmith - Part 6 (AKM)",
     "constraints": {
-      "min_ergonomics": 40,
+      "min_ergonomics": 25,
       "max_recoil_sum": 400,
       "min_sighting_range": 800
     },
@@ -111,7 +111,7 @@
   {
     "task_name": "Gunsmith - Part 7 (M4A1)",
     "constraints": {
-      "min_ergonomics": 47,
+      "min_ergonomics": 37,
       "max_recoil_sum": 300,
       "min_sighting_range": 800,
       "min_mag_capacity": 60,
@@ -127,7 +127,7 @@
   {
     "task_name": "Gunsmith - Part 8 (AKS-74N)",
     "constraints": {
-      "min_ergonomics": 60,
+      "min_ergonomics": 52,
       "max_recoil_sum": 275
     },
     "weapon_id": "5ab8e9fcd8ce870019439434",
@@ -146,7 +146,7 @@
   {
     "task_name": "Gunsmith - Part 9 (P226R)",
     "constraints": {
-      "min_ergonomics": 80,
+      "min_ergonomics": 77,
       "max_recoil_sum": 610
     },
     "weapon_id": "56d59856d2720bd8418b456a",
@@ -165,7 +165,7 @@
   {
     "task_name": "Gunsmith - Part 10 (AK-105)",
     "constraints": {
-      "min_ergonomics": 38,
+      "min_ergonomics": 21,
       "max_recoil_sum": 500,
       "min_sighting_range": 800,
       "max_weight": 4.8
@@ -183,8 +183,8 @@
   {
     "task_name": "Gunsmith - Part 11 (Vector 9x19)",
     "constraints": {
-      "min_ergonomics": 50,
-      "max_recoil_sum": 230,
+      "min_ergonomics": 48,
+      "max_recoil_sum": 240,
       "min_sighting_range": 300
     },
     "weapon_id": "5fc3f2d5900b1d5091531e57",
@@ -202,7 +202,7 @@
   {
     "task_name": "Gunsmith - Part 12 (MPX)",
     "constraints": {
-      "min_ergonomics": 52,
+      "min_ergonomics": 47,
       "max_recoil_sum": 225,
       "min_sighting_range": 300,
       "max_weight": 4.0
@@ -217,7 +217,7 @@
   {
     "task_name": "Gunsmith - Part 13 (RSASS)",
     "constraints": {
-      "min_ergonomics": 26,
+      "min_ergonomics": 17,
       "max_recoil_sum": 300,
       "min_sighting_range": 1500,
       "max_weight": 6.7
@@ -232,8 +232,8 @@
   {
     "task_name": "Gunsmith - Part 14 (HK 416A5)",
     "constraints": {
-      "min_ergonomics": 60,
-      "max_recoil_sum": 300,
+      "min_ergonomics": 50,
+      "max_recoil_sum": 310,
       "max_weight": 4.0,
       "min_sighting_range": 300,
       "min_mag_capacity": 30
@@ -251,7 +251,7 @@
   {
     "task_name": "Gunsmith - Part 15 (AS VAL)",
     "constraints": {
-      "min_ergonomics": 33,
+      "min_ergonomics": 27,
       "max_recoil_sum": 220,
       "min_mag_capacity": 30
     },
@@ -266,7 +266,7 @@
   {
     "task_name": "Gunsmith - Part 16 (DVL-10)",
     "constraints": {
-      "min_ergonomics": 40,
+      "min_ergonomics": 36,
       "max_recoil_sum": 450,
       "min_sighting_range": 2000,
       "max_weight": 6.7
@@ -282,7 +282,7 @@
   {
     "task_name": "Gunsmith - Part 17 (AK-102)",
     "constraints": {
-      "min_ergonomics": 68,
+      "min_ergonomics": 53,
       "max_recoil_sum": 300,
       "min_sighting_range": 800
     },
@@ -298,8 +298,8 @@
   {
     "task_name": "Gunsmith - Part 18 (AKMN)",
     "constraints": {
-      "min_ergonomics": 45,
-      "max_recoil_sum": 350,
+      "min_ergonomics": 40,
+      "max_recoil_sum": 380,
       "max_weight": 5.0
     },
     "weapon_id": "5a0ec13bfcdbcb00165aa685",
@@ -316,7 +316,7 @@
   {
     "task_name": "Gunsmith - Part 19 (SVDS)",
     "constraints": {
-      "min_ergonomics": 15,
+      "min_ergonomics": 10,
       "max_recoil_sum": 500
     },
     "weapon_id": "5c46fbd72e2216398b5a8c9c",
@@ -370,17 +370,40 @@
     ]
   },
   {
+    "task_name": "Gunsmith - Part 21 (M1911A1)",
+    "constraints": {
+      "min_ergonomics": 75,
+      "min_sighting_range": 200,
+      "min_mag_capacity": 1
+    },
+    "weapon_id": "5e81c3cbac2bb513793cdc75",
+    "required_item_ids": [
+      "5ef366938cef260c0642acad",
+      "5ef61964ec7f42238c31e0c1"
+    ],
+    "required_category_group_ids": [
+      [
+        "55818b164bdc2ddc698b456c",
+        "55818b084bdc2d5b648b4571"
+      ],
+      [
+        "5448bc234bdc2d3c308b4569"
+      ]
+    ]
+  },
+  {
     "task_name": "Gunsmith - Part 22 (M4A1)",
     "constraints": {
       "min_ergonomics": 40,
-      "max_recoil_sum": 270,
+      "max_recoil_sum": 280,
       "max_weight": 5.0,
       "min_mag_capacity": 60
     },
     "weapon_id": "5447a9cd4bdc2dbd208b4567",
     "required_item_ids": [
       "57dbb57e2459774673234890",
-      "5b2cfa535acfc432ff4db7a0"
+      "5b2cfa535acfc432ff4db7a0",
+      "5a1eaa87fcdbcb001865f75e"
     ]
   },
   {

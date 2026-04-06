@@ -13,7 +13,13 @@
     "flea_market_access": "Flohmarkt",
     "include_exclude": "Mod-Filter",
     "require_categories": "Kategorien suchen...",
-    "require_items": "Mods suchen..."
+    "require_items": "Mods suchen...",
+    "mod_filter_categories_hint": "Nach Kategorie: (+) erforderlich oder (−) alle Mods dieses Typs verbieten.",
+    "mod_filter_mods_hint": "Nach Mod: (+) erzwingen oder (−) ein bestimmtes Mod verbieten.",
+    "fast": "Schnell",
+    "auto": "Auto",
+    "precise": "Präzise",
+    "solver_precision_tooltip": "Auto: Präzise bei kleinem Baum, Schnell bei großem. Schnell: schnelles LP für große Mod-Bäume. Präzise: vollständige Platzierungsvariablen, langsamer, aber exakt bei Multi-Slot-Mods."
   },
   "tabs": {
     "explore": "Erkunden",
@@ -25,6 +31,7 @@
     "optimize_btn": "Optimierung starten",
     "constraints": "Einschränkungen",
     "required_items": "Benötigte Gegenstände",
+    "implicit_required_items": "Hilfs-Mods (automatisch mit Pflicht-Mods)",
     "required_categories": "Benötigte Kategorien",
     "ready_description": "Wählen Sie eine Gunsmith-Aufgabe, um eine Build zu generieren"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Rückstoß",
     "preset_ergo": "Ergo",
     "preset_balanced": "Ausgewogen",
+    "preset_price": "Min. brauchbar",
+    "preset_performance": "Leistung",
+    "preset_recoil_focus": "Rückstoß+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Gewichtung",
+    "weight_ui_triangle": "Dreieck",
+    "weight_ui_sliders": "Schieberegler",
     "generate_btn": "Optimierung starten",
     "ready_description": "Waffe wählen und Prioritäten anpassen für optimales Build"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Optimierungsstatus",
     "status_optimal": "Optimal",
     "status_feasible": "Machbar",
-    "status_infeasible": "Keine Lösung"
+    "status_infeasible": "Keine Lösung",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimierung abgeschlossen",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Gunsmith-Optimierung abgeschlossen",
     "gunsmith_failed": "Gunsmith-Optimierung fehlgeschlagen",
     "copied": "Kopiert",
-    "copy_failed": "Kopieren fehlgeschlagen"
+    "copy_failed": "Kopieren fehlgeschlagen",
+    "load_failed": "Spieldaten konnten nicht geladen werden",
+    "optimize_infeasible": "Keine gültige Konfiguration bei diesen Einschränkungen",
+    "explore_empty": "Keine Pareto-Punkte bei diesen Einschränkungen",
+    "gunsmith_infeasible": "Gunsmith-Aufgabe mit diesen Einschränkungen nicht lösbar",
+    "optimize_non_optimal": "Solver-Status: {{status}}"
   },
   "ui": {
     "initializing": "Initialisierung...",
@@ -75,6 +95,8 @@
     "weight_label": "Gewicht",
     "recoil_sum": "Rückstoß",
     "base_preset_used": "Verwendetes Preset",
+    "preset_purchase_at": "Preset kaufen bei",
+    "preset_source_unknown": "Keine Quelle bei aktuellen Händler-/Flohmarkt-Einstellungen",
     "build_manifest": "Build-Manifest",
     "new_changed_parts": "Neue/geänderte Teile",
     "retained_from_preset_short": "Vom Preset beibehalten",
@@ -95,7 +117,18 @@
     "none": "Keine",
     "unknown": "Unbekannt",
     "builds": "Builds",
-    "item_count": "{{count}} Stück"
+    "item_count": "{{count}} Stück",
+    "theme_light_primer": "Hell — Primer",
+    "theme_light_paper": "Hell — Warmes Papier",
+    "theme_light_latte": "Hell — Catppuccin Latte",
+    "theme_dark_onedark": "Dunkel — One Dark (hoher Kontrast)",
+    "theme_dark_github": "Dunkel — GitHub hoher Kontrast",
+    "theme_dark_tokyo": "Dunkel — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "System",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Daten von"
   },
   "error": {
     "title": "Ein Fehler ist aufgetreten",

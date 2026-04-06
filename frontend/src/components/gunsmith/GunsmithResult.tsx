@@ -4,6 +4,7 @@ import { ToolOutlined } from '@ant-design/icons'
 import { EmptyState } from '../common/EmptyState'
 import { StatsCards } from '../common/StatsCards'
 import { BuildManifest } from '../common/BuildManifest'
+import { UsingPresetCard } from '../common/UsingPresetCard'
 import type { OptimizeResponse } from '../../api/client'
 
 interface GunsmithResultProps {
@@ -22,8 +23,8 @@ export function GunsmithResult({ result, compactMode, onCompactModeChange, optim
     return (
       <EmptyState
         icon={<ToolOutlined />}
-        description={t('gunsmith.ready_description', '选择枪匠任务，生成满足约束的构建')}
-        buttonText={t('gunsmith.optimize_btn', '开始优化')}
+        description={t('gunsmith.ready_description')}
+        buttonText={t('gunsmith.optimize_btn')}
         buttonIcon={<ToolOutlined />}
         loading={optimizing}
         disabled={disabled}
@@ -35,9 +36,9 @@ export function GunsmithResult({ result, compactMode, onCompactModeChange, optim
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Alert
         type={result.status === 'optimal' ? 'success' : result.status === 'infeasible' ? 'error' : 'warning'}
-        message={`${t('results.optimization_status', '优化状态')}: ${t(`results.status_${result.status}`, result.status)}`}
+        message={`${t('results.optimization_status')}: ${t(`results.status_${result.status}`, { defaultValue: result.status })}`}
         showIcon
-        action={<Button type="primary" icon={<ToolOutlined />} loading={optimizing} onClick={onOptimize}>{t('ui.reoptimize_btn', '重新优化')}</Button>}
+        action={<Button type="primary" icon={<ToolOutlined />} loading={optimizing} onClick={onOptimize}>{t('ui.reoptimize_btn')}</Button>}
       />
       {result.status !== 'infeasible' && result.final_stats && (
         <>
@@ -48,6 +49,7 @@ export function GunsmithResult({ result, compactMode, onCompactModeChange, optim
             weight={result.final_stats.total_weight}
             price={result.final_stats.total_price}
           />
+          {result.selected_preset && <UsingPresetCard preset={result.selected_preset} />}
           <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} />
         </>
       )}

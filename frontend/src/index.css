@@ -11,10 +11,46 @@
   --scrollbar-track: rgba(0, 0, 0, 0.04);
 }
 
-[data-theme='dark'] {
-  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
-  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.3);
-  --scrollbar-track: rgba(255, 255, 255, 0.04);
+[data-theme='light'][data-light-palette='primer'] {
+  --scrollbar-thumb: rgba(31, 35, 40, 0.22);
+  --scrollbar-thumb-hover: rgba(31, 35, 40, 0.38);
+  --scrollbar-track: rgba(246, 248, 250, 0.95);
+}
+
+[data-theme='light'][data-light-palette='paper'] {
+  --scrollbar-thumb: rgba(55, 53, 47, 0.2);
+  --scrollbar-thumb-hover: rgba(55, 53, 47, 0.35);
+  --scrollbar-track: rgba(247, 246, 243, 0.95);
+}
+
+[data-theme='light'][data-light-palette='latte'] {
+  --scrollbar-thumb: rgba(76, 79, 105, 0.28);
+  --scrollbar-thumb-hover: rgba(76, 79, 105, 0.45);
+  --scrollbar-track: rgba(239, 241, 245, 0.9);
+}
+
+[data-theme='dark'][data-dark-palette='onedark'] {
+  --scrollbar-thumb: rgba(90, 98, 112, 0.72);
+  --scrollbar-thumb-hover: rgba(110, 118, 132, 0.9);
+  --scrollbar-track: rgba(40, 44, 52, 0.55);
+}
+
+[data-theme='dark'][data-dark-palette='github'] {
+  --scrollbar-thumb: rgba(110, 118, 129, 0.62);
+  --scrollbar-thumb-hover: rgba(139, 148, 158, 0.82);
+  --scrollbar-track: rgba(13, 17, 23, 0.55);
+}
+
+[data-theme='dark'][data-dark-palette='tokyo'] {
+  --scrollbar-thumb: rgba(106, 122, 181, 0.55);
+  --scrollbar-thumb-hover: rgba(122, 142, 207, 0.75);
+  --scrollbar-track: rgba(36, 40, 59, 0.5);
+}
+
+[data-theme='amoled'] {
+  --scrollbar-thumb: rgba(120, 130, 145, 0.45);
+  --scrollbar-thumb-hover: rgba(150, 160, 175, 0.65);
+  --scrollbar-track: rgba(0, 0, 0, 0.35);
 }
 
 html, body {
@@ -56,4 +92,9 @@ html, body {
 
 .main-content {
   scrollbar-gutter: stable;
+}
+
+/* Mode switch in header: frame + Segmented thumb use per-mode accent (see App.tsx mainModeAccent) */
+.app-main-mode-nav .ant-segmented-item-selected {
+  font-weight: 600;
 }

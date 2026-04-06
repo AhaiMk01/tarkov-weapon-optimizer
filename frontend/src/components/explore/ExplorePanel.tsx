@@ -3,15 +3,8 @@ import { Card, Select } from 'antd'
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
-import type { Gun, ModInfo } from '../../api/client'
-
-interface TraderLevels {
-  prapor: number
-  skier: number
-  peacekeeper: number
-  mechanic: number
-  jaeger: number
-}
+import type { Gun, ModInfo, ModCategoryOption } from '../../api/client'
+import type { TraderLevels } from '../../solver/types'
 
 interface ExplorePanelProps {
   guns: Gun[]
@@ -28,7 +21,7 @@ interface ExplorePanelProps {
   onExploreTradeoffChange: (v: 'price' | 'recoil' | 'ergo') => void
   availableMods: ModInfo[]
   loadingMods: boolean
-  modCategories: string[]
+  modCategoryOptions: ModCategoryOption[]
   includedCategories: string[]
   excludedCategories: string[]
   onIncludedCategoriesChange: (v: string[]) => void
@@ -65,17 +58,17 @@ export function ExplorePanel(props: ExplorePanelProps) {
         calibers={props.calibers}
         filteredGuns={props.filteredGuns}
       />
-      <Card size="small" title={<span style={{ userSelect: 'none' }}>{t('explore.tradeoff_strategy', '权衡策略')}</span>}>
+      <Card size="small" title={<span style={{ userSelect: 'none' }}>{t('explore.tradeoff_strategy')}</span>}>
         <Select style={{ width: '100%' }} value={props.exploreTradeoff} onChange={props.onExploreTradeoffChange} options={[
-          { value: 'price', label: t('ui.tradeoff_ergo_vs_recoil', '人机 vs 后坐 (忽略价格)') },
-          { value: 'recoil', label: t('ui.tradeoff_ergo_vs_price', '人机 vs 价格 (忽略后坐)') },
-          { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price', '后坐 vs 价格 (忽略人机)') },
+          { value: 'price', label: t('ui.tradeoff_ergo_vs_recoil') },
+          { value: 'recoil', label: t('ui.tradeoff_ergo_vs_price') },
+          { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price') },
         ]} />
       </Card>
       <ModFilter
         availableMods={props.availableMods}
         loadingMods={props.loadingMods}
-        modCategories={props.modCategories}
+        modCategoryOptions={props.modCategoryOptions}
         includedCategories={props.includedCategories}
         excludedCategories={props.excludedCategories}
         onIncludedCategoriesChange={props.onIncludedCategoriesChange}

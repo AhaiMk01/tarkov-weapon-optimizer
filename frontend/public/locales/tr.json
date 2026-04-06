@@ -13,7 +13,13 @@
     "flea_market_access": "Bit Pazarı",
     "include_exclude": "Mod Filtresi",
     "require_categories": "Kategori ara...",
-    "require_items": "Mod ara..."
+    "require_items": "Mod ara...",
+    "mod_filter_categories_hint": "Kategoriye göre: (+) bu türde herhangi bir modu zorunlu veya (−) yasakla.",
+    "mod_filter_mods_hint": "Moda göre: (+) belirli bir modu zorunlu kıl veya (−) yasakla.",
+    "fast": "Hızlı",
+    "auto": "Oto",
+    "precise": "Hassas",
+    "solver_precision_tooltip": "Oto: küçük ağaçta Hassas, büyükte Hızlı. Hızlı: büyük mod ağaçları için hızlı LP. Hassas: tam yerleşim değişkenleri, daha yavaş ama çoklu yuvada kesin."
   },
   "tabs": {
     "explore": "Analiz",
@@ -25,6 +31,7 @@
     "optimize_btn": "Optimizasyonu Başlat",
     "constraints": "Kısıtlamalar",
     "required_items": "Gerekli Öğeler",
+    "implicit_required_items": "Destek modları (gerekli parçalarla otomatik eklenir)",
     "required_categories": "Gerekli Kategoriler",
     "ready_description": "Bir build oluşturmak için silah ustası görevi seçin"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Geri Tepme",
     "preset_ergo": "Ergo",
     "preset_balanced": "Dengeli",
+    "preset_price": "Min. işlevsel",
+    "preset_performance": "Performans",
+    "preset_recoil_focus": "Geri tepme+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Ağırlıklar",
+    "weight_ui_triangle": "Üçgen",
+    "weight_ui_sliders": "Kaydırıcı",
     "generate_btn": "Optimizasyonu Başlat",
     "ready_description": "Silah seçin ve öncelikleri ayarlayarak optimal build oluşturun"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Optimizasyon Durumu",
     "status_optimal": "Optimal",
     "status_feasible": "Uygulanabilir",
-    "status_infeasible": "Çözüm yok"
+    "status_infeasible": "Çözüm yok",
+    "precision_auto_ran": "Oto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimizasyon tamamlandı",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Silah ustası optimizasyonu tamamlandı",
     "gunsmith_failed": "Silah ustası optimizasyonu başarısız",
     "copied": "Kopyalandı",
-    "copy_failed": "Kopyalama başarısız"
+    "copy_failed": "Kopyalama başarısız",
+    "load_failed": "Oyun verileri yüklenemedi",
+    "optimize_infeasible": "Mevcut kısıtlarla geçerli yapı yok",
+    "explore_empty": "Mevcut kısıtlarla sınır noktası yok",
+    "gunsmith_infeasible": "Silah ustası görevi karşılanamıyor",
+    "optimize_non_optimal": "Çözücü durumu: {{status}}"
   },
   "ui": {
     "initializing": "Başlatılıyor...",
@@ -75,6 +95,8 @@
     "weight_label": "Ağırlık",
     "recoil_sum": "Geri Tepme",
     "base_preset_used": "Kullanılan Ön Ayar",
+    "preset_purchase_at": "Ön ayarı satın al",
+    "preset_source_unknown": "Mevcut ayarlarda kaynak yok",
     "build_manifest": "Build Manifestosu",
     "new_changed_parts": "Yeni/Değişen Parçalar",
     "retained_from_preset_short": "Ön Ayardan Korunan",
@@ -95,7 +117,18 @@
     "none": "Yok",
     "unknown": "Bilinmiyor",
     "builds": "Buildler",
-    "item_count": "{{count}} adet"
+    "item_count": "{{count}} adet",
+    "theme_light_primer": "Açık — Primer",
+    "theme_light_paper": "Açık — Sıcak kağıt",
+    "theme_light_latte": "Açık — Catppuccin Latte",
+    "theme_dark_onedark": "Koyu — One Dark (yüksek kontrast)",
+    "theme_dark_github": "Koyu — GitHub yüksek kontrast",
+    "theme_dark_tokyo": "Koyu — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Sistem",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Veri:"
   },
   "error": {
     "title": "Bir hata oluştu",

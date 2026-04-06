@@ -13,7 +13,13 @@
     "flea_market_access": "Mercato Pulci",
     "include_exclude": "Filtro Mod",
     "require_categories": "Cerca categorie...",
-    "require_items": "Cerca mod..."
+    "require_items": "Cerca mod...",
+    "mod_filter_categories_hint": "Per categoria: richiedi (+) o vieta (−) qualsiasi mod di quel tipo.",
+    "mod_filter_mods_hint": "Per mod: forza (+) o escludi (−) un mod specifico.",
+    "fast": "Veloce",
+    "auto": "Auto",
+    "precise": "Preciso",
+    "solver_precision_tooltip": "Auto: Preciso con albero piccolo, Veloce con albero grande. Veloce: LP rapido per alberi di mod grandi. Preciso: variabili di posizionamento complete, più lento ma esatto su mod multi-slot."
   },
   "tabs": {
     "explore": "Esplora",
@@ -25,6 +31,7 @@
     "optimize_btn": "Avvia Ottimizzazione",
     "constraints": "Vincoli",
     "required_items": "Oggetti Richiesti",
+    "implicit_required_items": "Mod di supporto (inclusi automaticamente con quelli richiesti)",
     "required_categories": "Categorie Richieste",
     "ready_description": "Seleziona un compito armaiolo per generare una build"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Rinculo",
     "preset_ergo": "Ergo",
     "preset_balanced": "Bilanciato",
+    "preset_price": "Min. operativo",
+    "preset_performance": "Prestazioni",
+    "preset_recoil_focus": "Rinculo+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Pesi",
+    "weight_ui_triangle": "Triangolo",
+    "weight_ui_sliders": "Slider",
     "generate_btn": "Avvia Ottimizzazione",
     "ready_description": "Seleziona arma e regola priorità per generare build ottimale"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Stato Ottimizzazione",
     "status_optimal": "Ottimale",
     "status_feasible": "Fattibile",
-    "status_infeasible": "Nessuna soluzione"
+    "status_infeasible": "Nessuna soluzione",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Ottimizzazione completata",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Ottimizzazione armaiolo completata",
     "gunsmith_failed": "Ottimizzazione armaiolo fallita",
     "copied": "Copiato",
-    "copy_failed": "Copia fallita"
+    "copy_failed": "Copia fallita",
+    "load_failed": "Impossibile caricare i dati di gioco",
+    "optimize_infeasible": "Nessuna configurazione valida con i vincoli attuali",
+    "explore_empty": "Nessun punto di frontiera con i vincoli attuali",
+    "gunsmith_infeasible": "Impossibile soddisfare il compito da armaiolo",
+    "optimize_non_optimal": "Stato del risolutore: {{status}}"
   },
   "ui": {
     "initializing": "Inizializzazione...",
@@ -75,6 +95,8 @@
     "weight_label": "Peso",
     "recoil_sum": "Rinculo",
     "base_preset_used": "Preset Usato",
+    "preset_purchase_at": "Acquista preset da",
+    "preset_source_unknown": "Nessuna fonte con impostazioni attuali",
     "build_manifest": "Manifesto Build",
     "new_changed_parts": "Parti Nuove/Cambiate",
     "retained_from_preset_short": "Mantenuto dal Preset",
@@ -95,7 +117,18 @@
     "none": "Nessuno",
     "unknown": "Sconosciuto",
     "builds": "Build",
-    "item_count": "{{count}} oggetti"
+    "item_count": "{{count}} oggetti",
+    "theme_light_primer": "Chiaro — Primer",
+    "theme_light_paper": "Chiaro — Carta calda",
+    "theme_light_latte": "Chiaro — Catppuccin Latte",
+    "theme_dark_onedark": "Scuro — One Dark (alto contrasto)",
+    "theme_dark_github": "Scuro — GitHub alto contrasto",
+    "theme_dark_tokyo": "Scuro — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Sistema",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Dati da"
   },
   "error": {
     "title": "Si è verificato un errore",

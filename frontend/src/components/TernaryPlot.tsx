@@ -13,7 +13,7 @@ interface TernaryPlotProps {
 
 const width = 300
 const paddingX = 50
-const paddingTop = 30
+const paddingTop = 38
 const paddingBottom = 25
 const sideLength = width - paddingX * 2
 const triangleHeight = sideLength * (Math.sqrt(3) / 2)
@@ -119,20 +119,20 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
         />
         <g>{gridLines}</g>
         <g style={{ fontSize: 12, fontWeight: 600 }}>
-          <text x={topX} y={topY - 8} textAnchor="middle" fill={token.colorPrimary}>
-            {t('sidebar.ergonomics', '人机')}
-          </text>
-          <text x={topX} y={topY + 14} textAnchor="middle" fill={token.colorPrimary} style={{ fontSize: 10, opacity: 0.7 }}>
+          <text x={topX} y={topY - 22} textAnchor="middle" fill={token.colorPrimary} style={{ fontSize: 11, opacity: 0.85 }}>
             {displayPoint.ergo}%
           </text>
+          <text x={topX} y={topY - 6} textAnchor="middle" fill={token.colorPrimary}>
+            {t('sidebar.ergonomics')}
+          </text>
           <text x={rightX + 15} y={rightY + 4} fill={token.colorSuccess}>
-            {t('optimize.preset_recoil', '后坐')}
+            {t('optimize.preset_recoil')}
           </text>
           <text x={rightX + 15} y={rightY + 18} fill={token.colorSuccess} style={{ fontSize: 10, opacity: 0.7 }}>
             {displayPoint.recoil}%
           </text>
           <text x={leftX - 15} y={leftY + 4} textAnchor="end" fill={token.colorWarning}>
-            {t('sidebar.price', '价格')}
+            {t('sidebar.price')}
           </text>
           <text x={leftX - 15} y={leftY + 18} textAnchor="end" fill={token.colorWarning} style={{ fontSize: 10, opacity: 0.7 }}>
             {displayPoint.price}%

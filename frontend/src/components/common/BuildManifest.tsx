@@ -15,19 +15,18 @@ interface BuildManifestProps {
 
 export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy }: BuildManifestProps) {
   const { t } = useTranslation()
-  const maxHeight = 300
   const titleContent = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-      <span style={{ userSelect: 'none' }}>{t('ui.build_manifest', '构建清单')}</span>
+      <span style={{ userSelect: 'none' }}>{t('ui.build_manifest')}</span>
       <Space>
-        {onCopy && <Button size="small" icon={<CopyOutlined />} onClick={onCopy}>{t('ui.copy_btn', '复制')}</Button>}
+        {onCopy && <Button size="small" icon={<CopyOutlined />} onClick={onCopy}>{t('ui.copy_btn')}</Button>}
         <Segmented
           size="small"
           value={compactMode ? 'compact' : 'detailed'}
           onChange={(v) => onCompactModeChange(v === 'compact')}
           options={[
-            { label: t('ui.detailed', '详细'), value: 'detailed' },
-            { label: t('ui.compact', '紧凑'), value: 'compact' },
+            { label: t('ui.detailed'), value: 'detailed' },
+            { label: t('ui.compact'), value: 'compact' },
           ]}
         />
       </Space>
@@ -46,33 +45,25 @@ export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy
               key: 'new',
               label: (
                 <Space style={{ userSelect: 'none' }}>
-                  <Text type="warning">{t('ui.new_changed_parts', '新增/更换配件')}</Text>
+                  <Text type="warning">{t('ui.new_changed_parts')}</Text>
                   <Tag color="orange">{newItems.length}</Tag>
                 </Space>
               ),
-              children: (
-                <div style={{ maxHeight, overflowY: 'auto', overflowX: 'auto' }}>
-                  {newItems.length > 0
-                    ? newItems.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
-                    : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none', 'None')}</Text>}
-                </div>
-              ),
+              children: newItems.length > 0
+                ? newItems.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)
+                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>,
             },
             {
               key: 'retained',
               label: (
                 <Space style={{ userSelect: 'none' }}>
-                  <Text type="secondary">{t('ui.retained_from_preset_short', '预设保留配件')}</Text>
+                  <Text type="secondary">{t('ui.retained_from_preset_short')}</Text>
                   <Tag color="blue">{retainedItems.length}</Tag>
                 </Space>
               ),
-              children: (
-                <div style={{ maxHeight, overflowY: 'auto', overflowX: 'auto' }}>
-                  {retainedItems.length > 0
-                    ? retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)
-                    : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none', 'None')}</Text>}
-                </div>
-              ),
+              children: retainedItems.length > 0
+                ? retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)
+                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>,
             },
           ]}
         />
@@ -81,9 +72,7 @@ export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy
   }
   return (
     <Card title={titleContent} size="small">
-      <div style={{ maxHeight: maxHeight * 2, overflowY: 'auto', overflowX: 'auto' }}>
-        {result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}
-      </div>
+      {result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}
     </Card>
   )
 }

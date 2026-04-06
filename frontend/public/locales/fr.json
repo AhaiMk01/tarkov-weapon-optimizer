@@ -13,7 +13,13 @@
     "flea_market_access": "Marché aux puces",
     "include_exclude": "Filtre de mods",
     "require_categories": "Rechercher catégories...",
-    "require_items": "Rechercher mods..."
+    "require_items": "Rechercher mods...",
+    "mod_filter_categories_hint": "Par catégorie : exiger (+) ou interdire (−) tout mod de ce type.",
+    "mod_filter_mods_hint": "Par mod : forcer (+) ou bannir (−) un mod précis.",
+    "fast": "Rapide",
+    "auto": "Auto",
+    "precise": "Précis",
+    "solver_precision_tooltip": "Auto : Précis si l'arbre est petit, Rapide s'il est grand. Rapide : LP rapide pour les grands arbres de mods. Précis : variables de placement complètes, plus lent mais exact sur les mods multi-emplacements."
   },
   "tabs": {
     "explore": "Explorer",
@@ -25,6 +31,7 @@
     "optimize_btn": "Démarrer l'optimisation",
     "constraints": "Contraintes",
     "required_items": "Objets requis",
+    "implicit_required_items": "Mods de support (inclus automatiquement avec les pièces requises)",
     "required_categories": "Catégories requises",
     "ready_description": "Sélectionnez une tâche d'armurier pour générer une configuration"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Recul",
     "preset_ergo": "Ergo",
     "preset_balanced": "Équilibré",
+    "preset_price": "Min. utilisable",
+    "preset_performance": "Performance",
+    "preset_recoil_focus": "Recul+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Pondération",
+    "weight_ui_triangle": "Triangle",
+    "weight_ui_sliders": "Curseurs",
     "generate_btn": "Démarrer l'optimisation",
     "ready_description": "Sélectionnez arme et ajustez priorités pour build optimal"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Statut d'optimisation",
     "status_optimal": "Optimal",
     "status_feasible": "Réalisable",
-    "status_infeasible": "Sans solution"
+    "status_infeasible": "Sans solution",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimisation terminée",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Optimisation armurier terminée",
     "gunsmith_failed": "Optimisation armurier échouée",
     "copied": "Copié",
-    "copy_failed": "Échec de la copie"
+    "copy_failed": "Échec de la copie",
+    "load_failed": "Échec du chargement des données",
+    "optimize_infeasible": "Aucune configuration valide avec ces contraintes",
+    "explore_empty": "Aucun point de frontière avec ces contraintes",
+    "gunsmith_infeasible": "Impossible de satisfaire cette tâche d’armurier",
+    "optimize_non_optimal": "État du solveur : {{status}}"
   },
   "ui": {
     "initializing": "Initialisation...",
@@ -75,6 +95,8 @@
     "weight_label": "Poids",
     "recoil_sum": "Recul",
     "base_preset_used": "Preset utilisé",
+    "preset_purchase_at": "Acheter le preset chez",
+    "preset_source_unknown": "Aucune source avec réglages actuels",
     "build_manifest": "Manifeste de build",
     "new_changed_parts": "Pièces nouvelles/modifiées",
     "retained_from_preset_short": "Conservé du preset",
@@ -95,7 +117,18 @@
     "none": "Aucun",
     "unknown": "Inconnu",
     "builds": "Builds",
-    "item_count": "{{count}} objets"
+    "item_count": "{{count}} objets",
+    "theme_light_primer": "Clair — Primer",
+    "theme_light_paper": "Clair — Papier chaleureux",
+    "theme_light_latte": "Clair — Catppuccin Latte",
+    "theme_dark_onedark": "Sombre — One Dark (contraste élevé)",
+    "theme_dark_github": "Sombre — GitHub contraste élevé",
+    "theme_dark_tokyo": "Sombre — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Système",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Données :"
   },
   "error": {
     "title": "Une erreur s'est produite",

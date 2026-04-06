@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
-import { Alert, Card, Tag, Space, Button, Typography, message, Grid } from 'antd'
+import { Alert, Tag, Button, Typography } from 'antd'
 import { ThunderboltOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
 import { EmptyState } from '../common/EmptyState'
 import { StatsCards } from '../common/StatsCards'
 import { BuildManifest } from '../common/BuildManifest'
+import { UsingPresetCard } from '../common/UsingPresetCard'
 import type { OptimizeResponse } from '../../api/client'
 
-const { Text, Title } = Typography
+const { Text } = Typography
 
 interface OptimizeResultProps {
   result: OptimizeResponse | null
@@ -18,33 +19,18 @@ interface OptimizeResultProps {
   disabled: boolean
 }
 
+function precisionResolvedLabel(t: (k: string, opts?: Record<string, string>) => string, mode: 'fast' | 'precise'): string {
+  return mode === 'precise' ? t('sidebar.precise') : t('sidebar.fast')
+}
+
 export function OptimizeResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled }: OptimizeResultProps) {
   const { t } = useTranslation()
-  const screens = Grid.useBreakpoint()
-  const isMobile = !screens.md
-  const [messageApi, contextHolder] = message.useMessage()
-  const copyText = (text: string) => {
-    const successMsg = t('toast.copied', '已复制')
-    if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(text).then(() => messageApi.success(successMsg))
-    } else {
-      const textArea = document.createElement('textarea')
-      textArea.value = text
-      textArea.style.position = 'fixed'
-      textArea.style.left = '-9999px'
-      document.body.appendChild(textArea)
-      textArea.select()
-      document.execCommand('copy')
-      document.body.removeChild(textArea)
-      messageApi.success(successMsg)
-    }
-  }
   if (!result) {
     return (
       <EmptyState
         icon={<ThunderboltOutlined />}
-        description={t('optimize.ready_description', '选择武器并调整优先级，生成数学最优构建')}
-        buttonText={t('optimize.generate_btn', '开始优化')}
+        description={t('optimize.ready_description')}
+        buttonText={t('optimize.generate_btn')}
         buttonIcon={<ThunderboltOutlined />}
         loading={optimizing}
         disabled={disabled}
@@ -56,10 +42,23 @@ export function OptimizeResult({ result, compactMode, onCompactModeChange, optim
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Alert
         type={result.status === 'optimal' ? 'success' : result.status === 'infeasible' ? 'error' : 'warning'}
-        message={<><Text>{t('results.optimization_status', '优化状态')}: {t(`results.status_${result.status}`, result.status)}</Text>{result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}{result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}</>}
+        message={
+          <>
+            <Text>{t('results.optimization_status')}: {t(`results.status_${result.status}`, { defaultValue: result.status })}</Text>
+            {result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}
+            {result.precision_request === 'auto' && result.precision_resolved && (
+              <Tag color="processing" style={{ marginLeft: 8 }} title={t('sidebar.solver_precision_tooltip')}>
+                {t('results.precision_auto_ran', {
+                  mode: precisionResolvedLabel(t, result.precision_resolved),
+                })}
+              </Tag>
+            )}
+            {result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}
+          </>
+        }
         icon={result.status === 'optimal' ? <CheckCircleOutlined /> : result.status === 'infeasible' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
         showIcon
-        action={<Button type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={onOptimize}>{t('ui.reoptimize_btn', '重新优化')}</Button>}
+        action={<Button type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={onOptimize}>{t('ui.reoptimize_btn')}</Button>}
       />
       {result.status !== 'infeasible' && result.final_stats && (
         <>
@@ -70,36 +69,7 @@ export function OptimizeResult({ result, compactMode, onCompactModeChange, optim
             weight={result.final_stats.total_weight}
             price={result.final_stats.total_price}
           />
-          {result.selected_preset && (
-            <Card size="small">
-              {contextHolder}
-              {isMobile ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {result.selected_preset.icon && <img src={result.selected_preset.icon} alt="" style={{ width: '100%', maxHeight: 120, objectFit: 'contain' }} />}
-                  <div>
-                    <Space size={4} wrap>
-                      <Text type="secondary">{t('ui.base_preset_used', '使用预设')}</Text>
-                      <Tag color="gold" style={{ margin: 0 }}>₽{result.selected_preset.price.toLocaleString()}</Tag>
-                      {result.selected_preset.source && <Tag style={{ margin: 0 }}>{result.selected_preset.source}</Tag>}
-                    </Space>
-                    <Title level={5} style={{ margin: 0, cursor: 'pointer' }} onClick={() => copyText(result.selected_preset!.name)}>{result.selected_preset.name}</Title>
-                  </div>
-                </div>
-              ) : (
-                <Space>
-                  {result.selected_preset.icon && <img src={result.selected_preset.icon} alt="" style={{ height: 48, objectFit: 'contain' }} />}
-                  <div>
-                    <Space size={4}>
-                      <Text type="secondary">{t('ui.base_preset_used', '使用预设')}</Text>
-                      <Tag color="gold" style={{ margin: 0 }}>₽{result.selected_preset.price.toLocaleString()}</Tag>
-                      {result.selected_preset.source && <Tag style={{ margin: 0 }}>{result.selected_preset.source}</Tag>}
-                    </Space>
-                    <Title level={5} style={{ margin: 0, cursor: 'pointer' }} onClick={() => copyText(result.selected_preset!.name)}>{result.selected_preset.name}</Title>
-                  </div>
-                </Space>
-              )}
-            </Card>
-          )}
+          {result.selected_preset && <UsingPresetCard preset={result.selected_preset} />}
           <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} />
         </>
       )}

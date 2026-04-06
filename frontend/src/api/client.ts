@@ -17,6 +17,9 @@ export interface InfoResponse {
   guns: Gun[];
 }
 
+/** Solver LP mode: Fast (default omit), Precise, or Auto (precise when mod tree is small). */
+export type SolverPrecisionMode = 'auto' | 'fast' | 'precise';
+
 export interface OptimizeRequest {
   weapon_id: string;
   max_price?: number;
@@ -42,7 +45,8 @@ export interface OptimizeRequest {
   };
   flea_available?: boolean;
   player_level?: number;
-  precise_mode?: boolean;
+  /** Boolean values are normalized: true → precise, false → fast. */
+  precise_mode?: boolean | SolverPrecisionMode;
 }
 
 export interface ItemDetail {
@@ -51,6 +55,10 @@ export interface ItemDetail {
   price: number;
   icon?: string;
   source?: string;
+  /** When false, part is not on traders/flea in API — optimizer assumes FiR/owned (buy cost 0) */
+  purchasable?: boolean;
+  /** BSG reference value for display when not purchasable */
+  reference_price_rub?: number;
   ergonomics: number;
   recoil_modifier: number;
 }
@@ -61,7 +69,10 @@ export interface PresetDetail {
   price: number;
   items: string[];
   icon?: string;
+  /** API source key for the offer used (e.g. trader id, fleaMarket) */
   source?: string;
+  /** Human-readable seller for the preset price (e.g. "Prapor", "Flea Market") */
+  purchase_label?: string;
 }
 
 export interface FinalStats {
@@ -81,6 +92,8 @@ export interface OptimizeResponse {
   reason?: string;
   final_stats?: FinalStats;
   solve_time_ms?: number;
+  precision_request?: SolverPrecisionMode;
+  precision_resolved?: 'fast' | 'precise';
 }
 
 export type GameMode = 'regular' | 'pve';
@@ -89,7 +102,16 @@ export interface ModInfo {
   id: string;
   name: string;
   category: string;
+  /** BSG category id — must match solver `category_id` (not display name). */
+  category_id: string;
+  category_normalized: string;
+  category_child_ids: string[];
   icon?: string;
+}
+
+export interface ModCategoryOption {
+  id: string;
+  name: string;
 }
 
 export interface ExploreRequest extends OptimizeRequest {
@@ -112,6 +134,8 @@ export interface ExplorePoint {
 export interface ExploreResponse {
   points: ExplorePoint[];
   total_solve_time_ms?: number;
+  precision_request?: SolverPrecisionMode;
+  precision_resolved?: 'fast' | 'precise';
 }
 
 export interface GunsmithConstraints {
@@ -130,6 +154,9 @@ export interface GunsmithTask {
   constraints: GunsmithConstraints;
   required_item_ids: string[];
   required_item_names: string[];
+  /** Auto-added hosts when a required mod has no weapon slot and only one parent mod chain */
+  implicit_required_item_ids?: string[];
+  implicit_required_item_names?: string[];
   required_category_group_ids: string[][];
   required_category_names: string[][];
 }
@@ -144,13 +171,29 @@ let worker: Worker | null = null;
 let messageId = 0;
 const pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
 
+function rejectAllPending(reason: Error): void {
+  for (const [, pending] of pendingRequests) {
+    pending.reject(reason);
+  }
+  pendingRequests.clear();
+}
+
+/** Terminate the worker and fail all in-flight requests (fatal worker failure). */
+function resetWorker(reason: Error): void {
+  rejectAllPending(reason);
+  if (worker) {
+    worker.terminate();
+    worker = null;
+  }
+}
+
 function getWorker(): Worker {
   if (!worker) {
-    worker = new Worker(
+    const w = new Worker(
       new URL('../solver/solver.worker.ts', import.meta.url),
       { type: 'module' }
     );
-    worker.onmessage = (event) => {
+    w.onmessage = (event: MessageEvent<{ type: string; id: number; payload: unknown }>) => {
       const { type, id, payload } = event.data;
       const pending = pendingRequests.get(id);
       if (!pending) return;
@@ -162,9 +205,16 @@ function getWorker(): Worker {
         pending.resolve(payload);
       }
     };
-    worker.onerror = (event) => {
+    w.onerror = (event) => {
       console.error('Worker error:', event);
+      const msg = event.message || 'Web Worker failed';
+      resetWorker(new Error(msg));
     };
+    w.onmessageerror = (event) => {
+      console.error('Worker message error:', event);
+      resetWorker(new Error('Web Worker message error'));
+    };
+    worker = w;
   }
   return worker;
 }

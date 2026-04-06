@@ -8,9 +8,9 @@ export function ErrorFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
     <Result
       status="error"
-      title={t('error.title', '发生错误')}
+      title={t('error.title')}
       subTitle={errorMessage}
-      extra={<Button type="primary" onClick={resetErrorBoundary}>{t('error.retry', '重试')}</Button>}
+      extra={<Button type="primary" onClick={resetErrorBoundary}>{t('error.retry')}</Button>}
     />
   )
 }

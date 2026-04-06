@@ -1,14 +1,17 @@
 import { useTranslation } from 'react-i18next'
-import { Collapse, Select, Space, Tag, Button, Divider, theme } from 'antd'
+import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography } from 'antd'
 import { PlusOutlined, MinusOutlined } from '@ant-design/icons'
-import type { ModInfo } from '../../api/client'
+import type { ModInfo, ModCategoryOption } from '../../api/client'
 
 const { useToken } = theme
+const { Text } = Typography
+
+const hintStyle = { fontSize: 12, lineHeight: 1.45, display: 'block' as const }
 
 interface ModFilterProps {
   availableMods: ModInfo[]
   loadingMods: boolean
-  modCategories: string[]
+  modCategoryOptions: ModCategoryOption[]
   includedCategories: string[]
   excludedCategories: string[]
   onIncludedCategoriesChange: (v: string[]) => void
@@ -26,7 +29,7 @@ interface ModFilterProps {
 export function ModFilter({
   availableMods,
   loadingMods,
-  modCategories,
+  modCategoryOptions,
   includedCategories,
   excludedCategories,
   onIncludedCategoriesChange,
@@ -42,26 +45,37 @@ export function ModFilter({
 }: ModFilterProps) {
   const { t } = useTranslation()
   const { token } = useToken()
-  const searchedCategories = modCategories.filter(c => c.toLowerCase().includes(categorySearch.toLowerCase()) && !includedCategories.includes(c) && !excludedCategories.includes(c))
+  const eligibleCategories = modCategoryOptions.filter(
+    o => !includedCategories.includes(o.id) && !excludedCategories.includes(o.id),
+  )
+  const q = categorySearch.trim().toLowerCase()
+  const searchedCategories = q
+    ? eligibleCategories.filter(o => o.name.toLowerCase().includes(q))
+    : eligibleCategories
   const searchedMods = modSearch ? availableMods.filter(m => m.name.toLowerCase().includes(modSearch.toLowerCase()) && !includedModIds.includes(m.id) && !excludedModIds.includes(m.id)).slice(0, 10) : []
   return (
     <Collapse size="small" items={[
       {
         key: 'mods',
-        label: <span style={{ userSelect: 'none' }}>{t('sidebar.include_exclude', '配件筛选')}</span>,
+        label: <span style={{ userSelect: 'none' }}>{t('sidebar.include_exclude')}</span>,
         children: (
           <Space direction="vertical" style={{ width: '100%' }}>
+            <Text type="secondary" style={hintStyle}>
+              {t('sidebar.mod_filter_categories_hint')}
+            </Text>
             <Select
               showSearch
+              virtual
               style={{ width: '100%' }}
-              placeholder={t('sidebar.require_categories', '搜索类别...')}
+              placeholder={t('sidebar.require_categories')}
               value={null}
               searchValue={categorySearch}
               onSearch={onCategorySearchChange}
               onSelect={(v) => { if (v) { onIncludedCategoriesChange([...includedCategories, v]); onCategorySearchChange('') } }}
               filterOption={false}
               notFoundContent={null}
-              options={searchedCategories.slice(0, 10).map(cat => ({ value: cat, label: cat }))}
+              listHeight={320}
+              options={searchedCategories.map(o => ({ value: o.id, label: o.name }))}
               optionRender={(option) => (
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>{option.label}</span>
@@ -73,14 +87,25 @@ export function ModFilter({
               )}
             />
             <Space wrap>
-              {includedCategories.map(cat => <Tag key={cat} color="success" closable onClose={() => onIncludedCategoriesChange(includedCategories.filter(c => c !== cat))}>{cat}</Tag>)}
-              {excludedCategories.map(cat => <Tag key={cat} color="error" closable onClose={() => onExcludedCategoriesChange(excludedCategories.filter(c => c !== cat))}>{cat}</Tag>)}
+              {includedCategories.map(catId => (
+                <Tag key={catId} color="success" closable onClose={() => onIncludedCategoriesChange(includedCategories.filter(c => c !== catId))}>
+                  {modCategoryOptions.find(o => o.id === catId)?.name ?? catId}
+                </Tag>
+              ))}
+              {excludedCategories.map(catId => (
+                <Tag key={catId} color="error" closable onClose={() => onExcludedCategoriesChange(excludedCategories.filter(c => c !== catId))}>
+                  {modCategoryOptions.find(o => o.id === catId)?.name ?? catId}
+                </Tag>
+              ))}
             </Space>
             <Divider style={{ margin: '8px 0' }} />
+            <Text type="secondary" style={hintStyle}>
+              {t('sidebar.mod_filter_mods_hint')}
+            </Text>
             <Select
               showSearch
               style={{ width: '100%' }}
-              placeholder={t('sidebar.require_items', '搜索配件...')}
+              placeholder={t('sidebar.require_items')}
               value={null}
               searchValue={modSearch}
               onSearch={onModSearchChange}

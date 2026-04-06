@@ -1,4 +1,4 @@
-import { solveZ3 } from './src/solver/z3Solver';
+import { solve } from './src/solver/solver';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap';
 import type { ItemLookup, GunStats, ModStats, SolveParams } from './src/solver/types';
 
@@ -147,7 +147,8 @@ async function runTest() {
                     capacity: 0,
                     sighting_range: 0,
                     category: '',
-                    category_id: ''
+                    category_id: '',
+                    purchasable: true,
                 } as ModStats,
                 slots: (props.slots || []).map((s: any) => ({
                     id: s.id,
@@ -183,7 +184,7 @@ async function runTest() {
     };
 
     console.log('Solving for Max Recoil Reduction (Recoil Weight = 100)...');
-    const result = await solveZ3(params);
+    const result = await solve(params);
 
     console.log(`Status: ${result.status}`);
     const finalStats = result.final_stats;

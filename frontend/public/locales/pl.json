@@ -13,7 +13,13 @@
     "flea_market_access": "Pchli Targ",
     "include_exclude": "Filtr Modów",
     "require_categories": "Szukaj kategorii...",
-    "require_items": "Szukaj modów..."
+    "require_items": "Szukaj modów...",
+    "mod_filter_categories_hint": "Po kategorii: wymagaj (+) lub zabroć (−) dowolny mod tego typu.",
+    "mod_filter_mods_hint": "Po przedmiocie: wymusz (+) lub zablokuj (−) konkretny mod.",
+    "fast": "Szybki",
+    "auto": "Auto",
+    "precise": "Precyzyjny",
+    "solver_precision_tooltip": "Auto: Precyzyjny przy małym drzewie, Szybki przy dużym. Szybki: szybkie LP dla dużych drzew modów. Precyzyjny: pełne zmienne rozmieszczenia, wolniejszy ale dokładny dla modów wielu slotów."
   },
   "tabs": {
     "explore": "Analiza",
@@ -25,6 +31,7 @@
     "optimize_btn": "Rozpocznij Optymalizację",
     "constraints": "Ograniczenia",
     "required_items": "Wymagane Przedmioty",
+    "implicit_required_items": "Moduły wspierające (dołączane automatycznie z wymaganymi)",
     "required_categories": "Wymagane Kategorie",
     "ready_description": "Wybierz zadanie rusznikarza, aby wygenerować build"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Odrzut",
     "preset_ergo": "Ergo",
     "preset_balanced": "Zbalansowany",
+    "preset_price": "Min. sprawne",
+    "preset_performance": "Wydajność",
+    "preset_recoil_focus": "Odrzut+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Wagi",
+    "weight_ui_triangle": "Trójkąt",
+    "weight_ui_sliders": "Suwaki",
     "generate_btn": "Rozpocznij Optymalizację",
     "ready_description": "Wybierz broń i dostosuj priorytety dla optymalnej konfiguracji"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Status Optymalizacji",
     "status_optimal": "Optymalny",
     "status_feasible": "Wykonalny",
-    "status_infeasible": "Brak rozwiązania"
+    "status_infeasible": "Brak rozwiązania",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optymalizacja zakończona",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Optymalizacja rusznikarza zakończona",
     "gunsmith_failed": "Optymalizacja rusznikarza nieudana",
     "copied": "Skopiowano",
-    "copy_failed": "Kopiowanie nieudane"
+    "copy_failed": "Kopiowanie nieudane",
+    "load_failed": "Nie udało się wczytać danych gry",
+    "optimize_infeasible": "Brak poprawnej konfiguracji przy tych ograniczeniach",
+    "explore_empty": "Brak punktów granicy przy tych ograniczeniach",
+    "gunsmith_infeasible": "Nie można spełnić zadania rusznikarza",
+    "optimize_non_optimal": "Status solvera: {{status}}"
   },
   "ui": {
     "initializing": "Inicjalizacja...",
@@ -75,6 +95,8 @@
     "weight_label": "Waga",
     "recoil_sum": "Odrzut",
     "base_preset_used": "Użyty Preset",
+    "preset_purchase_at": "Kup preset u",
+    "preset_source_unknown": "Brak źródła przy obecnych ustawieniach",
     "build_manifest": "Manifest Buildu",
     "new_changed_parts": "Nowe/Zmienione Części",
     "retained_from_preset_short": "Zachowane z Presetu",
@@ -95,7 +117,18 @@
     "none": "Brak",
     "unknown": "Nieznany",
     "builds": "Buildy",
-    "item_count": "{{count}} szt."
+    "item_count": "{{count}} szt.",
+    "theme_light_primer": "Jasny — Primer",
+    "theme_light_paper": "Jasny — Ciepły papier",
+    "theme_light_latte": "Jasny — Catppuccin Latte",
+    "theme_dark_onedark": "Ciemny — One Dark (wysoki kontrast)",
+    "theme_dark_github": "Ciemny — GitHub wysoki kontrast",
+    "theme_dark_tokyo": "Ciemny — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Systemowy",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Dane:"
   },
   "error": {
     "title": "Wystąpił błąd",

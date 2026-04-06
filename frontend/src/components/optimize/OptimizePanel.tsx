@@ -2,15 +2,8 @@ import { WeaponSelector } from '../common/WeaponSelector'
 import { WeightAdjuster } from '../common/WeightAdjuster'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
-import type { Gun, ModInfo } from '../../api/client'
-
-interface TraderLevels {
-  prapor: number
-  skier: number
-  peacekeeper: number
-  mechanic: number
-  jaeger: number
-}
+import type { Gun, ModInfo, ModCategoryOption } from '../../api/client'
+import type { TraderLevels } from '../../solver/types'
 
 interface OptimizePanelProps {
   guns: Gun[]
@@ -35,7 +28,7 @@ interface OptimizePanelProps {
   onMinErgoChange: (v: number) => void
   availableMods: ModInfo[]
   loadingMods: boolean
-  modCategories: string[]
+  modCategoryOptions: ModCategoryOption[]
   includedCategories: string[]
   excludedCategories: string[]
   onIncludedCategoriesChange: (v: string[]) => void
@@ -86,7 +79,7 @@ export function OptimizePanel(props: OptimizePanelProps) {
       <ModFilter
         availableMods={props.availableMods}
         loadingMods={props.loadingMods}
-        modCategories={props.modCategories}
+        modCategoryOptions={props.modCategoryOptions}
         includedCategories={props.includedCategories}
         excludedCategories={props.excludedCategories}
         onIncludedCategoriesChange={props.onIncludedCategoriesChange}

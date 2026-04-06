@@ -6,6 +6,10 @@ import type { ItemDetail } from '../api/client'
 const { Text } = Typography
 const { useToken } = theme
 
+/** Grid track for per-item price (locale-formatted ₽ can be wide; ref lines need more room) */
+const PRICE_COLUMN = 'minmax(11rem, max-content)'
+const priceCellWrapStyle = { textAlign: 'right' as const, whiteSpace: 'nowrap' as const, justifySelf: 'end' as const }
+
 const traderIcons: Record<string, { icon: string; name: string }> = {
   'prapor': { icon: '/traders/prapor.webp', name: 'Prapor' },
   'therapist': { icon: '/traders/therapist.webp', name: 'Therapist' },
@@ -20,8 +24,20 @@ const traderIcons: Record<string, { icon: string; name: string }> = {
   'fleamarket': { icon: '/traders/flea-market-portrait.png', name: 'Flea Market' },
 }
 
-function TraderIcon({ source, unknownLabel, compact }: { source: string | undefined; unknownLabel: string; compact?: boolean }) {
+export function TraderIcon({ source, unknownLabel, compact }: { source: string | undefined; unknownLabel: string; compact?: boolean }) {
   if (!source) return <Text type="secondary" style={compact ? { minWidth: 80 } : undefined}>{unknownLabel}</Text>
+  if (source === 'not_purchasable') {
+    const label = compact ? 'Unlisted' : 'Not on market'
+    return (
+      <Text
+        type="secondary"
+        style={compact ? { minWidth: 80 } : undefined}
+        title="Tarkov.dev has no trader/flea buy row for this item — optimizer uses a reference price only; in-game it may be barter, craft, FiR, events, or API incomplete."
+      >
+        {label}
+      </Text>
+    )
+  }
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]
   if (compact) {
@@ -51,8 +67,8 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
   const { token } = useToken()
   const { message } = App.useApp()
   const copyToClipboard = (text: string) => {
-    const successMsg = t('toast.copied', 'Copied')
-    const failMsg = t('toast.copy_failed', 'Copy failed')
+    const successMsg = t('toast.copied')
+    const failMsg = t('toast.copy_failed')
     if (navigator.clipboard && window.isSecureContext) {
       navigator.clipboard.writeText(text).then(() => {
         message.success(successMsg)
@@ -81,12 +97,12 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
   const truncateStyle = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
   const clickableStyle = { cursor: 'pointer' }
   const tagStyle = { margin: 0, minWidth: 90, textAlign: 'center' as const }
-  const ergoLabel = t('item.ergo', 'Ergo')
-  const recoilLabel = t('item.recoil', 'Recoil')
-  const unknownLabel = t('ui.unknown', 'Unknown')
+  const ergoLabel = t('item.ergo')
+  const recoilLabel = t('item.recoil')
+  const unknownLabel = t('ui.unknown')
   if (compactMode) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto 64px', gap: 8, padding: '8px 16px', alignItems: 'center', minWidth: 480 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: `1fr auto auto ${PRICE_COLUMN}`, gap: 8, padding: '8px 16px', alignItems: 'center', minWidth: 520 }}>
         <div style={{ minWidth: 200 }}>
           <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
         </div>
@@ -103,14 +119,14 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
           )}
         </div>
         <TraderIcon source={item.source} unknownLabel={unknownLabel} compact />
-        <Text type="secondary" style={{ textAlign: 'right' }}>
-          {hidePrice ? '-' : `₽${item.price.toLocaleString()}`}
+        <Text type="secondary" style={priceCellWrapStyle}>
+          {hidePrice ? '-' : priceCell(item)}
         </Text>
       </div>
     )
   }
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '64px 1fr auto 64px 64px', gap: 8, padding: 16, alignItems: 'center', minWidth: 520 }}>
+    <div style={{ display: 'grid', gridTemplateColumns: `64px 1fr auto 64px ${PRICE_COLUMN}`, gap: 8, padding: 16, alignItems: 'center', minWidth: 560 }}>
       <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
         {item.icon ? (
           <img src={item.icon} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
@@ -136,9 +152,23 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
         {item.ergonomics === 0 && item.recoil_modifier === 0 && <Text type="secondary">-</Text>}
       </div>
       <TraderIcon source={item.source} unknownLabel={unknownLabel} />
-      <Text type="secondary" style={{ textAlign: 'right' }}>
-        {hidePrice ? '-' : `₽${item.price.toLocaleString()}`}
+      <Text type="secondary" style={priceCellWrapStyle}>
+        {hidePrice ? '-' : priceCell(item)}
       </Text>
     </div>
   )
+}
+
+function priceCell(item: ItemDetail) {
+  if (item.purchasable === false && item.reference_price_rub != null && item.reference_price_rub > 0) {
+    return (
+      <span title="BSG reference only — not counted in build price">
+        0 <Text type="secondary">(ref ₽{item.reference_price_rub.toLocaleString()})</Text>
+      </span>
+    )
+  }
+  if (item.purchasable === false) {
+    return <span title="Not counted in build price">0</span>
+  }
+  return `₽${item.price.toLocaleString()}`
 }

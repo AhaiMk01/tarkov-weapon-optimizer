@@ -13,7 +13,13 @@
     "flea_market_access": "Барахолка",
     "include_exclude": "Фильтр модов",
     "require_categories": "Поиск категорий...",
-    "require_items": "Поиск модов..."
+    "require_items": "Поиск модов...",
+    "mod_filter_categories_hint": "По категории: требовать (+) или запретить (−) любой мод этого типа.",
+    "mod_filter_mods_hint": "По предмету: заставить (+) или запретить (−) конкретный мод.",
+    "fast": "Быстро",
+    "auto": "Авто",
+    "precise": "Точно",
+    "solver_precision_tooltip": "Авто: точный режим при малом дереве, быстрый при большом. Быстро: быстрый LP для больших деревьев модов. Точно: полные переменные размещения, медленнее, но точнее."
   },
   "tabs": {
     "explore": "Анализ",
@@ -25,6 +31,7 @@
     "optimize_btn": "Начать оптимизацию",
     "constraints": "Ограничения",
     "required_items": "Необходимые предметы",
+    "implicit_required_items": "Вспомогательные моды (добавляются вместе с обязательными)",
     "required_categories": "Необходимые категории",
     "ready_description": "Выберите задание оружейника для создания сборки"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Отдача",
     "preset_ergo": "Эрго",
     "preset_balanced": "Баланс",
+    "preset_price": "Мин. работоспособность",
+    "preset_performance": "Характеристики",
+    "preset_recoil_focus": "Отдача+",
+    "preset_ergo_focus": "Эрго+",
+    "weight_ui_label": "Регулировка весов",
+    "weight_ui_triangle": "Треугольник",
+    "weight_ui_sliders": "Ползунки",
     "generate_btn": "Начать оптимизацию",
     "ready_description": "Выберите оружие и настройте приоритеты для оптимальной сборки"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Статус оптимизации",
     "status_optimal": "Оптимально",
     "status_feasible": "Возможно",
-    "status_infeasible": "Невозможно"
+    "status_infeasible": "Невозможно",
+    "precision_auto_ran": "Авто → {{mode}}"
   },
   "toast": {
     "optimize_success": "Оптимизация завершена",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Оптимизация оружейника завершена",
     "gunsmith_failed": "Ошибка оптимизации оружейника",
     "copied": "Скопировано",
-    "copy_failed": "Ошибка копирования"
+    "copy_failed": "Ошибка копирования",
+    "load_failed": "Не удалось загрузить данные",
+    "optimize_infeasible": "Нет подходящей сборки при текущих ограничениях",
+    "explore_empty": "Нет точек фронта при текущих ограничениях",
+    "gunsmith_infeasible": "Невыполнимо для задачи оружейника",
+    "optimize_non_optimal": "Статус решателя: {{status}}"
   },
   "ui": {
     "initializing": "Инициализация...",
@@ -75,6 +95,8 @@
     "weight_label": "Вес",
     "recoil_sum": "Отдача",
     "base_preset_used": "Используемый пресет",
+    "preset_purchase_at": "Где купить пресет",
+    "preset_source_unknown": "Нет источника при текущих настройках торговцев/барахолки",
     "build_manifest": "Манифест сборки",
     "new_changed_parts": "Новые/изменённые детали",
     "retained_from_preset_short": "Сохранено из пресета",
@@ -95,7 +117,18 @@
     "none": "Нет",
     "unknown": "Неизвестно",
     "builds": "Сборки",
-    "item_count": "{{count}} шт."
+    "item_count": "{{count}} шт.",
+    "theme_light_primer": "Светлая — Primer",
+    "theme_light_paper": "Светлая — тёплая бумага",
+    "theme_light_latte": "Светлая — Catppuccin Latte",
+    "theme_dark_onedark": "Тёмная — One Dark (высокий контраст)",
+    "theme_dark_github": "Тёмная — GitHub (высокий контраст)",
+    "theme_dark_tokyo": "Тёмная — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Как в системе",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Данные:"
   },
   "error": {
     "title": "Произошла ошибка",

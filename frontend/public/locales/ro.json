@@ -13,7 +13,13 @@
     "flea_market_access": "Flea Market",
     "include_exclude": "Filtru Moduri",
     "require_categories": "Caută categorii...",
-    "require_items": "Caută moduri..."
+    "require_items": "Caută moduri...",
+    "mod_filter_categories_hint": "Pe categorie: cere (+) sau interzice (−) orice mod de acel tip.",
+    "mod_filter_mods_hint": "Pe mod: forțează (+) sau interzice (−) un mod anume.",
+    "fast": "Rapid",
+    "auto": "Auto",
+    "precise": "Precis",
+    "solver_precision_tooltip": "Auto: Precis cu arbore mic, Rapid cu arbore mare. Rapid: LP rapid pentru arbori mari de moduri. Precis: variabile complete de plasare, mai lent dar exact la moduri multi-slot."
   },
   "tabs": {
     "explore": "Analiză",
@@ -25,6 +31,7 @@
     "optimize_btn": "Pornește Optimizarea",
     "constraints": "Constrângeri",
     "required_items": "Obiecte Necesare",
+    "implicit_required_items": "Moduri de suport (incluse automat cu cele obligatorii)",
     "required_categories": "Categorii Necesare",
     "ready_description": "Selectează o sarcină de armurier pentru a genera o configurație"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Recul",
     "preset_ergo": "Ergo",
     "preset_balanced": "Echilibrat",
+    "preset_price": "Min. funcțional",
+    "preset_performance": "Performanță",
+    "preset_recoil_focus": "Recul+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Ponderi",
+    "weight_ui_triangle": "Triunghi",
+    "weight_ui_sliders": "Glisoare",
     "generate_btn": "Pornește Optimizarea",
     "ready_description": "Selectează arma și ajustează prioritățile pentru configurație optimă"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Stare Optimizare",
     "status_optimal": "Optim",
     "status_feasible": "Fezabil",
-    "status_infeasible": "Fără soluție"
+    "status_infeasible": "Fără soluție",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimizare finalizată",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Optimizare armurier finalizată",
     "gunsmith_failed": "Optimizare armurier eșuată",
     "copied": "Copiat",
-    "copy_failed": "Copiere eșuată"
+    "copy_failed": "Copiere eșuată",
+    "load_failed": "Încărcarea datelor a eșuat",
+    "optimize_infeasible": "Nicio configurație validă cu restricțiile curente",
+    "explore_empty": "Niciun punct frontieră cu restricțiile curente",
+    "gunsmith_infeasible": "Sarcina de armurier nu poate fi îndeplinită",
+    "optimize_non_optimal": "Stare solver: {{status}}"
   },
   "ui": {
     "initializing": "Se inițializează...",
@@ -75,6 +95,8 @@
     "weight_label": "Greutate",
     "recoil_sum": "Recul",
     "base_preset_used": "Preset Folosit",
+    "preset_purchase_at": "Cumpără preset de la",
+    "preset_source_unknown": "Fără sursă la setările curente",
     "build_manifest": "Manifest Build",
     "new_changed_parts": "Părți Noi/Modificate",
     "retained_from_preset_short": "Păstrat din Preset",
@@ -95,7 +117,18 @@
     "none": "Niciunul",
     "unknown": "Necunoscut",
     "builds": "Configurații",
-    "item_count": "{{count}} obiecte"
+    "item_count": "{{count}} obiecte",
+    "theme_light_primer": "Deschis — Primer",
+    "theme_light_paper": "Deschis — Hârtie caldă",
+    "theme_light_latte": "Deschis — Catppuccin Latte",
+    "theme_dark_onedark": "Întunecat — One Dark (contrast ridicat)",
+    "theme_dark_github": "Întunecat — GitHub contrast ridicat",
+    "theme_dark_tokyo": "Întunecat — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Sistem",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Date:"
   },
   "error": {
     "title": "A apărut o eroare",

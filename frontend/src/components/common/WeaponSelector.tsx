@@ -28,7 +28,7 @@ export function WeaponSelector({
 }: WeaponSelectorProps) {
   const { t } = useTranslation()
   return (
-    <Card title={<span style={{ userSelect: 'none' }}>{t('sidebar.select_weapon', '武器选择')}</span>} size="small">
+    <Card title={<span style={{ userSelect: 'none' }}>{t('sidebar.select_weapon')}</span>} size="small">
       <Space direction="vertical" style={{ width: '100%' }}>
         <Row gutter={8}>
           <Col span={12}>
@@ -36,7 +36,7 @@ export function WeaponSelector({
               style={{ width: '100%' }}
               value={selectedCategory === 'All' ? undefined : selectedCategory}
               onChange={(v) => onCategoryChange(v || 'All')}
-              placeholder={t('ui.weapon_category', '武器类别')}
+              placeholder={t('ui.weapon_category')}
               allowClear
               options={categories.filter(c => c !== 'All').map(c => ({ value: c, label: c }))}
             />
@@ -46,7 +46,7 @@ export function WeaponSelector({
               style={{ width: '100%' }}
               value={selectedCaliber === 'All' ? undefined : selectedCaliber}
               onChange={(v) => onCaliberChange(v || 'All')}
-              placeholder={t('ui.caliber_type', '子弹口径')}
+              placeholder={t('ui.caliber_type')}
               allowClear
               options={calibers.filter(c => c !== 'All').map(c => ({ value: c, label: c }))}
             />

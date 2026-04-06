@@ -13,7 +13,13 @@
     "flea_market_access": "Bolhapiac",
     "include_exclude": "Mod szűrő",
     "require_categories": "Kategóriák keresése...",
-    "require_items": "Modok keresése..."
+    "require_items": "Modok keresése...",
+    "mod_filter_categories_hint": "Kategória szerint: (+) kötelező vagy (−) tiltott az adott típus minden modja.",
+    "mod_filter_mods_hint": "Mod szerint: (+) kényszerítés vagy (−) tiltás egy konkrét modra.",
+    "fast": "Gyors",
+    "auto": "Auto",
+    "precise": "Pontos",
+    "solver_precision_tooltip": "Auto: kis fánál Pontos, nagynál Gyors. Gyors: gyors LP nagy modfákhoz. Pontos: teljes elhelyezési változók, lassabb de pontos többhelyes modoknál."
   },
   "tabs": {
     "explore": "Elemzés",
@@ -25,6 +31,7 @@
     "optimize_btn": "Optimalizálás indítása",
     "constraints": "Korlátozások",
     "required_items": "Szükséges tárgyak",
+    "implicit_required_items": "Támogató modok (a kötelezőkkel automatikusan)",
     "required_categories": "Szükséges kategóriák",
     "ready_description": "Válasszon fegyverkovács feladatot egy build létrehozásához"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Visszarúgás",
     "preset_ergo": "Ergo",
     "preset_balanced": "Kiegyensúlyozott",
+    "preset_price": "Min. működőképes",
+    "preset_performance": "Teljesítmény",
+    "preset_recoil_focus": "Visszarúgás+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Súlyok",
+    "weight_ui_triangle": "Háromszög",
+    "weight_ui_sliders": "Csúszkák",
     "generate_btn": "Optimalizálás indítása",
     "ready_description": "Válasszon fegyvert és állítsa be a prioritásokat az optimális buildhez"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Optimalizálás állapota",
     "status_optimal": "Optimális",
     "status_feasible": "Megvalósítható",
-    "status_infeasible": "Nincs megoldás"
+    "status_infeasible": "Nincs megoldás",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimalizálás kész",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Fegyverkovács optimalizálás kész",
     "gunsmith_failed": "Fegyverkovács optimalizálás sikertelen",
     "copied": "Másolva",
-    "copy_failed": "Másolás sikertelen"
+    "copy_failed": "Másolás sikertelen",
+    "load_failed": "A játékadatok betöltése sikertelen",
+    "optimize_infeasible": "Nincs érvényes összeállítás ezekkel a korlátokkal",
+    "explore_empty": "Nincs frontpont ezekkel a korlátokkal",
+    "gunsmith_infeasible": "A fegyverkovács feladat nem teljesíthető",
+    "optimize_non_optimal": "Megoldó állapota: {{status}}"
   },
   "ui": {
     "initializing": "Inicializálás...",
@@ -75,6 +95,8 @@
     "weight_label": "Súly",
     "recoil_sum": "Visszarúgás",
     "base_preset_used": "Használt preset",
+    "preset_purchase_at": "Preset vásárlása",
+    "preset_source_unknown": "Nincs forrás a jelen beállításokkal",
     "build_manifest": "Build manifest",
     "new_changed_parts": "Új/módosított alkatrészek",
     "retained_from_preset_short": "Presetből megtartva",
@@ -95,7 +117,18 @@
     "none": "Nincs",
     "unknown": "Ismeretlen",
     "builds": "Buildek",
-    "item_count": "{{count}} db"
+    "item_count": "{{count}} db",
+    "theme_light_primer": "Világos — Primer",
+    "theme_light_paper": "Világos — Meleg papír",
+    "theme_light_latte": "Világos — Catppuccin Latte",
+    "theme_dark_onedark": "Sötét — One Dark (nagy kontraszt)",
+    "theme_dark_github": "Sötét — GitHub nagy kontraszt",
+    "theme_dark_tokyo": "Sötét — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Rendszer",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Adatok:"
   },
   "error": {
     "title": "Hiba történt",

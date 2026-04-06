@@ -1,15 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { Collapse, Switch, Slider, Segmented, Space, Divider, Typography } from 'antd'
+import type { TraderLevels } from '../../solver/types'
 
 const { Text } = Typography
-
-interface TraderLevels {
-  prapor: number
-  skier: number
-  peacekeeper: number
-  mechanic: number
-  jaeger: number
-}
 
 interface LevelConfigProps {
   fleaAvailable: boolean
@@ -33,15 +26,15 @@ export function LevelConfig({
     <Collapse size="small" items={[
       {
         key: 'market',
-        label: <span style={{ userSelect: 'none' }}>{t('sidebar.player_trader_access', '等级配置')}</span>,
+        label: <span style={{ userSelect: 'none' }}>{t('sidebar.player_trader_access')}</span>,
         children: (
           <Space direction="vertical" style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <Text>{t('sidebar.flea_market_access', '跳蚤市场')}</Text>
+              <Text>{t('sidebar.flea_market_access')}</Text>
               <Switch checked={fleaAvailable} onChange={onFleaChange} />
             </div>
             <div>
-              <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.player_level', '玩家等级')}: {playerLevel}</Text>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.player_level')}: {playerLevel}</Text>
               <Slider value={playerLevel} onChange={onPlayerLevelChange} min={1} max={79} />
             </div>
             <Divider style={{ margin: '8px 0' }} />

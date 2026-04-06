@@ -13,7 +13,13 @@
     "flea_market_access": "Blší trh",
     "include_exclude": "Filter modov",
     "require_categories": "Hľadať kategórie...",
-    "require_items": "Hľadať mody..."
+    "require_items": "Hľadať mody...",
+    "mod_filter_categories_hint": "Podľa kategórie: vyžadovať (+) alebo zakázať (−) akýkoľvek mod daného typu.",
+    "mod_filter_mods_hint": "Podľa modu: vynútiť (+) alebo zakázať (−) konkrétny mod.",
+    "fast": "Rýchle",
+    "auto": "Auto",
+    "precise": "Presné",
+    "solver_precision_tooltip": "Auto: Presné pri malom strome, Rýchle pri veľkom. Rýchle: rýchle LP pre veľké stromy modov. Presné: úplné premenné umiestnenia, pomalšie ale presné pri viacslotových modo."
   },
   "tabs": {
     "explore": "Analýza",
@@ -25,6 +31,7 @@
     "optimize_btn": "Spustiť optimalizáciu",
     "constraints": "Obmedzenia",
     "required_items": "Vyžadované položky",
+    "implicit_required_items": "Podporné doplnky (automaticky spolu s povinnými)",
     "required_categories": "Vyžadované kategórie",
     "ready_description": "Vyberte úlohu gunsmithe pre vygenerovanie zostavy"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Spätný ráz",
     "preset_ergo": "Ergo",
     "preset_balanced": "Vyvážené",
+    "preset_price": "Min. prevádzkové",
+    "preset_performance": "Výkon",
+    "preset_recoil_focus": "Ráz+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Váhy",
+    "weight_ui_triangle": "Trojuholník",
+    "weight_ui_sliders": "Posúvače",
     "generate_btn": "Spustiť optimalizáciu",
     "ready_description": "Vyberte zbraň a upravte priority pre optimálnu zostavu"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Stav optimalizácie",
     "status_optimal": "Optimálny",
     "status_feasible": "Uskutočniteľný",
-    "status_infeasible": "Bez riešenia"
+    "status_infeasible": "Bez riešenia",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimalizácia dokončená",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Optimalizácia gunsmithe dokončená",
     "gunsmith_failed": "Optimalizácia gunsmithe zlyhala",
     "copied": "Skopírované",
-    "copy_failed": "Kopírovanie zlyhalo"
+    "copy_failed": "Kopírovanie zlyhalo",
+    "load_failed": "Nepodarilo sa načítať herné dáta",
+    "optimize_infeasible": "Pri týchto obmedzeniach neexistuje platná zostava",
+    "explore_empty": "Pri týchto obmedzeniach žiadne body fronty",
+    "gunsmith_infeasible": "Úlohu gunsmithella nie je možné splniť",
+    "optimize_non_optimal": "Stav riešiča: {{status}}"
   },
   "ui": {
     "initializing": "Inicializácia...",
@@ -75,6 +95,8 @@
     "weight_label": "Hmotnosť",
     "recoil_sum": "Spätný ráz",
     "base_preset_used": "Použitý preset",
+    "preset_purchase_at": "Kúpiť preset u",
+    "preset_source_unknown": "Žiadny zdroj pri aktuálnom nastavení",
     "build_manifest": "Manifest zostavy",
     "new_changed_parts": "Nové/zmenené diely",
     "retained_from_preset_short": "Zachované z presetu",
@@ -95,7 +117,18 @@
     "none": "Žiadne",
     "unknown": "Neznáme",
     "builds": "Zostavy",
-    "item_count": "{{count}} ks"
+    "item_count": "{{count}} ks",
+    "theme_light_primer": "Svetlý — Primer",
+    "theme_light_paper": "Svetlý — Teplý papier",
+    "theme_light_latte": "Svetlý — Catppuccin Latte",
+    "theme_dark_onedark": "Tmavý — One Dark (vysoký kontrast)",
+    "theme_dark_github": "Tmavý — GitHub vysoký kontrast",
+    "theme_dark_tokyo": "Tmavý — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "Podľa systému",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Údaje:"
   },
   "error": {
     "title": "Vyskytla sa chyba",

@@ -13,7 +13,13 @@
     "flea_market_access": "Flea Market",
     "include_exclude": "Mod Filter",
     "require_categories": "Search categories...",
-    "require_items": "Search mods..."
+    "require_items": "Search mods...",
+    "mod_filter_categories_hint": "By category: require (+) or forbid (−) any mod of that type (e.g. sights, grips).",
+    "mod_filter_mods_hint": "By item: force (+) or ban (−) one specific mod.",
+    "fast": "Fast",
+    "auto": "Auto",
+    "precise": "Precise",
+    "solver_precision_tooltip": "Auto: Precise when the mod tree is small, Fast when large. Fast: quick LP for large mod trees. Precise: full placement variables, slower but exact on multi-slot items."
   },
   "tabs": {
     "explore": "Explore",
@@ -25,6 +31,7 @@
     "optimize_btn": "Start Optimization",
     "constraints": "Constraints",
     "required_items": "Required Items",
+    "implicit_required_items": "Supporting mods (auto-included with required items)",
     "required_categories": "Required Categories",
     "ready_description": "Select a gunsmith task to generate a build that meets constraints"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "Recoil",
     "preset_ergo": "Ergo",
     "preset_balanced": "Balanced",
+    "preset_price": "Min. operable",
+    "preset_performance": "Performance",
+    "preset_recoil_focus": "Recoil+",
+    "preset_ergo_focus": "Ergo+",
+    "weight_ui_label": "Weight control",
+    "weight_ui_triangle": "Triangle",
+    "weight_ui_sliders": "Sliders",
     "generate_btn": "Start Optimization",
     "ready_description": "Select weapon and adjust priorities to generate optimal build"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "Optimization Status",
     "status_optimal": "Optimal",
     "status_feasible": "Feasible",
-    "status_infeasible": "Infeasible"
+    "status_infeasible": "Infeasible",
+    "precision_auto_ran": "Auto → {{mode}}"
   },
   "toast": {
     "optimize_success": "Optimization complete",
@@ -63,7 +78,12 @@
     "gunsmith_success": "Gunsmith optimization complete",
     "gunsmith_failed": "Gunsmith optimization failed",
     "copied": "Copied",
-    "copy_failed": "Copy failed"
+    "copy_failed": "Copy failed",
+    "load_failed": "Failed to load game data",
+    "optimize_infeasible": "No valid build for current constraints",
+    "explore_empty": "No frontier points under current constraints",
+    "gunsmith_infeasible": "No build satisfies this gunsmith task",
+    "optimize_non_optimal": "Solver status: {{status}}"
   },
   "ui": {
     "initializing": "Initializing...",
@@ -75,6 +95,8 @@
     "weight_label": "Weight",
     "recoil_sum": "Recoil",
     "base_preset_used": "Using Preset",
+    "preset_purchase_at": "Buy preset at",
+    "preset_source_unknown": "No clear source at current trader/flea settings",
     "build_manifest": "Build Manifest",
     "new_changed_parts": "New/Changed Parts",
     "retained_from_preset_short": "Retained from Preset",
@@ -95,7 +117,18 @@
     "none": "None",
     "unknown": "Unknown",
     "builds": "Builds",
-    "item_count": "{{count}} items"
+    "item_count": "{{count}} items",
+    "theme_light_primer": "Light — Primer",
+    "theme_light_paper": "Light — Warm paper",
+    "theme_light_latte": "Light — Catppuccin Latte",
+    "theme_dark_onedark": "Dark — One Dark (high contrast)",
+    "theme_dark_github": "Dark — GitHub high contrast",
+    "theme_dark_tokyo": "Dark — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "System",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "Data from"
   },
   "error": {
     "title": "An error occurred",

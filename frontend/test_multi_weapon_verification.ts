@@ -1,6 +1,6 @@
 
-import { buildLP, LPBuildParams } from './src/solver/lpBuilder.ts';
-import { ItemLookup, CompatibilityMap, GunLookupEntry, ModLookupEntry, SlotInfo, TraderLevels, DEFAULT_TRADER_LEVELS } from './src/solver/types.ts';
+import { buildLP } from './src/solver/lpBuilder.ts';
+import { ItemLookup, CompatibilityMap, GunLookupEntry, ModLookupEntry, SlotInfo, TraderLevels, DEFAULT_TRADER_LEVELS, SolveParams } from './src/solver/types.ts';
 import { fetchAllData, buildItemLookup } from './src/solver/dataService.ts';
 import * as fs from 'fs';
 
@@ -97,12 +97,10 @@ async function runTest(weaponName: string, weaponId: string,
         console.log(`[${weaponName}] Reachable items: ${limitReachable.size} (from ${Object.keys(itemLookup).length} total)`);
 
         // Params
-        const params: LPBuildParams = {
+        const params: SolveParams = {
             weaponId: weaponId, // Correct param
             itemLookup,
             compatibilityMap: contextMap, // Use filtered map
-            // slotItems/slotOwner removed as they are not in LPBuildParams interface
-            // (lpBuilder derives them from compatibilityMap)
             maxPrice: 1000000,
             minErgonomics: 0,
             maxRecoilV: 500,

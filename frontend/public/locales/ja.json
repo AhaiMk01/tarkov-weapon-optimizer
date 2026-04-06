@@ -13,7 +13,13 @@
     "flea_market_access": "フリーマーケット",
     "include_exclude": "MODフィルター",
     "require_categories": "カテゴリを検索...",
-    "require_items": "MODを検索..."
+    "require_items": "MODを検索...",
+    "mod_filter_categories_hint": "カテゴリ：その種類のMODを必須（+）または禁止（−）。",
+    "mod_filter_mods_hint": "アイテム：特定のMODを強制（+）または禁止（−）。",
+    "fast": "高速",
+    "auto": "自動",
+    "precise": "精密",
+    "solver_precision_tooltip": "自動：ツリーが小さいとき精密、大きいとき高速。高速：大きなMODツリー向けの速いLP。精密：配置変数すべてで多スロットも正確だが遅い。"
   },
   "tabs": {
     "explore": "分析",
@@ -25,6 +31,7 @@
     "optimize_btn": "最適化開始",
     "constraints": "制約",
     "required_items": "必須アイテム",
+    "implicit_required_items": "支えアタッチメント（必須パーツに自動的に含まれる）",
     "required_categories": "必須カテゴリ",
     "ready_description": "ガンスミスタスクを選択してビルドを生成"
   },
@@ -37,6 +44,13 @@
     "preset_recoil": "反動",
     "preset_ergo": "エルゴ",
     "preset_balanced": "バランス",
+    "preset_price": "最低限運用",
+    "preset_performance": "性能優先",
+    "preset_recoil_focus": "反動寄り",
+    "preset_ergo_focus": "人機寄り",
+    "weight_ui_label": "重み調整",
+    "weight_ui_triangle": "三角",
+    "weight_ui_sliders": "スライダー",
     "generate_btn": "最適化開始",
     "ready_description": "武器を選択し優先度を調整、最適なビルドを生成"
   },
@@ -53,7 +67,8 @@
     "optimization_status": "最適化状態",
     "status_optimal": "最適",
     "status_feasible": "実現可能",
-    "status_infeasible": "解なし"
+    "status_infeasible": "解なし",
+    "precision_auto_ran": "自動 → {{mode}}"
   },
   "toast": {
     "optimize_success": "最適化完了",
@@ -63,7 +78,12 @@
     "gunsmith_success": "ガンスミス最適化完了",
     "gunsmith_failed": "ガンスミス最適化失敗",
     "copied": "コピーしました",
-    "copy_failed": "コピー失敗"
+    "copy_failed": "コピー失敗",
+    "load_failed": "ゲームデータの読み込みに失敗しました",
+    "optimize_infeasible": "現在の制約では有効な構成がありません",
+    "explore_empty": "現在の制約ではフロンティア点がありません",
+    "gunsmith_infeasible": "ガンスミスタスクを満たせません",
+    "optimize_non_optimal": "ソルバー状態: {{status}}"
   },
   "ui": {
     "initializing": "初期化中...",
@@ -75,6 +95,8 @@
     "weight_label": "重量",
     "recoil_sum": "反動",
     "base_preset_used": "使用プリセット",
+    "preset_purchase_at": "プリセット購入先",
+    "preset_source_unknown": "現在の設定では購入元が不明",
     "build_manifest": "ビルドマニフェスト",
     "new_changed_parts": "新規/変更パーツ",
     "retained_from_preset_short": "プリセットから保持",
@@ -95,7 +117,18 @@
     "none": "なし",
     "unknown": "不明",
     "builds": "ビルド",
-    "item_count": "{{count}} 個"
+    "item_count": "{{count}} 個",
+    "theme_light_primer": "ライト — Primer",
+    "theme_light_paper": "ライト — ウォームペーパー",
+    "theme_light_latte": "ライト — Catppuccin Latte",
+    "theme_dark_onedark": "ダーク — One Dark（高コントラスト）",
+    "theme_dark_github": "ダーク — GitHub ハイコントラスト",
+    "theme_dark_tokyo": "ダーク — Tokyo Night Storm",
+    "theme_amoled": "AMOLED",
+    "theme_auto": "システムに合わせる",
+    "footer_copyright": "© {{year}} AhaiMk01",
+    "footer_github": "@AhaiMk01",
+    "footer_data_from": "データ:"
   },
   "error": {
     "title": "エラーが発生しました",
