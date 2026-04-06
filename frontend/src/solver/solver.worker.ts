@@ -4,9 +4,11 @@
 
 import { ensureDataLoaded } from './dataService.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
+import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
+import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
 import { solve } from './solver.ts';
 import { explorePareto } from './paretoExplorer.ts';
-import type { ItemLookup, CompatibilityMap, TraderLevels } from './types.ts';
+import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats } from './types.ts';
 import type { OptimizeRequest, ExploreRequest, OptimizeResponse, ExploreResponse, ExplorePoint } from '../api/client.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,8 +57,11 @@ interface WorkerMessage {
   };
 }
 
-self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
-  const { type, id, payload } = event.data;
+/** Serialize all handler work so HiGHS singleton is never used concurrently. */
+let dispatchChain: Promise<void> = Promise.resolve();
+
+async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+  const { type, id, payload } = eventData;
   const lang = payload.lang ?? 'en';
   const gameMode = payload.gameMode ?? 'regular';
 
@@ -97,10 +102,14 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
               const item = data.itemLookup[mid];
               if (!item) return null;
               const itemData = item.data as Record<string, unknown>;
+              const st = item.stats as ModStats;
               return {
                 id: mid,
                 name: itemData.name as string,
                 category: 'category' in item.stats ? item.stats.category : 'Unknown',
+                category_id: 'category_id' in item.stats ? String(item.stats.category_id) : '',
+                category_normalized: st.category_normalized ?? '',
+                category_child_ids: Array.isArray(st.category_child_ids) ? st.category_child_ids : [],
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
               };
             })
@@ -114,6 +123,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           const req = payload.request as OptimizeRequest;
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
+          const precReq = normalizePrecisionRequest(req.precise_mode);
+          const usePrecise = resolvePreciseFlag(precReq, compatMap);
 
           const result: OptimizeResponse = await solve({
             weaponId: req.weapon_id,
@@ -136,9 +147,11 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             playerLevel: req.player_level,
-            preciseMode: req.precise_mode ?? false,
+            preciseMode: usePrecise,
           });
 
+          result.precision_request = precReq;
+          result.precision_resolved = usePrecise ? 'precise' : 'fast';
           self.postMessage({ type: 'result', id, payload: result });
           break;
         }
@@ -147,6 +160,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
           const req = payload.request as ExploreRequest;
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
+          const precReq = normalizePrecisionRequest(req.precise_mode);
+          const usePrecise = resolvePreciseFlag(precReq, compatMap);
 
           const startTime = performance.now();
           const points: ExplorePoint[] = await explorePareto({
@@ -169,12 +184,14 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             playerLevel: req.player_level,
-            preciseMode: req.precise_mode ?? false,
+            preciseMode: usePrecise,
           });
 
           const result: ExploreResponse = {
             points,
             total_solve_time_ms: Math.round(performance.now() - startTime),
+            precision_request: precReq,
+            precision_resolved: usePrecise ? 'precise' : 'fast',
           };
 
           self.postMessage({ type: 'result', id, payload: result });
@@ -184,7 +201,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
         case 'getGunsmithTasks': {
           const data = await getOrLoadData(lang, gameMode);
           // Import tasks.json
-          const tasksResp = await fetch('/tasks.json');
+          const base = (typeof import.meta.env?.BASE_URL === 'string') ? import.meta.env.BASE_URL : '/';
+          const tasksResp = await fetch(base + 'tasks.json');
           const rawTasks = await tasksResp.json();
 
           const categoryIdToName: Record<string, string> = {};
@@ -206,7 +224,15 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
                 weaponInfo.image512pxLink ?? weaponInfo.imageLink ?? weaponInfo.iconLink) as string | null;
 
             const requiredItemIds: string[] = raw.required_item_ids ?? [];
+            const cmap = getCompatMap(data, weaponId);
+            const expandedIds = expandIncludeItemsWithDeps(weaponId, cmap, requiredItemIds) ?? requiredItemIds;
+            const implicitItemIds = expandedIds.filter((iid: string) => !requiredItemIds.includes(iid));
+
             const requiredItemNames = requiredItemIds.map((iid: string) => {
+              const entry = data.itemLookup[iid];
+              return (entry?.data as Record<string, unknown>)?.name as string ?? iid;
+            });
+            const implicitItemNames = implicitItemIds.map((iid: string) => {
               const entry = data.itemLookup[iid];
               return (entry?.data as Record<string, unknown>)?.name as string ?? iid;
             });
@@ -224,6 +250,8 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
               constraints: raw.constraints ?? {},
               required_item_ids: requiredItemIds,
               required_item_names: requiredItemNames,
+              implicit_required_item_ids: implicitItemIds,
+              implicit_required_item_names: implicitItemNames,
               required_category_group_ids: requiredCategoryGroupIds,
               required_category_names: requiredCategoryNames,
             };
@@ -247,4 +275,13 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
     const msg = error instanceof Error ? error.message : String(error);
     self.postMessage({ type: 'error', id, payload: msg });
   }
+}
+
+self.onmessage = (event: MessageEvent<WorkerMessage>) => {
+  dispatchChain = dispatchChain
+    .then(() => dispatchMessage(event.data))
+    .catch(() => {
+      // Errors are reported via postMessage inside dispatchMessage; swallow
+      // chain rejection so later requests still run.
+    });
 };

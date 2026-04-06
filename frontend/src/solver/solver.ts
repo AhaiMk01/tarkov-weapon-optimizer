@@ -27,7 +27,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       const isBrowser = typeof window !== 'undefined' || typeof self !== 'undefined';
       const opts = isBrowser ? {
         locateFile: (file: string) => {
-          if (file.endsWith('.wasm')) return '/' + file;
+          if (file.endsWith('.wasm')) return (import.meta.env.BASE_URL || '/') + file;
           return file;
         },
       } : undefined;
@@ -96,9 +96,11 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         detailedItems.push({
           id: itemId,
           name: data.name ?? 'Unknown',
-          price: ms.price || 0,
+          price: ms.purchasable ? (ms.price || 0) : 0,
           icon,
-          source: ms.price_source ?? 'Unknown',
+          source: ms.purchasable ? (ms.price_source ?? 'Unknown') : 'not_purchasable',
+          purchasable: ms.purchasable,
+          reference_price_rub: ms.reference_price_rub,
           ergonomics: ms.ergonomics || 0,
           recoil_modifier: ms.recoil_modifier || 0,
         });
@@ -142,13 +144,24 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       const preset = (weapon.presets || []).find(p => p.id === selectedBaseId)
         || (weapon.all_presets || []).find(p => p.id === selectedBaseId);
       if (preset) {
-        const [filteredPrice] = getAvailablePrice(preset, traderLevels, fleaAvailable, playerLevel);
+        const [filteredPrice, src, , purchaseLabel] = getAvailablePrice(preset, traderLevels, fleaAvailable, playerLevel);
         basePrice = filteredPrice;
+        let source = src ?? undefined;
+        let label = purchaseLabel ?? undefined;
+        if (!source && preset.price_source && preset.price_source !== 'not_available') {
+          source = preset.price_source;
+        }
+        if (!label && source === 'fleaMarket') {
+          label = 'Flea Market';
+        }
         presetDetail = {
           id: preset.id,
           name: preset.name,
           price: filteredPrice,
           items: preset.items || [],
+          icon: preset.image ?? undefined,
+          source,
+          purchase_label: label,
         };
       }
     }
