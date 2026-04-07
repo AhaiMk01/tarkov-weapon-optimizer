@@ -34,7 +34,6 @@ export function WeightAdjuster({
   onMaxPriceChange,
   minErgo,
   onMinErgoChange,
-  useMinMag,
   onUseMinMagChange,
   minMagCapacity,
   onMinMagCapacityChange,
