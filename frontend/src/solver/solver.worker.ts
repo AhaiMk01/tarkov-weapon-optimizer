@@ -111,6 +111,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 category_normalized: st.category_normalized ?? '',
                 category_child_ids: Array.isArray(st.category_child_ids) ? st.category_child_ids : [],
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
+                capacity: st.capacity ?? 0,
               };
             })
             .filter(Boolean)

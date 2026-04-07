@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Alert, App, Button, Card, Table, Tag, Typography, theme } from 'antd'
+import { Alert, Button, Card, Table, Tag, Typography, theme } from 'antd'
 import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, ExportOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
@@ -29,17 +29,11 @@ const EFTFORGE_URL = 'https://www.eftforge.com'
 export function ExploreResult({ exploreResult, solveTime, explorePrecision, resultTradeoff, exploring, onExplore, disabled, weaponId }: ExploreResultProps) {
   const { t } = useTranslation()
   const { token } = useToken()
-  const { message } = App.useApp()
-
   const handleOpenInEFTForge = (point: ExplorePoint) => {
     if (!weaponId || !point.slot_pairs?.length) return
     const payload = { v: 1, g: weaponId, p: point.slot_pairs }
     const code = compressToEncodedURIComponent(JSON.stringify(payload))
-    navigator.clipboard.writeText(code).then(
-      () => message.success(t('ui.eftforge_code_copied', { defaultValue: 'Build code copied — paste it in EFTForge\'s import dialog' })),
-      () => message.error(t('ui.clipboard_failed', { defaultValue: 'Failed to copy to clipboard' })),
-    )
-    window.open(EFTFORGE_URL, '_blank')
+    window.open(`${EFTFORGE_URL}?build=${code}`, '_blank')
   }
   if (exploreResult.length === 0) {
     return (

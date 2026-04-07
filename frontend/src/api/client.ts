@@ -109,6 +109,7 @@ export interface ModInfo {
   category_normalized: string;
   category_child_ids: string[];
   icon?: string;
+  capacity?: number;
 }
 
 export interface ModCategoryOption {

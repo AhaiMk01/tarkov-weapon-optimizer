@@ -60,6 +60,8 @@
   "constraints": {
     "budget_limit": "Budget Limit",
     "min_ergo": "Min Ergonomics",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
     "min_ergo_tag": "Ergo >=",
     "max_recoil_sum_tag": "Recoil Sum <=",
     "min_mag_capacity_tag": "Magazine >=",

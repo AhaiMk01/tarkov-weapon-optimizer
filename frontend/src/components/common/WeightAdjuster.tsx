@@ -16,6 +16,11 @@ interface WeightAdjusterProps {
   onMaxPriceChange: (v: number) => void
   minErgo: number
   onMinErgoChange: (v: number) => void
+  useMinMag: boolean
+  onUseMinMagChange: (v: boolean) => void
+  minMagCapacity: number
+  onMinMagCapacityChange: (v: number) => void
+  availableMagCapacities: number[]
 }
 
 export function WeightAdjuster({
@@ -29,6 +34,11 @@ export function WeightAdjuster({
   onMaxPriceChange,
   minErgo,
   onMinErgoChange,
+  useMinMag,
+  onUseMinMagChange,
+  minMagCapacity,
+  onMinMagCapacityChange,
+  availableMagCapacities,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
   const [slidersMode, setSlidersMode] = useState(() => localStorage.getItem('weightUiSliders') === 'true')
@@ -109,6 +119,24 @@ export function WeightAdjuster({
               <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.min_ergo')}: {minErgo}</Text>
               <Slider value={minErgo} onChange={onMinErgoChange} max={100} />
             </div>
+            {availableMagCapacities.length > 0 && (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text>{t('constraints.min_mag_capacity')}{useMinMag ? `: ${minMagCapacity}` : ''}</Text>
+                  <Switch checked={useMinMag} onChange={(v) => { onUseMinMagChange(v); if (v && !availableMagCapacities.includes(minMagCapacity)) onMinMagCapacityChange(availableMagCapacities[0]); }} />
+                </div>
+                {useMinMag && (
+                  <Slider
+                    value={minMagCapacity}
+                    onChange={onMinMagCapacityChange}
+                    min={availableMagCapacities[0]}
+                    max={availableMagCapacities[availableMagCapacities.length - 1]}
+                    marks={Object.fromEntries(availableMagCapacities.map(c => [c, `${c}`]))}
+                    step={null}
+                  />
+                )}
+              </>
+            )}
           </Space>
         ),
       },

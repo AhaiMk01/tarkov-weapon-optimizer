@@ -26,6 +26,11 @@ interface OptimizePanelProps {
   onMaxPriceChange: (v: number) => void
   minErgo: number
   onMinErgoChange: (v: number) => void
+  useMinMag: boolean
+  onUseMinMagChange: (v: boolean) => void
+  minMagCapacity: number
+  onMinMagCapacityChange: (v: number) => void
+  availableMagCapacities: number[]
   availableMods: ModInfo[]
   loadingMods: boolean
   modCategoryOptions: ModCategoryOption[]
@@ -75,6 +80,11 @@ export function OptimizePanel(props: OptimizePanelProps) {
         onMaxPriceChange={props.onMaxPriceChange}
         minErgo={props.minErgo}
         onMinErgoChange={props.onMinErgoChange}
+        useMinMag={props.useMinMag}
+        onUseMinMagChange={props.onUseMinMagChange}
+        minMagCapacity={props.minMagCapacity}
+        onMinMagCapacityChange={props.onMinMagCapacityChange}
+        availableMagCapacities={props.availableMagCapacities}
       />
       <ModFilter
         availableMods={props.availableMods}

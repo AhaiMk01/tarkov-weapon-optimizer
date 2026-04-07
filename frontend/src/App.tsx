@@ -1,10 +1,11 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
-import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, SunOutlined, MoonOutlined, SyncOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, ReadOutlined, CoffeeOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, SunOutlined, MoonOutlined, SyncOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, ReadOutlined, CoffeeOutlined, HistoryOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
+import { ChangelogModal } from './components/common/ChangelogModal'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
 import { ExplorePanel } from './components/explore/ExplorePanel'
@@ -205,6 +206,8 @@ function AppContent({
   const [useBudget, setUseBudget] = useState(false)
   const [maxPrice, setMaxPrice] = useState(200000)
   const [minErgo, setMinErgo] = useState(0)
+  const [useMinMag, setUseMinMag] = useState(false)
+  const [minMagCapacity, setMinMagCapacity] = useState(30)
   const [includedModIds, setIncludedModIds] = useState<string[]>([])
   const [excludedModIds, setExcludedModIds] = useState<string[]>([])
   const [modSearch, setModSearch] = useState('')
@@ -238,6 +241,7 @@ function AppContent({
   const [gunsmithResult, setGunsmithResult] = useState<OptimizeResponse | null>(null)
   const [optimizingGunsmith, setOptimizingGunsmith] = useState(false)
   const modsRequestSeq = useRef(0)
+  const [changelogOpen, setChangelogOpen] = useState(false)
   const messageApiRef = useRef(messageApi)
   messageApiRef.current = messageApi
 
@@ -350,6 +354,10 @@ function AppContent({
       .map(([id, meta]) => ({ id, name: meta.name }))
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [availableMods])
+  const availableMagCapacities = useMemo(() => {
+    const caps = availableMods.filter(m => m.capacity && m.capacity > 0).map(m => m.capacity!)
+    return [...new Set(caps)].sort((a, b) => a - b)
+  }, [availableMods])
   const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
   const selectedGun = guns.find(g => g.id === selectedGunId)
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
@@ -381,6 +389,7 @@ function AppContent({
         price_weight: priceWeight,
         max_price: useBudget ? maxPrice : undefined,
         min_ergonomics: minErgo > 0 ? minErgo : undefined,
+        min_mag_capacity: useMinMag ? minMagCapacity : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -418,6 +427,7 @@ function AppContent({
         max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
         min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
         max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
+        min_mag_capacity: useMinMag ? minMagCapacity : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -594,6 +604,11 @@ function AppContent({
               onMaxPriceChange={setMaxPrice}
               minErgo={minErgo}
               onMinErgoChange={setMinErgo}
+              useMinMag={useMinMag}
+              onUseMinMagChange={setUseMinMag}
+              minMagCapacity={minMagCapacity}
+              onMinMagCapacityChange={setMinMagCapacity}
+              availableMagCapacities={availableMagCapacities}
             />
           }
           right={
@@ -832,12 +847,20 @@ function AppContent({
               {t('ui.footer_github')}
             </Link>
             {' · '}
+            <Link style={{ cursor: 'pointer' }} onClick={() => setChangelogOpen(true)}>
+              <HistoryOutlined aria-hidden style={{ marginInlineEnd: 4 }} />
+              Changelog
+            </Link>
+            {' · '}
             {t('ui.footer_data_from')}{' '}
             <Link href={TARKOV_DEV_URL} target="_blank" rel="noopener noreferrer">
               Tarkov.dev
             </Link>
+            {' · '}
+            Made with ❤️
           </Text>
         </Footer>
+        <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       </Layout>
       )}
     </AntApp>

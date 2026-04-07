@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Collapse, Tag, Space, Segmented, Button, Typography, App } from 'antd'
+import { Card, Collapse, Tag, Space, Segmented, Button, Typography } from 'antd'
 import { CopyOutlined, ExportOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ItemRow } from '../ItemRow'
@@ -19,17 +19,12 @@ interface BuildManifestProps {
 
 export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy, weaponId }: BuildManifestProps) {
   const { t } = useTranslation()
-  const { message } = App.useApp()
 
   const handleOpenInEFTForge = () => {
     if (!weaponId || !result.slot_pairs?.length) return
     const payload = { v: 1, g: weaponId, p: result.slot_pairs }
     const code = compressToEncodedURIComponent(JSON.stringify(payload))
-    navigator.clipboard.writeText(code).then(
-      () => message.success(t('ui.eftforge_code_copied', { defaultValue: 'Build code copied — paste it in EFTForge\'s import dialog' })),
-      () => message.error(t('ui.clipboard_failed', { defaultValue: 'Failed to copy to clipboard' })),
-    )
-    window.open(EFTFORGE_URL, '_blank')
+    window.open(`${EFTFORGE_URL}?build=${code}`, '_blank')
   }
 
   const titleContent = (
