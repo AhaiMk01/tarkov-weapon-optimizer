@@ -120,22 +120,17 @@ export function WeightAdjuster({
               <Slider value={minErgo} onChange={onMinErgoChange} max={100} />
             </div>
             {availableMagCapacities.length > 0 && (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text>{t('constraints.min_mag_capacity')}{useMinMag ? `: ${minMagCapacity}` : ''}</Text>
-                  <Switch checked={useMinMag} onChange={(v) => { onUseMinMagChange(v); if (v && !availableMagCapacities.includes(minMagCapacity)) onMinMagCapacityChange(availableMagCapacities[0]); }} />
-                </div>
-                {useMinMag && (
-                  <Slider
-                    value={minMagCapacity}
-                    onChange={onMinMagCapacityChange}
-                    min={availableMagCapacities[0]}
-                    max={availableMagCapacities[availableMagCapacities.length - 1]}
-                    marks={Object.fromEntries(availableMagCapacities.map(c => [c, `${c}`]))}
-                    step={null}
-                  />
-                )}
-              </>
+              <div>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.min_mag_capacity')}: {minMagCapacity === 0 ? t('constraints.off') : minMagCapacity}</Text>
+                <Slider
+                  value={minMagCapacity}
+                  onChange={(v) => { onMinMagCapacityChange(v); onUseMinMagChange(v > 0); }}
+                  min={0}
+                  max={availableMagCapacities[availableMagCapacities.length - 1]}
+                  marks={Object.fromEntries([[0, t('constraints.off')], ...availableMagCapacities.map(c => [c, `${c}`] as const)])}
+                  step={null}
+                />
+              </div>
             )}
           </Space>
         ),

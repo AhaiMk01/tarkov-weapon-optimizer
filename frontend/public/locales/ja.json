@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "トレードオフ戦略",
-    "ready_description": "武器と分析戦略を選択、パレート境界を探索"
+    "ready_description": "武器と分析戦略を選択、パレート境界を探索",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "重み調整",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "反動合計 <=",
     "min_mag_capacity_tag": "マガジン >=",
     "min_sighting_range_tag": "照準距離 >=",
-    "max_weight_tag": "重量 <="
+    "max_weight_tag": "重量 <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "最適化状態",

@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Стратегия компромиссов",
-    "ready_description": "Выберите оружие и стратегию анализа, исследуйте границу Парето"
+    "ready_description": "Выберите оружие и стратегию анализа, исследуйте границу Парето",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Настройка весов",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Сумма отдачи <=",
     "min_mag_capacity_tag": "Магазин >=",
     "min_sighting_range_tag": "Дальность прицела >=",
-    "max_weight_tag": "Вес <="
+    "max_weight_tag": "Вес <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Статус оптимизации",

@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Ödünleşim Stratejisi",
-    "ready_description": "Silah ve analiz stratejisi seçin, Pareto sınırını keşfedin"
+    "ready_description": "Silah ve analiz stratejisi seçin, Pareto sınırını keşfedin",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Ağırlık Ayarı",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Geri Tepme Toplamı <=",
     "min_mag_capacity_tag": "Şarjör >=",
     "min_sighting_range_tag": "Nişan Mesafesi >=",
-    "max_weight_tag": "Ağırlık <="
+    "max_weight_tag": "Ağırlık <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Optimizasyon Durumu",

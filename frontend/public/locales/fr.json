@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Stratégie de compromis",
-    "ready_description": "Sélectionnez arme et stratégie d'analyse, explorez frontière de Pareto"
+    "ready_description": "Sélectionnez arme et stratégie d'analyse, explorez frontière de Pareto",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Ajustement des poids",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Somme Recul <=",
     "min_mag_capacity_tag": "Chargeur >=",
     "min_sighting_range_tag": "Portée Visée >=",
-    "max_weight_tag": "Poids <="
+    "max_weight_tag": "Poids <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Statut d'optimisation",

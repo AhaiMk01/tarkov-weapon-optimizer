@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategia Kompromisu",
-    "ready_description": "Wybierz broń i strategię analizy, eksploruj granicę Pareto"
+    "ready_description": "Wybierz broń i strategię analizy, eksploruj granicę Pareto",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Dostosowanie Wag",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Suma Odrzutu <=",
     "min_mag_capacity_tag": "Magazynek >=",
     "min_sighting_range_tag": "Zasięg Celowania >=",
-    "max_weight_tag": "Waga <="
+    "max_weight_tag": "Waga <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Status Optymalizacji",

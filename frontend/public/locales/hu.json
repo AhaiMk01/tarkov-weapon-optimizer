@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Kompromisszum stratégia",
-    "ready_description": "Válasszon fegyvert és elemzési stratégiát, fedezze fel a Pareto-határt"
+    "ready_description": "Válasszon fegyvert és elemzési stratégiát, fedezze fel a Pareto-határt",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Súlyok beállítása",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Visszarúgás összeg <=",
     "min_mag_capacity_tag": "Tár >=",
     "min_sighting_range_tag": "Célzási táv >=",
-    "max_weight_tag": "Súly <="
+    "max_weight_tag": "Súly <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Optimalizálás állapota",

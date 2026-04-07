@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "절충 전략",
-    "ready_description": "무기와 분석 전략을 선택하여 파레토 경계 탐색"
+    "ready_description": "무기와 분석 전략을 선택하여 파레토 경계 탐색",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "가중치 조정",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "반동 합계 <=",
     "min_mag_capacity_tag": "탄창 >=",
     "min_sighting_range_tag": "조준 거리 >=",
-    "max_weight_tag": "무게 <="
+    "max_weight_tag": "무게 <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "최적화 상태",

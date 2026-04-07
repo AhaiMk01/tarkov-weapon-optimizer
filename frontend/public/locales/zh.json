@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "侧重方向",
-    "ready_description": "选好武器和分析侧重，查看人机、后坐与价格之间的帕累托权衡。"
+    "ready_description": "选好武器和分析侧重，查看人机、后坐与价格之间的帕累托权衡。",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "属性权重",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "后坐总和 ≤",
     "min_mag_capacity_tag": "弹匣容量 ≥",
     "min_sighting_range_tag": "瞄准射程 ≥",
-    "max_weight_tag": "重量 ≤"
+    "max_weight_tag": "重量 ≤",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "求解结果",

@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategie kompromisů",
-    "ready_description": "Vyberte zbraň a strategii analýzy, prozkoumejte Pareto hranici"
+    "ready_description": "Vyberte zbraň a strategii analýzy, prozkoumejte Pareto hranici",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Úprava vah",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Součet zpět. rázu <=",
     "min_mag_capacity_tag": "Zásobník >=",
     "min_sighting_range_tag": "Dosah mířidel >=",
-    "max_weight_tag": "Hmotnost <="
+    "max_weight_tag": "Hmotnost <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Stav optimalizace",

@@ -117,6 +117,34 @@ All weapon/mod data from **Tarkov.dev GraphQL API** (`https://api.tarkov.dev/gra
 
 When adding translations, add keys to `zh.json` first (source of truth), then sync to all 16 locale files.
 
+## Versioning & Release Workflow
+
+**Versioning strategy:** Semantic versioning (`vMAJOR.MINOR.PATCH`).
+- **MAJOR** — architectural changes (e.g. Python→Web, solver engine swap)
+- **MINOR** — new user-facing features (new constraints, UI panels, integrations)
+- **PATCH** — bug fixes, solver accuracy fixes, styling tweaks
+
+**Current version:** defined in `frontend/package.json` `"version"` field and `frontend/index.html` `<title>` tag.
+
+**Release checklist** (when user says "update changelog, commit, bump version, and push"):
+1. Update `CHANGELOG.md` at repo root — add entries under `[vX.Y.Z] — YYYY-MM-DD`
+2. Copy `CHANGELOG.md` → `frontend/public/CHANGELOG.md` (served to the changelog modal)
+3. Bump `"version"` in `frontend/package.json`
+4. Update `<title>` in `frontend/index.html` to include version
+5. Run i18n sync: programmatically find missing keys in `en.json` vs all other locale files, patch missing keys with English fallbacks
+6. Stage all changed files, commit with message: `feat: vX.Y.Z — <summary>`
+7. Create git tag: `git tag vX.Y.Z`
+8. Push commit and tag: `git push && git push --tags`
+
+**Changelog format** (Keep a Changelog style):
+```
+## [vX.Y.Z] — YYYY-MM-DD
+### Added / Changed / Fixed / Removed
+- Description of change
+```
+
+Only include web app (v2.0.0+) history in the changelog. Pre-web-app Python versions are not tracked.
+
 ## Common Pitfalls
 
 - **HiGHS WASM memory / failures**: Large models can exhaust default WASM memory; use the custom build documented under `frontend/vendor/highs/`. On solve exceptions, `solver.ts` sets a **corrupted** flag and re-instantiates HiGHS on the next call.

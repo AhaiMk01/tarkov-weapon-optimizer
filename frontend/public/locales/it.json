@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategia di Compromesso",
-    "ready_description": "Seleziona arma e strategia di analisi, esplora frontiera di Pareto"
+    "ready_description": "Seleziona arma e strategia di analisi, esplora frontiera di Pareto",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Regolazione Pesi",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Somma Rinculo <=",
     "min_mag_capacity_tag": "Caricatore >=",
     "min_sighting_range_tag": "Portata Mira >=",
-    "max_weight_tag": "Peso <="
+    "max_weight_tag": "Peso <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Stato Ottimizzazione",

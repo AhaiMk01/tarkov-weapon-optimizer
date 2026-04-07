@@ -2,6 +2,13 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.1.1] — 2026-04-07
+
+### Changed
+- Min magazine capacity: merged toggle switch into slider with "Off" tick at 0
+- Synced missing i18n keys across all 16 locale files
+- Added i18n sync step to release workflow in CLAUDE.md
+
 ## [v2.1.0] — 2026-04-07
 
 ### Added

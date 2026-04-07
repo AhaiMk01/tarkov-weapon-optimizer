@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategie de Compromis",
-    "ready_description": "Selectează arma și strategia de analiză, explorează frontiera Pareto"
+    "ready_description": "Selectează arma și strategia de analiză, explorează frontiera Pareto",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Ajustare Ponderi",
@@ -61,7 +64,10 @@
     "max_recoil_sum_tag": "Sumă Recul <=",
     "min_mag_capacity_tag": "Încărcător >=",
     "min_sighting_range_tag": "Rază Vizare >=",
-    "max_weight_tag": "Greutate <="
+    "max_weight_tag": "Greutate <=",
+    "min_mag_capacity": "Min Magazine Capacity",
+    "min_mag_unit": "rounds",
+    "off": "Off"
   },
   "results": {
     "optimization_status": "Stare Optimizare",
