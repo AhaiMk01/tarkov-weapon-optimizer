@@ -94,6 +94,7 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
       price: Math.round(stats.total_price),
       selected_items: result.selected_items,
       selected_preset: result.selected_preset,
+      slot_pairs: result.slot_pairs,
       status: result.status,
       solve_time_ms: result.solve_time_ms,
     });

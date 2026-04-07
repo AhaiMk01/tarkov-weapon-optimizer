@@ -230,6 +230,8 @@ function AppContent({
   }>({})
   const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
+  const [useExploreBudget, setUseExploreBudget] = useState(false)
+  const [exploreBudgetValue, setExploreBudgetValue] = useState<number>(0)
   const [resultTradeoff, setResultTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
   const [gunsmithTasks, setGunsmithTasks] = useState<GunsmithTask[]>([])
   const [selectedTaskName, setSelectedTaskName] = useState<string>('')
@@ -413,8 +415,9 @@ function AppContent({
         weapon_id: selectedGunId,
         ignore: exploreTradeoff,
         steps: 10,
-        max_price: useBudget ? maxPrice : undefined,
-        min_ergonomics: minErgo > 0 ? minErgo : undefined,
+        max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
+        min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
+        max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -618,6 +621,10 @@ function AppContent({
               {...commonPanelProps}
               exploreTradeoff={exploreTradeoff}
               onExploreTradeoffChange={setExploreTradeoff}
+              useExploreBudget={useExploreBudget}
+              onUseExploreBudgetChange={setUseExploreBudget}
+              exploreBudgetValue={exploreBudgetValue}
+              onExploreBudgetValueChange={setExploreBudgetValue}
             />
           }
           right={
@@ -629,6 +636,7 @@ function AppContent({
               exploring={exploring}
               onExplore={handleExplore}
               disabled={!selectedGunId}
+              weaponId={selectedGunId ?? undefined}
             />
           }
         />

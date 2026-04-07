@@ -129,6 +129,7 @@ export interface ExplorePoint {
   price: number;
   selected_items: ItemDetail[];
   selected_preset?: PresetDetail;
+  slot_pairs?: [string, string][];
   status: string;
   solve_time_ms?: number;
 }

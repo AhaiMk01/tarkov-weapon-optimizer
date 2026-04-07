@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { Alert, Button, Card, Table, Tag, Typography, theme } from 'antd'
-import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons'
+import { Alert, App, Button, Card, Table, Tag, Typography, theme } from 'antd'
+import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, ExportOutlined } from '@ant-design/icons'
+import { compressToEncodedURIComponent } from 'lz-string'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { EmptyState } from '../common/EmptyState'
 import type { ExplorePoint, SolverPrecisionMode } from '../../api/client'
@@ -16,15 +17,30 @@ interface ExploreResultProps {
   exploring: boolean
   onExplore: () => void
   disabled: boolean
+  weaponId?: string
 }
 
 function precisionResolvedLabel(t: (k: string, opts?: Record<string, string>) => string, mode: 'fast' | 'precise'): string {
   return mode === 'precise' ? t('sidebar.precise') : t('sidebar.fast')
 }
 
-export function ExploreResult({ exploreResult, solveTime, explorePrecision, resultTradeoff, exploring, onExplore, disabled }: ExploreResultProps) {
+const EFTFORGE_URL = 'https://www.eftforge.com'
+
+export function ExploreResult({ exploreResult, solveTime, explorePrecision, resultTradeoff, exploring, onExplore, disabled, weaponId }: ExploreResultProps) {
   const { t } = useTranslation()
   const { token } = useToken()
+  const { message } = App.useApp()
+
+  const handleOpenInEFTForge = (point: ExplorePoint) => {
+    if (!weaponId || !point.slot_pairs?.length) return
+    const payload = { v: 1, g: weaponId, p: point.slot_pairs }
+    const code = compressToEncodedURIComponent(JSON.stringify(payload))
+    navigator.clipboard.writeText(code).then(
+      () => message.success(t('ui.eftforge_code_copied', { defaultValue: 'Build code copied — paste it in EFTForge\'s import dialog' })),
+      () => message.error(t('ui.clipboard_failed', { defaultValue: 'Failed to copy to clipboard' })),
+    )
+    window.open(EFTFORGE_URL, '_blank')
+  }
   if (exploreResult.length === 0) {
     return (
       <EmptyState
@@ -65,8 +81,8 @@ export function ExploreResult({ exploreResult, solveTime, explorePrecision, resu
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 20, right: 20, bottom: 40, left: 40 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis type="number" dataKey={resultTradeoff === 'recoil' ? 'ergo' : resultTradeoff === 'ergo' ? 'recoil_v' : 'ergo'} name={resultTradeoff === 'recoil' ? t('ui.chart_ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_recoil_v') : t('ui.chart_ergonomics')} domain={['dataMin', 'dataMax']} />
-              <YAxis type="number" dataKey={resultTradeoff === 'price' ? 'recoil_v' : 'price'} name={resultTradeoff === 'price' ? t('ui.chart_recoil_v') : t('ui.chart_price')} domain={['dataMin', 'dataMax']} />
+              <XAxis type="number" dataKey={resultTradeoff === 'recoil' ? 'ergo' : resultTradeoff === 'ergo' ? 'recoil_v' : 'ergo'} name={resultTradeoff === 'recoil' ? t('ui.chart_ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_recoil_v') : t('ui.chart_ergonomics')} domain={['auto', 'auto']} label={{ value: resultTradeoff === 'recoil' ? t('ui.chart_ergonomics') : resultTradeoff === 'ergo' ? t('ui.chart_recoil_v') : t('ui.chart_ergonomics'), position: 'bottom', offset: 20 }} />
+              <YAxis type="number" dataKey={resultTradeoff === 'price' ? 'recoil_v' : 'price'} name={resultTradeoff === 'price' ? t('ui.chart_recoil_v') : t('ui.chart_price')} domain={['auto', 'auto']} label={{ value: resultTradeoff === 'price' ? t('ui.chart_recoil_v') : t('ui.chart_price'), angle: -90, position: 'insideLeft', offset: -20 }} />
               <ZAxis type="number" dataKey="recoil_pct" />
               <Tooltip content={({ active, payload }) => {
                 if (active && payload && payload.length) {
@@ -94,6 +110,7 @@ export function ExploreResult({ exploreResult, solveTime, explorePrecision, resu
         { title: t('sidebar.recoil_h'), dataIndex: 'recoil_h', render: (v: number) => <Text>{v.toFixed(1)}</Text> },
         { title: t('sidebar.price'), dataIndex: 'price', render: (v: number) => <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text> },
         { title: t('ui.table_items'), dataIndex: 'selected_items', render: (items: unknown[]) => t('ui.item_count', { count: items.length }) },
+        ...(weaponId ? [{ title: '', dataIndex: 'slot_pairs', render: (_: unknown, record: ExplorePoint) => record.slot_pairs?.length ? <Button size="small" icon={<ExportOutlined />} onClick={() => handleOpenInEFTForge(record)}>EFTForge</Button> : null }] : []),
       ]} />
     </div>
   )

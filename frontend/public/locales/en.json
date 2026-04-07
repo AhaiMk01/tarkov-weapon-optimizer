@@ -37,7 +37,10 @@
   },
   "explore": {
     "tradeoff_strategy": "Trade-off Strategy",
-    "ready_description": "Select weapon and analysis strategy, explore Pareto frontier"
+    "ready_description": "Select weapon and analysis strategy, explore Pareto frontier",
+    "limit_price": "Max Price",
+    "limit_recoil": "Max Recoil V",
+    "limit_ergo": "Min Ergo"
   },
   "optimize": {
     "header": "Weight Adjustment",
@@ -100,9 +103,9 @@
     "build_manifest": "Build Manifest",
     "new_changed_parts": "New/Changed Parts",
     "retained_from_preset_short": "Retained from Preset",
-    "tradeoff_ergo_vs_recoil": "Ergo vs Recoil (Ignore Price)",
-    "tradeoff_ergo_vs_price": "Ergo vs Price (Ignore Recoil)",
-    "tradeoff_recoil_vs_price": "Recoil vs Price (Ignore Ergo)",
+    "tradeoff_ergo_vs_recoil": "Ergo vs Recoil (Price optional)",
+    "tradeoff_ergo_vs_price": "Ergo vs Price (Recoil optional)",
+    "tradeoff_recoil_vs_price": "Recoil vs Price (Ergo optional)",
     "run_analysis": "Run Analysis",
     "table_items": "Items",
     "chart_ergonomics": "Ergo",
