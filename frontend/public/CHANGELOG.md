@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.1.2] — 2026-04-07
+
+### Fixed
+- Min magazine capacity defaults to Off instead of 30
+- Switching weapons resets min magazine capacity to Off
+
 ## [v2.1.1] — 2026-04-07
 
 ### Changed

@@ -207,7 +207,7 @@ function AppContent({
   const [maxPrice, setMaxPrice] = useState(200000)
   const [minErgo, setMinErgo] = useState(0)
   const [useMinMag, setUseMinMag] = useState(false)
-  const [minMagCapacity, setMinMagCapacity] = useState(30)
+  const [minMagCapacity, setMinMagCapacity] = useState(0)
   const [includedModIds, setIncludedModIds] = useState<string[]>([])
   const [excludedModIds, setExcludedModIds] = useState<string[]>([])
   const [modSearch, setModSearch] = useState('')
@@ -549,6 +549,8 @@ function AppContent({
   const handleGunChange = (id: string) => {
     setSelectedGunId(id)
     setResult(null)
+    setMinMagCapacity(0)
+    setUseMinMag(false)
   }
 
   const commonPanelProps = {
