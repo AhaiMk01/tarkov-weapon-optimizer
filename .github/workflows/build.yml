@@ -1,9 +1,11 @@
 name: Build Executables
 
+# Disabled — executable builds paused, web app is primary distribution
+# on:
+#   push:
+#     tags:
+#       - 'v*'
 on:
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       platform:
