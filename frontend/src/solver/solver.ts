@@ -129,6 +129,11 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
           reference_price_rub: ms.reference_price_rub,
           ergonomics: ms.ergonomics || 0,
           recoil_modifier: ms.recoil_modifier || 0,
+          accuracy_modifier: ms.accuracy_modifier || undefined,
+          weight: ms.weight || undefined,
+          category: ms.category || undefined,
+          capacity: ms.capacity || undefined,
+          sighting_range: ms.sighting_range || undefined,
         });
       } else {
         detailedItems.push({

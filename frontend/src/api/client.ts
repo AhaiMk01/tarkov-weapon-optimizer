@@ -64,6 +64,12 @@ export interface ItemDetail {
   ergonomics: number;
   recoil_modifier: number;
   barter_requirements?: Array<{ name: string; count: number; unit_price: number; icon?: string }>;
+  // Tooltip extras
+  accuracy_modifier?: number;
+  weight?: number;
+  category?: string;
+  capacity?: number;
+  sighting_range?: number;
 }
 
 export interface PresetDetail {
