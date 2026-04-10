@@ -368,7 +368,7 @@ export function buildLP(params: SolveParams): LPResult {
     } else if (itemIndex.has(ownerId)) {
       slot_owner_arr.push(itemIndex.get(ownerId)!);
     } else {
-      slot_owner_arr.push(0); // fallback to root
+      slot_owner_arr.push(-1); // owner not in LP — slot is orphaned
     }
     slot_required.push(requiredSlots.has(slotId) ? 1 : 0);
   }
@@ -629,7 +629,10 @@ export function buildLP(params: SolveParams): LPResult {
       // Each placement var requires its slot owner
       for (const slot of slots) {
         const owner = slot_owner_arr[slot];
-        if (owner !== 0) {
+        if (owner === -1) {
+          // Orphaned slot — force placement to 0
+          L(`  conn_p_${i}_${slot}: p_${i}_${slot} = 0`);
+        } else if (owner !== 0) {
           L(`  conn_p_${i}_${slot}: p_${i}_${slot} - x_${owner} <= 0`);
         }
       }
@@ -639,6 +642,7 @@ export function buildLP(params: SolveParams): LPResult {
       if (hasRoot) {
         // On weapon root — always connectable
       } else {
+        // Filter out orphaned owners (-1) — their slots don't exist in the LP
         const uniqueOwners = [...new Set(owners)].filter(o => o > 0);
         if (uniqueOwners.length === 0) {
           L(`  nop_${i}: x_${i} = 0`);
