@@ -708,6 +708,7 @@ export function getAvailablePrice(
   traderLevels: TraderLevels = DEFAULT_TRADER_LEVELS,
   fleaAvailable = true,
   playerLevel: number | null = null,
+  barterAvailable = false,
 ): [number, string | null, boolean, string | null] {
   if (stats.purchasable === false) {
     return [0, 'not_purchasable', false, null];
@@ -734,6 +735,8 @@ export function getAvailablePrice(
   for (const offer of offers) {
     const price = offer.price;
     const source = offer.source;
+    // Skip barter offers when barter toggle is off
+    if (!barterAvailable && source.startsWith('barter:')) continue;
     const requiredLevel = offer.trader_level;
     const vendor = (offer.vendor_normalized ?? '').toLowerCase();
 
