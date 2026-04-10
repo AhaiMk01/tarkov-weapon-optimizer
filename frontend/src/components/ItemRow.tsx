@@ -28,13 +28,13 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
   if (!requirements?.length) return children
   const lines = requirements.map((r, i) => (
     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-      {r.icon && <img src={r.icon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0 }} />}
+      {r.icon && <img src={r.icon} alt="" style={{ width: 40, height: 40, objectFit: 'contain', flexShrink: 0 }} />}
       <span>{r.count}x {r.name} — ₽{r.unit_price.toLocaleString()}{r.count > 1 ? ` (₽${(r.count * r.unit_price).toLocaleString()})` : ''}</span>
     </div>
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
   return (
-    <Tooltip title={<div style={{ fontSize: 12 }}><div style={{ fontWeight: 600, marginBottom: 4 }}>Barter requirements:</div>{lines}<div style={{ marginTop: 4, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 4 }}>Total: ₽{total.toLocaleString()}</div></div>}>
+    <Tooltip overlayStyle={{ maxWidth: 400 }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>Barter requirements:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>Total: ₽{total.toLocaleString()}</div></div>}>
       {children}
     </Tooltip>
   )
