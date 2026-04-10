@@ -113,7 +113,7 @@ function ItemTooltip({ item, children }: { item: ItemDetail; children: React.Rea
   if (!lines.length && !tooltipImg) return children
   const content = (
     <div style={{ fontSize: 12 }}>
-      {tooltipImg && <img src={tooltipImg} alt="" style={{ width: 128, height: 128, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
+      {tooltipImg && <img src={tooltipImg} alt="" style={{ width: 200, height: 140, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
       {lines}
     </div>
   )

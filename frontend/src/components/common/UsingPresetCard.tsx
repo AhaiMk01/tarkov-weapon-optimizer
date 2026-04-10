@@ -20,7 +20,7 @@ function PresetTooltipContent({ preset }: { preset: Preset }) {
   const img = preset.image_large ?? preset.icon
   return (
     <div style={{ fontSize: 12 }}>
-      {img && <img src={img} alt="" style={{ width: 180, height: 100, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
+      {img && <img src={img} alt="" style={{ width: 300, height: 160, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
       {lines}
     </div>
   )
