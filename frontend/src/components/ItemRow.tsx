@@ -39,6 +39,31 @@ export function TraderIcon({ source, unknownLabel, compact }: { source: string |
       </Text>
     )
   }
+  if (source.startsWith('barter:')) {
+    const traderKey = source.replace('barter:', '').toLowerCase().replace(/\s+/g, '')
+    const trader = traderIcons[traderKey]
+    const traderName = trader?.name || source.replace('barter:', '')
+    if (compact) {
+      return <Text type="secondary" style={{ minWidth: 80 }} title={`Barter from ${traderName}`}>{traderName} (B)</Text>
+    }
+    if (trader?.icon) {
+      return (
+        <div style={{ position: 'relative', display: 'inline-block' }} title={`Barter from ${traderName}`}>
+          <img
+            src={trader.icon}
+            alt={traderName}
+            style={{ width: 64, height: 64, borderRadius: 4, objectFit: 'cover' }}
+          />
+          <span style={{
+            position: 'absolute', bottom: 0, right: 0,
+            background: '#faad14', color: '#000', fontSize: 10, fontWeight: 700,
+            borderRadius: '4px 0 4px 0', padding: '1px 4px', lineHeight: 1.2,
+          }}>B</span>
+        </div>
+      )
+    }
+    return <Text type="secondary" title={`Barter from ${traderName}`}>{traderName} (Barter)</Text>
+  }
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]
   if (compact) {
