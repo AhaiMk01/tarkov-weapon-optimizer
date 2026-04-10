@@ -165,7 +165,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
   const isExcluded = excludedIds?.includes(item.id) ?? false
   const hasActions = !!(onToggleLock || onToggleExclude)
   const actionBtns = hasActions ? (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, flexShrink: 0 }}>
+    <div style={{ display: 'flex', flexDirection: compactMode ? 'row' : 'column', gap: 0, flexShrink: 0 }}>
       {onToggleLock && (
         <Tooltip title={isLocked ? 'Unlock (remove from required)' : 'Lock (require in next build)'}>
           <Button
