@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Magazynek >=",
     "min_sighting_range_tag": "Zasięg Celowania >=",
     "max_weight_tag": "Waga <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Min. pojemność magazynka",
+    "min_mag_unit": "naboi",
+    "off": "Wył."
   },
   "results": {
     "optimization_status": "Status Optymalizacji",

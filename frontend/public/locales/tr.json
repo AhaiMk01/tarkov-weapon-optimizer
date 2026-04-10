@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Şarjör >=",
     "min_sighting_range_tag": "Nişan Mesafesi >=",
     "max_weight_tag": "Ağırlık <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Min. şarjör kapasitesi",
+    "min_mag_unit": "mermi",
+    "off": "Kapalı"
   },
   "results": {
     "optimization_status": "Optimizasyon Durumu",

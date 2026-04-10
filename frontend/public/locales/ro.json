@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Încărcător >=",
     "min_sighting_range_tag": "Rază Vizare >=",
     "max_weight_tag": "Greutate <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Capacitate min. încărcător",
+    "min_mag_unit": "cartușe",
+    "off": "Dezactivat"
   },
   "results": {
     "optimization_status": "Stare Optimizare",

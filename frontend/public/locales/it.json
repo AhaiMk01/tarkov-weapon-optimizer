@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Caricatore >=",
     "min_sighting_range_tag": "Portata Mira >=",
     "max_weight_tag": "Peso <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Capacità min. caricatore",
+    "min_mag_unit": "colpi",
+    "off": "Disattivato"
   },
   "results": {
     "optimization_status": "Stato Ottimizzazione",

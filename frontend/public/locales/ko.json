@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "탄창 >=",
     "min_sighting_range_tag": "조준 거리 >=",
     "max_weight_tag": "무게 <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "최소 탄창 용량",
+    "min_mag_unit": "발",
+    "off": "끔"
   },
   "results": {
     "optimization_status": "최적화 상태",

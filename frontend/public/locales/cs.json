@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Zásobník >=",
     "min_sighting_range_tag": "Dosah mířidel >=",
     "max_weight_tag": "Hmotnost <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Min. kapacita zásobníku",
+    "min_mag_unit": "nábojů",
+    "off": "Vyp."
   },
   "results": {
     "optimization_status": "Stav optimalizace",

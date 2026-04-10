@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Tár >=",
     "min_sighting_range_tag": "Célzási táv >=",
     "max_weight_tag": "Súly <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Min. tárkapacitás",
+    "min_mag_unit": "töltény",
+    "off": "Ki"
   },
   "results": {
     "optimization_status": "Optimalizálás állapota",

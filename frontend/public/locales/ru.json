@@ -67,9 +67,9 @@
     "min_mag_capacity_tag": "Магазин >=",
     "min_sighting_range_tag": "Дальность прицела >=",
     "max_weight_tag": "Вес <=",
-    "min_mag_capacity": "Min Magazine Capacity",
-    "min_mag_unit": "rounds",
-    "off": "Off"
+    "min_mag_capacity": "Мин. ёмкость магазина",
+    "min_mag_unit": "патронов",
+    "off": "Выкл"
   },
   "results": {
     "optimization_status": "Статус оптимизации",
