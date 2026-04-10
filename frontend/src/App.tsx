@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
-import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, SunOutlined, MoonOutlined, SyncOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, ReadOutlined, CoffeeOutlined, HistoryOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
@@ -136,13 +136,14 @@ function choiceToLightPalette(c: ThemeChoice): LightPaletteId | null {
 }
 
 function normalizeStoredThemeRaw(raw: string | null): ThemeChoice {
-  if (!raw) return 'auto'
-  if (raw === 'light_primer' || raw === 'light_paper' || raw === 'light_latte') return raw
-  if (raw === 'light') return 'light_primer'
-  if (raw === 'auto' || raw === 'amoled') return raw
+  if (!raw) return 'dark_onedark'
+  // Light themes disabled — fall back to dark
+  if (raw === 'light_primer' || raw === 'light_paper' || raw === 'light_latte' || raw === 'light') return 'dark_onedark'
+  if (raw === 'auto') return 'dark_onedark'
+  if (raw === 'amoled') return raw
   if (raw === 'dark_onedark' || raw === 'dark_github' || raw === 'dark_tokyo') return raw
   if (raw === 'dark') return 'dark_onedark'
-  return 'auto'
+  return 'dark_onedark'
 }
 
 function readStoredThemeChoice(): ThemeChoice {
@@ -265,14 +266,15 @@ function AppContent({
   }, [playerLevel, fleaAvailable, barterAvailable, barterExcludeDogtags, traderLevels])
   const themeSelectOptions = useMemo(
     () => [
-      { value: 'light_primer' as const, label: <Space size={6}><SunOutlined />{t('ui.theme_light_primer')}</Space> },
-      { value: 'light_paper' as const, label: <Space size={6}><ReadOutlined />{t('ui.theme_light_paper')}</Space> },
-      { value: 'light_latte' as const, label: <Space size={6}><CoffeeOutlined />{t('ui.theme_light_latte')}</Space> },
+      // Light themes disabled — item images lack transparent backgrounds
+      // { value: 'light_primer' as const, label: <Space size={6}><SunOutlined />{t('ui.theme_light_primer')}</Space> },
+      // { value: 'light_paper' as const, label: <Space size={6}><ReadOutlined />{t('ui.theme_light_paper')}</Space> },
+      // { value: 'light_latte' as const, label: <Space size={6}><CoffeeOutlined />{t('ui.theme_light_latte')}</Space> },
       { value: 'dark_onedark' as const, label: <Space size={6}><MoonOutlined />{t('ui.theme_dark_onedark')}</Space> },
       { value: 'dark_github' as const, label: <Space size={6}><GithubOutlined />{t('ui.theme_dark_github')}</Space> },
       { value: 'dark_tokyo' as const, label: <Space size={6}><CloudOutlined />{t('ui.theme_dark_tokyo')}</Space> },
       { value: 'amoled' as const, label: <Space size={6}><BlockOutlined />{t('ui.theme_amoled')}</Space> },
-      { value: 'auto' as const, label: <Space size={6}><SyncOutlined />{t('ui.theme_auto')}</Space> },
+      // { value: 'auto' as const, label: <Space size={6}><SyncOutlined />{t('ui.theme_auto')}</Space> },
     ],
     [t],
   )
@@ -507,6 +509,13 @@ function AppContent({
     }
   }
 
+  const toggleLock = (id: string) => {
+    setIncludedModIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+  const toggleExclude = (id: string) => {
+    setExcludedModIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
   const copyToClipboard = (content: string) => {
     const successMsg = t('toast.copied')
     const failMsg = t('toast.copy_failed')
@@ -639,6 +648,10 @@ function AppContent({
               onCopy={copyBuild}
               disabled={!selectedGunId}
               weaponId={selectedGunId}
+              lockedIds={includedModIds}
+              excludedIds={excludedModIds}
+              onToggleLock={toggleLock}
+              onToggleExclude={toggleExclude}
             />
           }
         />
@@ -767,7 +780,7 @@ function AppContent({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }} onClick={() => window.location.reload()}>
               <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="logo" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
               <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1 }}>{t('app.title')}</span>
-              <Tag color="orange" style={{ margin: 0 }}>v2.2.0</Tag>
+              <Tag color="orange" style={{ margin: 0 }}>v2.2.1</Tag>
             </div>
             {!isMobile && (
               <span className="app-main-mode-nav" data-active-mode={activeTab} style={{ ...mainModeNavWrapStyle, display: 'inline-flex' }}>

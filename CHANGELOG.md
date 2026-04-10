@@ -2,6 +2,27 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.2.1] — 2026-04-10
+
+### Added
+- Item tooltips with hi-res image, category path, weight, and capacity
+- Preset tooltips with large weapon image
+- Accuracy (MOA) and sighting range shown as inline tags on item rows
+- Weight column in item rows
+- Category path shown under item name (e.g. "Gear mod > Magazine")
+- Lock/ban buttons on result items to quickly require or exclude mods in next build
+- Two-column item grid layout on non-mobile screens
+- Column divider line between item grid columns
+
+### Changed
+- Redesigned preset card — compact row layout with trader icon
+- Use transparent-background images (image512px) instead of dark-bg icons
+- Disabled light themes and auto mode — dark-only for now (item images need dark backgrounds)
+- Default theme set to Dark OneDark
+
+### Fixed
+- Preset-retained items no longer show misleading trader source and price
+
 ## [v2.2.0] — 2026-04-10
 
 ### Added

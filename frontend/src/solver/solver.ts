@@ -108,7 +108,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = entry.data as Record<string, any>;
-      const icon = data.iconLink ?? data.iconLinkFallback ?? data.imageLink ?? data.image512pxLink;
+      const icon = data.image512pxLink ?? data.imageLink ?? data.image8xLink ?? data.iconLink ?? data.iconLinkFallback;
       const imageLarge = data.image512pxLink ?? data.imageLink ?? data.image8xLink;
 
       if (entry.type === 'mod') {

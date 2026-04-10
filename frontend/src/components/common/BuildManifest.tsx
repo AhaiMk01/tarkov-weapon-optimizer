@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Collapse, Tag, Space, Segmented, Button, Typography, Grid } from 'antd'
+import { Card, Collapse, Tag, Space, Segmented, Button, Typography, Grid, theme } from 'antd'
 import { CopyOutlined, ExportOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ItemRow } from '../ItemRow'
@@ -15,17 +15,24 @@ interface BuildManifestProps {
   onCompactModeChange: (v: boolean) => void
   onCopy?: () => void
   weaponId?: string
+  lockedIds?: string[]
+  excludedIds?: string[]
+  onToggleLock?: (id: string) => void
+  onToggleExclude?: (id: string) => void
 }
 
-const itemGridStyle = (wide: boolean): React.CSSProperties => ({
+const itemGridStyle = (wide: boolean, borderColor: string): React.CSSProperties => ({
   display: 'grid',
   gridTemplateColumns: wide ? '1fr 1fr' : '1fr',
+  ...(wide ? { columnGap: 0, columnRule: `1px solid ${borderColor}` } : {}),
 })
 
-export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy, weaponId }: BuildManifestProps) {
+export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: BuildManifestProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const screens = Grid.useBreakpoint()
   const useTwoCol = !!screens.md
+  const gridStyle = itemGridStyle(useTwoCol, token.colorBorderSecondary)
 
   const handleOpenInEFTForge = () => {
     if (!weaponId || !result.slot_pairs?.length) return
@@ -72,7 +79,7 @@ export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy
                 </Space>
               ),
               children: newItems.length > 0
-                ? <div style={itemGridStyle(useTwoCol)}>{newItems.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}</div>
+                ? <div style={gridStyle}>{newItems.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />)}</div>
                 : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>,
             },
             {
@@ -84,7 +91,7 @@ export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy
                 </Space>
               ),
               children: retainedItems.length > 0
-                ? <div style={itemGridStyle(useTwoCol)}>{retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}</div>
+                ? <div style={gridStyle}>{retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}</div>
                 : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>,
             },
           ]}
@@ -94,7 +101,7 @@ export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy
   }
   return (
     <Card title={titleContent} size="small">
-      <div style={itemGridStyle(useTwoCol)}>{result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} />)}</div>
+      <div style={gridStyle}>{result.selected_items.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />)}</div>
     </Card>
   )
 }

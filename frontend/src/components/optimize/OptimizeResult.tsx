@@ -18,13 +18,17 @@ interface OptimizeResultProps {
   onCopy: () => void
   disabled: boolean
   weaponId?: string
+  lockedIds?: string[]
+  excludedIds?: string[]
+  onToggleLock?: (id: string) => void
+  onToggleExclude?: (id: string) => void
 }
 
 function precisionResolvedLabel(t: (k: string, opts?: Record<string, string>) => string, mode: 'fast' | 'precise'): string {
   return mode === 'precise' ? t('sidebar.precise') : t('sidebar.fast')
 }
 
-export function OptimizeResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled, weaponId }: OptimizeResultProps) {
+export function OptimizeResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: OptimizeResultProps) {
   const { t } = useTranslation()
   if (!result) {
     return (
@@ -71,7 +75,7 @@ export function OptimizeResult({ result, compactMode, onCompactModeChange, optim
             price={result.final_stats.total_price}
           />
           {result.selected_preset && <UsingPresetCard preset={result.selected_preset} />}
-          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} />
+          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />
         </>
       )}
     </div>

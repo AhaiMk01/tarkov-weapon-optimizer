@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 12;
+const CACHE_VERSION = 13;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -266,6 +266,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
       id
       name
       normalizedName
+      parent { name parent { name } }
       children {
         id
       }
@@ -592,6 +593,19 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
   return offers;
 }
 
+const SKIP_CATEGORIES = new Set(['Compound item', 'Weapon mod']);
+
+function buildCategoryPath(bsgCategory: RawItem | undefined): string {
+  if (!bsgCategory?.name) return '';
+  const parts: string[] = [bsgCategory.name];
+  let node = bsgCategory.parent;
+  while (node?.name) {
+    if (!SKIP_CATEGORIES.has(node.name)) parts.push(node.name);
+    node = node.parent;
+  }
+  return parts.reverse().join(' > ');
+}
+
 function extractModStats(mod: RawItem): ModStats {
   const props = mod.properties ?? {};
   const ergo = mod.ergonomicsModifier ?? 0;
@@ -665,7 +679,7 @@ function extractModStats(mod: RawItem): ModStats {
     min_level_flea: mod.minLevelForFlea ?? 0,
     capacity: props.capacity ?? 0,
     sighting_range: props.sightingRange ?? 0,
-    category: mod.bsgCategory?.name ?? '',
+    category: buildCategoryPath(mod.bsgCategory),
     category_id: mod.bsgCategory?.id ?? '',
     category_normalized: mod.bsgCategory?.normalizedName ?? '',
     category_child_ids: (mod.bsgCategory?.children ?? [])

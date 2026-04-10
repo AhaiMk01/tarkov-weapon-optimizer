@@ -8,20 +8,11 @@ const { Text } = Typography
 type Preset = NonNullable<OptimizeResponse['selected_preset']>
 
 function PresetTooltipContent({ preset }: { preset: Preset }) {
-  const lines: React.ReactNode[] = []
-  if (preset.caliber) lines.push(<div key="cal">Caliber: {preset.caliber}</div>)
-  if (preset.fire_rate) lines.push(<div key="fr">Fire rate: {preset.fire_rate} RPM</div>)
-  if (preset.fire_modes?.length) lines.push(<div key="fm">Fire modes: {preset.fire_modes.join(', ')}</div>)
-  if (preset.default_ergo) lines.push(<div key="de">Default ergo: {preset.default_ergo}</div>)
-  if (preset.default_recoil_v) lines.push(<div key="rv">Default recoil V: {preset.default_recoil_v}</div>)
-  if (preset.default_recoil_h) lines.push(<div key="rh">Default recoil H: {preset.default_recoil_h}</div>)
-  if (preset.weight) lines.push(<div key="w">Base weight: {preset.weight.toFixed(2)} kg</div>)
-  if (preset.parts_count) lines.push(<div key="pc">Preset parts: {preset.parts_count}</div>)
   const img = preset.image_large ?? preset.icon
+  if (!img) return null
   return (
-    <div style={{ fontSize: 12 }}>
-      {img && <img src={img} alt="" style={{ width: 300, height: 160, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
-      {lines}
+    <div>
+      <img src={img} alt="" style={{ width: 300, height: 160, objectFit: 'contain', display: 'block' }} />
     </div>
   )
 }
