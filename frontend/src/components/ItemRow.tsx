@@ -109,8 +109,14 @@ function ItemTooltip({ item, children }: { item: ItemDetail; children: React.Rea
   if (item.accuracy_modifier) lines.push(<div key="acc">Accuracy (MOA): {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</div>)
   if (item.capacity) lines.push(<div key="cap">Capacity: {item.capacity} rounds</div>)
   if (item.sighting_range) lines.push(<div key="sr">Sighting range: {item.sighting_range}m</div>)
-  if (!lines.length) return children
-  return <Tooltip title={<div style={{ fontSize: 12 }}>{lines}</div>}>{children}</Tooltip>
+  if (!lines.length && !item.icon) return children
+  const content = (
+    <div style={{ fontSize: 12 }}>
+      {item.icon && <img src={item.icon} alt="" style={{ width: 96, height: 96, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
+      {lines}
+    </div>
+  )
+  return <Tooltip title={content}>{children}</Tooltip>
 }
 
 interface ItemRowProps {
@@ -160,11 +166,11 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
   if (compactMode) {
     return (
       <div style={{ display: 'grid', gridTemplateColumns: `1fr auto auto ${PRICE_COLUMN}`, gap: 8, padding: '8px 16px', alignItems: 'center', minWidth: 520 }}>
-        <ItemTooltip item={item}>
-          <div style={{ minWidth: 200 }}>
+        <div style={{ minWidth: 200 }}>
+          <ItemTooltip item={item}>
             <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
-          </div>
-        </ItemTooltip>
+          </ItemTooltip>
+        </div>
         <div style={{ display: 'flex', gap: 4 }}>
           {item.ergonomics !== 0 && (
             <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>
@@ -186,19 +192,21 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
   }
   return (
     <div style={{ display: 'grid', gridTemplateColumns: `64px 1fr auto 64px ${PRICE_COLUMN}`, gap: 8, padding: 16, alignItems: 'center', minWidth: 560 }}>
-      <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
-        {item.icon ? (
-          <img src={item.icon} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-        ) : (
-          <SettingOutlined style={{ fontSize: 24, color: token.colorTextQuaternary }} />
-        )}
-      </div>
       <ItemTooltip item={item}>
-        <div style={{ minWidth: 200 }}>
-          <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
-          <Text type="secondary" style={{ fontSize: 12, ...truncateStyle, ...clickableStyle }} title={item.id} onClick={() => copyToClipboard(item.id)}>ID: {item.id}</Text>
+        <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0 }}>
+          {item.icon ? (
+            <img src={item.icon} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          ) : (
+            <SettingOutlined style={{ fontSize: 24, color: token.colorTextQuaternary }} />
+          )}
         </div>
       </ItemTooltip>
+      <div style={{ minWidth: 200 }}>
+        <ItemTooltip item={item}>
+          <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+        </ItemTooltip>
+        <Text type="secondary" style={{ fontSize: 12, ...truncateStyle, ...clickableStyle }} title={item.id} onClick={() => copyToClipboard(item.id)}>ID: {item.id}</Text>
+      </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {item.ergonomics !== 0 && (
           <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>
