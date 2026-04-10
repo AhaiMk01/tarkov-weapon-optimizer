@@ -38,8 +38,8 @@ function BarterTooltip({ requirements, children }: { requirements?: Array<{ name
   )
 }
 
-export function TraderIcon({ source, unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: Array<{ name: string; count: number; unit_price: number }> }) {
-  if (!source) return <Text type="secondary" style={compact ? { minWidth: 80 } : undefined}>{unknownLabel}</Text>
+export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: Array<{ name: string; count: number; unit_price: number }> }) {
+  if (!source) return <Text type="secondary" style={compact ? { minWidth: 80 } : undefined}>—</Text>
   if (source === 'not_purchasable') {
     const label = compact ? 'Unlisted' : 'Not on market'
     return (

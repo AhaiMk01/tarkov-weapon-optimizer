@@ -116,12 +116,15 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         totalRecoilMod += ms.recoil_modifier || 0;
         totalWeight += ms.weight || 0;
 
+        // Initialize with no price/source — the buy loop below will fill in
+        // price and source only for items that are actually purchased (buy_i=1).
+        // Items retained from a preset keep price=0 and no source.
         detailedItems.push({
           id: itemId,
           name: data.name ?? 'Unknown',
-          price: ms.purchasable ? (ms.price || 0) : 0,
+          price: 0,
           icon,
-          source: ms.purchasable ? (ms.price_source ?? 'Unknown') : 'not_purchasable',
+          source: undefined,
           purchasable: ms.purchasable,
           reference_price_rub: ms.reference_price_rub,
           ergonomics: ms.ergonomics || 0,
@@ -148,27 +151,32 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
     let buyPrice = 0;
     for (let i = 1; i <= lp.nItems; i++) {
+      const itemId = lp.indexToItem[i];
+      const xCol = columns[`x_${i}`];
+      if (!xCol || xCol.Primal < 0.5) continue; // not selected
       const buyCol = columns[`buy_${i}`];
-      if (buyCol && buyCol.Primal > 0.5) {
-        const itemId = lp.indexToItem[i];
-        const entry = params.itemLookup[itemId];
-        if (entry?.type === 'mod') {
-          const [price, src] = getAvailablePrice(entry.stats, traderLevels, fleaAvailable, playerLevel, barterAvailable);
-          buyPrice += price;
-          // Update detailed item with filtered source and barter requirements
-          const detail = detailedItems.find(d => d.id === itemId);
-          if (detail && src) {
-            detail.source = src;
-            detail.price = price;
-            if (src.startsWith('barter:') && entry.stats.offers) {
-              const offer = entry.stats.offers.find(o => o.source === src);
-              if (offer?.barter_requirements) {
-                detail.barter_requirements = offer.barter_requirements;
-              }
-            }
+      const isBought = buyCol && buyCol.Primal > 0.5;
+      const entry = params.itemLookup[itemId];
+      if (entry?.type !== 'mod') continue;
+      const detail = detailedItems.find(d => d.id === itemId);
+      if (!detail) continue;
+
+      if (isBought) {
+        const [price, src] = getAvailablePrice(entry.stats, traderLevels, fleaAvailable, playerLevel, barterAvailable);
+        buyPrice += price;
+        detail.source = src ?? undefined;
+        detail.price = price;
+        if (src?.startsWith('barter:') && entry.stats.offers) {
+          const offer = entry.stats.offers.find(o => o.source === src);
+          if (offer?.barter_requirements) {
+            detail.barter_requirements = offer.barter_requirements;
           }
         }
+      } else if (!entry.stats.purchasable) {
+        // FiR / unpurchasable item — show as such
+        detail.source = 'not_purchasable';
       }
+      // else: preset-retained item — keeps price=0, source=undefined
     }
 
     // Base price (use filtered preset price)
