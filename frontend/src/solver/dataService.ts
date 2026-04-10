@@ -39,6 +39,14 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
         }
       }
     }
+    bartersFor {
+      trader { name normalizedName }
+      level
+      requiredItems {
+        item { id name avg24hPrice basePrice }
+        count
+      }
+    }
     accuracyModifier
     conflictingSlotIds
     ergonomicsModifier
@@ -111,6 +119,14 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
             priceRUB
             price
           }
+          bartersFor {
+            trader { name normalizedName }
+            level
+            requiredItems {
+              item { id name avg24hPrice basePrice }
+              count
+            }
+          }
         }
         slots {
           id
@@ -158,6 +174,14 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
           minTraderLevel
           buyLimit
         }
+      }
+    }
+    bartersFor {
+      trader { name normalizedName }
+      level
+      requiredItems {
+        item { id name avg24hPrice basePrice }
+        count
       }
     }
     accuracyModifier
@@ -354,6 +378,8 @@ function hasValidPrice(item: RawItem): boolean {
       return true;
     }
   }
+  const bartersFor = item.bartersFor ?? [];
+  if (Array.isArray(bartersFor) && bartersFor.length > 0) return true;
   // Include mods listed in API without buyFor when they have a BSG reference price (still not "purchasable")
   const ap = item.avg24hPrice;
   const bp = item.basePrice;
@@ -437,6 +463,10 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
         vendor_normalized: vendor.normalizedName ?? '',
         trader_level: traderLevel,
       });
+    }
+    const bartersFor = preset.bartersFor ?? [];
+    if (Array.isArray(bartersFor)) {
+      offers.push(...extractBarterOffers(bartersFor));
     }
     offers.sort((a, b) => a.price - b.price);
     let lowestPrice = 0;
@@ -526,6 +556,37 @@ function extractGunStats(gun: RawItem): GunStats {
   };
 }
 
+/** Convert bartersFor entries into OfferInfo with "barter:" source prefix. */
+function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
+  const offers: OfferInfo[] = [];
+  for (const barter of bartersFor) {
+    if (typeof barter !== 'object' || !barter) continue;
+    const b = barter as Record<string, unknown>;
+    const trader = b.trader as Record<string, string> | undefined;
+    if (!trader) continue;
+    const level = typeof b.level === 'number' ? b.level : 1;
+    const requiredItems = (b.requiredItems ?? []) as Array<{
+      item?: { avg24hPrice?: number | null; basePrice?: number | null };
+      count?: number;
+    }>;
+    let totalCost = 0;
+    for (const ri of requiredItems) {
+      const count = ri.count ?? 1;
+      const price = ri.item?.avg24hPrice ?? ri.item?.basePrice ?? 0;
+      totalCost += count * price;
+    }
+    if (totalCost <= 0) continue;
+    offers.push({
+      price: Math.round(totalCost),
+      source: `barter:${trader.normalizedName ?? trader.name ?? 'unknown'}`,
+      vendor_name: trader.name ?? '',
+      vendor_normalized: trader.normalizedName ?? '',
+      trader_level: level,
+    });
+  }
+  return offers;
+}
+
 function extractModStats(mod: RawItem): ModStats {
   const props = mod.properties ?? {};
   const ergo = mod.ergonomicsModifier ?? 0;
@@ -565,6 +626,10 @@ function extractModStats(mod: RawItem): ModStats {
       vendor_normalized: vendor.normalizedName ?? '',
       trader_level: traderLevel,
     });
+  }
+  const bartersFor = mod.bartersFor ?? [];
+  if (Array.isArray(bartersFor)) {
+    offers.push(...extractBarterOffers(bartersFor));
   }
   offers.sort((a, b) => a.price - b.price);
   const purchasable = offers.length > 0;
