@@ -207,7 +207,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         <div style={{ width: 64, textAlign: 'center', flexShrink: 0 }}>
           <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
         </div>
-        {!hidePrice && <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap', minWidth: 60, textAlign: 'right' }}>{priceCell(item)}</Text>}
+        {!hidePrice && <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>{priceCell(item)}</Tag>}
       </div>
     )
   }
