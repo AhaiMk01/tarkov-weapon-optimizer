@@ -5,12 +5,19 @@
 
 // --- Offer / Price ---
 
+export interface BarterRequirement {
+  name: string;
+  count: number;
+  unit_price: number;
+}
+
 export interface OfferInfo {
   price: number;
   source: string;
   vendor_name: string;
   vendor_normalized: string;
   trader_level: number | null;
+  barter_requirements?: BarterRequirement[];
 }
 
 // --- Gun Stats ---

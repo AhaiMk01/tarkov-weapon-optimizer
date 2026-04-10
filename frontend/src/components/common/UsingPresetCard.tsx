@@ -11,7 +11,7 @@ function PresetPurchaseLine({ preset }: { preset: NonNullable<OptimizeResponse['
   return (
     <div style={{ marginTop: 6 }}>
       <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>{t('ui.preset_purchase_at')}</Text>
-      <TraderIcon source={preset.source} unknownLabel={unknown} compact />
+      <TraderIcon source={preset.source} unknownLabel={unknown} compact barterRequirements={preset.barter_requirements} />
     </div>
   )
 }

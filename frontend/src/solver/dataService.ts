@@ -566,14 +566,16 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
     if (!trader) continue;
     const level = typeof b.level === 'number' ? b.level : 1;
     const requiredItems = (b.requiredItems ?? []) as Array<{
-      item?: { avg24hPrice?: number | null; basePrice?: number | null };
+      item?: { name?: string; avg24hPrice?: number | null; basePrice?: number | null };
       count?: number;
     }>;
     let totalCost = 0;
+    const reqs: import('./types').BarterRequirement[] = [];
     for (const ri of requiredItems) {
       const count = ri.count ?? 1;
       const price = ri.item?.avg24hPrice ?? ri.item?.basePrice ?? 0;
       totalCost += count * price;
+      reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price });
     }
     if (totalCost <= 0) continue;
     offers.push({
@@ -582,6 +584,7 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
       vendor_name: trader.name ?? '',
       vendor_normalized: trader.normalizedName ?? '',
       trader_level: level,
+      barter_requirements: reqs,
     });
   }
   return offers;

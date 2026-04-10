@@ -1,5 +1,5 @@
 import { SettingOutlined } from '@ant-design/icons'
-import { Tag, Typography, theme, App } from 'antd'
+import { Tag, Typography, theme, App, Tooltip } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { ItemDetail } from '../api/client'
 
@@ -25,7 +25,20 @@ const traderIcons: Record<string, { icon: string; name: string }> = {
   'fleamarket': { icon: base + 'traders/flea-market-portrait.png', name: 'Flea Market' },
 }
 
-export function TraderIcon({ source, unknownLabel, compact }: { source: string | undefined; unknownLabel: string; compact?: boolean }) {
+function BarterTooltip({ requirements, children }: { requirements?: Array<{ name: string; count: number; unit_price: number }>; children: React.ReactElement }) {
+  if (!requirements?.length) return children
+  const lines = requirements.map((r, i) => (
+    <div key={i}>{r.count}x {r.name} — ₽{r.unit_price.toLocaleString()}{r.count > 1 ? ` (₽${(r.count * r.unit_price).toLocaleString()})` : ''}</div>
+  ))
+  const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
+  return (
+    <Tooltip title={<div style={{ fontSize: 12 }}><div style={{ fontWeight: 600, marginBottom: 4 }}>Barter requirements:</div>{lines}<div style={{ marginTop: 4, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 4 }}>Total: ₽{total.toLocaleString()}</div></div>}>
+      {children}
+    </Tooltip>
+  )
+}
+
+export function TraderIcon({ source, unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: Array<{ name: string; count: number; unit_price: number }> }) {
   if (!source) return <Text type="secondary" style={compact ? { minWidth: 80 } : undefined}>{unknownLabel}</Text>
   if (source === 'not_purchasable') {
     const label = compact ? 'Unlisted' : 'Not on market'
@@ -44,25 +57,27 @@ export function TraderIcon({ source, unknownLabel, compact }: { source: string |
     const trader = traderIcons[traderKey]
     const traderName = trader?.name || source.replace('barter:', '')
     if (compact) {
-      return <Text type="secondary" style={{ minWidth: 80 }} title={`Barter from ${traderName}`}>{traderName} (B)</Text>
+      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ minWidth: 80, cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} (B)</Text></BarterTooltip>
     }
     if (trader?.icon) {
       return (
-        <div style={{ position: 'relative', display: 'inline-block' }} title={`Barter from ${traderName}`}>
-          <img
-            src={trader.icon}
-            alt={traderName}
-            style={{ width: 64, height: 64, borderRadius: 4, objectFit: 'cover' }}
-          />
-          <span style={{
-            position: 'absolute', bottom: 0, right: 0,
-            background: '#faad14', color: '#000', fontSize: 10, fontWeight: 700,
-            borderRadius: '4px 0 4px 0', padding: '1px 4px', lineHeight: 1.2,
-          }}>B</span>
-        </div>
+        <BarterTooltip requirements={barterRequirements}>
+          <div style={{ position: 'relative', display: 'inline-block', cursor: barterRequirements?.length ? 'help' : undefined }}>
+            <img
+              src={trader.icon}
+              alt={traderName}
+              style={{ width: 64, height: 64, borderRadius: 4, objectFit: 'cover' }}
+            />
+            <span style={{
+              position: 'absolute', bottom: 0, right: 0,
+              background: '#faad14', color: '#000', fontSize: 10, fontWeight: 700,
+              borderRadius: '4px 0 4px 0', padding: '1px 4px', lineHeight: 1.2,
+            }}>B</span>
+          </div>
+        </BarterTooltip>
       )
     }
-    return <Text type="secondary" title={`Barter from ${traderName}`}>{traderName} (Barter)</Text>
+    return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} (Barter)</Text></BarterTooltip>
   }
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]
@@ -144,7 +159,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
             </Tag>
           )}
         </div>
-        <TraderIcon source={item.source} unknownLabel={unknownLabel} compact />
+        <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
         <Text type="secondary" style={priceCellWrapStyle}>
           {hidePrice ? '-' : priceCell(item)}
         </Text>
@@ -177,7 +192,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false }: ItemRo
         )}
         {item.ergonomics === 0 && item.recoil_modifier === 0 && <Text type="secondary">-</Text>}
       </div>
-      <TraderIcon source={item.source} unknownLabel={unknownLabel} />
+      <TraderIcon source={item.source} unknownLabel={unknownLabel} barterRequirements={item.barter_requirements} />
       <Text type="secondary" style={priceCellWrapStyle}>
         {hidePrice ? '-' : priceCell(item)}
       </Text>

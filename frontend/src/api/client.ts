@@ -62,6 +62,7 @@ export interface ItemDetail {
   reference_price_rub?: number;
   ergonomics: number;
   recoil_modifier: number;
+  barter_requirements?: Array<{ name: string; count: number; unit_price: number }>;
 }
 
 export interface PresetDetail {
@@ -74,6 +75,7 @@ export interface PresetDetail {
   source?: string;
   /** Human-readable seller for the preset price (e.g. "Prapor", "Flea Market") */
   purchase_label?: string;
+  barter_requirements?: Array<{ name: string; count: number; unit_price: number }>;
 }
 
 export interface FinalStats {

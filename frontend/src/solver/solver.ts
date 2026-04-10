@@ -153,8 +153,20 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         const itemId = lp.indexToItem[i];
         const entry = params.itemLookup[itemId];
         if (entry?.type === 'mod') {
-          const [price] = getAvailablePrice(entry.stats, traderLevels, fleaAvailable, playerLevel, barterAvailable);
+          const [price, src] = getAvailablePrice(entry.stats, traderLevels, fleaAvailable, playerLevel, barterAvailable);
           buyPrice += price;
+          // Update detailed item with filtered source and barter requirements
+          const detail = detailedItems.find(d => d.id === itemId);
+          if (detail && src) {
+            detail.source = src;
+            detail.price = price;
+            if (src.startsWith('barter:') && entry.stats.offers) {
+              const offer = entry.stats.offers.find(o => o.source === src);
+              if (offer?.barter_requirements) {
+                detail.barter_requirements = offer.barter_requirements;
+              }
+            }
+          }
         }
       }
     }
@@ -178,6 +190,11 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         if (!label && source === 'fleaMarket') {
           label = 'Flea Market';
         }
+        let presetBarterReqs: Array<{ name: string; count: number; unit_price: number }> | undefined;
+        if (source?.startsWith('barter:') && preset.offers) {
+          const offer = preset.offers.find(o => o.source === source);
+          if (offer?.barter_requirements) presetBarterReqs = offer.barter_requirements;
+        }
         presetDetail = {
           id: preset.id,
           name: preset.name,
@@ -186,6 +203,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
           icon: preset.image ?? undefined,
           source,
           purchase_label: label,
+          barter_requirements: presetBarterReqs,
         };
       }
     }
