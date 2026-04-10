@@ -87,6 +87,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
               image,
               category: gun.bsgCategory?.name ?? 'Unknown',
               caliber: (props.caliber ?? '').replace('Caliber', '').trim(),
+              base_moa: (props.centerOfImpact ?? 0) * 100,
             };
           }).sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
           self.postMessage({ type: 'result', id, payload: { guns: gunList } });
@@ -112,6 +113,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 category_child_ids: Array.isArray(st.category_child_ids) ? st.category_child_ids : [],
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
                 capacity: st.capacity ?? 0,
+                accuracy_modifier: st.accuracy_modifier ?? 0,
               };
             })
             .filter(Boolean)
@@ -138,6 +140,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             minMagCapacity: req.min_mag_capacity,
             minSightingRange: req.min_sighting_range,
             maxWeight: req.max_weight,
+            maxMOA: req.max_moa,
             includeItems: req.include_items,
             excludeItems: req.exclude_items,
             includeCategories: req.include_categories,
@@ -179,6 +182,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             minMagCapacity: req.min_mag_capacity,
             minSightingRange: req.min_sighting_range,
             maxWeight: req.max_weight,
+            maxMOA: req.max_moa,
             includeItems: req.include_items,
             excludeItems: req.exclude_items,
             includeCategories: req.include_categories,

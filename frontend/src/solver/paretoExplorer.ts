@@ -20,6 +20,7 @@ export interface ParetoParams {
   minMagCapacity?: number | null;
   minSightingRange?: number | null;
   maxWeight?: number | null;
+  maxMOA?: number | null;
   includeItems?: string[] | null;
   excludeItems?: string[] | null;
   includeCategories?: string[][] | null;
@@ -42,6 +43,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     minMagCapacity: p.minMagCapacity,
     minSightingRange: p.minSightingRange,
     maxWeight: p.maxWeight,
+    maxMOA: p.maxMOA,
     includeItems: p.includeItems,
     excludeItems: p.excludeItems,
     includeCategories: p.includeCategories,

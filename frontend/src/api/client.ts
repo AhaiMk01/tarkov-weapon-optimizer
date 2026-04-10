@@ -11,6 +11,7 @@ export interface Gun {
   image?: string;
   category: string;
   caliber: string;
+  base_moa?: number;
 }
 
 export interface InfoResponse {
@@ -29,6 +30,7 @@ export interface OptimizeRequest {
   min_mag_capacity?: number;
   min_sighting_range?: number;
   max_weight?: number;
+  max_moa?: number;
   include_items?: string[];
   exclude_items?: string[];
   include_categories?: string[][];
@@ -102,6 +104,7 @@ export interface FinalStats {
   recoil_horizontal: number;
   total_price: number;
   total_weight: number;
+  moa: number;
 }
 
 export interface OptimizeResponse {
@@ -131,6 +134,7 @@ export interface ModInfo {
   category_child_ids: string[];
   icon?: string;
   capacity?: number;
+  accuracy_modifier?: number;
 }
 
 export interface ModCategoryOption {

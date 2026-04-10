@@ -9,9 +9,10 @@ interface StatsCardsProps {
   recoilHorizontal: number
   weight: number
   price: number
+  moa?: number
 }
 
-export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price }: StatsCardsProps) {
+export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa }: StatsCardsProps) {
   const { t } = useTranslation()
   const { token } = useToken()
   return (
@@ -25,6 +26,11 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('ui.horiz_recoil')} value={recoilHorizontal.toFixed(1)} />
       </Card>
+      {moa != null && moa > 0 && (
+        <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
+          <Statistic title="MOA" value={moa.toFixed(2)} />
+        </Card>
+      )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('ui.weight_label')} value={weight.toFixed(2)} suffix="kg" />
       </Card>

@@ -275,6 +275,7 @@ export function buildLP(params: SolveParams): LPResult {
   const item_weight_g: number[] = [0]; // weight in grams for weight constraint
   const item_capacity: number[] = [0]; // magazine capacity
   const item_sighting_range: number[] = [0]; // sighting range
+  const item_accuracy_mod: number[] = [0]; // accuracy modifier (percentage * 100 for integer math)
 
   for (let idx = 1; idx <= n_items; idx++) {
     const iid = indexToItem[idx];
@@ -298,6 +299,7 @@ export function buildLP(params: SolveParams): LPResult {
       item_weight_g.push(Math.round((ms.weight ?? 0) * 1000));
       item_capacity.push(ms.capacity ?? 0);
       item_sighting_range.push(ms.sighting_range ?? 0);
+      item_accuracy_mod.push(Math.round((ms.accuracy_modifier ?? 0) * 100));
     } else {
       item_ergo.push(0);
       item_recoil.push(0);
@@ -307,6 +309,7 @@ export function buildLP(params: SolveParams): LPResult {
       item_weight_g.push(0);
       item_capacity.push(0);
       item_sighting_range.push(0);
+      item_accuracy_mod.push(0);
     }
   }
 
@@ -815,6 +818,25 @@ export function buildLP(params: SolveParams): LPResult {
     }
     if (weightTerms.length > 0) {
       L(`  weight_lim: ${formatTerms(weightTerms)} <= ${weightBudget}`);
+    }
+  }
+
+  // maxMOA: finalMOA = baseCOI * (1 - sum(acc_mod)/100) * 100 <= maxMOA
+  // Rearranged: sum(acc_mod * x_i) >= (1 - maxMOA / (baseCOI * 100)) * 100
+  // Using scaled values (acc_mod * 100): sum(item_accuracy_mod[i] * x_i) >= (100 - maxMOA/baseCOI) * 100
+  if (params.maxMOA != null) {
+    const baseCOI = weaponStats.center_of_impact ?? 0;
+    if (baseCOI > 0) {
+      const minAccModScaled = Math.round((100 - params.maxMOA / baseCOI) * 100);
+      const accTerms: string[] = [];
+      for (let i = 1; i <= n_items; i++) {
+        if (item_accuracy_mod[i] !== 0) {
+          accTerms.push(`${item_accuracy_mod[i]} x_${i}`);
+        }
+      }
+      if (accTerms.length > 0) {
+        L(`  moa_lim: ${formatTerms(accTerms)} >= ${minAccModScaled}`);
+      }
     }
   }
 

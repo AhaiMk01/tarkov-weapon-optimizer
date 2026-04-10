@@ -98,6 +98,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
     let totalErgo = wStats.naked_ergonomics;
     let totalRecoilMod = 0;
+    let totalAccuracyMod = 0;
     let totalWeight = wStats.weight || 0;
 
     const detailedItems: ItemDetail[] = [];
@@ -115,6 +116,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         const ms = entry.stats;
         totalErgo += ms.ergonomics || 0;
         totalRecoilMod += ms.recoil_modifier || 0;
+        totalAccuracyMod += ms.accuracy_modifier || 0;
         totalWeight += ms.weight || 0;
 
         // Initialize with no price/source — the buy loop below will fill in
@@ -251,12 +253,16 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
     const totalPrice = buyPrice + basePrice;
 
+    const baseCOI = wStats.center_of_impact || 0;
+    const finalMOA = baseCOI * (1 - totalAccuracyMod / 100) * 100;
+
     const finalStats: FinalStats = {
       ergonomics: Math.max(0, Math.min(100, totalErgo)),
       recoil_vertical: wStats.naked_recoil_v * (1 + totalRecoilMod),
       recoil_horizontal: wStats.naked_recoil_h * (1 + totalRecoilMod),
       total_price: totalPrice,
       total_weight: totalWeight,
+      moa: finalMOA,
     };
 
     // Reconstruct slot-item pairs for EFTForge build export.
