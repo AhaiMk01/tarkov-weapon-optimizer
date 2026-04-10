@@ -330,6 +330,18 @@ export function buildLP(params: SolveParams): LPResult {
   }
   const n_memberships = slot_of_member.length;
 
+  // Build slotId → nameId map for slot grouping
+  const slotNameId = new Map<string, string>();
+  for (const slot of weapon.slots) {
+    slotNameId.set(slot.id, slot.nameId);
+  }
+  for (const iid of Object.keys(cmap.item_to_slots)) {
+    if (!(iid in itemLookup)) continue;
+    for (const slot of itemLookup[iid].slots) {
+      slotNameId.set(slot.id, slot.nameId);
+    }
+  }
+
   // ========================================================================
   // 7. Slot ownership and required flag
   // ========================================================================
@@ -446,7 +458,6 @@ export function buildLP(params: SolveParams): LPResult {
   // In precise mode: full placement variables for all multi-slot items.
   // In fast mode: simple per-slot mutex with x_i (sub-second, ~1-2% suboptimal).
   const usePrecise = !!params.preciseMode;
-
   const multiSlotItems = new Set<number>();
   if (usePrecise) {
     for (const [item, slots] of itemToSlotIndices) {
@@ -597,6 +608,7 @@ export function buildLP(params: SolveParams): LPResult {
     }
     L(`  slot_${slot}: ${terms.join(' + ')} <= 1`);
   }
+
 
   // --- 3. Placement linking (precise mode only) ---
   for (const item of multiSlotItems) {
