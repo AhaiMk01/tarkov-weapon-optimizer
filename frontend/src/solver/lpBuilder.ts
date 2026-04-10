@@ -97,6 +97,7 @@ export function buildLP(params: SolveParams): LPResult {
       params.traderLevels ?? undefined,
       params.fleaAvailable ?? true,
       params.playerLevel ?? null,
+      params.barterAvailable ?? false,
     );
     if (pPrice <= 0 && !pAvail) continue; // skip unpurchasable
     const pid = preset.id;
@@ -142,6 +143,7 @@ export function buildLP(params: SolveParams): LPResult {
         params.traderLevels ?? undefined,
         params.fleaAvailable ?? true,
         params.playerLevel ?? null,
+        params.barterAvailable ?? false,
       );
     }
 
