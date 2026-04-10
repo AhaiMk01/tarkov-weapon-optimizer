@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 10;
+const CACHE_VERSION = 11;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
