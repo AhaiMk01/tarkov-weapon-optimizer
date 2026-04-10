@@ -54,7 +54,7 @@ export function UsingPresetCard({ preset }: { preset: Preset }) {
       {contextHolder}
       <div style={{ display: 'flex', gap: isMobile ? 10 : 14, alignItems: 'center', flexWrap: 'wrap' }}>
         {preset.icon && (
-          <Tooltip title={tooltipContent}>
+          <Tooltip title={tooltipContent} overlayStyle={{ maxWidth: 340 }}>
             <img
               src={preset.icon}
               alt=""
@@ -63,7 +63,7 @@ export function UsingPresetCard({ preset }: { preset: Preset }) {
           </Tooltip>
         )}
         <div style={{ flex: 1, minWidth: 150 }}>
-          <Tooltip title={tooltipContent}>
+          <Tooltip title={tooltipContent} overlayStyle={{ maxWidth: 340 }}>
             <Text
               strong
               style={{ display: 'block', cursor: 'pointer', fontSize: 13, lineHeight: 1.3 }}

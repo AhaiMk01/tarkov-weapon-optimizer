@@ -117,7 +117,7 @@ function ItemTooltip({ item, children }: { item: ItemDetail; children: React.Rea
       {lines}
     </div>
   )
-  return <Tooltip title={content}>{children}</Tooltip>
+  return <Tooltip title={content} overlayStyle={{ maxWidth: 240 }}>{children}</Tooltip>
 }
 
 interface ItemRowProps {
