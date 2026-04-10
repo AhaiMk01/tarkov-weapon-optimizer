@@ -25,7 +25,7 @@ const itemGridStyle = (wide: boolean): React.CSSProperties => ({
 export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy, weaponId }: BuildManifestProps) {
   const { t } = useTranslation()
   const screens = Grid.useBreakpoint()
-  const useTwoCol = compactMode && !!screens.lg
+  const useTwoCol = !!screens.md
 
   const handleOpenInEFTForge = () => {
     if (!weaponId || !result.slot_pairs?.length) return
