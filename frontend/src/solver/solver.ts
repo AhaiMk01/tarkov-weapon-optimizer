@@ -190,6 +190,17 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
     // Base price (use filtered preset price)
     let basePrice = 0;
     let presetDetail: PresetDetail | undefined;
+    // Shared weapon info for preset tooltip
+    const weaponTooltip = {
+      caliber: wStats.caliber || undefined,
+      fire_rate: wStats.fire_rate || undefined,
+      fire_modes: wStats.fire_modes?.length ? wStats.fire_modes : undefined,
+      default_ergo: wStats.default_ergonomics || undefined,
+      default_recoil_v: wStats.default_recoil_v || undefined,
+      default_recoil_h: wStats.default_recoil_h || undefined,
+      weight: wStats.weight || undefined,
+    };
+
     if (selectedBaseId === 'naked') {
       basePrice = wStats.price < 100_000_000 ? wStats.price : 0;
       const gunData = weapon.data as Record<string, unknown>;
@@ -198,8 +209,10 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         name: (gunData.name as string) ?? 'Naked Gun',
         price: basePrice,
         items: [],
-        icon: (gunData.image512pxLink ?? gunData.imageLink ?? gunData.iconLink ?? wStats.default_preset_image) as string | undefined,
+        icon: (gunData.iconLink ?? gunData.iconLinkFallback ?? wStats.default_preset_image) as string | undefined,
+        image_large: (gunData.image512pxLink ?? gunData.imageLink ?? gunData.image8xLink) as string | undefined,
         source: wStats.price_source !== 'not_available' ? wStats.price_source : undefined,
+        ...weaponTooltip,
       };
     } else if (selectedBaseId) {
       const preset = (weapon.presets || []).find(p => p.id === selectedBaseId)
@@ -226,9 +239,12 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
           price: filteredPrice,
           items: preset.items || [],
           icon: preset.image ?? undefined,
+          image_large: preset.image ?? undefined,
           source,
           purchase_label: label,
           barter_requirements: presetBarterReqs,
+          parts_count: preset.items?.length || undefined,
+          ...weaponTooltip,
         };
       }
     }

@@ -84,6 +84,16 @@ export interface PresetDetail {
   /** Human-readable seller for the preset price (e.g. "Prapor", "Flea Market") */
   purchase_label?: string;
   barter_requirements?: Array<{ name: string; count: number; unit_price: number; icon?: string }>;
+  // Tooltip extras
+  image_large?: string;
+  caliber?: string;
+  fire_rate?: number;
+  fire_modes?: string[];
+  default_ergo?: number;
+  default_recoil_v?: number;
+  default_recoil_h?: number;
+  weight?: number;
+  parts_count?: number;
 }
 
 export interface FinalStats {
