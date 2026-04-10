@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Card, Select, Space, Row, Col } from 'antd'
 import type { Gun } from '../../api/client'
@@ -27,6 +28,8 @@ export function WeaponSelector({
   filteredGuns,
 }: WeaponSelectorProps) {
   const { t } = useTranslation()
+  const [searchValue, setSearchValue] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
   return (
     <Card title={<span style={{ userSelect: 'none' }}>{t('sidebar.select_weapon')}</span>} size="small">
       <Space direction="vertical" style={{ width: '100%' }}>
@@ -56,7 +59,16 @@ export function WeaponSelector({
           showSearch
           style={{ width: '100%' }}
           value={selectedGunId}
-          onChange={onGunChange}
+          searchValue={searchValue}
+          onSearch={setSearchValue}
+          onDropdownVisibleChange={setDropdownOpen}
+          onChange={(v) => { onGunChange(v); setSearchValue('') }}
+          onKeyDown={(e) => { if (e.key === ' ' && dropdownOpen) setSearchValue(prev => prev + ' ') }}
+          labelRender={(item) => (
+            dropdownOpen && searchValue
+              ? <span style={{ visibility: 'hidden' }}>{item.label}</span>
+              : <span>{item.label}</span>
+          )}
           filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
           options={filteredGuns.map(g => ({ value: g.id, label: g.name }))}
           optionRender={(option) => {
