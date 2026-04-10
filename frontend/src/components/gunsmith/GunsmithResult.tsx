@@ -49,8 +49,15 @@ export function GunsmithResult({ result, compactMode, onCompactModeChange, optim
             recoilHorizontal={result.final_stats.recoil_horizontal}
             weight={result.final_stats.total_weight}
             price={result.final_stats.total_price}
+            moa={result.final_stats.moa}
           />
-          {result.selected_preset && <UsingPresetCard preset={result.selected_preset} />}
+          {result.selected_preset && (
+            <UsingPresetCard
+              preset={result.selected_preset}
+              retainedItems={result.selected_items.filter(i => result.selected_preset!.items.includes(i.id))}
+              compactMode={compactMode}
+            />
+          )}
           <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} />
         </>
       )}

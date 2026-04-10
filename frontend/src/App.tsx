@@ -213,6 +213,8 @@ function AppContent({
   const [minErgo, setMinErgo] = useState(0)
   const [useMinMag, setUseMinMag] = useState(false)
   const [minMagCapacity, setMinMagCapacity] = useState(0)
+  const [useMOA, setUseMOA] = useState(false)
+  const [maxMOA, setMaxMOA] = useState(0)
   const [includedModIds, setIncludedModIds] = useState<string[]>([])
   const [excludedModIds, setExcludedModIds] = useState<string[]>([])
   const [modSearch, setModSearch] = useState('')
@@ -366,8 +368,33 @@ function AppContent({
     const caps = availableMods.filter(m => m.capacity && m.capacity > 0).map(m => m.capacity!)
     return [...new Set(caps)].sort((a, b) => a - b)
   }, [availableMods])
-  const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
   const selectedGun = guns.find(g => g.id === selectedGunId)
+  const moaRange = useMemo(() => {
+    const baseMOA = selectedGun?.base_moa ?? 0
+    if (baseMOA <= 0) return { base: 0, min: 0, max: 0 }
+    // Group by category, take best/worst single mod per category (one per slot)
+    // Positive acc mod = better accuracy (lower MOA), negative = worse (higher MOA)
+    // finalMOA = baseMOA * (1 - totalAccMod / 100)
+    // Best (lowest) MOA: use max positive mod per category
+    // Worst (highest) MOA: use min negative mod per category
+    const bestByCategory: Record<string, number> = {}
+    const worstByCategory: Record<string, number> = {}
+    for (const m of availableMods) {
+      const acc = m.accuracy_modifier ?? 0
+      if (acc === 0) continue
+      const cat = m.category_id || 'unknown'
+      if (acc > 0) bestByCategory[cat] = Math.max(bestByCategory[cat] ?? 0, acc)
+      if (acc < 0) worstByCategory[cat] = Math.min(worstByCategory[cat] ?? 0, acc)
+    }
+    const bestMod = Object.values(bestByCategory).reduce((s, v) => s + v, 0)
+    const worstMod = Object.values(worstByCategory).reduce((s, v) => s + v, 0)
+    return {
+      base: Math.round(baseMOA * 100) / 100,
+      min: Math.round(Math.max(0, baseMOA * (1 - bestMod / 100)) * 100) / 100,
+      max: Math.round(baseMOA * (1 - worstMod / 100) * 100) / 100,
+    }
+  }, [selectedGun, availableMods])
+  const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
   useEffect(() => {
@@ -398,6 +425,7 @@ function AppContent({
         max_price: useBudget ? maxPrice : undefined,
         min_ergonomics: minErgo > 0 ? minErgo : undefined,
         min_mag_capacity: useMinMag ? minMagCapacity : undefined,
+        max_moa: useMOA ? maxMOA : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -438,6 +466,7 @@ function AppContent({
         min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
         max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
         min_mag_capacity: useMinMag ? minMagCapacity : undefined,
+        max_moa: useMOA ? maxMOA : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -571,6 +600,8 @@ function AppContent({
     setSelectedGunId(id)
     setResult(null)
     setMinMagCapacity(0)
+    setUseMOA(false)
+    setMaxMOA(0)
     setUseMinMag(false)
   }
 
@@ -636,6 +667,12 @@ function AppContent({
               minMagCapacity={minMagCapacity}
               onMinMagCapacityChange={setMinMagCapacity}
               availableMagCapacities={availableMagCapacities}
+              useMOA={useMOA}
+              onUseMOAChange={(v) => { setUseMOA(v); if (v && maxMOA === 0) setMaxMOA(moaRange.base) }}
+              maxMOA={maxMOA}
+              onMaxMOAChange={setMaxMOA}
+              moaRange={moaRange}
+
             />
           }
           right={

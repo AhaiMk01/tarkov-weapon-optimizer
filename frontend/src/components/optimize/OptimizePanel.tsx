@@ -31,6 +31,11 @@ interface OptimizePanelProps {
   minMagCapacity: number
   onMinMagCapacityChange: (v: number) => void
   availableMagCapacities: number[]
+  useMOA: boolean
+  onUseMOAChange: (v: boolean) => void
+  maxMOA: number
+  onMaxMOAChange: (v: number) => void
+  moaRange: { base: number; min: number; max: number }
   availableMods: ModInfo[]
   loadingMods: boolean
   modCategoryOptions: ModCategoryOption[]
@@ -89,6 +94,11 @@ export function OptimizePanel(props: OptimizePanelProps) {
         minMagCapacity={props.minMagCapacity}
         onMinMagCapacityChange={props.onMinMagCapacityChange}
         availableMagCapacities={props.availableMagCapacities}
+        useMOA={props.useMOA}
+        onUseMOAChange={props.onUseMOAChange}
+        maxMOA={props.maxMOA}
+        onMaxMOAChange={props.onMaxMOAChange}
+        moaRange={props.moaRange}
       />
       <ModFilter
         availableMods={props.availableMods}
