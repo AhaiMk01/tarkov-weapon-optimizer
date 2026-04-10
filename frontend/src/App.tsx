@@ -77,14 +77,15 @@ function readStoredGameMode(): GameMode {
   return result
 }
 
-function readStoredLevelConfig(): { playerLevel: number; fleaAvailable: boolean; traderLevels: TraderLevels } {
-  const fallback = { playerLevel: 60, fleaAvailable: true, traderLevels: { ...DEFAULT_TRADER_LEVELS } }
+function readStoredLevelConfig(): { playerLevel: number; fleaAvailable: boolean; barterAvailable: boolean; traderLevels: TraderLevels } {
+  const fallback = { playerLevel: 60, fleaAvailable: true, barterAvailable: false, traderLevels: { ...DEFAULT_TRADER_LEVELS } }
   try {
     const raw = localStorage.getItem(LEVEL_CONFIG_STORAGE_KEY)
     if (!raw) return fallback
     const o = JSON.parse(raw) as {
       playerLevel?: unknown
       fleaAvailable?: unknown
+      barterAvailable?: unknown
       traderLevels?: Record<string, unknown>
     }
     const traderLevels = { ...DEFAULT_TRADER_LEVELS }
@@ -101,7 +102,8 @@ function readStoredLevelConfig(): { playerLevel: number; fleaAvailable: boolean;
       playerLevel = Math.max(1, Math.min(79, Math.round(o.playerLevel)))
     }
     const fleaAvailable = typeof o.fleaAvailable === 'boolean' ? o.fleaAvailable : fallback.fleaAvailable
-    return { playerLevel, fleaAvailable, traderLevels }
+    const barterAvailable = typeof o.barterAvailable === 'boolean' ? o.barterAvailable : fallback.barterAvailable
+    return { playerLevel, fleaAvailable, barterAvailable, traderLevels }
   } catch {
     return fallback
   }
@@ -217,6 +219,7 @@ function AppContent({
   const initialLevelConfig = useMemo(() => readStoredLevelConfig(), [])
   const [playerLevel, setPlayerLevel] = useState(initialLevelConfig.playerLevel)
   const [fleaAvailable, setFleaAvailable] = useState(initialLevelConfig.fleaAvailable)
+  const [barterAvailable, setBarterAvailable] = useState(initialLevelConfig.barterAvailable)
   const [solverPrecision, setSolverPrecision] = useState<SolverPrecisionMode>(() => {
     const s = localStorage.getItem('solverPrecision')
     if (s === 'fast' || s === 'precise' || s === 'auto') return s
@@ -254,9 +257,9 @@ function AppContent({
   useEffect(() => {
     localStorage.setItem(
       LEVEL_CONFIG_STORAGE_KEY,
-      JSON.stringify({ playerLevel, fleaAvailable, traderLevels }),
+      JSON.stringify({ playerLevel, fleaAvailable, barterAvailable, traderLevels }),
     )
-  }, [playerLevel, fleaAvailable, traderLevels])
+  }, [playerLevel, fleaAvailable, barterAvailable, traderLevels])
   const themeSelectOptions = useMemo(
     () => [
       { value: 'light_primer' as const, label: <Space size={6}><SunOutlined />{t('ui.theme_light_primer')}</Space> },
@@ -397,6 +400,7 @@ function AppContent({
         trader_levels: traderLevels,
         player_level: playerLevel,
         flea_available: fleaAvailable,
+        barter_available: barterAvailable,
         precise_mode: solverPrecision,
       }, gameMode, i18n.language || 'en')
       setResult(res)
@@ -435,6 +439,7 @@ function AppContent({
         trader_levels: traderLevels,
         player_level: playerLevel,
         flea_available: fleaAvailable,
+        barter_available: barterAvailable,
         precise_mode: solverPrecision,
       }, gameMode, i18n.language || 'en')
       setExploreResult(res.points)
@@ -476,6 +481,7 @@ function AppContent({
         trader_levels: traderLevels,
         player_level: playerLevel,
         flea_available: fleaAvailable,
+        barter_available: barterAvailable,
         precise_mode: true,
       }, gameMode, i18n.language || 'en')
       setGunsmithResult(res)
@@ -581,6 +587,8 @@ function AppContent({
     onModSearchChange: setModSearch,
     fleaAvailable,
     onFleaChange: setFleaAvailable,
+    barterAvailable,
+    onBarterChange: setBarterAvailable,
     playerLevel,
     onPlayerLevelChange: setPlayerLevel,
     traderLevels,
@@ -672,6 +680,8 @@ function AppContent({
               selectedTask={selectedTask}
               fleaAvailable={fleaAvailable}
               onFleaChange={setFleaAvailable}
+              barterAvailable={barterAvailable}
+              onBarterChange={setBarterAvailable}
               playerLevel={playerLevel}
               onPlayerLevelChange={setPlayerLevel}
               traderLevels={traderLevels}

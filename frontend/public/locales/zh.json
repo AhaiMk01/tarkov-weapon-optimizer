@@ -11,6 +11,7 @@
     "player_trader_access": "商人等级",
     "player_level": "玩家等级",
     "flea_market_access": "跳蚤市场",
+    "barter_available": "Barter Trades",
     "include_exclude": "配件过滤",
     "require_categories": "搜索配件类型…",
     "require_items": "搜索具体配件…",

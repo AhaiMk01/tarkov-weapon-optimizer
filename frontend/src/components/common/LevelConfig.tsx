@@ -7,6 +7,8 @@ const { Text } = Typography
 interface LevelConfigProps {
   fleaAvailable: boolean
   onFleaChange: (v: boolean) => void
+  barterAvailable: boolean
+  onBarterChange: (v: boolean) => void
   playerLevel: number
   onPlayerLevelChange: (v: number) => void
   traderLevels: TraderLevels
@@ -16,6 +18,8 @@ interface LevelConfigProps {
 export function LevelConfig({
   fleaAvailable,
   onFleaChange,
+  barterAvailable,
+  onBarterChange,
   playerLevel,
   onPlayerLevelChange,
   traderLevels,
@@ -32,6 +36,10 @@ export function LevelConfig({
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text>{t('sidebar.flea_market_access')}</Text>
               <Switch checked={fleaAvailable} onChange={onFleaChange} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <Text>{t('sidebar.barter_available')}</Text>
+              <Switch checked={barterAvailable} onChange={onBarterChange} />
             </div>
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.player_level')}: {playerLevel}</Text>

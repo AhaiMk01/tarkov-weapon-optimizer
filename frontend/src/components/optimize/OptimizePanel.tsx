@@ -48,6 +48,8 @@ interface OptimizePanelProps {
   onModSearchChange: (v: string) => void
   fleaAvailable: boolean
   onFleaChange: (v: boolean) => void
+  barterAvailable: boolean
+  onBarterChange: (v: boolean) => void
   playerLevel: number
   onPlayerLevelChange: (v: number) => void
   traderLevels: TraderLevels
@@ -106,6 +108,8 @@ export function OptimizePanel(props: OptimizePanelProps) {
       <LevelConfig
         fleaAvailable={props.fleaAvailable}
         onFleaChange={props.onFleaChange}
+        barterAvailable={props.barterAvailable}
+        onBarterChange={props.onBarterChange}
         playerLevel={props.playerLevel}
         onPlayerLevelChange={props.onPlayerLevelChange}
         traderLevels={props.traderLevels}

@@ -13,6 +13,8 @@ interface GunsmithPanelProps {
   selectedTask: GunsmithTask | undefined
   fleaAvailable: boolean
   onFleaChange: (v: boolean) => void
+  barterAvailable: boolean
+  onBarterChange: (v: boolean) => void
   playerLevel: number
   onPlayerLevelChange: (v: number) => void
   traderLevels: TraderLevels
@@ -93,6 +95,8 @@ export function GunsmithPanel(props: GunsmithPanelProps) {
       <LevelConfig
         fleaAvailable={props.fleaAvailable}
         onFleaChange={props.onFleaChange}
+        barterAvailable={props.barterAvailable}
+        onBarterChange={props.onBarterChange}
         playerLevel={props.playerLevel}
         onPlayerLevelChange={props.onPlayerLevelChange}
         traderLevels={props.traderLevels}
