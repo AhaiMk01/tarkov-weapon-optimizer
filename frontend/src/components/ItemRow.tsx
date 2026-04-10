@@ -41,13 +41,13 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
 }
 
 export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: BarterReq[] }) {
-  if (!source) return <Text type="secondary" style={compact ? { minWidth: 80 } : undefined}>—</Text>
+  if (!source) return <Text type="secondary" style={compact ? { minWidth: 100, whiteSpace: 'nowrap' } : undefined}>—</Text>
   if (source === 'not_purchasable') {
     const label = compact ? 'Unlisted' : 'Not on market'
     return (
       <Text
         type="secondary"
-        style={compact ? { minWidth: 80 } : undefined}
+        style={compact ? { minWidth: 100, whiteSpace: 'nowrap' } : undefined}
         title="Tarkov.dev has no trader/flea buy row for this item — optimizer uses a reference price only; in-game it may be barter, craft, FiR, events, or API incomplete."
       >
         {label}
@@ -59,7 +59,7 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
     const trader = traderIcons[traderKey]
     const traderName = trader?.name || source.replace('barter:', '')
     if (compact) {
-      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ minWidth: 80, cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} (B)</Text></BarterTooltip>
+      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ minWidth: 100, whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} (B)</Text></BarterTooltip>
     }
     if (trader?.icon) {
       return (
@@ -84,7 +84,7 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]
   if (compact) {
-    return <Text type="secondary" style={{ minWidth: 80 }}>{trader?.name || source}</Text>
+    return <Text type="secondary" style={{ minWidth: 100, whiteSpace: 'nowrap' }}>{trader?.name || source}</Text>
   }
   if (trader?.icon) {
     return (

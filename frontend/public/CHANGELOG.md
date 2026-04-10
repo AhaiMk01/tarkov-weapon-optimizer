@@ -2,6 +2,23 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.3.0] — 2026-04-10
+
+### Added
+- MOA stat card in optimize and gunsmith results — computed from weapon center of impact + mod accuracy modifiers
+- Max MOA (Spread) hard constraint with weapon-specific slider range (best/base/worst marks)
+- Accuracy (Acc) and sighting range tags on item rows alongside ergo/recoil
+- Lock/ban buttons on result items to quickly require or exclude mods in next optimization
+- Card-based item layout in detailed mode with 64x64 item icon, trader portrait, weight tag, price tag
+- Retained items section moved into preset card as collapsible
+- Category path shown under item name (e.g. "Gear mod > Magazine")
+- "Hard Constraints" as a separate collapsible panel
+
+### Changed
+- Renamed "Level Config" to "Market & Trader Access"
+- "Using Preset" label now shows "Naked Receiver" for naked gun builds
+- Compact mode renders as slim single-line rows with horizontal lock/ban buttons
+
 ## [v2.2.1] — 2026-04-10
 
 ### Added
