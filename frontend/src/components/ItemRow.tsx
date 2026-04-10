@@ -198,7 +198,9 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
         {actionBtns}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Text strong style={{ fontSize: 12, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+          <ItemTooltip item={item}>
+            <Text strong style={{ fontSize: 12, ...truncateStyle, display: 'inline', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+          </ItemTooltip>
         </div>
         {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
         {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
