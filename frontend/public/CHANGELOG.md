@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.3.1] — 2026-04-10
+
+### Fixed
+- Fixed bug where tags would overlap horizontally with UI items when displayed in single-column on extremely small screens
+- Safely drop to single-column earlier on narrow displays to prevent component squishing
+
 ## [v2.3.0] — 2026-04-10
 
 ### Added

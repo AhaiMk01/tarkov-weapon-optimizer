@@ -46,7 +46,6 @@ export function UsingPresetCard({ preset, retainedItems, compactMode }: UsingPre
   }
   const unknown = t('ui.unknown')
   const tooltipContent = <PresetTooltipContent preset={preset} />
-  const useTwoCol = !!screens.md
   return (
     <Card size="small" style={{ overflow: 'hidden' }}>
       {contextHolder}
@@ -90,7 +89,7 @@ export function UsingPresetCard({ preset, retainedItems, compactMode }: UsingPre
               </Space>
             ),
             children: (
-              <div style={{ display: 'grid', gridTemplateColumns: useTwoCol ? '1fr 1fr' : '1fr', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${compactMode ? 380 : 480}px), 1fr))`, gap: 8 }}>
                 {retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}
               </div>
             ),
