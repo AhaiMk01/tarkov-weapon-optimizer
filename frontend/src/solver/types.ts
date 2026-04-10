@@ -175,6 +175,7 @@ export interface SolveParams {
   priceWeight?: number;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
+  barterAvailable?: boolean;
   playerLevel?: number | null;
   preciseMode?: boolean;
 }

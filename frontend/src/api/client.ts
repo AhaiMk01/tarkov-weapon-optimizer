@@ -44,6 +44,7 @@ export interface OptimizeRequest {
     jaeger: number;
   };
   flea_available?: boolean;
+  barter_available?: boolean;
   player_level?: number;
   /** Boolean values are normalized: true → precise, false → fast. */
   precise_mode?: boolean | SolverPrecisionMode;
