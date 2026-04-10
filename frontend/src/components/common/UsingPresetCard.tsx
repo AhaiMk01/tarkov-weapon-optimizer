@@ -1,20 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Tag, Space, Typography, message, Grid } from 'antd'
+import { Card, Tag, Typography, message, Grid } from 'antd'
 import { TraderIcon } from '../ItemRow'
 import type { OptimizeResponse } from '../../api/client'
 
-const { Text, Title } = Typography
-
-function PresetPurchaseLine({ preset }: { preset: NonNullable<OptimizeResponse['selected_preset']> }) {
-  const { t } = useTranslation()
-  const unknown = preset.purchase_label || t('ui.preset_source_unknown')
-  return (
-    <div style={{ marginTop: 6 }}>
-      <Text type="secondary" style={{ fontSize: 12, display: 'block', marginBottom: 4 }}>{t('ui.preset_purchase_at')}</Text>
-      <TraderIcon source={preset.source} unknownLabel={unknown} compact barterRequirements={preset.barter_requirements} />
-    </div>
-  )
-}
+const { Text } = Typography
 
 export function UsingPresetCard({ preset }: { preset: NonNullable<OptimizeResponse['selected_preset']> }) {
   const { t } = useTranslation()
@@ -37,28 +26,32 @@ export function UsingPresetCard({ preset }: { preset: NonNullable<OptimizeRespon
       messageApi.success(successMsg)
     }
   }
+  const unknown = t('ui.unknown')
   return (
-    <Card size="small">
+    <Card size="small" style={{ overflow: 'hidden' }}>
       {contextHolder}
-      <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: isMobile ? 8 : 12, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
+      <div style={{ display: 'flex', gap: isMobile ? 10 : 14, alignItems: 'center', flexWrap: 'wrap' }}>
         {preset.icon && (
           <img
             src={preset.icon}
             alt=""
-            style={
-              isMobile
-                ? { width: '100%', maxHeight: 220, objectFit: 'contain' }
-                : { width: 132, height: 132, minWidth: 132, objectFit: 'contain', flexShrink: 0 }
-            }
+            style={{ width: isMobile ? 80 : 100, height: isMobile ? 50 : 60, objectFit: 'contain', flexShrink: 0 }}
           />
         )}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <Space size={4} wrap>
-            <Text type="secondary">{t('ui.base_preset_used')}</Text>
-            <Tag color="gold" style={{ margin: 0 }}>₽{preset.price.toLocaleString()}</Tag>
-          </Space>
-          <PresetPurchaseLine preset={preset} />
-          <Title level={5} style={{ margin: '8px 0 0', cursor: 'pointer' }} onClick={() => copyText(preset.name)}>{preset.name}</Title>
+        <div style={{ flex: 1, minWidth: 150 }}>
+          <Text
+            strong
+            style={{ display: 'block', cursor: 'pointer', fontSize: 13, lineHeight: 1.3 }}
+            title={preset.name}
+            onClick={() => copyText(preset.name)}
+          >
+            {preset.name}
+          </Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{t('ui.base_preset_used')}</Text>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <TraderIcon source={preset.source} unknownLabel={unknown} compact barterRequirements={preset.barter_requirements} />
+          <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>₽{preset.price.toLocaleString()}</Tag>
         </div>
       </div>
     </Card>
