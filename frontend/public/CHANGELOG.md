@@ -2,6 +2,22 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.2.0] — 2026-04-10
+
+### Added
+- Barter trade support — toggle "Barter Trades" in Level Config to include barter-only items in optimization
+- Barter cost calculated as flea market value of required trade-in items
+- Barter source indicator — gold "B" badge on trader icons for barter-sourced items
+- Barter requirement tooltip — hover to see trade-in items, counts, and flea prices
+- Barter support for weapon presets (preset-only barters now selectable)
+
+### Changed
+- Preset-retained items no longer show a misleading trader source and price — they display "—" since they're included with the preset
+- Version tag in header now shows full version (v2.2.0) instead of just "v2"
+
+### Fixed
+- Weapon search now accepts spaces (merged from community PR #5)
+
 ## [v2.1.2] — 2026-04-07
 
 ### Fixed
