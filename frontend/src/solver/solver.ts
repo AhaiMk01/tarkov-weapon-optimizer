@@ -185,6 +185,15 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
     let presetDetail: PresetDetail | undefined;
     if (selectedBaseId === 'naked') {
       basePrice = wStats.price < 100_000_000 ? wStats.price : 0;
+      const gunData = weapon.data as Record<string, unknown>;
+      presetDetail = {
+        id: params.weaponId,
+        name: (gunData.name as string) ?? 'Naked Gun',
+        price: basePrice,
+        items: [],
+        icon: (gunData.image512pxLink ?? gunData.imageLink ?? gunData.iconLink ?? wStats.default_preset_image) as string | undefined,
+        source: wStats.price_source !== 'not_available' ? wStats.price_source : undefined,
+      };
     } else if (selectedBaseId) {
       const preset = (weapon.presets || []).find(p => p.id === selectedBaseId)
         || (weapon.all_presets || []).find(p => p.id === selectedBaseId);
