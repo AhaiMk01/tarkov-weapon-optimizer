@@ -8,7 +8,7 @@
     "recoil_v": "Recuo Vertical",
     "recoil_h": "Recuo Horizontal",
     "price": "Preço",
-    "player_trader_access": "Config. de Níveis",
+    "player_trader_access": "Mercado e comerciantes",
     "player_level": "Nível de Jogador",
     "flea_market_access": "Mercado de Pulgas",
     "barter_available": "Trocas",
@@ -60,6 +60,7 @@
     "ready_description": "Selecione arma e ajuste prioridades para build ideal"
   },
   "constraints": {
+    "header": "Restrições",
     "budget_limit": "Limite de Orçamento",
     "min_ergo": "Ergonomia Mínima",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Alcance Mira >=",
     "max_weight_tag": "Peso <=",
     "min_mag_capacity": "Capacidade mín. do carregador",
+    "max_moa": "MOA máx. (dispersão)",
     "min_mag_unit": "cartuchos",
     "off": "Desligado"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Peso",
     "recoil_sum": "Recuo",
     "base_preset_used": "Preset Usado",
+    "naked_receiver": "Receptor básico",
     "preset_purchase_at": "Comprar preset em",
     "preset_source_unknown": "Sem fonte nas definições atuais",
     "build_manifest": "Manifesto de Build",

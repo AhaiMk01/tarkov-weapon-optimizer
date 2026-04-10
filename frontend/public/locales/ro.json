@@ -8,7 +8,7 @@
     "recoil_v": "Recul Vertical",
     "recoil_h": "Recul Orizontal",
     "price": "Preț",
-    "player_trader_access": "Setări Nivele",
+    "player_trader_access": "Piață și comercianți",
     "player_level": "Nivel Jucător",
     "flea_market_access": "Flea Market",
     "barter_available": "Schimburi",
@@ -60,6 +60,7 @@
     "ready_description": "Selectează arma și ajustează prioritățile pentru configurație optimă"
   },
   "constraints": {
+    "header": "Restricții",
     "budget_limit": "Limită Buget",
     "min_ergo": "Ergonomie Min.",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Rază Vizare >=",
     "max_weight_tag": "Greutate <=",
     "min_mag_capacity": "Capacitate min. încărcător",
+    "max_moa": "MOA max. (dispersie)",
     "min_mag_unit": "cartușe",
     "off": "Dezactivat"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Greutate",
     "recoil_sum": "Recul",
     "base_preset_used": "Preset Folosit",
+    "naked_receiver": "Mecanism gol",
     "preset_purchase_at": "Cumpără preset de la",
     "preset_source_unknown": "Fără sursă la setările curente",
     "build_manifest": "Manifest Build",

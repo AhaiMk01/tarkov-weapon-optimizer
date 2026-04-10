@@ -8,7 +8,7 @@
     "recoil_v": "垂直反動",
     "recoil_h": "水平反動",
     "price": "価格",
-    "player_trader_access": "レベル設定",
+    "player_trader_access": "マーケットとトレーダー",
     "player_level": "プレイヤーレベル",
     "flea_market_access": "フリーマーケット",
     "barter_available": "物々交換",
@@ -60,6 +60,7 @@
     "ready_description": "武器を選択し優先度を調整、最適なビルドを生成"
   },
   "constraints": {
+    "header": "ハード制約",
     "budget_limit": "予算制限",
     "min_ergo": "最小エルゴ",
     "min_ergo_tag": "エルゴ >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "照準距離 >=",
     "max_weight_tag": "重量 <=",
     "min_mag_capacity": "最小マガジン容量",
+    "max_moa": "最大 MOA（散布）",
     "min_mag_unit": "発",
     "off": "オフ"
   },
@@ -103,6 +105,7 @@
     "weight_label": "重量",
     "recoil_sum": "反動",
     "base_preset_used": "使用プリセット",
+    "naked_receiver": "素のレシーバー",
     "preset_purchase_at": "プリセット購入先",
     "preset_source_unknown": "現在の設定では購入元が不明",
     "build_manifest": "ビルドマニフェスト",

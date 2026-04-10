@@ -8,7 +8,7 @@
     "recoil_v": "Függőleges visszarúgás",
     "recoil_h": "Vízszintes visszarúgás",
     "price": "Ár",
-    "player_trader_access": "Szint beállítások",
+    "player_trader_access": "Piac és kereskedők",
     "player_level": "Játékos szint",
     "flea_market_access": "Bolhapiac",
     "barter_available": "Cserekereskedés",
@@ -60,6 +60,7 @@
     "ready_description": "Válasszon fegyvert és állítsa be a prioritásokat az optimális buildhez"
   },
   "constraints": {
+    "header": "Korlátozások",
     "budget_limit": "Költségvetési korlát",
     "min_ergo": "Min. ergonómia",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Célzási táv >=",
     "max_weight_tag": "Súly <=",
     "min_mag_capacity": "Min. tárkapacitás",
+    "max_moa": "Max. MOA (szórás)",
     "min_mag_unit": "töltény",
     "off": "Ki"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Súly",
     "recoil_sum": "Visszarúgás",
     "base_preset_used": "Használt preset",
+    "naked_receiver": "Csupasz váz",
     "preset_purchase_at": "Preset vásárlása",
     "preset_source_unknown": "Nincs forrás a jelen beállításokkal",
     "build_manifest": "Build manifest",

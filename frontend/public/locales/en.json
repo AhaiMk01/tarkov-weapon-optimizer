@@ -8,7 +8,7 @@
     "recoil_v": "Vertical Recoil",
     "recoil_h": "Horizontal Recoil",
     "price": "Price",
-    "player_trader_access": "Level Config",
+    "player_trader_access": "Market & Trader Access",
     "player_level": "Player Level",
     "flea_market_access": "Flea Market",
     "barter_available": "Barter Trades",
@@ -60,9 +60,11 @@
     "ready_description": "Select weapon and adjust priorities to generate optimal build"
   },
   "constraints": {
+    "header": "Hard Constraints",
     "budget_limit": "Budget Limit",
     "min_ergo": "Min Ergonomics",
     "min_mag_capacity": "Min Magazine Capacity",
+    "max_moa": "Max MOA (Spread)",
     "min_mag_unit": "rounds",
     "off": "Off",
     "min_ergo_tag": "Ergo >=",
@@ -103,6 +105,7 @@
     "weight_label": "Weight",
     "recoil_sum": "Recoil",
     "base_preset_used": "Using Preset",
+    "naked_receiver": "Naked Receiver",
     "preset_purchase_at": "Buy preset at",
     "preset_source_unknown": "No clear source at current trader/flea settings",
     "build_manifest": "Build Manifest",

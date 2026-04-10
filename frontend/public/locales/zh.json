@@ -8,7 +8,7 @@
     "recoil_v": "垂直后坐",
     "recoil_h": "水平后坐",
     "price": "价格",
-    "player_trader_access": "商人等级",
+    "player_trader_access": "市场与商人",
     "player_level": "玩家等级",
     "flea_market_access": "跳蚤市场",
     "barter_available": "以物换物",
@@ -60,6 +60,7 @@
     "ready_description": "选好武器，调好更在意人机、后坐还是价格，求解当前条件下的最优配装。"
   },
   "constraints": {
+    "header": "硬约束",
     "budget_limit": "预算上限",
     "min_ergo": "最低人机",
     "min_ergo_tag": "人机 ≥",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "瞄准射程 ≥",
     "max_weight_tag": "重量 ≤",
     "min_mag_capacity": "最小弹匣容量",
+    "max_moa": "最大 MOA（散布）",
     "min_mag_unit": "发",
     "off": "关"
   },
@@ -103,6 +105,7 @@
     "weight_label": "重量",
     "recoil_sum": "后坐",
     "base_preset_used": "基于预设",
+    "naked_receiver": "裸枪",
     "preset_purchase_at": "预设购买途径",
     "preset_source_unknown": "按当前商人等级和跳蚤设置，暂无法确定明确来源",
     "build_manifest": "配装清单",

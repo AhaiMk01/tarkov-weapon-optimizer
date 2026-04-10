@@ -8,7 +8,7 @@
     "recoil_v": "Odrzut Pionowy",
     "recoil_h": "Odrzut Poziomy",
     "price": "Cena",
-    "player_trader_access": "Konfiguracja Poziomów",
+    "player_trader_access": "Rynek i handlarze",
     "player_level": "Poziom Gracza",
     "flea_market_access": "Pchli Targ",
     "barter_available": "Wymiana barterowa",
@@ -60,6 +60,7 @@
     "ready_description": "Wybierz broń i dostosuj priorytety dla optymalnej konfiguracji"
   },
   "constraints": {
+    "header": "Ograniczenia",
     "budget_limit": "Limit Budżetu",
     "min_ergo": "Min. Ergonomia",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Zasięg Celowania >=",
     "max_weight_tag": "Waga <=",
     "min_mag_capacity": "Min. pojemność magazynka",
+    "max_moa": "Maks. MOA (rozrzut)",
     "min_mag_unit": "naboi",
     "off": "Wył."
   },
@@ -103,6 +105,7 @@
     "weight_label": "Waga",
     "recoil_sum": "Odrzut",
     "base_preset_used": "Użyty Preset",
+    "naked_receiver": "Goła komora",
     "preset_purchase_at": "Kup preset u",
     "preset_source_unknown": "Brak źródła przy obecnych ustawieniach",
     "build_manifest": "Manifest Buildu",

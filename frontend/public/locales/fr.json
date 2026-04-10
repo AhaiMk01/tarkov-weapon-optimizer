@@ -8,7 +8,7 @@
     "recoil_v": "Recul Vertical",
     "recoil_h": "Recul Horizontal",
     "price": "Prix",
-    "player_trader_access": "Config. des niveaux",
+    "player_trader_access": "Marché et marchands",
     "player_level": "Niveau du joueur",
     "flea_market_access": "Marché aux puces",
     "barter_available": "Trocs",
@@ -60,6 +60,7 @@
     "ready_description": "Sélectionnez arme et ajustez priorités pour build optimal"
   },
   "constraints": {
+    "header": "Contraintes",
     "budget_limit": "Limite de budget",
     "min_ergo": "Ergonomie min.",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Portée Visée >=",
     "max_weight_tag": "Poids <=",
     "min_mag_capacity": "Capacité min. du chargeur",
+    "max_moa": "MOA max. (dispersion)",
     "min_mag_unit": "cartouches",
     "off": "Désactivé"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Poids",
     "recoil_sum": "Recul",
     "base_preset_used": "Preset utilisé",
+    "naked_receiver": "Boîtier nu",
     "preset_purchase_at": "Acheter le preset chez",
     "preset_source_unknown": "Aucune source avec réglages actuels",
     "build_manifest": "Manifeste de build",

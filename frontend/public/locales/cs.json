@@ -8,7 +8,7 @@
     "recoil_v": "Vertikální zpětný ráz",
     "recoil_h": "Horizontální zpětný ráz",
     "price": "Cena",
-    "player_trader_access": "Nastavení úrovní",
+    "player_trader_access": "Trh a obchodníci",
     "player_level": "Úroveň hráče",
     "flea_market_access": "Bleší trh",
     "barter_available": "Bartry",
@@ -60,6 +60,7 @@
     "ready_description": "Vyberte zbraň a upravte priority pro optimální sestavu"
   },
   "constraints": {
+    "header": "Omezení",
     "budget_limit": "Rozpočtový limit",
     "min_ergo": "Min. ergonomie",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Dosah mířidel >=",
     "max_weight_tag": "Hmotnost <=",
     "min_mag_capacity": "Min. kapacita zásobníku",
+    "max_moa": "Max. MOA (rozptyl)",
     "min_mag_unit": "nábojů",
     "off": "Vyp."
   },
@@ -103,6 +105,7 @@
     "weight_label": "Hmotnost",
     "recoil_sum": "Zpětný ráz",
     "base_preset_used": "Použitý preset",
+    "naked_receiver": "Holý rám",
     "preset_purchase_at": "Preset koupit u",
     "preset_source_unknown": "Žádný zdroj při současném nastavení",
     "build_manifest": "Manifest sestavy",

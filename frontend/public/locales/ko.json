@@ -8,7 +8,7 @@
     "recoil_v": "수직 반동",
     "recoil_h": "수평 반동",
     "price": "가격",
-    "player_trader_access": "레벨 설정",
+    "player_trader_access": "시장 및 상인",
     "player_level": "플레이어 레벨",
     "flea_market_access": "플리마켓",
     "barter_available": "물물교환",
@@ -60,6 +60,7 @@
     "ready_description": "무기 선택 및 우선순위 조정으로 최적 빌드 생성"
   },
   "constraints": {
+    "header": "제약 조건",
     "budget_limit": "예산 한도",
     "min_ergo": "최소 에르고",
     "min_ergo_tag": "에르고 >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "조준 거리 >=",
     "max_weight_tag": "무게 <=",
     "min_mag_capacity": "최소 탄창 용량",
+    "max_moa": "최대 MOA (산포)",
     "min_mag_unit": "발",
     "off": "끔"
   },
@@ -103,6 +105,7 @@
     "weight_label": "무게",
     "recoil_sum": "반동",
     "base_preset_used": "사용된 프리셋",
+    "naked_receiver": "기본 리시버",
     "preset_purchase_at": "프리셋 구매처",
     "preset_source_unknown": "현재 설정에서 구매처 불명",
     "build_manifest": "빌드 매니페스트",

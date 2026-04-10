@@ -8,7 +8,7 @@
     "recoil_v": "Retroceso Vertical",
     "recoil_h": "Retroceso Horizontal",
     "price": "Precio",
-    "player_trader_access": "Config. de Niveles",
+    "player_trader_access": "Mercado y comerciantes",
     "player_level": "Nivel de Jugador",
     "flea_market_access": "Mercadillo",
     "barter_available": "Intercambios",
@@ -60,6 +60,7 @@
     "ready_description": "Selecciona arma y ajusta prioridades para generar build óptima"
   },
   "constraints": {
+    "header": "Restricciones",
     "budget_limit": "Límite de Presupuesto",
     "min_ergo": "Ergonomía Mínima",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Alcance Mira >=",
     "max_weight_tag": "Peso <=",
     "min_mag_capacity": "Capacidad mín. de cargador",
+    "max_moa": "MOA máx. (dispersión)",
     "min_mag_unit": "cartuchos",
     "off": "Desactivado"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Peso",
     "recoil_sum": "Retroceso",
     "base_preset_used": "Preset Usado",
+    "naked_receiver": "Cajón de mecanismos",
     "preset_purchase_at": "Comprar preset en",
     "preset_source_unknown": "Sin fuente con ajustes actuales",
     "build_manifest": "Manifiesto de Build",

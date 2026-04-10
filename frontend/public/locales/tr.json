@@ -8,7 +8,7 @@
     "recoil_v": "Dikey Geri Tepme",
     "recoil_h": "Yatay Geri Tepme",
     "price": "Fiyat",
-    "player_trader_access": "Seviye Ayarları",
+    "player_trader_access": "Pazar ve tüccarlar",
     "player_level": "Oyuncu Seviyesi",
     "flea_market_access": "Bit Pazarı",
     "barter_available": "Takas",
@@ -60,6 +60,7 @@
     "ready_description": "Silah seçin ve öncelikleri ayarlayarak optimal build oluşturun"
   },
   "constraints": {
+    "header": "Kısıtlamalar",
     "budget_limit": "Bütçe Limiti",
     "min_ergo": "Min. Ergonomi",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Nişan Mesafesi >=",
     "max_weight_tag": "Ağırlık <=",
     "min_mag_capacity": "Min. şarjör kapasitesi",
+    "max_moa": "Maks. MOA (saçılma)",
     "min_mag_unit": "mermi",
     "off": "Kapalı"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Ağırlık",
     "recoil_sum": "Geri Tepme",
     "base_preset_used": "Kullanılan Ön Ayar",
+    "naked_receiver": "Çıplak gövde",
     "preset_purchase_at": "Ön ayarı satın al",
     "preset_source_unknown": "Mevcut ayarlarda kaynak yok",
     "build_manifest": "Build Manifestosu",

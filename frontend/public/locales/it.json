@@ -8,7 +8,7 @@
     "recoil_v": "Rinculo Verticale",
     "recoil_h": "Rinculo Orizzontale",
     "price": "Prezzo",
-    "player_trader_access": "Config. Livelli",
+    "player_trader_access": "Mercato e commercianti",
     "player_level": "Livello Giocatore",
     "flea_market_access": "Mercato Pulci",
     "barter_available": "Baratti",
@@ -60,6 +60,7 @@
     "ready_description": "Seleziona arma e regola priorità per generare build ottimale"
   },
   "constraints": {
+    "header": "Vincoli",
     "budget_limit": "Limite Budget",
     "min_ergo": "Ergonomia Min.",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Portata Mira >=",
     "max_weight_tag": "Peso <=",
     "min_mag_capacity": "Capacità min. caricatore",
+    "max_moa": "MOA max. (dispersione)",
     "min_mag_unit": "colpi",
     "off": "Disattivato"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Peso",
     "recoil_sum": "Rinculo",
     "base_preset_used": "Preset Usato",
+    "naked_receiver": "Castello nudo",
     "preset_purchase_at": "Acquista preset da",
     "preset_source_unknown": "Nessuna fonte con impostazioni attuali",
     "build_manifest": "Manifesto Build",

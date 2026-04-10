@@ -8,7 +8,7 @@
     "recoil_v": "Vertikaler Rückstoß",
     "recoil_h": "Horizontaler Rückstoß",
     "price": "Preis",
-    "player_trader_access": "Level-Konfiguration",
+    "player_trader_access": "Markt & Händler",
     "player_level": "Spielerstufe",
     "flea_market_access": "Flohmarkt",
     "barter_available": "Tauschhandel",
@@ -60,6 +60,7 @@
     "ready_description": "Waffe wählen und Prioritäten anpassen für optimales Build"
   },
   "constraints": {
+    "header": "Einschränkungen",
     "budget_limit": "Budgetlimit",
     "min_ergo": "Min. Ergonomie",
     "min_ergo_tag": "Ergo >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Visierreichweite >=",
     "max_weight_tag": "Gewicht <=",
     "min_mag_capacity": "Min. Magazinkapazität",
+    "max_moa": "Max. MOA (Streuung)",
     "min_mag_unit": "Schuss",
     "off": "Aus"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Gewicht",
     "recoil_sum": "Rückstoß",
     "base_preset_used": "Verwendetes Preset",
+    "naked_receiver": "Nackter Empfänger",
     "preset_purchase_at": "Preset kaufen bei",
     "preset_source_unknown": "Keine Quelle bei aktuellen Händler-/Flohmarkt-Einstellungen",
     "build_manifest": "Build-Manifest",

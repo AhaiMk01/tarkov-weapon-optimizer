@@ -8,7 +8,7 @@
     "recoil_v": "Вертикальная отдача",
     "recoil_h": "Горизонтальная отдача",
     "price": "Цена",
-    "player_trader_access": "Настройка уровней",
+    "player_trader_access": "Рынок и торговцы",
     "player_level": "Уровень игрока",
     "flea_market_access": "Барахолка",
     "barter_available": "Бартерные обмены",
@@ -60,6 +60,7 @@
     "ready_description": "Выберите оружие и настройте приоритеты для оптимальной сборки"
   },
   "constraints": {
+    "header": "Жёсткие ограничения",
     "budget_limit": "Лимит бюджета",
     "min_ergo": "Мин. эргономика",
     "min_ergo_tag": "Эрго >=",
@@ -68,6 +69,7 @@
     "min_sighting_range_tag": "Дальность прицела >=",
     "max_weight_tag": "Вес <=",
     "min_mag_capacity": "Мин. ёмкость магазина",
+    "max_moa": "Макс. MOA (разброс)",
     "min_mag_unit": "патронов",
     "off": "Выкл"
   },
@@ -103,6 +105,7 @@
     "weight_label": "Вес",
     "recoil_sum": "Отдача",
     "base_preset_used": "Используемый пресет",
+    "naked_receiver": "Голый ствол",
     "preset_purchase_at": "Где купить пресет",
     "preset_source_unknown": "Нет источника при текущих настройках торговцев/барахолки",
     "build_manifest": "Манифест сборки",
