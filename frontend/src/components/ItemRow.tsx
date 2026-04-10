@@ -41,13 +41,13 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
 }
 
 export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: BarterReq[] }) {
-  if (!source) return <Text type="secondary" style={compact ? { minWidth: 100, whiteSpace: 'nowrap' } : undefined}>—</Text>
+  if (!source) return <Text type="secondary" style={compact ? { whiteSpace: 'nowrap' } : undefined}>—</Text>
   if (source === 'not_purchasable') {
     const label = compact ? 'Unlisted' : 'Not on market'
     return (
       <Text
         type="secondary"
-        style={compact ? { minWidth: 100, whiteSpace: 'nowrap' } : undefined}
+        style={compact ? { whiteSpace: 'nowrap' } : undefined}
         title="Tarkov.dev has no trader/flea buy row for this item — optimizer uses a reference price only; in-game it may be barter, craft, FiR, events, or API incomplete."
       >
         {label}
@@ -59,7 +59,7 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
     const trader = traderIcons[traderKey]
     const traderName = trader?.name || source.replace('barter:', '')
     if (compact) {
-      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ minWidth: 100, whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} (B)</Text></BarterTooltip>
+      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} (B)</Text></BarterTooltip>
     }
     if (trader?.icon) {
       return (
@@ -84,7 +84,8 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]
   if (compact) {
-    return <Text type="secondary" style={{ minWidth: 100, whiteSpace: 'nowrap' }}>{trader?.name || source}</Text>
+    const label = source === 'fleaMarket' ? 'Flea' : (trader?.name || source)
+    return <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>{label}</Text>
   }
   if (trader?.icon) {
     return (
@@ -204,7 +205,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         </div>
         {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
         {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
-        <div style={{ width: 64, textAlign: 'center', flexShrink: 0 }}>
+        <div style={{ width: 80, textAlign: 'left', flexShrink: 0 }}>
           <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
         </div>
         {!hidePrice && <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>{priceCell(item)}</Tag>}
