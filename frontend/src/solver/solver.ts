@@ -109,6 +109,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const data = entry.data as Record<string, any>;
       const icon = data.iconLink ?? data.iconLinkFallback ?? data.imageLink ?? data.image512pxLink;
+      const imageLarge = data.image512pxLink ?? data.imageLink ?? data.image8xLink;
 
       if (entry.type === 'mod') {
         const ms = entry.stats;
@@ -124,6 +125,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
           name: data.name ?? 'Unknown',
           price: 0,
           icon,
+          image_large: imageLarge || undefined,
           source: undefined,
           purchasable: ms.purchasable,
           reference_price_rub: ms.reference_price_rub,

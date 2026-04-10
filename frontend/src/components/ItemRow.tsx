@@ -109,10 +109,11 @@ function ItemTooltip({ item, children }: { item: ItemDetail; children: React.Rea
   if (item.accuracy_modifier) lines.push(<div key="acc">Accuracy (MOA): {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</div>)
   if (item.capacity) lines.push(<div key="cap">Capacity: {item.capacity} rounds</div>)
   if (item.sighting_range) lines.push(<div key="sr">Sighting range: {item.sighting_range}m</div>)
-  if (!lines.length && !item.icon) return children
+  const tooltipImg = item.image_large ?? item.icon
+  if (!lines.length && !tooltipImg) return children
   const content = (
     <div style={{ fontSize: 12 }}>
-      {item.icon && <img src={item.icon} alt="" style={{ width: 96, height: 96, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
+      {tooltipImg && <img src={tooltipImg} alt="" style={{ width: 128, height: 128, objectFit: 'contain', display: 'block', margin: '0 auto 6px', background: 'rgba(255,255,255,0.06)', borderRadius: 4 }} />}
       {lines}
     </div>
   )

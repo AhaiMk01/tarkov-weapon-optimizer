@@ -65,6 +65,7 @@ export interface ItemDetail {
   recoil_modifier: number;
   barter_requirements?: Array<{ name: string; count: number; unit_price: number; icon?: string }>;
   // Tooltip extras
+  image_large?: string;
   accuracy_modifier?: number;
   weight?: number;
   category?: string;
