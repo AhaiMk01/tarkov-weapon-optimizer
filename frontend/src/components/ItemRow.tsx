@@ -25,10 +25,15 @@ const traderIcons: Record<string, { icon: string; name: string }> = {
   'fleamarket': { icon: base + 'traders/flea-market-portrait.png', name: 'Flea Market' },
 }
 
-function BarterTooltip({ requirements, children }: { requirements?: Array<{ name: string; count: number; unit_price: number }>; children: React.ReactElement }) {
+type BarterReq = { name: string; count: number; unit_price: number; icon?: string }
+
+function BarterTooltip({ requirements, children }: { requirements?: BarterReq[]; children: React.ReactElement }) {
   if (!requirements?.length) return children
   const lines = requirements.map((r, i) => (
-    <div key={i}>{r.count}x {r.name} — ₽{r.unit_price.toLocaleString()}{r.count > 1 ? ` (₽${(r.count * r.unit_price).toLocaleString()})` : ''}</div>
+    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+      {r.icon && <img src={r.icon} alt="" style={{ width: 24, height: 24, objectFit: 'contain', flexShrink: 0, background: 'rgba(255,255,255,0.08)', borderRadius: 2 }} />}
+      <span>{r.count}x {r.name} — ₽{r.unit_price.toLocaleString()}{r.count > 1 ? ` (₽${(r.count * r.unit_price).toLocaleString()})` : ''}</span>
+    </div>
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
   return (
@@ -38,7 +43,7 @@ function BarterTooltip({ requirements, children }: { requirements?: Array<{ name
   )
 }
 
-export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: Array<{ name: string; count: number; unit_price: number }> }) {
+export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barterRequirements }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: BarterReq[] }) {
   if (!source) return <Text type="secondary" style={compact ? { minWidth: 80 } : undefined}>—</Text>
   if (source === 'not_purchasable') {
     const label = compact ? 'Unlisted' : 'Not on market'

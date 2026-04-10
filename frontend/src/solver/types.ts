@@ -9,6 +9,7 @@ export interface BarterRequirement {
   name: string;
   count: number;
   unit_price: number;
+  icon?: string;
 }
 
 export interface OfferInfo {

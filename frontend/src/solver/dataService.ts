@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 11;
+const CACHE_VERSION = 12;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -43,7 +43,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
       trader { name normalizedName }
       level
       requiredItems {
-        item { id name avg24hPrice basePrice }
+        item { id name avg24hPrice basePrice iconLink }
         count
       }
     }
@@ -123,7 +123,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
             trader { name normalizedName }
             level
             requiredItems {
-              item { id name avg24hPrice basePrice }
+              item { id name avg24hPrice basePrice iconLink }
               count
             }
           }
@@ -180,7 +180,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
       trader { name normalizedName }
       level
       requiredItems {
-        item { id name avg24hPrice basePrice }
+        item { id name avg24hPrice basePrice iconLink }
         count
       }
     }
@@ -566,7 +566,7 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
     if (!trader) continue;
     const level = typeof b.level === 'number' ? b.level : 1;
     const requiredItems = (b.requiredItems ?? []) as Array<{
-      item?: { name?: string; avg24hPrice?: number | null; basePrice?: number | null };
+      item?: { name?: string; avg24hPrice?: number | null; basePrice?: number | null; iconLink?: string };
       count?: number;
     }>;
     let totalCost = 0;
@@ -575,7 +575,7 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
       const count = ri.count ?? 1;
       const price = ri.item?.avg24hPrice ?? ri.item?.basePrice ?? 0;
       totalCost += count * price;
-      reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price });
+      reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price, icon: ri.item?.iconLink || undefined });
     }
     if (totalCost <= 0) continue;
     const requiresDogtag = reqs.some(r => /dogtag/i.test(r.name));
