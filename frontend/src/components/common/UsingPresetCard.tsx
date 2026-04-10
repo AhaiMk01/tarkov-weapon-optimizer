@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Tag, Typography, message, Grid, Tooltip } from 'antd'
-import { TraderIcon } from '../ItemRow'
-import type { OptimizeResponse } from '../../api/client'
+import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space } from 'antd'
+import { TraderIcon, ItemRow } from '../ItemRow'
+import type { OptimizeResponse, ItemDetail } from '../../api/client'
 
 const { Text } = Typography
 
@@ -17,7 +17,13 @@ function PresetTooltipContent({ preset }: { preset: Preset }) {
   )
 }
 
-export function UsingPresetCard({ preset }: { preset: Preset }) {
+interface UsingPresetCardProps {
+  preset: Preset
+  retainedItems?: ItemDetail[]
+  compactMode?: boolean
+}
+
+export function UsingPresetCard({ preset, retainedItems, compactMode }: UsingPresetCardProps) {
   const { t } = useTranslation()
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md
@@ -40,6 +46,7 @@ export function UsingPresetCard({ preset }: { preset: Preset }) {
   }
   const unknown = t('ui.unknown')
   const tooltipContent = <PresetTooltipContent preset={preset} />
+  const useTwoCol = !!screens.md
   return (
     <Card size="small" style={{ overflow: 'hidden' }}>
       {contextHolder}
@@ -63,13 +70,33 @@ export function UsingPresetCard({ preset }: { preset: Preset }) {
               {preset.name}
             </Text>
           </Tooltip>
-          <Text type="secondary" style={{ fontSize: 11 }}>{t('ui.base_preset_used')}</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{preset.items.length > 0 ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <TraderIcon source={preset.source} unknownLabel={unknown} compact barterRequirements={preset.barter_requirements} />
+          <TraderIcon source={preset.source} unknownLabel={unknown} barterRequirements={preset.barter_requirements} />
           <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>₽{preset.price.toLocaleString()}</Tag>
         </div>
       </div>
+      {retainedItems && retainedItems.length > 0 && (
+        <Collapse
+          size="small"
+          style={{ marginTop: 8 }}
+          items={[{
+            key: 'retained',
+            label: (
+              <Space style={{ userSelect: 'none' }}>
+                <Text type="secondary">{t('ui.retained_from_preset_short')}</Text>
+                <Tag color="blue">{retainedItems.length}</Tag>
+              </Space>
+            ),
+            children: (
+              <div style={{ display: 'grid', gridTemplateColumns: useTwoCol ? '1fr 1fr' : '1fr', gap: 8 }}>
+                {retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}
+              </div>
+            ),
+          }]}
+        />
+      )}
     </Card>
   )
 }
