@@ -12,6 +12,7 @@
     "player_level": "플레이어 레벨",
     "flea_market_access": "플리마켓",
     "barter_available": "물물교환",
+    "barter_exclude_dogtags": "인식표 교환 제외",
     "include_exclude": "모드 필터",
     "require_categories": "카테고리 검색...",
     "require_items": "모드 검색...",

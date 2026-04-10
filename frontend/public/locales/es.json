@@ -12,6 +12,7 @@
     "player_level": "Nivel de Jugador",
     "flea_market_access": "Mercadillo",
     "barter_available": "Intercambios",
+    "barter_exclude_dogtags": "Excluir trueques con chapas",
     "include_exclude": "Filtro de Mods",
     "require_categories": "Buscar categorías...",
     "require_items": "Buscar mods...",

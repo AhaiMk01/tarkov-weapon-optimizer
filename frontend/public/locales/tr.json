@@ -12,6 +12,7 @@
     "player_level": "Oyuncu Seviyesi",
     "flea_market_access": "Bit Pazarı",
     "barter_available": "Takas",
+    "barter_exclude_dogtags": "Künye takaslarını hariç tut",
     "include_exclude": "Mod Filtresi",
     "require_categories": "Kategori ara...",
     "require_items": "Mod ara...",

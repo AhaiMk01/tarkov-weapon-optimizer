@@ -15,6 +15,8 @@ interface GunsmithPanelProps {
   onFleaChange: (v: boolean) => void
   barterAvailable: boolean
   onBarterChange: (v: boolean) => void
+  barterExcludeDogtags: boolean
+  onBarterExcludeDogsChange: (v: boolean) => void
   playerLevel: number
   onPlayerLevelChange: (v: number) => void
   traderLevels: TraderLevels
@@ -97,6 +99,8 @@ export function GunsmithPanel(props: GunsmithPanelProps) {
         onFleaChange={props.onFleaChange}
         barterAvailable={props.barterAvailable}
         onBarterChange={props.onBarterChange}
+        barterExcludeDogtags={props.barterExcludeDogtags}
+        onBarterExcludeDogsChange={props.onBarterExcludeDogsChange}
         playerLevel={props.playerLevel}
         onPlayerLevelChange={props.onPlayerLevelChange}
         traderLevels={props.traderLevels}

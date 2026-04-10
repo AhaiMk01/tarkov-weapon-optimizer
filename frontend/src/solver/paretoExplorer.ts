@@ -28,6 +28,7 @@ export interface ParetoParams {
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   barterAvailable?: boolean;
+  barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
   preciseMode?: boolean;
 }
@@ -48,6 +49,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     traderLevels: p.traderLevels,
     fleaAvailable: p.fleaAvailable ?? true,
     barterAvailable: p.barterAvailable ?? false,
+    barterExcludeDogtags: p.barterExcludeDogtags ?? false,
     playerLevel: p.playerLevel,
     preciseMode: p.preciseMode,
   };

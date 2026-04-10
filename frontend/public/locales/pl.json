@@ -12,6 +12,7 @@
     "player_level": "Poziom Gracza",
     "flea_market_access": "Pchli Targ",
     "barter_available": "Wymiana barterowa",
+    "barter_exclude_dogtags": "Wyklucz wymiany z nieśmiertelnikami",
     "include_exclude": "Filtr Modów",
     "require_categories": "Szukaj kategorii...",
     "require_items": "Szukaj modów...",

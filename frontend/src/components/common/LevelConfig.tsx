@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Collapse, Switch, Slider, Segmented, Space, Divider, Typography } from 'antd'
+import { Collapse, Switch, Checkbox, Slider, Segmented, Space, Divider, Typography } from 'antd'
 import type { TraderLevels } from '../../solver/types'
 
 const { Text } = Typography
@@ -9,6 +9,8 @@ interface LevelConfigProps {
   onFleaChange: (v: boolean) => void
   barterAvailable: boolean
   onBarterChange: (v: boolean) => void
+  barterExcludeDogtags: boolean
+  onBarterExcludeDogsChange: (v: boolean) => void
   playerLevel: number
   onPlayerLevelChange: (v: number) => void
   traderLevels: TraderLevels
@@ -20,6 +22,8 @@ export function LevelConfig({
   onFleaChange,
   barterAvailable,
   onBarterChange,
+  barterExcludeDogtags,
+  onBarterExcludeDogsChange,
   playerLevel,
   onPlayerLevelChange,
   traderLevels,
@@ -41,6 +45,11 @@ export function LevelConfig({
               <Text>{t('sidebar.barter_available')}</Text>
               <Switch checked={barterAvailable} onChange={onBarterChange} />
             </div>
+            {barterAvailable && (
+              <Checkbox checked={barterExcludeDogtags} onChange={(e) => onBarterExcludeDogsChange(e.target.checked)}>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.barter_exclude_dogtags')}</Text>
+              </Checkbox>
+            )}
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.player_level')}: {playerLevel}</Text>
               <Slider value={playerLevel} onChange={onPlayerLevelChange} min={1} max={79} />

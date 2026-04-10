@@ -148,6 +148,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             barterAvailable: req.barter_available ?? false,
+            barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
             playerLevel: req.player_level,
             preciseMode: usePrecise,
           });
@@ -186,6 +187,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             barterAvailable: req.barter_available ?? false,
+            barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
             playerLevel: req.player_level,
             preciseMode: usePrecise,
           });

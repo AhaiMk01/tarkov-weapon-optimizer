@@ -12,6 +12,7 @@
     "player_level": "Niveau du joueur",
     "flea_market_access": "Marché aux puces",
     "barter_available": "Trocs",
+    "barter_exclude_dogtags": "Exclure les trocs de plaques",
     "include_exclude": "Filtre de mods",
     "require_categories": "Rechercher catégories...",
     "require_items": "Rechercher mods...",

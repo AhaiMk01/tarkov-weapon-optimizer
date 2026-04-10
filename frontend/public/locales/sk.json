@@ -12,6 +12,7 @@
     "player_level": "Úroveň hráča",
     "flea_market_access": "Blší trh",
     "barter_available": "Výmenný obchod",
+    "barter_exclude_dogtags": "Vylúčiť výmeny so psími známkami",
     "include_exclude": "Filter modov",
     "require_categories": "Hľadať kategórie...",
     "require_items": "Hľadať mody...",

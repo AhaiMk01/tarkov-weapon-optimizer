@@ -578,6 +578,7 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
       reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price });
     }
     if (totalCost <= 0) continue;
+    const requiresDogtag = reqs.some(r => /dogtag/i.test(r.name));
     offers.push({
       price: Math.round(totalCost),
       source: `barter:${trader.normalizedName ?? trader.name ?? 'unknown'}`,
@@ -585,6 +586,7 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
       vendor_normalized: trader.normalizedName ?? '',
       trader_level: level,
       barter_requirements: reqs,
+      requires_dogtag: requiresDogtag || undefined,
     });
   }
   return offers;
@@ -712,6 +714,7 @@ export function getAvailablePrice(
   fleaAvailable = true,
   playerLevel: number | null = null,
   barterAvailable = false,
+  barterExcludeDogtags = false,
 ): [number, string | null, boolean, string | null] {
   if (stats.purchasable === false) {
     return [0, 'not_purchasable', false, null];
@@ -740,6 +743,7 @@ export function getAvailablePrice(
     const source = offer.source;
     // Skip barter offers when barter toggle is off
     if (!barterAvailable && source.startsWith('barter:')) continue;
+    if (barterExcludeDogtags && offer.requires_dogtag) continue;
     const requiredLevel = offer.trader_level;
     const vendor = (offer.vendor_normalized ?? '').toLowerCase();
 

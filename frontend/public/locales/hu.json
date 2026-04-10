@@ -12,6 +12,7 @@
     "player_level": "Játékos szint",
     "flea_market_access": "Bolhapiac",
     "barter_available": "Cserekereskedés",
+    "barter_exclude_dogtags": "Dögcédulás cserék kizárása",
     "include_exclude": "Mod szűrő",
     "require_categories": "Kategóriák keresése...",
     "require_items": "Modok keresése...",

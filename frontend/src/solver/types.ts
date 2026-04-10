@@ -18,6 +18,7 @@ export interface OfferInfo {
   vendor_normalized: string;
   trader_level: number | null;
   barter_requirements?: BarterRequirement[];
+  requires_dogtag?: boolean;
 }
 
 // --- Gun Stats ---
@@ -183,6 +184,7 @@ export interface SolveParams {
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   barterAvailable?: boolean;
+  barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
   preciseMode?: boolean;
 }

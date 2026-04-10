@@ -12,6 +12,7 @@
     "player_level": "プレイヤーレベル",
     "flea_market_access": "フリーマーケット",
     "barter_available": "物々交換",
+    "barter_exclude_dogtags": "ドッグタグ交換を除外",
     "include_exclude": "MODフィルター",
     "require_categories": "カテゴリを検索...",
     "require_items": "MODを検索...",

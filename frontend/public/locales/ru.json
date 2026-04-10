@@ -12,6 +12,7 @@
     "player_level": "Уровень игрока",
     "flea_market_access": "Барахолка",
     "barter_available": "Бартерные обмены",
+    "barter_exclude_dogtags": "Исключить обмены с жетонами",
     "include_exclude": "Фильтр модов",
     "require_categories": "Поиск категорий...",
     "require_items": "Поиск модов...",

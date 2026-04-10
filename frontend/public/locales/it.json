@@ -12,6 +12,7 @@
     "player_level": "Livello Giocatore",
     "flea_market_access": "Mercato Pulci",
     "barter_available": "Baratti",
+    "barter_exclude_dogtags": "Escludi baratti con piastrine",
     "include_exclude": "Filtro Mod",
     "require_categories": "Cerca categorie...",
     "require_items": "Cerca mod...",

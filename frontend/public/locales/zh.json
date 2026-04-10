@@ -12,6 +12,7 @@
     "player_level": "玩家等级",
     "flea_market_access": "跳蚤市场",
     "barter_available": "以物换物",
+    "barter_exclude_dogtags": "排除狗牌交易",
     "include_exclude": "配件过滤",
     "require_categories": "搜索配件类型…",
     "require_items": "搜索具体配件…",

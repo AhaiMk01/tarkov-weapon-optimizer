@@ -12,6 +12,7 @@
     "player_level": "Player Level",
     "flea_market_access": "Flea Market",
     "barter_available": "Barter Trades",
+    "barter_exclude_dogtags": "Exclude dogtag barters",
     "include_exclude": "Mod Filter",
     "require_categories": "Search categories...",
     "require_items": "Search mods...",

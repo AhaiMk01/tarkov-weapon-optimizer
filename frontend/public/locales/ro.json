@@ -12,6 +12,7 @@
     "player_level": "Nivel Jucător",
     "flea_market_access": "Flea Market",
     "barter_available": "Schimburi",
+    "barter_exclude_dogtags": "Exclude schimburi cu plăcuțe",
     "include_exclude": "Filtru Moduri",
     "require_categories": "Caută categorii...",
     "require_items": "Caută moduri...",

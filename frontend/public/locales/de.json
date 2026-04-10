@@ -12,6 +12,7 @@
     "player_level": "Spielerstufe",
     "flea_market_access": "Flohmarkt",
     "barter_available": "Tauschhandel",
+    "barter_exclude_dogtags": "Hundemarken-Tausch ausschließen",
     "include_exclude": "Mod-Filter",
     "require_categories": "Kategorien suchen...",
     "require_items": "Mods suchen...",
