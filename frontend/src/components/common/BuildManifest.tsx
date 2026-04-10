@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Collapse, Tag, Space, Segmented, Button, Typography, Grid, theme } from 'antd'
+import { Card, Space, Segmented, Button, Typography, Grid } from 'antd'
 import { CopyOutlined, ExportOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ItemRow } from '../ItemRow'
@@ -21,18 +21,17 @@ interface BuildManifestProps {
   onToggleExclude?: (id: string) => void
 }
 
-const itemGridStyle = (wide: boolean, borderColor: string): React.CSSProperties => ({
+const itemGridStyle = (wide: boolean): React.CSSProperties => ({
   display: 'grid',
   gridTemplateColumns: wide ? '1fr 1fr' : '1fr',
-  ...(wide ? { columnGap: 0, columnRule: `1px solid ${borderColor}` } : {}),
+  gap: 8,
 })
 
 export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: BuildManifestProps) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
   const screens = Grid.useBreakpoint()
   const useTwoCol = !!screens.md
-  const gridStyle = itemGridStyle(useTwoCol, token.colorBorderSecondary)
+  const gridStyle = itemGridStyle(useTwoCol)
 
   const handleOpenInEFTForge = () => {
     if (!weaponId || !result.slot_pairs?.length) return
@@ -63,39 +62,12 @@ export function BuildManifest({ result, compactMode, onCompactModeChange, onCopy
   )
   if (result.selected_preset) {
     const newItems = result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id))
-    const retainedItems = result.selected_items.filter(i => result.selected_preset!.items.includes(i.id))
     return (
       <Card title={titleContent} size="small">
-        <Collapse
-          size="small"
-          defaultActiveKey={newItems.length > 0 ? ['new'] : []}
-          items={[
-            {
-              key: 'new',
-              label: (
-                <Space style={{ userSelect: 'none' }}>
-                  <Text type="warning">{t('ui.new_changed_parts')}</Text>
-                  <Tag color="orange">{newItems.length}</Tag>
-                </Space>
-              ),
-              children: newItems.length > 0
-                ? <div style={gridStyle}>{newItems.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />)}</div>
-                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>,
-            },
-            {
-              key: 'retained',
-              label: (
-                <Space style={{ userSelect: 'none' }}>
-                  <Text type="secondary">{t('ui.retained_from_preset_short')}</Text>
-                  <Tag color="blue">{retainedItems.length}</Tag>
-                </Space>
-              ),
-              children: retainedItems.length > 0
-                ? <div style={gridStyle}>{retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}</div>
-                : <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>,
-            },
-          ]}
-        />
+        <div style={gridStyle}>
+          {newItems.map(item => <ItemRow key={item.id} item={item} compactMode={compactMode} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />)}
+        </div>
+        {newItems.length === 0 && <Text type="secondary" style={{ padding: '8px 24px', display: 'block' }}>{t('ui.none')}</Text>}
       </Card>
     )
   }

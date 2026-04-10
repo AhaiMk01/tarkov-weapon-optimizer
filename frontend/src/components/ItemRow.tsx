@@ -6,11 +6,6 @@ import type { ItemDetail } from '../api/client'
 const { Text } = Typography
 const { useToken } = theme
 
-/** Grid track for per-item price (locale-formatted ₽ can be wide; ref lines need more room) */
-const PRICE_COLUMN = 'minmax(11rem, max-content)'
-const WEIGHT_COLUMN = 'minmax(4rem, max-content)'
-const priceCellWrapStyle = { textAlign: 'right' as const, whiteSpace: 'nowrap' as const, justifySelf: 'end' as const }
-const weightCellStyle = { textAlign: 'right' as const, whiteSpace: 'nowrap' as const, justifySelf: 'end' as const }
 
 const base = import.meta.env.BASE_URL || '/'
 const traderIcons: Record<string, { icon: string; name: string }> = {
@@ -196,51 +191,27 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       )}
     </div>
   ) : null
-  const actionCol = hasActions ? 'auto ' : ''
+  const hasTags = item.ergonomics !== 0 || item.recoil_modifier !== 0 || !!item.accuracy_modifier || !!item.sighting_range
+
   if (compactMode) {
     return (
-      <div style={{ display: 'grid', gridTemplateColumns: `${actionCol}1fr auto auto ${WEIGHT_COLUMN} ${PRICE_COLUMN}`, gap: 8, padding: '8px 16px', alignItems: 'center', minWidth: 560 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
         {actionBtns}
-        <div style={{ minWidth: 200 }}>
-          <ItemTooltip item={item}>
-            <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
-          </ItemTooltip>
-          {item.category && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }}>{item.category}</Text>}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text strong style={{ fontSize: 12, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
         </div>
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-          {item.ergonomics !== 0 && (
-            <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>
-              {ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}
-            </Tag>
-          )}
-          {item.recoil_modifier !== 0 && (
-            <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={tagStyle}>
-              {recoilLabel}: {item.recoil_modifier > 0 ? '+' : ''}{(item.recoil_modifier * 100).toFixed(1)}%
-            </Tag>
-          )}
-          {!!item.accuracy_modifier && (
-            <Tag color={item.accuracy_modifier < 0 ? 'green' : 'red'} style={tagStyle}>
-              MOA: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%
-            </Tag>
-          )}
-          {!!item.sighting_range && (
-            <Tag color="purple" style={tagStyle}>
-              Sight: {item.sighting_range}m
-            </Tag>
-          )}
+        {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+        {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
+        <div style={{ width: 64, textAlign: 'center', flexShrink: 0 }}>
+          <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
         </div>
-        <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
-        <Text type="secondary" style={weightCellStyle}>
-          {item.weight ? `${item.weight.toFixed(2)} kg` : '-'}
-        </Text>
-        <Text type="secondary" style={priceCellWrapStyle}>
-          {hidePrice ? '-' : priceCell(item)}
-        </Text>
+        {!hidePrice && <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap', minWidth: 60, textAlign: 'right' }}>{priceCell(item)}</Text>}
       </div>
     )
   }
+
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: `${actionCol}64px 1fr auto 64px ${WEIGHT_COLUMN} ${PRICE_COLUMN}`, gap: 8, padding: 16, alignItems: 'center', minWidth: 600 }}>
+    <div style={{ border: `1px solid ${token.colorBorderSecondary}`, borderRadius: 8, padding: '8px 12px', background: token.colorBgElevated, display: 'flex', gap: 10, alignItems: 'center' }}>
       {actionBtns}
       <ItemTooltip item={item}>
         <div style={{ width: 64, height: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', flexShrink: 0, background: token.colorFillQuaternary, borderRadius: 4 }}>
@@ -251,43 +222,25 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
           )}
         </div>
       </ItemTooltip>
-      <div style={{ minWidth: 200 }}>
-        <ItemTooltip item={item}>
-          <Text strong style={{ display: 'block', ...truncateStyle, ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
-        </ItemTooltip>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
         {item.category && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }}>{item.category}</Text>}
-        <Text type="secondary" style={{ fontSize: 12, ...truncateStyle, ...clickableStyle }} title={item.id} onClick={() => copyToClipboard(item.id)}>ID: {item.id}</Text>
+        {hasTags && (
+          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+            {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+            {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={tagStyle}>{recoilLabel}: {item.recoil_modifier > 0 ? '+' : ''}{(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
+            {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'green' : 'red'} style={tagStyle}>Acc: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
+            {!!item.sighting_range && <Tag color="purple" style={tagStyle}>Sight: {item.sighting_range}m</Tag>}
+          </div>
+        )}
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-        {item.ergonomics !== 0 && (
-          <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>
-            {ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}
-          </Tag>
-        )}
-        {item.recoil_modifier !== 0 && (
-          <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={tagStyle}>
-            {recoilLabel}: {item.recoil_modifier > 0 ? '+' : ''}{(item.recoil_modifier * 100).toFixed(1)}%
-          </Tag>
-        )}
-        {!!item.accuracy_modifier && (
-          <Tag color={item.accuracy_modifier < 0 ? 'green' : 'red'} style={tagStyle}>
-            MOA: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%
-          </Tag>
-        )}
-        {!!item.sighting_range && (
-          <Tag color="purple" style={tagStyle}>
-            {item.sighting_range}m
-          </Tag>
-        )}
-        {item.ergonomics === 0 && item.recoil_modifier === 0 && !item.accuracy_modifier && !item.sighting_range && <Text type="secondary">-</Text>}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+        <div style={{ width: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <TraderIcon source={item.source} unknownLabel={unknownLabel} barterRequirements={item.barter_requirements} />
+        </div>
+        <div style={{ width: 70, textAlign: 'right' }}>{item.weight ? <Tag color="cyan" style={{ margin: 0 }}>{item.weight.toFixed(2)} kg</Tag> : null}</div>
+        {!hidePrice && <div style={{ width: 90, textAlign: 'right' }}><Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>{priceCell(item)}</Tag></div>}
       </div>
-      <TraderIcon source={item.source} unknownLabel={unknownLabel} barterRequirements={item.barter_requirements} />
-      <Text type="secondary" style={weightCellStyle}>
-        {item.weight ? `${item.weight.toFixed(2)} kg` : '-'}
-      </Text>
-      <Text type="secondary" style={priceCellWrapStyle}>
-        {hidePrice ? '-' : priceCell(item)}
-      </Text>
     </div>
   )
 }
