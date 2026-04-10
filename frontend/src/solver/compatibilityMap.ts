@@ -33,9 +33,7 @@ export function buildCompatibilityMap(weaponId: string, itemLookup: ItemLookup):
 
   const visited = new Set<string>();
   while (queue.length > 0) {
-    const [itemId] = queue.shift()!;
-    if (visited.has(itemId)) continue;
-    visited.add(itemId);
+    const [itemId, parentSlotId] = queue.shift()!;
     if (!(itemId in itemLookup)) continue;
 
     const item = itemLookup[itemId];
@@ -46,14 +44,21 @@ export function buildCompatibilityMap(weaponId: string, itemLookup: ItemLookup):
       if (conflicting.includes(weaponId)) continue;
     }
 
+    // Record which slot this item can be placed in
+    if (!itemToSlots[itemId]) itemToSlots[itemId] = [];
+    if (!itemToSlots[itemId].includes(parentSlotId)) {
+      itemToSlots[itemId].push(parentSlotId);
+    }
+
+    if (visited.has(itemId)) continue;
+    visited.add(itemId);
+
     reachable[itemId] = { item };
-    itemToSlots[itemId] = [];
 
     for (const slot of item.slots) {
       const slotId = slot.id;
       slotItems[slotId] = [];
       slotOwner[slotId] = itemId;
-      itemToSlots[itemId].push(slotId);
       for (const allowedId of slot.allowedItems) {
         if (allowedId in itemLookup) {
           slotItems[slotId].push(allowedId);
