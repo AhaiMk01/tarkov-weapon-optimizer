@@ -19,6 +19,12 @@ All notable changes to the Tarkov Weapon Mod Optimizer.
 - Fixed missing `useTranslation` import in manifest components.
 - Removed nested scrollbars in result containers to restore clean native browser scrolling.
 - Locked price/trader columns in table mode to prevent horizontal layout shift.
+- Translated ~25 untranslated UI keys (table headers, tooltips, lock/ban labels, barter labels) across all 14 non-English locales.
+- Translated `ui.on`/`ui.off` toggles for all locales (was showing English "On"/"Off").
+- Added missing `trader` section to 14 locale files.
+- Fixed ternary plot vertex label showing preset name ("纯后坐") instead of axis label ("后坐").
+- Fixed zh.json explore constraint labels still in English (limit_price, limit_recoil, limit_ergo).
+- Removed unused imports (Tooltip, Switch, Select) causing TypeScript build failures.
 
 ## [v2.3.1] — 2026-04-10
 

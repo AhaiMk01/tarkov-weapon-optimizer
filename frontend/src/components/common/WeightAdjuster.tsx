@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Switch, Space, Typography, Select, Segmented } from 'antd'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented } from 'antd'
 import { TernaryPlot } from '../TernaryPlot'
 
 const { Text } = Typography

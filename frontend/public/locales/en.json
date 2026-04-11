@@ -169,6 +169,13 @@
     "ban_action_tooltip_remove": "Unban (remove from excluded)",
     "changelog_title": "Changelog"
   },
+  "trader": {
+    "prapor": "Prapor",
+    "skier": "Skier",
+    "peacekeeper": "Peacekeeper",
+    "mechanic": "Mechanic",
+    "jaeger": "Jaeger"
+  },
   "error": {
     "title": "An error occurred",
     "retry": "Retry"

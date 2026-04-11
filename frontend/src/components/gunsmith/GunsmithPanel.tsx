@@ -87,7 +87,7 @@ export function GunsmithPanel(props: GunsmithPanelProps) {
               <div>
                 <Text strong>{t('gunsmith.required_categories')}</Text>
                 <div style={{ marginTop: 8 }}>
-                  <Space wrap>{props.selectedTask.required_category_names.map((group, i) => <Tag key={i}>{group.join(' / ')}</Tag>)}</Space>
+                  <Space wrap>{props.selectedTask.required_category_names.map((group, i) => <Tag key={i}>{group.map(n => n.split(/[>/\\]/).pop()?.trim()).join(' / ')}</Tag>)}</Space>
                 </div>
               </div>
             )}

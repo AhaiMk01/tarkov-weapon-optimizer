@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Table, Card, Space, Segmented, Button, Typography, Tag, Tooltip } from 'antd'
+import { Table, Card, Space, Segmented, Button, Typography, Tag } from 'antd'
 import { CopyOutlined, ExportOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ItemRow, ItemTooltip, TraderIcon, priceCell } from '../ItemRow'

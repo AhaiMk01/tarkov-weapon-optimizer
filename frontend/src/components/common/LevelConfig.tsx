@@ -57,7 +57,7 @@ export function LevelConfig({
             <Divider style={{ margin: '8px 0' }} />
             {(Object.keys(traderLevels) as Array<keyof TraderLevels>).map(trader => (
               <div key={trader} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <Text type="secondary" style={{ fontSize: 12, textTransform: 'capitalize', minWidth: 70 }}>{trader}</Text>
+                <Text type="secondary" style={{ fontSize: 12, minWidth: 70 }}>{t(`trader.${trader}`)}</Text>
                 <Segmented size="small" value={traderLevels[trader]} onChange={(v) => onTraderLevelsChange({ ...traderLevels, [trader]: v as number })} options={[{ label: t('ui.ll_level', { level: 1 }), value: 1 }, { label: t('ui.ll_level', { level: 2 }), value: 2 }, { label: t('ui.ll_level', { level: 3 }), value: 3 }, { label: t('ui.ll_level', { level: 4 }), value: 4 }]} />
               </div>
             ))}

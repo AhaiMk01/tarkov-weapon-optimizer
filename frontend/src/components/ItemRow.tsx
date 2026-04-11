@@ -331,13 +331,13 @@ export function priceCell(item: ItemDetail) {
   const { t } = i18n
   if (item.purchasable === false && item.reference_price_rub != null && item.reference_price_rub > 0) {
     return (
-      <span title={t.t('ui.not_purchasable_tooltip')}>
-        0 <Text type="secondary">({t.t('ui.ref_price_label')} ₽{item.reference_price_rub.toLocaleString()})</Text>
+      <span title={t('ui.not_purchasable_tooltip')}>
+        0 <Text type="secondary">({t('ui.ref_price_label')} ₽{item.reference_price_rub.toLocaleString()})</Text>
       </span>
     )
   }
   if (item.purchasable === false) {
-    return <span title={t.t('ui.not_purchasable_tooltip')}>0</span>
+    return <span title={t('ui.not_purchasable_tooltip')}>0</span>
   }
   return `₽${item.price.toLocaleString()}`
 }

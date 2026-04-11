@@ -33,16 +33,16 @@
     "optimize_btn": "开始优化",
     "constraints": "任务条件",
     "required_items": "指定配件",
-    "implicit_required_items": "连带配件（随指定件自动包含）",
+    "implicit_required_items": "附带必选配件（因为指定配件依赖关系）",
     "required_categories": "指定类别",
     "ready_description": "选一个枪匠任务，自动生成满足条件的配装方案。"
   },
   "explore": {
     "tradeoff_strategy": "侧重方向",
-    "ready_description": "选好武器和分析侧重，查看人机、后坐与价格之间的帕累托权衡。",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "选好武器和分析侧重，查看人机、后坐与价格之间的权衡。",
+    "limit_price": "最高价格",
+    "limit_recoil": "最高垂直后坐",
+    "limit_ergo": "最低人机"
   },
   "optimize": {
     "header": "属性权重",
@@ -122,7 +122,7 @@
     "pvp": "PvP",
     "pve": "PvE",
     "copy_btn": "复制",
-    "reoptimize_btn": "再算一次",
+    "reoptimize_btn": "重新优化",
     "compact": "精简",
     "detailed": "完整",
     "none": "无",
@@ -159,7 +159,7 @@
     "total_label": "总计",
     "unlisted_label": "未列出",
     "not_on_market_label": "不在市场",
-    "not_purchasable_tooltip": "Tarkov.dev 没有此物品的交易记录 — 优化器仅使用参考价格；游戏中可能是交换、制作、FiR、活动或 API 未完成。",
+    "not_purchasable_tooltip": "Tarkov.dev 没有此物品的交易记录 — 优化器仅使用参考价格",
     "barter_badge_short": "B",
     "barter_badge_long": "交换",
     "ref_price_label": "参考",
@@ -168,6 +168,13 @@
     "ban_action_tooltip_add": "禁用 (排除在外)",
     "ban_action_tooltip_remove": "取消禁用 (不再排除)",
     "changelog_title": "更新日志"
+  },
+  "trader": {
+    "prapor": "Prapor",
+    "skier": "Skier",
+    "peacekeeper": "Peacekeeper",
+    "mechanic": "Mechanic",
+    "jaeger": "Jaeger"
   },
   "error": {
     "title": "出错了",

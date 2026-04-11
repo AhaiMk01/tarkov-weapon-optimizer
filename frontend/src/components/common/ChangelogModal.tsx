@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Modal, Typography, Spin } from 'antd'
+import { useTranslation } from 'react-i18next'
 
 const { Title, Text } = Typography
 

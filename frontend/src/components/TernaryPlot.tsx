@@ -126,7 +126,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
             {t('sidebar.ergonomics')}
           </text>
           <text x={rightX + 15} y={rightY + 4} fill={token.colorSuccess}>
-            {t('optimize.preset_recoil')}
+            {t('item.recoil')}
           </text>
           <text x={rightX + 15} y={rightY + 18} fill={token.colorSuccess} style={{ fontSize: 10, opacity: 0.7 }}>
             {displayPoint.recoil}%
