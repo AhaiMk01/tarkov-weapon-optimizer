@@ -2,6 +2,24 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.4.0] — 2026-04-11
+
+### Added
+- New **Table View** mode for results, providing a high-density spreadsheet layout for power users.
+- Persistent view state (Detailed/Compact/Table) saved to local storage.
+- Interactive Lock/Ban buttons directly inside the result table.
+- New i18n keys for stats labels, units, and tooltips across the app.
+
+### Changed
+- Refactored mobile item cards for improved readability and vertical alignment.
+- Updated accuracy (Acc) tag colors to Orange to distinguish them from Recoil (Green).
+- Global footer now uses bullet separators and flex-wrapping to prevent layout orphans.
+
+### Fixed
+- Fixed missing `useTranslation` import in manifest components.
+- Removed nested scrollbars in result containers to restore clean native browser scrolling.
+- Locked price/trader columns in table mode to prevent horizontal layout shift.
+
 ## [v2.3.1] — 2026-04-10
 
 ### Fixed

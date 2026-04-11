@@ -48,9 +48,10 @@ export function ChangelogModal({ open, onClose }: ChangelogModalProps) {
     }
   }, [open, sections.length])
 
+  const { t } = useTranslation()
   return (
     <Modal
-      title="Changelog"
+      title={t('ui.changelog_title')}
       open={open}
       onCancel={onClose}
       footer={null}

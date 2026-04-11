@@ -11,8 +11,8 @@ const { Text } = Typography
 
 interface OptimizeResultProps {
   result: OptimizeResponse | null
-  compactMode: boolean
-  onCompactModeChange: (v: boolean) => void
+  viewMode: 'detailed' | 'compact' | 'table'
+  onViewModeChange: (v: 'detailed' | 'compact' | 'table') => void
   optimizing: boolean
   onOptimize: () => void
   onCopy: () => void
@@ -28,7 +28,7 @@ function precisionResolvedLabel(t: (k: string, opts?: Record<string, string>) =>
   return mode === 'precise' ? t('sidebar.precise') : t('sidebar.fast')
 }
 
-export function OptimizeResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: OptimizeResultProps) {
+export function OptimizeResult({ result, viewMode, onViewModeChange, optimizing, onOptimize, onCopy, disabled, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: OptimizeResultProps) {
   const { t } = useTranslation()
   if (!result) {
     return (
@@ -48,22 +48,25 @@ export function OptimizeResult({ result, compactMode, onCompactModeChange, optim
       <Alert
         type={result.status === 'optimal' ? 'success' : result.status === 'infeasible' ? 'error' : 'warning'}
         message={
-          <>
-            <Text>{t('results.optimization_status')}: {t(`results.status_${result.status}`, { defaultValue: result.status })}</Text>
-            {result.solve_time_ms && <Tag color="blue" style={{ marginLeft: 8 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}
-            {result.precision_request === 'auto' && result.precision_resolved && (
-              <Tag color="processing" style={{ marginLeft: 8 }} title={t('sidebar.solver_precision_tooltip')}>
-                {t('results.precision_auto_ran', {
-                  mode: precisionResolvedLabel(t, result.precision_resolved),
-                })}
-              </Tag>
-            )}
-            {result.reason && <Text type="secondary" style={{ marginLeft: 8 }}>{result.reason}</Text>}
-          </>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, width: '100%' }}>
+            <Button type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={onOptimize}>{t('ui.reoptimize_btn')}</Button>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              <Text>{t('results.optimization_status')}: {t(`results.status_${result.status}`, { defaultValue: result.status })}</Text>
+              {result.solve_time_ms && <Tag color="blue" style={{ margin: 0 }}>{result.solve_time_ms.toFixed(0)} ms</Tag>}
+              {result.precision_request === 'auto' && result.precision_resolved && (
+                <Tag color="processing" style={{ margin: 0 }} title={t('sidebar.solver_precision_tooltip')}>
+                  {t('results.precision_auto_ran', {
+                    mode: precisionResolvedLabel(t, result.precision_resolved),
+                  })}
+                </Tag>
+              )}
+              {result.reason && <Text type="secondary" style={{ margin: 0 }}>{result.reason}</Text>}
+            </div>
+          </div>
         }
         icon={result.status === 'optimal' ? <CheckCircleOutlined /> : result.status === 'infeasible' ? <CloseCircleOutlined /> : <ExclamationCircleOutlined />}
         showIcon
-        action={<Button type="primary" icon={<ThunderboltOutlined />} loading={optimizing} onClick={onOptimize}>{t('ui.reoptimize_btn')}</Button>}
+        style={{ alignItems: 'center' }}
       />
       {result.status !== 'infeasible' && result.final_stats && (
         <>
@@ -79,10 +82,10 @@ export function OptimizeResult({ result, compactMode, onCompactModeChange, optim
             <UsingPresetCard
               preset={result.selected_preset}
               retainedItems={result.selected_items.filter(i => result.selected_preset!.items.includes(i.id))}
-              compactMode={compactMode}
+              compactMode={viewMode === 'compact' || viewMode === 'table'}
             />
           )}
-          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />
+          <BuildManifest result={result} viewMode={viewMode} onViewModeChange={onViewModeChange} onCopy={onCopy} weaponId={weaponId} lockedIds={lockedIds} excludedIds={excludedIds} onToggleLock={onToggleLock} onToggleExclude={onToggleExclude} />
         </>
       )}
     </div>

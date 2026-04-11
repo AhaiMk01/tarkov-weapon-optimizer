@@ -1,0 +1,103 @@
+{
+  "hash": "c1d5ac68",
+  "configHash": "a7a545d8",
+  "lockfileHash": "3fcd65f9",
+  "browserHash": "5cf3ac71",
+  "optimized": {
+    "react/jsx-dev-runtime": {
+      "src": "../../node_modules/react/jsx-dev-runtime.js",
+      "file": "react_jsx-dev-runtime.js",
+      "fileHash": "698b5c23",
+      "needsInterop": true
+    },
+    "react": {
+      "src": "../../node_modules/react/index.js",
+      "file": "react.js",
+      "fileHash": "d644a198",
+      "needsInterop": true
+    },
+    "react-dom/client": {
+      "src": "../../node_modules/react-dom/client.js",
+      "file": "react-dom_client.js",
+      "fileHash": "38888a95",
+      "needsInterop": true
+    },
+    "react-error-boundary": {
+      "src": "../../node_modules/react-error-boundary/dist/react-error-boundary.js",
+      "file": "react-error-boundary.js",
+      "fileHash": "9ca1a661",
+      "needsInterop": false
+    },
+    "i18next": {
+      "src": "../../node_modules/i18next/dist/esm/i18next.js",
+      "file": "i18next.js",
+      "fileHash": "8a3006f1",
+      "needsInterop": false
+    },
+    "react-i18next": {
+      "src": "../../node_modules/react-i18next/dist/es/index.js",
+      "file": "react-i18next.js",
+      "fileHash": "1a190a04",
+      "needsInterop": false
+    },
+    "i18next-http-backend": {
+      "src": "../../node_modules/i18next-http-backend/esm/index.js",
+      "file": "i18next-http-backend.js",
+      "fileHash": "37e16da4",
+      "needsInterop": false
+    },
+    "i18next-browser-languagedetector": {
+      "src": "../../node_modules/i18next-browser-languagedetector/dist/esm/i18nextBrowserLanguageDetector.js",
+      "file": "i18next-browser-languagedetector.js",
+      "fileHash": "fbf79c39",
+      "needsInterop": false
+    },
+    "antd": {
+      "src": "../../node_modules/antd/es/index.js",
+      "file": "antd.js",
+      "fileHash": "233aa4d0",
+      "needsInterop": false
+    },
+    "@ant-design/icons": {
+      "src": "../../node_modules/@ant-design/icons/es/index.js",
+      "file": "@ant-design_icons.js",
+      "fileHash": "09bf1822",
+      "needsInterop": false
+    },
+    "recharts": {
+      "src": "../../node_modules/recharts/es6/index.js",
+      "file": "recharts.js",
+      "fileHash": "f20f4465",
+      "needsInterop": false
+    }
+  },
+  "chunks": {
+    "chunk-GRNUH66I": {
+      "file": "chunk-GRNUH66I.js"
+    },
+    "chunk-LNJWJNFR": {
+      "file": "chunk-LNJWJNFR.js"
+    },
+    "browser-ponyfill-C366J5VO": {
+      "file": "browser-ponyfill-C366J5VO.js"
+    },
+    "chunk-XTAKEHK5": {
+      "file": "chunk-XTAKEHK5.js"
+    },
+    "chunk-ZWUTBOB6": {
+      "file": "chunk-ZWUTBOB6.js"
+    },
+    "chunk-WXPUGGPP": {
+      "file": "chunk-WXPUGGPP.js"
+    },
+    "chunk-SKCSXP5W": {
+      "file": "chunk-SKCSXP5W.js"
+    },
+    "chunk-U4B3EOPV": {
+      "file": "chunk-U4B3EOPV.js"
+    },
+    "chunk-DC5AMYBS": {
+      "file": "chunk-DC5AMYBS.js"
+    }
+  }
+}

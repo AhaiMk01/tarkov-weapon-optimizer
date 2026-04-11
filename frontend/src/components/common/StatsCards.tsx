@@ -28,11 +28,11 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       </Card>
       {moa != null && moa > 0 && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-          <Statistic title="MOA" value={moa.toFixed(2)} />
+          <Statistic title={t('ui.moa_label')} value={moa.toFixed(2)} />
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-        <Statistic title={t('ui.weight_label')} value={weight.toFixed(2)} suffix="kg" />
+        <Statistic title={t('ui.weight_label')} value={weight.toFixed(2)} suffix={t('ui.weight_unit')} />
       </Card>
       <Card size="small" style={{ flex: '2 1 150px', minWidth: 150 }}>
         <Statistic title={t('ui.total_cost')} value={price.toLocaleString()} prefix="₽" valueStyle={{ color: token.colorWarning }} />

@@ -233,7 +233,13 @@ function AppContent({
   })
   const [traderLevels, setTraderLevels] = useState(initialLevelConfig.traderLevels)
   const [activeTab, setActiveTab] = useState<string>('optimize')
-  const [compactMode, setCompactMode] = useState<boolean>(() => localStorage.getItem('compactMode') === 'true')
+  const [viewMode, setViewMode] = useState<'detailed' | 'compact' | 'table'>(() => {
+    const s = localStorage.getItem('viewMode')
+    if (s === 'detailed' || s === 'compact' || s === 'table') return s
+    // Migration from old compactMode
+    if (localStorage.getItem('compactMode') === 'true') return 'compact'
+    return 'detailed'
+  })
   const [exploring, setExploring] = useState(false)
   const [exploreResult, setExploreResult] = useState<ExplorePoint[]>([])
   const [explorePrecisionMeta, setExplorePrecisionMeta] = useState<{
@@ -258,7 +264,7 @@ function AppContent({
     localStorage.setItem(GAME_MODE_STORAGE_KEY, gameMode)
     localStorage.removeItem(GAME_MODE_LEGACY_KEY)
   }, [gameMode])
-  useEffect(() => { localStorage.setItem('compactMode', String(compactMode)) }, [compactMode])
+  useEffect(() => { localStorage.setItem('viewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('solverPrecision', solverPrecision) }, [solverPrecision])
   useEffect(() => {
     localStorage.setItem(
@@ -678,8 +684,8 @@ function AppContent({
           right={
             <OptimizeResult
               result={result}
-              compactMode={compactMode}
-              onCompactModeChange={setCompactMode}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               optimizing={optimizing}
               onOptimize={handleOptimize}
               onCopy={copyBuild}
@@ -751,8 +757,8 @@ function AppContent({
           right={
             <GunsmithResult
               result={gunsmithResult}
-              compactMode={compactMode}
-              onCompactModeChange={setCompactMode}
+              viewMode={viewMode}
+              onViewModeChange={setViewMode}
               optimizing={optimizingGunsmith}
               onOptimize={handleGunsmithOptimize}
               onCopy={copyGunsmithBuild}
@@ -817,7 +823,7 @@ function AppContent({
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }} onClick={() => window.location.reload()}>
               <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="logo" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
               <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1 }}>{t('app.title')}</span>
-              <Tag color="orange" style={{ margin: 0 }}>v2.3.1</Tag>
+              <Tag color="orange" style={{ margin: 0 }}>v2.4.0</Tag>
             </div>
             {!isMobile && (
               <span className="app-main-mode-nav" data-active-mode={activeTab} style={{ ...mainModeNavWrapStyle, display: 'inline-flex' }}>
@@ -897,40 +903,43 @@ function AppContent({
         </Header>
         <Content
           className="main-content"
-          style={{ flex: 1, minHeight: 0, padding: 16, overflow: 'auto', background: token.colorBgLayout }}
+          style={{ flex: 1, minHeight: 0, padding: isMobile ? '16px 0' : 16, overflowX: 'hidden', overflowY: isMobile ? 'auto' : 'hidden', background: token.colorBgLayout, display: 'flex', flexDirection: 'column' }}
         >
-          {tabItems.find(i => i.key === activeTab)?.children}
+          <div style={{ padding: isMobile ? '0 16px' : 0, height: isMobile ? 'auto' : '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
+            {tabItems.find(i => i.key === activeTab)?.children}
+          </div>
         </Content>
         <Footer
           style={{
             flexShrink: 0,
             margin: 0,
-            padding: '8px 16px',
-            textAlign: 'center',
+            padding: '12px 16px',
             background: token.colorBgContainer,
             borderTop: `1px solid ${token.colorBorderSecondary}`,
           }}
         >
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            {t('ui.footer_copyright', { year: new Date().getFullYear() })}
-            {' · '}
-            <Link href={GITHUB_PROFILE_URL} target="_blank" rel="noopener noreferrer">
-              <GithubOutlined aria-hidden style={{ marginInlineEnd: 4 }} />
+          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '8px 16px', fontSize: 13, color: token.colorTextSecondary }}>
+            <span>{t('ui.footer_copyright', { year: new Date().getFullYear() })}</span>
+            <span style={{ opacity: 0.3 }}>•</span>
+            <Link href={GITHUB_PROFILE_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <GithubOutlined aria-hidden />
               {t('ui.footer_github')}
             </Link>
-            {' · '}
-            <Link style={{ cursor: 'pointer' }} onClick={() => setChangelogOpen(true)}>
-              <HistoryOutlined aria-hidden style={{ marginInlineEnd: 4 }} />
+            <span style={{ opacity: 0.3 }}>•</span>
+            <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setChangelogOpen(true)}>
+              <HistoryOutlined aria-hidden />
               Changelog
             </Link>
-            {' · '}
-            {t('ui.footer_data_from')}{' '}
-            <Link href={TARKOV_DEV_URL} target="_blank" rel="noopener noreferrer">
-              Tarkov.dev
-            </Link>
-            {' · '}
-            Made with ❤️
-          </Text>
+            <span style={{ opacity: 0.3 }}>•</span>
+            <span>
+              {t('ui.footer_data_from')}{' '}
+              <Link href={TARKOV_DEV_URL} target="_blank" rel="noopener noreferrer">
+                Tarkov.dev
+              </Link>
+            </span>
+            <span style={{ opacity: 0.3 }}>•</span>
+            <span>Made with ❤️</span>
+          </div>
         </Footer>
         <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
       </Layout>

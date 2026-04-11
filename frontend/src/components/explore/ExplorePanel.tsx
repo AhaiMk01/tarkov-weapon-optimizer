@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Checkbox, InputNumber, Select, Space } from 'antd'
+import { Card, InputNumber, Select, Segmented, Typography } from 'antd'
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
@@ -67,26 +67,33 @@ export function ExplorePanel(props: ExplorePanelProps) {
         filteredGuns={props.filteredGuns}
       />
       <Card size="small" title={<span style={{ userSelect: 'none' }}>{t('explore.tradeoff_strategy')}</span>}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <Select style={{ width: '100%' }} value={props.exploreTradeoff} onChange={props.onExploreTradeoffChange} options={[
             { value: 'price', label: t('ui.tradeoff_ergo_vs_recoil') },
             { value: 'recoil', label: t('ui.tradeoff_ergo_vs_price') },
             { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price') },
           ]} />
-          <Space>
-            <Checkbox checked={props.useExploreBudget} onChange={e => props.onUseExploreBudgetChange(e.target.checked)}>
-              {props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo')}
-            </Checkbox>
-            <InputNumber
-              size="small"
-              disabled={!props.useExploreBudget}
-              value={props.exploreBudgetValue}
-              onChange={v => props.onExploreBudgetValueChange(v ?? 0)}
-              min={0}
-              style={{ width: 120 }}
-              addonAfter={props.exploreTradeoff === 'price' ? '₽' : undefined}
-            />
-          </Space>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo')}
+                </Typography.Text>
+                <Segmented size="small" value={props.useExploreBudget ? 'on' : 'off'} onChange={v => props.onUseExploreBudgetChange(v === 'on')} options={[{ label: t('ui.on', 'On'), value: 'on' }, { label: t('ui.off', 'Off'), value: 'off' }]} />
+             </div>
+             {props.useExploreBudget && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                   <InputNumber
+                     size="small"
+                     value={props.exploreBudgetValue}
+                     onChange={v => props.onExploreBudgetValueChange(v ?? 0)}
+                     min={0}
+                     style={{ flex: 1 }}
+                     prefix={props.exploreTradeoff === 'price' ? '₽' : undefined}
+                   />
+                </div>
+             )}
+          </div>
         </div>
       </Card>
       <ModFilter

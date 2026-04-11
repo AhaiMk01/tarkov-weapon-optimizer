@@ -1,0 +1,36 @@
+- ref: e1
+  role: link
+  url: "https://www.reddit.com/"
+  children:
+  - ref: e2
+    role: img
+- ref: e3
+  role: heading
+  name: Prove your humanity
+  level: 1
+- ref: e4
+  role: form
+  children:
+  - ref: e5
+    role: presentation
+    name: reCAPTCHA
+- ref: e6
+  role: link
+  name: "Reddit, Inc. © \"2026\". All rights reserved."
+  url: "https://www.redditinc.com/"
+- ref: e7
+  role: link
+  name: User Agreement
+  url: "https://www.reddit.com/help/useragreement"
+- ref: e8
+  role: link
+  name: Privacy Policy
+  url: "https://www.reddit.com/help/privacypolicy"
+- ref: e9
+  role: link
+  name: Content Policy
+  url: "https://www.reddit.com/help/contentpolicy"
+- ref: e10
+  role: link
+  name: Help
+  url: "https://support.reddithelp.com/hc/en-us"

@@ -9,8 +9,8 @@ import type { OptimizeResponse } from '../../api/client'
 
 interface GunsmithResultProps {
   result: OptimizeResponse | null
-  compactMode: boolean
-  onCompactModeChange: (v: boolean) => void
+  viewMode: 'detailed' | 'compact' | 'table'
+  onViewModeChange: (v: 'detailed' | 'compact' | 'table') => void
   optimizing: boolean
   onOptimize: () => void
   onCopy: () => void
@@ -18,7 +18,7 @@ interface GunsmithResultProps {
   weaponId?: string
 }
 
-export function GunsmithResult({ result, compactMode, onCompactModeChange, optimizing, onOptimize, onCopy, disabled, weaponId }: GunsmithResultProps) {
+export function GunsmithResult({ result, viewMode, onViewModeChange, optimizing, onOptimize, onCopy, disabled, weaponId }: GunsmithResultProps) {
   const { t } = useTranslation()
   if (!result) {
     return (
@@ -55,10 +55,10 @@ export function GunsmithResult({ result, compactMode, onCompactModeChange, optim
             <UsingPresetCard
               preset={result.selected_preset}
               retainedItems={result.selected_items.filter(i => result.selected_preset!.items.includes(i.id))}
-              compactMode={compactMode}
+              compactMode={viewMode === 'compact' || viewMode === 'table'}
             />
           )}
-          <BuildManifest result={result} compactMode={compactMode} onCompactModeChange={onCompactModeChange} onCopy={onCopy} weaponId={weaponId} />
+          <BuildManifest result={result} viewMode={viewMode} onViewModeChange={onViewModeChange} onCopy={onCopy} weaponId={weaponId} />
         </>
       )}
     </div>

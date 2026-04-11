@@ -1,0 +1,2173 @@
+- ref: e1
+  role: banner
+  children:
+  - ref: e2
+    role: link
+    name: jump to content
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#content"
+  - ref: e3
+    role: list
+    children:
+    - ref: e4
+      role: listitem
+      name: POPULAR
+      children:
+      - ref: e5
+        role: link
+        name: POPULAR
+        url: "https://old.reddit.com/r/popular/"
+    - ref: e6
+      role: listitem
+      name: 所有
+      children:
+      - ref: e7
+        role: link
+        name: 所有
+        url: "https://old.reddit.com/r/all/"
+    - ref: e8
+      role: listitem
+      name: USERS
+      children:
+      - ref: e9
+        role: link
+        name: USERS
+        url: "https://old.reddit.com/users/"
+  - ref: e10
+    role: list
+    children:
+    - ref: e11
+      role: listitem
+      name: ASKREDDIT
+      children:
+      - ref: e12
+        role: link
+        name: ASKREDDIT
+        url: "https://old.reddit.com/r/AskReddit/"
+    - ref: e13
+      role: listitem
+      name: PICS
+      children:
+      - ref: e14
+        role: link
+        name: PICS
+        url: "https://old.reddit.com/r/pics/"
+    - ref: e15
+      role: listitem
+      name: FUNNY
+      children:
+      - ref: e16
+        role: link
+        name: FUNNY
+        url: "https://old.reddit.com/r/funny/"
+    - ref: e17
+      role: listitem
+      name: MOVIES
+      children:
+      - ref: e18
+        role: link
+        name: MOVIES
+        url: "https://old.reddit.com/r/movies/"
+    - ref: e19
+      role: listitem
+      name: WORLDNEWS
+      children:
+      - ref: e20
+        role: link
+        name: WORLDNEWS
+        url: "https://old.reddit.com/r/worldnews/"
+    - ref: e21
+      role: listitem
+      name: NEWS
+      children:
+      - ref: e22
+        role: link
+        name: NEWS
+        url: "https://old.reddit.com/r/news/"
+    - ref: e23
+      role: listitem
+      name: TODAYILEARNED
+      children:
+      - ref: e24
+        role: link
+        name: TODAYILEARNED
+        url: "https://old.reddit.com/r/todayilearned/"
+    - ref: e25
+      role: listitem
+      name: NOTTHEONION
+      children:
+      - ref: e26
+        role: link
+        name: NOTTHEONION
+        url: "https://old.reddit.com/r/nottheonion/"
+    - ref: e27
+      role: listitem
+      name: EXPLAINLIKEIMFIVE
+      children:
+      - ref: e28
+        role: link
+        name: EXPLAINLIKEIMFIVE
+        url: "https://old.reddit.com/r/explainlikeimfive/"
+    - ref: e29
+      role: listitem
+      name: MILDLYINTERESTING
+      children:
+      - ref: e30
+        role: link
+        name: MILDLYINTERESTING
+        url: "https://old.reddit.com/r/mildlyinteresting/"
+    - ref: e31
+      role: listitem
+      name: DIY
+      children:
+      - ref: e32
+        role: link
+        name: DIY
+        url: "https://old.reddit.com/r/DIY/"
+    - ref: e33
+      role: listitem
+      name: VIDEOS
+      children:
+      - ref: e34
+        role: link
+        name: VIDEOS
+        url: "https://old.reddit.com/r/videos/"
+    - ref: e35
+      role: listitem
+      name: OLDSCHOOLCOOL
+      children:
+      - ref: e36
+        role: link
+        name: OLDSCHOOLCOOL
+        url: "https://old.reddit.com/r/OldSchoolCool/"
+    - ref: e37
+      role: listitem
+      name: TWOXCHROMOSOMES
+      children:
+      - ref: e38
+        role: link
+        name: TWOXCHROMOSOMES
+        url: "https://old.reddit.com/r/TwoXChromosomes/"
+    - ref: e39
+      role: listitem
+      name: TIFU
+      children:
+      - ref: e40
+        role: link
+        name: TIFU
+        url: "https://old.reddit.com/r/tifu/"
+    - ref: e41
+      role: listitem
+      name: MUSIC
+      children:
+      - ref: e42
+        role: link
+        name: MUSIC
+        url: "https://old.reddit.com/r/Music/"
+    - ref: e43
+      role: listitem
+      name: BOOKS
+      children:
+      - ref: e44
+        role: link
+        name: BOOKS
+        url: "https://old.reddit.com/r/books/"
+    - ref: e45
+      role: listitem
+      name: LIFEPROTIPS
+      children:
+      - ref: e46
+        role: link
+        name: LIFEPROTIPS
+        url: "https://old.reddit.com/r/LifeProTips/"
+    - ref: e47
+      role: listitem
+      name: DATAISBEAUTIFUL
+      children:
+      - ref: e48
+        role: link
+        name: DATAISBEAUTIFUL
+        url: "https://old.reddit.com/r/dataisbeautiful/"
+    - ref: e49
+      role: listitem
+      name: AWW
+      children:
+      - ref: e50
+        role: link
+        name: AWW
+        url: "https://old.reddit.com/r/aww/"
+    - ref: e51
+      role: listitem
+      name: SCIENCE
+      children:
+      - ref: e52
+        role: link
+        name: SCIENCE
+        url: "https://old.reddit.com/r/science/"
+    - ref: e53
+      role: listitem
+      name: SPACE
+      children:
+      - ref: e54
+        role: link
+        name: SPACE
+        url: "https://old.reddit.com/r/space/"
+    - ref: e55
+      role: listitem
+      name: SHOWERTHOUGHTS
+      children:
+      - ref: e56
+        role: link
+        name: SHOWERTHOUGHTS
+        url: "https://old.reddit.com/r/Showerthoughts/"
+    - ref: e57
+      role: listitem
+      name: ASKSCIENCE
+      children:
+      - ref: e58
+        role: link
+        name: ASKSCIENCE
+        url: "https://old.reddit.com/r/askscience/"
+    - ref: e59
+      role: listitem
+      name: JOKES
+      children:
+      - ref: e60
+        role: link
+        name: JOKES
+        url: "https://old.reddit.com/r/Jokes/"
+    - ref: e61
+      role: listitem
+      name: ART
+      children:
+      - ref: e62
+        role: link
+        name: ART
+        url: "https://old.reddit.com/r/Art/"
+    - ref: e63
+      role: listitem
+      name: IAMA
+      children:
+      - ref: e64
+        role: link
+        name: IAMA
+        url: "https://old.reddit.com/r/IAmA/"
+    - ref: e65
+      role: listitem
+      name: FUTUROLOGY
+      children:
+      - ref: e66
+        role: link
+        name: FUTUROLOGY
+        url: "https://old.reddit.com/r/Futurology/"
+    - ref: e67
+      role: listitem
+      name: SPORTS
+      children:
+      - ref: e68
+        role: link
+        name: SPORTS
+        url: "https://old.reddit.com/r/sports/"
+    - ref: e69
+      role: listitem
+      name: UPLIFTINGNEWS
+      children:
+      - ref: e70
+        role: link
+        name: UPLIFTINGNEWS
+        url: "https://old.reddit.com/r/UpliftingNews/"
+    - ref: e71
+      role: listitem
+      name: FOOD
+      children:
+      - ref: e72
+        role: link
+        name: FOOD
+        url: "https://old.reddit.com/r/food/"
+    - ref: e73
+      role: listitem
+      name: NOSLEEP
+      children:
+      - ref: e74
+        role: link
+        name: NOSLEEP
+        url: "https://old.reddit.com/r/nosleep/"
+    - ref: e75
+      role: listitem
+      name: CREEPY
+      children:
+      - ref: e76
+        role: link
+        name: CREEPY
+        url: "https://old.reddit.com/r/creepy/"
+    - ref: e77
+      role: listitem
+      name: HISTORY
+      children:
+      - ref: e78
+        role: link
+        name: HISTORY
+        url: "https://old.reddit.com/r/history/"
+    - ref: e79
+      role: listitem
+      name: GIFS
+      children:
+      - ref: e80
+        role: link
+        name: GIFS
+        url: "https://old.reddit.com/r/gifs/"
+    - ref: e81
+      role: listitem
+      name: INTERNETISBEAUTIFUL
+      children:
+      - ref: e82
+        role: link
+        name: INTERNETISBEAUTIFUL
+        url: "https://old.reddit.com/r/InternetIsBeautiful/"
+    - ref: e83
+      role: listitem
+      name: GETMOTIVATED
+      children:
+      - ref: e84
+        role: link
+        name: GETMOTIVATED
+        url: "https://old.reddit.com/r/GetMotivated/"
+    - ref: e85
+      role: listitem
+      name: GADGETS
+      children:
+      - ref: e86
+        role: link
+        name: GADGETS
+        url: "https://old.reddit.com/r/gadgets/"
+    - ref: e87
+      role: listitem
+      name: ANNOUNCEMENTS
+      children:
+      - ref: e88
+        role: link
+        name: ANNOUNCEMENTS
+        url: "https://old.reddit.com/r/announcements/"
+    - ref: e89
+      role: listitem
+      name: WRITINGPROMPTS
+      children:
+      - ref: e90
+        role: link
+        name: WRITINGPROMPTS
+        url: "https://old.reddit.com/r/WritingPrompts/"
+    - ref: e91
+      role: listitem
+      name: PHILOSOPHY
+      children:
+      - ref: e92
+        role: link
+        name: PHILOSOPHY
+        url: "https://old.reddit.com/r/philosophy/"
+    - ref: e93
+      role: listitem
+      name: DOCUMENTARIES
+      children:
+      - ref: e94
+        role: link
+        name: DOCUMENTARIES
+        url: "https://old.reddit.com/r/Documentaries/"
+    - ref: e95
+      role: listitem
+      name: EARTHPORN
+      children:
+      - ref: e96
+        role: link
+        name: EARTHPORN
+        url: "https://old.reddit.com/r/EarthPorn/"
+    - ref: e97
+      role: listitem
+      name: PHOTOSHOPBATTLES
+      children:
+      - ref: e98
+        role: link
+        name: PHOTOSHOPBATTLES
+        url: "https://old.reddit.com/r/photoshopbattles/"
+    - ref: e99
+      role: listitem
+      name: LISTENTOTHIS
+      children:
+      - ref: e100
+        role: link
+        name: LISTENTOTHIS
+        url: "https://old.reddit.com/r/listentothis/"
+    - ref: e101
+      role: listitem
+      name: BLOG
+      children:
+      - ref: e102
+        role: link
+        name: BLOG
+        url: "https://old.reddit.com/r/blog/"
+  - ref: e103
+    role: link
+    name: 更多 »
+    url: "https://old.reddit.com/subreddits/"
+  - ref: e104
+    role: link
+    name: reddit.com
+    url: "https://old.reddit.com/"
+  - ref: e105
+    role: link
+    name: Tarkov
+    url: "https://old.reddit.com/r/Tarkov/"
+  - ref: e106
+    role: list
+    children:
+    - ref: e107
+      role: listitem
+      name: 留言
+      children:
+      - ref: e108
+        role: link
+        name: 留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e109
+    role: link
+    name: Log in
+    url: "https://www.reddit.com/login"
+  - ref: e110
+    role: link
+    name: 註冊
+    url: "https://www.reddit.com/login"
+  - ref: e111
+    role: list
+- ref: e112
+  role: search
+  children:
+  - ref: e113
+    role: textbox
+    name: 搜尋
+  - ref: e114
+    role: button
+- ref: e115
+  role: textbox
+  value: "https://redd.it/1selvw7"
+- ref: e116
+  role: link
+  name: 發表新連結
+  url: "https://old.reddit.com/r/Tarkov/submit"
+- ref: e117
+  role: link
+  name: 發表新文章
+  url: "https://old.reddit.com/r/Tarkov/submit?selftext=true"
+- ref: e118
+  role: heading
+  level: 1
+- ref: e119
+  role: link
+  name: join
+  url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#"
+- ref: e120
+  role: form
+  children:
+  - ref: e121
+    role: heading
+    name: Quick Links
+    level: 3
+  - ref: e122
+    role: list
+    children:
+    - ref: e123
+      role: listitem
+      name: Subreddit Rules
+      children:
+      - ref: e124
+        role: link
+        name: Subreddit Rules
+        url: "https://www.reddit.com/r/Tarkov/about/rules"
+    - ref: e125
+      role: listitem
+      name: "Anti-Cheat & Suspicious Gameplay Rules"
+      children:
+      - ref: e126
+        role: link
+        name: "Anti-Cheat & Suspicious Gameplay Rules"
+        url: "https://www.reddit.com/r/Tarkov/wiki/cheaters"
+    - ref: e127
+      role: listitem
+      name: User Guide / Wiki
+      children:
+      - ref: e128
+        role: link
+        name: User Guide / Wiki
+        url: "https://www.reddit.com/r/Tarkov/wiki/userguide"
+  - ref: e129
+    role: heading
+    name: Helpful Resources
+    level: 3
+  - ref: e130
+    role: list
+    children:
+    - ref: e131
+      role: listitem
+      name: Official EFT Website
+      children:
+      - ref: e132
+        role: link
+        name: Official EFT Website
+        url: "https://www.escapefromtarkov.com/"
+    - ref: e133
+      role: listitem
+      name: Tarkov Wiki
+      children:
+      - ref: e134
+        role: link
+        name: Tarkov Wiki
+        url: "https://escapefromtarkov.fandom.com/"
+    - ref: e135
+      role: listitem
+      name: "Tarkov.dev — maps, items, player lookup"
+      children:
+      - ref: e136
+        role: link
+        name: Tarkov.dev
+        url: "https://tarkov.dev/"
+    - ref: e137
+      role: listitem
+      name: Map Genie Maps
+      children:
+      - ref: e138
+        role: link
+        name: Map Genie Maps
+        url: "https://mapgenie.io/tarkov"
+  - ref: e139
+    role: heading
+    name: Before Posting
+    level: 3
+  - ref: e140
+    role: list
+    children:
+    - ref: e141
+      role: listitem
+      name: Search for similar posts first
+    - ref: e142
+      role: listitem
+      name: Use the correct flair
+    - ref: e143
+      role: listitem
+      name: "Cheating-related posts require video — read the full rules"
+      children:
+      - ref: e144
+        role: link
+        name: full rules
+        url: "https://www.reddit.com/r/Tarkov/wiki/cheaters"
+- ref: e145
+  role: time
+  name: "Tue Dec 29 20:23:33 2015 UTC"
+- ref: e146
+  role: heading
+  name: 板主
+  level: 1
+- ref: e147
+  role: list
+  children:
+  - ref: e148
+    role: listitem
+    name: MESSAGE THE MODS
+    children:
+    - ref: e149
+      role: link
+      name: MESSAGE THE MODS
+      url: "https://old.reddit.com/message/compose/?to=/r/Tarkov"
+- ref: e150
+  role: aside
+  children:
+  - ref: e151
+    role: banner
+    children:
+    - ref: e152
+      role: link
+      name: r/Tarkov
+      url: "https://old.reddit.com/r/Tarkov/?ref=readnext"
+    - ref: e153
+      role: navigation
+  - ref: e154
+    role: link
+    name: "3 · 50 留言 How do you make the fastest money without risking your PMC?"
+    url: "https://old.reddit.com/r/Tarkov/comments/1sf33ab/how_do_you_make_the_fastest_money_without_risking/?ref=readnext_0"
+    children:
+    - ref: e155
+      role: span
+      name: 3
+- ref: e156
+  role: link
+- ref: e157
+  role: main
+  children:
+  - ref: e158
+    role: section
+    children:
+    - ref: e159
+      role: link
+      name: "Welcome to Reddit. Come for the cats, stay for the empathy. BECOME A REDDITOR and start exploring."
+      url: "https://old.reddit.com/login"
+      children:
+      - ref: e160
+        role: heading
+        name: Welcome to Reddit.
+        level: 2
+    - ref: e161
+      role: link
+      name: ×
+      url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#"
+  - ref: e162
+    role: button
+    name: 好評
+  - ref: e163
+    role: div
+    name: 52
+  - ref: e164
+    role: button
+    name: 負評
+  - ref: e165
+    role: span
+    name: Guide
+  - ref: e166
+    role: link
+    name: "[Update] Tarkov Weapon Mod Optimizer — Now runs entirely in your browser, no download needed"
+    url: "https://i.redd.it/s90b3jey3ptg1.jpeg"
+  - ref: e167
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e168
+    role: time
+    name: "Tue Apr 7 04:26:25 2026 UTC"
+  - ref: e169
+    role: list
+    children:
+    - ref: e170
+      role: listitem
+      name: 18 留言
+      children:
+      - ref: e171
+        role: link
+        name: 18 留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+    - ref: e172
+      role: listitem
+      name: 分享
+      children:
+      - ref: e173
+        role: link
+        name: 分享
+        url: "javascript: void 0;"
+    - ref: e174
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e175
+        role: link
+        name: 儲存
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#"
+    - ref: e176
+      role: listitem
+      name: 隱藏
+      children:
+      - ref: e177
+        role: form
+        children:
+        - ref: e178
+          role: link
+          name: 隱藏
+          url: "javascript:void(0)"
+    - ref: e179
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e180
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+  - ref: e181
+    role: link
+    url: "https://i.redd.it/s90b3jey3ptg1.jpeg"
+    children:
+    - ref: e182
+      role: img
+  - ref: e183
+    role: link
+    name: "https://ahaimk01.github.io/tarkov-weapon-optimizer/"
+    url: "https://ahaimk01.github.io/tarkov-weapon-optimizer/"
+  - ref: e184
+    role: list
+    children:
+    - ref: e185
+      role: listitem
+      name: "Pure browser app — no server, no install. Runs on GitHub Pages. Your browser does all the computation via WebAssembly."
+    - ref: e186
+      role: listitem
+      name: 16 languages — basically all the language available in game
+    - ref: e187
+      role: listitem
+      name: PvP / PvE mode toggle — uses the correct item pool for each game mode
+    - ref: e188
+      role: listitem
+      name: "EFTForge integration — one-click export your optimized build to EFTForge. Huge shoutout to the EFTForge dev for building"
+      children:
+      - ref: e189
+        role: link
+        name: EFTForge
+        url: "https://www.eftforge.com/"
+    - ref: e190
+      role: listitem
+      name: "Pareto frontier improvements — axis labels, uniform tick spacing, and you can now set an optional budget limit on the \"f"
+    - ref: e191
+      role: listitem
+      name: Solver precision mode — choose fast or precise depending on how complex your build is
+    - ref: e192
+      role: listitem
+      name: "Weight presets — quick toggles for common optimization goals (pure recoil, pure ergo, balanced, budget)"
+    - ref: e193
+      role: listitem
+      name: Many themes
+    - ref: e194
+      role: listitem
+      name: Live data from Tarkov.dev API as always
+  - ref: e195
+    role: link
+    name: "https://github.com/AhaiMk01/tarkov-weapon-optimizer"
+    url: "https://github.com/AhaiMk01/tarkov-weapon-optimizer"
+  - ref: e196
+    role: section
+    children:
+    - ref: e197
+      role: link
+      name: "Want to add to the discussion? Post a comment! CREATE AN ACCOUNT"
+      url: "https://old.reddit.com/login"
+      children:
+      - ref: e198
+        role: textbox
+      - ref: e199
+        role: heading
+        name: "Want to add to the discussion?"
+        level: 2
+  - ref: e200
+    role: link
+  - ref: e201
+    role: button
+    name: 好評
+  - ref: e202
+    role: button
+    name: 負評
+  - ref: e203
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e204
+    role: link
+    name: UnsureAboutThisCrap
+    url: "https://old.reddit.com/user/UnsureAboutThisCrap"
+  - ref: e205
+    role: span
+    name: 6
+  - ref: e206
+    role: time
+    name: "Tue Apr 7 06:00:58 2026 UTC"
+  - ref: e207
+    role: form
+  - ref: e208
+    role: list
+    children:
+    - ref: e209
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e210
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oer595t/"
+    - ref: e211
+      role: listitem
+      name: embed
+      children:
+      - ref: e212
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e213
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e214
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e215
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e216
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e217
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e218
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e219
+    role: link
+  - ref: e220
+    role: button
+    name: 好評
+  - ref: e221
+    role: button
+    name: 負評
+  - ref: e222
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e223
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e224
+    role: link
+    name: S
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e225
+    role: span
+    name: 2
+  - ref: e226
+    role: time
+    name: "Wed Apr 8 15:12:24 2026 UTC"
+  - ref: e227
+    role: form
+  - ref: e228
+    role: list
+    children:
+    - ref: e229
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e230
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/of0c8er/"
+    - ref: e231
+      role: listitem
+      name: embed
+      children:
+      - ref: e232
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e233
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e234
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e235
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e236
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oer595t"
+    - ref: e237
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e238
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e239
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e240
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e241
+    role: link
+  - ref: e242
+    role: button
+    name: 好評
+  - ref: e243
+    role: button
+    name: 負評
+  - ref: e244
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e245
+    role: link
+    name: smokeymcdugen
+    url: "https://old.reddit.com/user/smokeymcdugen"
+  - ref: e246
+    role: span
+    name: 5
+  - ref: e247
+    role: time
+    name: "Tue Apr 7 06:24:28 2026 UTC"
+  - ref: e248
+    role: form
+  - ref: e249
+    role: list
+    children:
+    - ref: e250
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e251
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oer7y36/"
+    - ref: e252
+      role: listitem
+      name: embed
+      children:
+      - ref: e253
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e254
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e255
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e256
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e257
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e258
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e259
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e260
+    role: link
+  - ref: e261
+    role: button
+    name: 好評
+  - ref: e262
+    role: button
+    name: 負評
+  - ref: e263
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e264
+    role: link
+    name: fungus_is_amungus
+    url: "https://old.reddit.com/user/fungus_is_amungus"
+  - ref: e265
+    role: span
+    name: 9
+  - ref: e266
+    role: time
+    name: "Tue Apr 7 12:02:13 2026 UTC"
+  - ref: e267
+    role: form
+  - ref: e269
+    role: list
+    children:
+    - ref: e270
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e271
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oescmgu/"
+    - ref: e272
+      role: listitem
+      name: embed
+      children:
+      - ref: e273
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e274
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e275
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e276
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e277
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oer7y36"
+    - ref: e278
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e279
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e280
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e281
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e282
+    role: link
+  - ref: e283
+    role: button
+    name: 好評
+  - ref: e284
+    role: button
+    name: 負評
+  - ref: e285
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e286
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e287
+    role: link
+    name: S
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e288
+    role: span
+    name: 1
+  - ref: e289
+    role: time
+    name: "Wed Apr 8 15:15:20 2026 UTC"
+  - ref: e290
+    role: form
+  - ref: e291
+    role: list
+    children:
+    - ref: e292
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e293
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/of0cw2h/"
+    - ref: e294
+      role: listitem
+      name: embed
+      children:
+      - ref: e295
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e296
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e297
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e298
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e299
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oer7y36"
+    - ref: e300
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e301
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e302
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e303
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e304
+    role: link
+  - ref: e305
+    role: button
+    name: 好評
+  - ref: e306
+    role: button
+    name: 負評
+  - ref: e307
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e308
+    role: link
+    name: OkCantaloupe3
+    url: "https://old.reddit.com/user/OkCantaloupe3"
+  - ref: e309
+    role: span
+    name: 2
+  - ref: e310
+    role: time
+    name: "Tue Apr 7 04:34:09 2026 UTC"
+  - ref: e311
+    role: form
+  - ref: e312
+    role: list
+    children:
+    - ref: e313
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e314
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oequefw/"
+    - ref: e315
+      role: listitem
+      name: embed
+      children:
+      - ref: e316
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e317
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e318
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e319
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e320
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e321
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e322
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e323
+    role: link
+  - ref: e324
+    role: button
+    name: 好評
+  - ref: e325
+    role: button
+    name: 負評
+  - ref: e326
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e327
+    role: link
+    name: executive0utcome
+    url: "https://old.reddit.com/user/executive0utcome"
+  - ref: e328
+    role: span
+    name: 2
+  - ref: e329
+    role: time
+    name: "Tue Apr 7 04:39:21 2026 UTC"
+  - ref: e330
+    role: form
+  - ref: e331
+    role: list
+    children:
+    - ref: e332
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e333
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oeqv3pp/"
+    - ref: e334
+      role: listitem
+      name: embed
+      children:
+      - ref: e335
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e336
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e337
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e338
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e339
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e340
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e341
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e342
+    role: link
+  - ref: e343
+    role: button
+    name: 好評
+  - ref: e344
+    role: button
+    name: 負評
+  - ref: e345
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e346
+    role: link
+    name: Thee_Sinner
+    url: "https://old.reddit.com/user/Thee_Sinner"
+  - ref: e347
+    role: span
+    name: 2
+  - ref: e348
+    role: time
+    name: "Tue Apr 7 06:07:02 2026 UTC"
+  - ref: e349
+    role: form
+  - ref: e350
+    role: list
+    children:
+    - ref: e351
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e352
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oer5yct/"
+    - ref: e353
+      role: listitem
+      name: embed
+      children:
+      - ref: e354
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e355
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e356
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e357
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e358
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e359
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e360
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e361
+    role: link
+  - ref: e362
+    role: button
+    name: 好評
+  - ref: e363
+    role: button
+    name: 負評
+  - ref: e364
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e365
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e366
+    role: link
+    name: S
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e367
+    role: span
+    name: 2
+  - ref: e368
+    role: time
+    name: "Tue Apr 7 15:03:23 2026 UTC"
+  - ref: e369
+    role: form
+  - ref: e370
+    role: list
+    children:
+    - ref: e371
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e372
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oetcjxl/"
+    - ref: e373
+      role: listitem
+      name: embed
+      children:
+      - ref: e374
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e375
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e376
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e377
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e378
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oer5yct"
+    - ref: e379
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e380
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e381
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e382
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e383
+    role: link
+  - ref: e384
+    role: button
+    name: 好評
+  - ref: e385
+    role: button
+    name: 負評
+  - ref: e386
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e387
+    role: link
+    name: LazyLazinLoser
+    url: "https://old.reddit.com/user/LazyLazinLoser"
+  - ref: e388
+    role: span
+    name: 2
+  - ref: e389
+    role: time
+    name: "Tue Apr 7 07:19:41 2026 UTC"
+  - ref: e390
+    role: form
+  - ref: e391
+    role: list
+    children:
+    - ref: e392
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e393
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oere52y/"
+    - ref: e394
+      role: listitem
+      name: embed
+      children:
+      - ref: e395
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e396
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e397
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e398
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e399
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e400
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e401
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e402
+    role: link
+  - ref: e403
+    role: button
+    name: 好評
+  - ref: e404
+    role: button
+    name: 負評
+  - ref: e405
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e406
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e407
+    role: link
+    name: S
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e408
+    role: span
+    name: 2
+  - ref: e409
+    role: time
+    name: "Tue Apr 7 15:05:41 2026 UTC"
+  - ref: e410
+    role: form
+  - ref: e411
+    role: list
+    children:
+    - ref: e412
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e413
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oetd2fz/"
+    - ref: e414
+      role: listitem
+      name: embed
+      children:
+      - ref: e415
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e416
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e417
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e418
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e419
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oere52y"
+    - ref: e420
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e421
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e422
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e423
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e424
+    role: link
+  - ref: e425
+    role: button
+    name: 好評
+  - ref: e426
+    role: button
+    name: 負評
+  - ref: e427
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e428
+    role: link
+    name: Kitair
+    url: "https://old.reddit.com/user/Kitair"
+  - ref: e429
+    role: span
+    name: 2
+  - ref: e430
+    role: time
+    name: "Tue Apr 7 09:24:07 2026 UTC"
+  - ref: e431
+    role: form
+  - ref: e432
+    role: list
+    children:
+    - ref: e433
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e434
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oerrgi4/"
+    - ref: e435
+      role: listitem
+      name: embed
+      children:
+      - ref: e436
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e437
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e438
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e439
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e440
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e441
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e442
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e443
+    role: link
+  - ref: e444
+    role: button
+    name: 好評
+  - ref: e445
+    role: button
+    name: 負評
+  - ref: e446
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e447
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e448
+    role: link
+    name: S
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e449
+    role: span
+    name: 1
+  - ref: e450
+    role: time
+    name: "Tue Apr 7 15:12:56 2026 UTC"
+  - ref: e451
+    role: form
+  - ref: e452
+    role: list
+    children:
+    - ref: e453
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e454
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oetep9u/"
+    - ref: e455
+      role: listitem
+      name: embed
+      children:
+      - ref: e456
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e457
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e458
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e459
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e460
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oerrgi4"
+    - ref: e461
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e462
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e463
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e464
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e465
+    role: link
+  - ref: e466
+    role: button
+    name: 好評
+  - ref: e467
+    role: button
+    name: 負評
+  - ref: e468
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e469
+    role: link
+    name: krislicoque
+    url: "https://old.reddit.com/user/krislicoque"
+  - ref: e470
+    role: span
+    name: 2
+  - ref: e471
+    role: time
+    name: "Tue Apr 7 09:30:54 2026 UTC"
+  - ref: e472
+    role: form
+  - ref: e473
+    role: list
+    children:
+    - ref: e474
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e475
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oers70g/"
+    - ref: e476
+      role: listitem
+      name: embed
+      children:
+      - ref: e477
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e478
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e479
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e480
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e481
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e482
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e483
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e484
+    role: link
+  - ref: e485
+    role: button
+    name: 好評
+  - ref: e486
+    role: button
+    name: 負評
+  - ref: e487
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e488
+    role: link
+    name: Ahai568
+    url: "https://old.reddit.com/user/Ahai568"
+  - ref: e489
+    role: link
+    name: S
+    url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/"
+  - ref: e490
+    role: span
+    name: 2
+  - ref: e491
+    role: time
+    name: "Tue Apr 7 15:11:55 2026 UTC"
+  - ref: e492
+    role: form
+  - ref: e493
+    role: list
+    children:
+    - ref: e494
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e495
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oeteh0o/"
+    - ref: e496
+      role: listitem
+      name: embed
+      children:
+      - ref: e497
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e498
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e499
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e500
+      role: listitem
+      name: 上層留言
+      children:
+      - ref: e501
+        role: link
+        name: 上層留言
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#oers70g"
+    - ref: e502
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e503
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e504
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e505
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e506
+    role: link
+  - ref: e507
+    role: button
+    name: 好評
+  - ref: e508
+    role: button
+    name: 負評
+  - ref: e509
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e510
+    role: link
+    name: morf1067
+    url: "https://old.reddit.com/user/morf1067"
+  - ref: e511
+    role: span
+    name: 2
+  - ref: e512
+    role: time
+    name: "Tue Apr 7 15:12:34 2026 UTC"
+  - ref: e513
+    role: form
+  - ref: e514
+    role: list
+    children:
+    - ref: e515
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e516
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oetemdu/"
+    - ref: e517
+      role: listitem
+      name: embed
+      children:
+      - ref: e518
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e519
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e520
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e521
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e522
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e523
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e524
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e525
+    role: link
+  - ref: e526
+    role: button
+    name: 好評
+  - ref: e527
+    role: button
+    name: 負評
+  - ref: e528
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e529
+    role: link
+    name: cugaro
+    url: "https://old.reddit.com/user/cugaro"
+  - ref: e530
+    role: span
+    name: 1
+  - ref: e531
+    role: time
+    name: "Tue Apr 7 07:40:03 2026 UTC"
+  - ref: e532
+    role: form
+  - ref: e533
+    role: list
+    children:
+    - ref: e534
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e535
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oergbav/"
+    - ref: e536
+      role: listitem
+      name: embed
+      children:
+      - ref: e537
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e538
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e539
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e540
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e541
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e542
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e543
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+  - ref: e544
+    role: link
+  - ref: e545
+    role: button
+    name: 好評
+  - ref: e546
+    role: button
+    name: 負評
+  - ref: e547
+    role: link
+    name: "[–]"
+    url: "javascript:void(0)"
+  - ref: e548
+    role: link
+    name: Th3F3LL4S
+    url: "https://old.reddit.com/user/Th3F3LL4S"
+  - ref: e549
+    role: span
+    name: 1
+  - ref: e550
+    role: time
+    name: "Tue Apr 7 17:16:47 2026 UTC"
+  - ref: e551
+    role: form
+  - ref: e552
+    role: list
+    children:
+    - ref: e553
+      role: listitem
+      name: 永久連結
+      children:
+      - ref: e554
+        role: link
+        name: 永久連結
+        url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/oeu71vi/"
+    - ref: e555
+      role: listitem
+      name: embed
+      children:
+      - ref: e556
+        role: link
+        name: embed
+        url: "javascript:void(0)"
+    - ref: e557
+      role: listitem
+      name: 儲存
+      children:
+      - ref: e558
+        role: link
+        name: 儲存
+        url: "javascript:void(0)"
+    - ref: e559
+      role: listitem
+      name: 檢舉
+      children:
+      - ref: e560
+        role: link
+        name: 檢舉
+        url: "javascript:void(0)"
+    - ref: e561
+      role: listitem
+      name: 回覆
+      children:
+      - ref: e562
+        role: link
+        name: 回覆
+        url: "javascript:void(0)"
+- ref: e563
+  role: list
+  children:
+  - ref: e564
+    role: listitem
+    name: 關於
+  - ref: e565
+    role: listitem
+    name: 網誌
+    children:
+    - ref: e566
+      role: link
+      name: 網誌
+      url: "https://redditblog.com/"
+  - ref: e567
+    role: listitem
+    name: 關於
+    children:
+    - ref: e568
+      role: link
+      name: 關於
+      url: "https://www.redditinc.com/"
+  - ref: e569
+    role: listitem
+    name: 廣告
+    children:
+    - ref: e570
+      role: link
+      name: 廣告
+      url: "https://www.redditinc.com/advertising"
+  - ref: e571
+    role: listitem
+    name: careers
+    children:
+    - ref: e572
+      role: link
+      name: careers
+      url: "https://www.redditinc.com/careers"
+- ref: e573
+  role: list
+  children:
+  - ref: e574
+    role: listitem
+    name: 幫助
+  - ref: e575
+    role: listitem
+    name: 網站規定
+    children:
+    - ref: e576
+      role: link
+      name: 網站規定
+      url: "https://old.reddit.com/rules/"
+  - ref: e577
+    role: listitem
+    name: Reddit help center
+    children:
+    - ref: e578
+      role: link
+      name: Reddit help center
+      url: "https://www.reddithelp.com/"
+  - ref: e579
+    role: listitem
+    name: reddit 站規
+    children:
+    - ref: e580
+      role: link
+      name: reddit 站規
+      url: "https://old.reddit.com/wiki/reddiquette/"
+  - ref: e581
+    role: listitem
+    name: mod guidelines
+    children:
+    - ref: e582
+      role: link
+      name: mod guidelines
+      url: "https://old.reddit.com/help/healthycommunities/"
+  - ref: e583
+    role: listitem
+    name: 聯絡我們
+    children:
+    - ref: e584
+      role: link
+      name: 聯絡我們
+      url: "https://old.reddit.com/contact/"
+- ref: e585
+  role: list
+  children:
+  - ref: e586
+    role: listitem
+    name: "應用程式 & 工具"
+  - ref: e587
+    role: listitem
+    name: Reddit for iPhone
+    children:
+    - ref: e588
+      role: link
+      name: Reddit for iPhone
+      url: "https://itunes.apple.com/us/app/reddit-the-official-app/id1064216828?mt=8"
+  - ref: e589
+    role: listitem
+    name: Reddit for Android
+    children:
+    - ref: e590
+      role: link
+      name: Reddit for Android
+      url: "https://play.google.com/store/apps/details?id=com.reddit.frontpage"
+  - ref: e591
+    role: listitem
+    name: mobile website
+    children:
+    - ref: e592
+      role: link
+      name: mobile website
+      url: "https://old.reddit.com/r/Tarkov/comments/1selvw7/update_tarkov_weapon_mod_optimizer_now_runs/#"
+- ref: e593
+  role: list
+  children:
+  - ref: e594
+    role: listitem
+    name: "<3"
+  - ref: e595
+    role: listitem
+    name: reddit premium
+    children:
+    - ref: e596
+      role: link
+      name: reddit premium
+      url: "https://old.reddit.com/premium/"
+- ref: e597
+  role: link
+  name: User Agreement
+  url: "https://old.reddit.com/help/useragreement"
+- ref: e598
+  role: link
+  name: 隱私權政策
+  url: "https://old.reddit.com/help/privacypolicy"
+- ref: e599
+  role: img
