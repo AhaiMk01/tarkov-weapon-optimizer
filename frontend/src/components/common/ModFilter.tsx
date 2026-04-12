@@ -26,6 +26,7 @@ interface ModFilterProps {
   onModSearchChange: (v: string) => void
 }
 
+
 export function ModFilter({
   availableMods,
   loadingMods,
@@ -45,14 +46,9 @@ export function ModFilter({
 }: ModFilterProps) {
   const { t } = useTranslation()
   const { token } = useToken()
-  const eligibleCategories = modCategoryOptions.filter(
-    o => !includedCategories.includes(o.id) && !excludedCategories.includes(o.id),
-  )
-  const q = categorySearch.trim().toLowerCase()
-  const searchedCategories = q
-    ? eligibleCategories.filter(o => o.name.toLowerCase().includes(q))
-    : eligibleCategories
+
   const searchedMods = modSearch ? availableMods.filter(m => m.name.toLowerCase().includes(modSearch.toLowerCase()) && !includedModIds.includes(m.id) && !excludedModIds.includes(m.id)).slice(0, 10) : []
+
   return (
     <Collapse size="small" items={[
       {
@@ -65,36 +61,40 @@ export function ModFilter({
             </Text>
             <Select
               showSearch
-              virtual
               style={{ width: '100%' }}
               placeholder={t('sidebar.require_categories')}
+              allowClear
               value={null}
               searchValue={categorySearch}
               onSearch={onCategorySearchChange}
-              onSelect={(v) => { if (v) { onIncludedCategoriesChange([...includedCategories, v]); onCategorySearchChange('') } }}
-              filterOption={false}
-              notFoundContent={null}
-              listHeight={320}
-              options={searchedCategories.map(o => ({ value: o.id, label: o.name }))}
-              optionRender={(option) => (
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span>{option.label}</span>
-                  <Space size={4}>
-                    <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([...includedCategories, option.value as string]); onCategorySearchChange('') }} style={{ color: token.colorSuccess }} />
-                    <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedCategoriesChange([...excludedCategories, option.value as string]); onCategorySearchChange('') }} style={{ color: token.colorError }} />
-                  </Space>
-                </div>
-              )}
+              options={modCategoryOptions.map(o => ({
+                value: o.id,
+                label: (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>{o.name}</span>
+                    <Space size={4}>
+                      {!includedCategories.includes(o.id) && !excludedCategories.includes(o.id) && (
+                        <>
+                          <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([...includedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorSuccess }} />
+                          <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedCategoriesChange([...excludedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorError }} />
+                        </>
+                      )}
+                    </Space>
+                  </div>
+                ),
+                name: o.name,
+              }))}
+              filterOption={(input, option) => (option?.name as string ?? '').toLowerCase().includes(input.toLowerCase())}
             />
             <Space wrap>
               {includedCategories.map(catId => (
                 <Tag key={catId} color="success" closable onClose={() => onIncludedCategoriesChange(includedCategories.filter(c => c !== catId))}>
-                  {modCategoryOptions.find(o => o.id === catId)?.name ?? catId}
+                  + {modCategoryOptions.find(o => o.id === catId)?.name || catId}
                 </Tag>
               ))}
               {excludedCategories.map(catId => (
                 <Tag key={catId} color="error" closable onClose={() => onExcludedCategoriesChange(excludedCategories.filter(c => c !== catId))}>
-                  {modCategoryOptions.find(o => o.id === catId)?.name ?? catId}
+                  - {modCategoryOptions.find(o => o.id === catId)?.name || catId}
                 </Tag>
               ))}
             </Space>
