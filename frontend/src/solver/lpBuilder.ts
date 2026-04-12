@@ -145,6 +145,7 @@ export function buildLP(params: SolveParams): LPResult {
         params.fleaAvailable ?? true,
         params.playerLevel ?? null,
         params.barterAvailable ?? false,
+        params.barterExcludeDogtags ?? false,
       );
     }
 
