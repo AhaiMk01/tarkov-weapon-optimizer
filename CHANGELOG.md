@@ -2,6 +2,18 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.4.1] — 2026-04-12
+
+### Added
+- Mod categories now use **handbook categories** from the Tarkov.dev API, showing proper pluralized names (e.g. "Suppressors", "Magazines") instead of raw BSG category paths.
+- Build result items display full handbook hierarchy path (e.g. "Weapon parts & mods > Functional mods > Suppressors") with leaf name shown in compact mode.
+
+### Changed
+- ModFilter category dropdown now uses antd built-in search filtering with inline +/- buttons per option.
+
+### Fixed
+- Fixed "Exclude dogtag barters" checkbox having no effect — the `barterExcludeDogtags` parameter was not passed to `getAvailablePrice` during LP construction.
+
 ## [v2.4.0] — 2026-04-11
 
 ### Added
