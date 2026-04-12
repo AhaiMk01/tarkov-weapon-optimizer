@@ -352,8 +352,12 @@ function AppContent({
     for (const m of availableMods) {
       if (!m.category_id || !m.category) continue
       if (!byId.has(m.category_id)) {
+        const displayName = (m.handbook_categories && m.handbook_categories.length > 0)
+          ? m.handbook_categories[0]
+          : (m.category.split(' > ').pop() || m.category)
+
         byId.set(m.category_id, {
-          name: m.category,
+          name: displayName,
           normalized: m.category_normalized ?? '',
           childIds: m.category_child_ids ?? [],
         })

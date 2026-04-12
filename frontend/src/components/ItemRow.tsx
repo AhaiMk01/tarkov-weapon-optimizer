@@ -281,7 +281,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                <TraderIcon source={item.source} unknownLabel={unknownLabel} size={20} barterRequirements={item.barter_requirements} />
-               <Text type="secondary" style={{ fontSize: 11, wordBreak: 'break-word' }}>{item.category?.split(/->|>|\//).pop()?.trim()}</Text>
+               <Text type="secondary" style={{ fontSize: 11, wordBreak: 'break-word' }} title={item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}>{item.handbook_categories?.[0] ?? item.category?.split(/->|>|\//).pop()?.trim()}</Text>
             </div>
             {item.weight ? <Text type="secondary" style={{ fontSize: 11, whiteSpace: 'nowrap' }}>{item.weight.toFixed(2)} {t('ui.weight_unit')}</Text> : null}
           </div>
@@ -304,7 +304,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       </ItemTooltip>
       <div style={{ flex: 1, minWidth: 0 }}>
         <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
-        {item.category && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }}>{item.category}</Text>}
+        {(item.handbook_categories?.[0] || item.category) && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }} title={item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}>{item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}</Text>}
         {hasTags && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, overflow: 'hidden' }}>
             {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}

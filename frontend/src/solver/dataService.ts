@@ -9,7 +9,7 @@ import type {
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 13;
+const CACHE_VERSION = 15;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -62,6 +62,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
     imageLink
     iconLinkFallback
     iconLink
+    handbookCategories { name }
     bsgCategory {
       id
       name
@@ -262,6 +263,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
     inspectImageLink
     baseImageLink
     minLevelForFlea
+    handbookCategories { name }
     bsgCategory {
       id
       name
@@ -546,6 +548,7 @@ function extractGunStats(gun: RawItem): GunStats {
     sighting_range: props.sightingRange ?? 0,
     category: gun.bsgCategory?.name ?? '',
     category_id: gun.bsgCategory?.id ?? '',
+    handbook_categories: (gun.handbookCategories ?? []).map((c: { name: string }) => c.name),
     camera_snap: props.cameraSnap ?? 0,
     center_of_impact: props.centerOfImpact ?? 0,
     deviation_max: props.deviationMax ?? 0,
@@ -681,6 +684,7 @@ function extractModStats(mod: RawItem): ModStats {
     sighting_range: props.sightingRange ?? 0,
     category: buildCategoryPath(mod.bsgCategory),
     category_id: mod.bsgCategory?.id ?? '',
+    handbook_categories: (mod.handbookCategories ?? []).map((c: { name: string }) => c.name),
     category_normalized: mod.bsgCategory?.normalizedName ?? '',
     category_child_ids: (mod.bsgCategory?.children ?? [])
       .map((c: { id?: string }) => c.id)

@@ -42,6 +42,7 @@ export interface GunStats {
   sighting_range: number;
   category: string;
   category_id: string;
+  handbook_categories?: string[];
   camera_snap: number;
   center_of_impact: number;
   deviation_max: number;
@@ -73,6 +74,8 @@ export interface ModStats {
   sighting_range: number;
   category: string;
   category_id: string;
+  /** Plural names from handbookCategories (e.g. ['Suppressors', 'Muzzle devices', ...]) */
+  handbook_categories?: string[];
   /** BSG `bsgCategory.normalizedName` (e.g. `auxiliary-mod`). */
   category_normalized?: string;
   /** Child category ids under `bsgCategory` in the handbook tree (when non-empty, this node is not a taxonomy leaf). */

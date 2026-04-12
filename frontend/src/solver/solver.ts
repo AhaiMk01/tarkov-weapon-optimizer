@@ -136,6 +136,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
           accuracy_modifier: ms.accuracy_modifier || undefined,
           weight: ms.weight || undefined,
           category: ms.category || undefined,
+          handbook_categories: ms.handbook_categories?.length ? ms.handbook_categories : undefined,
           capacity: ms.capacity || undefined,
           sighting_range: ms.sighting_range || undefined,
         });

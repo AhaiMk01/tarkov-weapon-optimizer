@@ -71,6 +71,7 @@ export interface ItemDetail {
   accuracy_modifier?: number;
   weight?: number;
   category?: string;
+  handbook_categories?: string[];
   capacity?: number;
   sighting_range?: number;
 }
@@ -131,6 +132,7 @@ export interface ModInfo {
   /** BSG category id — must match solver `category_id` (not display name). */
   category_id: string;
   category_normalized: string;
+  handbook_categories: string[];
   category_child_ids: string[];
   icon?: string;
   capacity?: number;

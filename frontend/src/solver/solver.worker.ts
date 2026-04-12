@@ -110,6 +110,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 category: 'category' in item.stats ? item.stats.category : 'Unknown',
                 category_id: 'category_id' in item.stats ? String(item.stats.category_id) : '',
                 category_normalized: st.category_normalized ?? '',
+                handbook_categories: Array.isArray(st.handbook_categories) ? st.handbook_categories : [],
                 category_child_ids: Array.isArray(st.category_child_ids) ? st.category_child_ids : [],
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
                 capacity: st.capacity ?? 0,
@@ -217,7 +218,8 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const categoryIdToName: Record<string, string> = {};
           for (const [, item] of Object.entries(data.itemLookup)) {
             const catId = 'category_id' in item.stats ? item.stats.category_id : '';
-            const catName = 'category' in item.stats ? item.stats.category : '';
+            const st = item.stats as ModStats;
+            const catName = st.handbook_categories?.[0] ?? ('category' in item.stats ? item.stats.category : '');
             if (catId && catName) categoryIdToName[catId] = catName;
           }
 
