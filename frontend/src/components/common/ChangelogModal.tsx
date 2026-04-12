@@ -1,34 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Modal, Typography, Spin } from 'antd'
+import { Modal, Spin, theme } from 'antd'
 import { useTranslation } from 'react-i18next'
+import { marked } from 'marked'
 
-const { Title, Text } = Typography
-
-interface Section {
-  title: string
-  items: { category: string; entries: string[] }[]
-}
-
-function parseChangelog(raw: string): Section[] {
-  const lines = raw.split('\n')
-  const sections: Section[] = []
-  let current: Section | null = null
-  let currentCategory: Section['items'][0] | null = null
-
-  for (const line of lines) {
-    if (line.startsWith('## ')) {
-      current = { title: line.replace('## ', ''), items: [] }
-      sections.push(current)
-      currentCategory = null
-    } else if (line.startsWith('### ') && current) {
-      currentCategory = { category: line.replace('### ', ''), entries: [] }
-      current.items.push(currentCategory)
-    } else if (line.startsWith('- ') && currentCategory) {
-      currentCategory.entries.push(line.replace('- ', ''))
-    }
-  }
-  return sections
-}
+const { useToken } = theme
 
 interface ChangelogModalProps {
   open: boolean
@@ -36,18 +11,23 @@ interface ChangelogModalProps {
 }
 
 export function ChangelogModal({ open, onClose }: ChangelogModalProps) {
-  const [sections, setSections] = useState<Section[]>([])
+  const [html, setHtml] = useState('')
   const [loading, setLoading] = useState(false)
+  const { token } = useToken()
 
   useEffect(() => {
-    if (open && sections.length === 0) {
+    if (open && !html) {
       setLoading(true)
       fetch(`${import.meta.env.BASE_URL}CHANGELOG.md`)
         .then(r => r.text())
-        .then(text => setSections(parseChangelog(text)))
+        .then(text => {
+          // Skip the "# Changelog" title and description line
+          const body = text.replace(/^#\s+Changelog\s*\n+.*?\n/, '')
+          setHtml(marked.parse(body, { async: false }) as string)
+        })
         .finally(() => setLoading(false))
     }
-  }, [open, sections.length])
+  }, [open, html])
 
   const { t } = useTranslation()
   return (
@@ -59,21 +39,17 @@ export function ChangelogModal({ open, onClose }: ChangelogModalProps) {
       width={600}
       styles={{ body: { maxHeight: '60vh', overflowY: 'auto' } }}
     >
-      {loading ? <Spin /> : sections.map((section, i) => (
-        <div key={i} style={{ marginBottom: 16 }}>
-          <Title level={5} style={{ marginBottom: 8 }}>{section.title}</Title>
-          {section.items.map((cat, j) => (
-            <div key={j} style={{ marginBottom: 8 }}>
-              <Text strong>{cat.category}</Text>
-              <ul style={{ margin: '4px 0', paddingLeft: 20 }}>
-                {cat.entries.map((entry, k) => (
-                  <li key={k}><Text>{entry}</Text></li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      ))}
+      {loading ? <Spin /> : (
+        <div
+          className="changelog-content"
+          dangerouslySetInnerHTML={{ __html: html }}
+          style={{
+            color: token.colorText,
+            fontSize: 14,
+            lineHeight: 1.7,
+          }}
+        />
+      )}
     </Modal>
   )
 }
