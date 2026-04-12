@@ -148,6 +148,7 @@
     "table_view": "表格",
     "on": "开",
     "off": "关",
+    "reset": "重置为默认值",
     "ll_level": "LL {{level}}",
     "acc_label": "精度",
     "sight_label": "瞄准",

@@ -72,6 +72,7 @@
     "max_moa": "MOA máx. (dispersión)",
     "min_mag_unit": "cartuchos",
     "off": "Desactivado"
+    "reset": "Restablecer valores predeterminados",
   },
   "results": {
     "optimization_status": "Estado de Optimización",
@@ -167,6 +168,7 @@
     "changelog_title": "Registro de cambios",
     "on": "Sí",
     "off": "No",
+    "reset": "Restablecer valores predeterminados",
     "ll_level": "LL {{level}}"
   },
   "error": {

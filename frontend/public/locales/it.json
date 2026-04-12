@@ -72,6 +72,7 @@
     "max_moa": "MOA max. (dispersione)",
     "min_mag_unit": "colpi",
     "off": "Disattivato"
+    "reset": "Ripristina valori predefiniti",
   },
   "results": {
     "optimization_status": "Stato Ottimizzazione",
@@ -167,6 +168,7 @@
     "changelog_title": "Registro modifiche",
     "on": "Sì",
     "off": "No",
+    "reset": "Ripristina valori predefiniti",
     "ll_level": "LL {{level}}"
   },
   "error": {

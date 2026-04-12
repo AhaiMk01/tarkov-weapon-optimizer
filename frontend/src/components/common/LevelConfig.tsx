@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { Collapse, Checkbox, Slider, Segmented, Space, Divider, Typography } from 'antd'
+import { Collapse, Checkbox, Slider, Segmented, Space, Divider, Typography, Button, Tooltip } from 'antd'
+import { UndoOutlined } from '@ant-design/icons'
+import { DEFAULT_TRADER_LEVELS } from '../../solver/types'
 import type { TraderLevels } from '../../solver/types'
 
 const { Text } = Typography
@@ -35,6 +37,7 @@ export function LevelConfig({
       {
         key: 'market',
         label: <span style={{ userSelect: 'none' }}>{t('sidebar.player_trader_access')}</span>,
+        extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onFleaChange(true); onBarterChange(false); onBarterExcludeDogsChange(true); onPlayerLevelChange(60); onTraderLevelsChange({ ...DEFAULT_TRADER_LEVELS }) }} /></Tooltip>,
         children: (
           <Space direction="vertical" style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

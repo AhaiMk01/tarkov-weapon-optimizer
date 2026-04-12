@@ -72,6 +72,7 @@
     "max_moa": "Max. MOA (szórás)",
     "min_mag_unit": "töltény",
     "off": "Ki"
+    "reset": "Visszaállítás alapértelmezettre",
   },
   "results": {
     "optimization_status": "Optimalizálás állapota",
@@ -167,6 +168,7 @@
     "changelog_title": "Változásnapló",
     "on": "Be",
     "off": "Ki",
+    "reset": "Visszaállítás alapértelmezettre",
     "ll_level": "LL {{level}}"
   },
   "error": {

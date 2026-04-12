@@ -72,6 +72,7 @@
     "max_moa": "Макс. MOA (разброс)",
     "min_mag_unit": "патронов",
     "off": "Выкл"
+    "reset": "Сбросить настройки",
   },
   "results": {
     "optimization_status": "Статус оптимизации",
@@ -167,6 +168,7 @@
     "changelog_title": "Журнал изменений",
     "on": "Вкл",
     "off": "Выкл",
+    "reset": "Сбросить настройки",
     "ll_level": "LL {{level}}"
   },
   "error": {

@@ -148,6 +148,7 @@
     "table_view": "Table",
     "on": "On",
     "off": "Off",
+    "reset": "Reset to defaults",
     "ll_level": "LL {{level}}",
     "acc_label": "Acc",
     "sight_label": "Sight",

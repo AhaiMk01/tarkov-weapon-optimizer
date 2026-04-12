@@ -72,6 +72,7 @@
     "max_moa": "최대 MOA (산포)",
     "min_mag_unit": "발",
     "off": "끔"
+    "reset": "기본값으로 재설정",
   },
   "results": {
     "optimization_status": "최적화 상태",
@@ -167,6 +168,7 @@
     "changelog_title": "변경 이력",
     "on": "켜기",
     "off": "끄기",
+    "reset": "기본값으로 재설정",
     "ll_level": "LL {{level}}"
   },
   "error": {

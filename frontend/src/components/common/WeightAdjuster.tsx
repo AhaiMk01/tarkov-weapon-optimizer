@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented } from 'antd'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip } from 'antd'
+import { UndoOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
 
 const { Text } = Typography
@@ -83,6 +84,7 @@ export function WeightAdjuster({
         {
           key: 'weight',
           label: <span style={{ userSelect: 'none' }}>{t('optimize.header')}</span>,
+          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onWeightChange(33, 34, 33) }} /></Tooltip>,
           children: (
             <Space direction="vertical" style={{ width: '100%' }}>
               <Space size="small" wrap>
@@ -133,6 +135,7 @@ export function WeightAdjuster({
         {
           key: 'constraints',
           label: <span style={{ userSelect: 'none' }}>{t('constraints.header')}</span>,
+          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0) }} /></Tooltip>,
           children: (
             <Space direction="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
