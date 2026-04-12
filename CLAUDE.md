@@ -145,6 +145,11 @@ When adding translations, add keys to `zh.json` first (source of truth), then sy
 
 Only include web app (v2.0.0+) history in the changelog. Pre-web-app Python versions are not tracked.
 
+## Pre-Commit Checklist
+
+- Run `npx tsc --noEmit` (or `npm run build --prefix frontend`) and fix all TypeScript errors before committing.
+- Sync i18n: ensure all locale files in `frontend/public/locales/` have the same keys as `zh.json`. Fill missing keys with English fallbacks.
+
 ## Common Pitfalls
 
 - **HiGHS WASM memory / failures**: Large models can exhaust default WASM memory; use the custom build documented under `frontend/vendor/highs/`. On solve exceptions, `solver.ts` sets a **corrupted** flag and re-instantiates HiGHS on the next call.

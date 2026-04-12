@@ -29,7 +29,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
   const { t } = useTranslation()
   const { token } = useToken()
   const svgRef = useRef<SVGSVGElement>(null)
-  const [hoveredPoint, setHoveredPoint] = useState<{ ergo: number; recoil: number; price: number } | null>(null)
+  const [dragging, setDragging] = useState(false)
   const toSVG = useCallback((ergo: number, recoil: number, price: number) => {
     const total = ergo + recoil + price
     const e = ergo / total
@@ -52,40 +52,41 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const p = 1 - e - r
     return { e: Math.max(0, Math.min(1, e)), r: Math.max(0, Math.min(1, r)), p: Math.max(0, Math.min(1, p)) }
   }, [])
-  const handleClick = useCallback((ev: React.MouseEvent<SVGSVGElement>) => {
+  const svgCoords = useCallback((ev: React.MouseEvent<SVGSVGElement> | MouseEvent) => {
     const svg = svgRef.current
-    if (!svg) return
+    if (!svg) return null
     const rect = svg.getBoundingClientRect()
     const scaleX = width / rect.width
     const scaleY = height / rect.height
     const x = (ev.clientX - rect.left) * scaleX
     const y = (ev.clientY - rect.top) * scaleY
-    const { e: ergo, r: recoil, p: price } = toBarycentric(x, y)
+    return { x, y }
+  }, [])
+  const applyPoint = useCallback((ev: React.MouseEvent<SVGSVGElement> | MouseEvent) => {
+    const coords = svgCoords(ev)
+    if (!coords) return
+    const { e: ergo, r: recoil, p: price } = toBarycentric(coords.x, coords.y)
     const total = ergo + recoil + price
     const ergoNorm = Math.round((ergo / total) * 100)
     const recoilNorm = Math.round((recoil / total) * 100)
     const priceNorm = 100 - ergoNorm - recoilNorm
     onChange(ergoNorm, recoilNorm, priceNorm)
-  }, [onChange, toBarycentric])
-  const handleMouseMove = useCallback((ev: React.MouseEvent<SVGSVGElement>) => {
-    const svg = svgRef.current
-    if (!svg) return
-    const rect = svg.getBoundingClientRect()
-    const scaleX = width / rect.width
-    const scaleY = height / rect.height
-    const x = (ev.clientX - rect.left) * scaleX
-    const y = (ev.clientY - rect.top) * scaleY
-    const { e: ergo, r: recoil, p: price } = toBarycentric(x, y)
-    if (ergo >= 0 && recoil >= 0 && price >= 0) {
-      const total = ergo + recoil + price
-      const ergoNorm = Math.round((ergo / total) * 100)
-      const recoilNorm = Math.round((recoil / total) * 100)
-      const priceNorm = 100 - ergoNorm - recoilNorm
-      setHoveredPoint({ ergo: ergoNorm, recoil: recoilNorm, price: priceNorm })
-    } else {
-      setHoveredPoint(null)
+  }, [onChange, toBarycentric, svgCoords])
+  const handleMouseDown = useCallback((ev: React.MouseEvent<SVGSVGElement>) => {
+    ev.preventDefault()
+    setDragging(true)
+    applyPoint(ev)
+    const handleMouseMove = (moveEv: MouseEvent) => {
+      applyPoint(moveEv)
     }
-  }, [toBarycentric])
+    const handleMouseUp = () => {
+      setDragging(false)
+      window.removeEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+    window.addEventListener('mousemove', handleMouseMove)
+    window.addEventListener('mouseup', handleMouseUp)
+  }, [applyPoint])
   const gridLines = []
   for (let i = 1; i < 10; i++) {
     const t = i / 10
@@ -99,17 +100,18 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const leftEnd = toSVG(0, 1 - t, t)
     gridLines.push(<line key={`left-${i}`} x1={leftStart.x} y1={leftStart.y} x2={leftEnd.x} y2={leftEnd.y} stroke={token.colorBorderSecondary} strokeWidth={0.5} />)
   }
-  const displayPoint = hoveredPoint || { ergo: ergoWeight, recoil: recoilWeight, price: priceWeight }
-  const displaySVG = toSVG(displayPoint.ergo, displayPoint.recoil, displayPoint.price)
+  const displaySVG = toSVG(ergoWeight, recoilWeight, priceWeight)
+  const total = ergoWeight + recoilWeight + priceWeight
+  const pctErgo = total > 0 ? Math.round(ergoWeight / total * 100) : 33
+  const pctRecoil = total > 0 ? Math.round(recoilWeight / total * 100) : 34
+  const pctPrice = total > 0 ? 100 - pctErgo - pctRecoil : 33
   return (
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: '100%', height: 'auto', cursor: 'crosshair', userSelect: 'none' }}
-        onClick={handleClick}
-        onMouseMove={handleMouseMove}
-        onMouseLeave={() => setHoveredPoint(null)}
+        style={{ width: '100%', height: 'auto', cursor: dragging ? 'grabbing' : 'crosshair', userSelect: 'none' }}
+        onMouseDown={handleMouseDown}
       >
         <polygon
           points={`${topX},${topY} ${rightX},${rightY} ${leftX},${leftY}`}
@@ -120,7 +122,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
         <g>{gridLines}</g>
         <g style={{ fontSize: 12, fontWeight: 600 }}>
           <text x={topX} y={topY - 22} textAnchor="middle" fill={token.colorPrimary} style={{ fontSize: 11, opacity: 0.85 }}>
-            {displayPoint.ergo}%
+            {pctErgo}%
           </text>
           <text x={topX} y={topY - 6} textAnchor="middle" fill={token.colorPrimary}>
             {t('sidebar.ergonomics')}
@@ -129,16 +131,16 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
             {t('item.recoil')}
           </text>
           <text x={rightX + 15} y={rightY + 18} fill={token.colorSuccess} style={{ fontSize: 10, opacity: 0.7 }}>
-            {displayPoint.recoil}%
+            {pctRecoil}%
           </text>
           <text x={leftX - 15} y={leftY + 4} textAnchor="end" fill={token.colorWarning}>
             {t('sidebar.price')}
           </text>
           <text x={leftX - 15} y={leftY + 18} textAnchor="end" fill={token.colorWarning} style={{ fontSize: 10, opacity: 0.7 }}>
-            {displayPoint.price}%
+            {pctPrice}%
           </text>
         </g>
-        <circle cx={displaySVG.x} cy={displaySVG.y} r={6} fill={token.colorWarning} stroke={token.colorBgContainer} strokeWidth={2} />
+        <circle cx={displaySVG.x} cy={displaySVG.y} r={6} fill={token.colorWarning} stroke={token.colorBgContainer} strokeWidth={2} style={{ pointerEvents: 'none' }} />
       </svg>
     </div>
   )

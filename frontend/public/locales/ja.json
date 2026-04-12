@@ -71,8 +71,8 @@
     "min_mag_capacity": "最小マガジン容量",
     "max_moa": "最大 MOA（散布）",
     "min_mag_unit": "発",
-    "off": "オフ"
-    "reset": "デフォルトにリセット",
+    "off": "オフ",
+    "reset": "デフォルトにリセット"
   },
   "results": {
     "optimization_status": "最適化状態",

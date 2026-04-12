@@ -71,8 +71,8 @@
     "min_mag_capacity": "Capacitate min. încărcător",
     "max_moa": "MOA max. (dispersie)",
     "min_mag_unit": "cartușe",
-    "off": "Dezactivat"
-    "reset": "Resetare la implicit",
+    "off": "Dezactivat",
+    "reset": "Resetare la implicit"
   },
   "results": {
     "optimization_status": "Stare Optimizare",

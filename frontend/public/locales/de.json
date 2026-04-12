@@ -71,8 +71,8 @@
     "min_mag_capacity": "Min. Magazinkapazität",
     "max_moa": "Max. MOA (Streuung)",
     "min_mag_unit": "Schuss",
-    "off": "Aus"
-    "reset": "Auf Standard zurücksetzen",
+    "off": "Aus",
+    "reset": "Auf Standard zurücksetzen"
   },
   "results": {
     "optimization_status": "Optimierungsstatus",

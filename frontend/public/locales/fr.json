@@ -71,8 +71,8 @@
     "min_mag_capacity": "Capacité min. du chargeur",
     "max_moa": "MOA max. (dispersion)",
     "min_mag_unit": "cartouches",
-    "off": "Désactivé"
-    "reset": "Réinitialiser par défaut",
+    "off": "Désactivé",
+    "reset": "Réinitialiser par défaut"
   },
   "results": {
     "optimization_status": "Statut d'optimisation",

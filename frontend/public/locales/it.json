@@ -71,8 +71,8 @@
     "min_mag_capacity": "Capacità min. caricatore",
     "max_moa": "MOA max. (dispersione)",
     "min_mag_unit": "colpi",
-    "off": "Disattivato"
-    "reset": "Ripristina valori predefiniti",
+    "off": "Disattivato",
+    "reset": "Ripristina valori predefiniti"
   },
   "results": {
     "optimization_status": "Stato Ottimizzazione",

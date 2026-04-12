@@ -71,8 +71,8 @@
     "min_mag_capacity": "최소 탄창 용량",
     "max_moa": "최대 MOA (산포)",
     "min_mag_unit": "발",
-    "off": "끔"
-    "reset": "기본값으로 재설정",
+    "off": "끔",
+    "reset": "기본값으로 재설정"
   },
   "results": {
     "optimization_status": "최적화 상태",

@@ -71,8 +71,8 @@
     "min_mag_capacity": "Min. tárkapacitás",
     "max_moa": "Max. MOA (szórás)",
     "min_mag_unit": "töltény",
-    "off": "Ki"
-    "reset": "Visszaállítás alapértelmezettre",
+    "off": "Ki",
+    "reset": "Visszaállítás alapértelmezettre"
   },
   "results": {
     "optimization_status": "Optimalizálás állapota",

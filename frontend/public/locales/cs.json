@@ -71,8 +71,8 @@
     "min_mag_capacity": "Min. kapacita zásobníku",
     "max_moa": "Max. MOA (rozptyl)",
     "min_mag_unit": "nábojů",
-    "off": "Vyp."
-    "reset": "Obnovit výchozí",
+    "off": "Vyp.",
+    "reset": "Obnovit výchozí"
   },
   "results": {
     "optimization_status": "Stav optimalizace",

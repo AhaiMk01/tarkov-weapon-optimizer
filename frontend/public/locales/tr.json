@@ -71,8 +71,8 @@
     "min_mag_capacity": "Min. şarjör kapasitesi",
     "max_moa": "Maks. MOA (saçılma)",
     "min_mag_unit": "mermi",
-    "off": "Kapalı"
-    "reset": "Varsayılanlara sıfırla",
+    "off": "Kapalı",
+    "reset": "Varsayılanlara sıfırla"
   },
   "results": {
     "optimization_status": "Optimizasyon Durumu",

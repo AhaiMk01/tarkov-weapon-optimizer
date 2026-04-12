@@ -71,8 +71,8 @@
     "min_mag_capacity": "Capacidad mín. de cargador",
     "max_moa": "MOA máx. (dispersión)",
     "min_mag_unit": "cartuchos",
-    "off": "Desactivado"
-    "reset": "Restablecer valores predeterminados",
+    "off": "Desactivado",
+    "reset": "Restablecer valores predeterminados"
   },
   "results": {
     "optimization_status": "Estado de Optimización",

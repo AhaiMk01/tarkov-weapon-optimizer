@@ -71,8 +71,8 @@
     "min_mag_capacity": "Min. pojemność magazynka",
     "max_moa": "Maks. MOA (rozrzut)",
     "min_mag_unit": "naboi",
-    "off": "Wył."
-    "reset": "Przywróć domyślne",
+    "off": "Wył.",
+    "reset": "Przywróć domyślne"
   },
   "results": {
     "optimization_status": "Status Optymalizacji",

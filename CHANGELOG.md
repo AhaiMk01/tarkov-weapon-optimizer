@@ -2,6 +2,13 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.4.2] — 2026-04-12
+
+### Fixed
+- Language selector flags now render as SVG images (via `flag-icons`) instead of Unicode emoji, fixing broken display on Windows Chrome.
+- Ternary plot (triangle weight picker) click and drag now works correctly in Chrome — dot no longer follows cursor on hover, only responds to click/drag.
+- Fixed broken JSON syntax in 14 locale files (missing commas in constraints section).
+
 ## [v2.4.1] — 2026-04-12
 
 ### Added
