@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space, Table } from 'antd'
-import { TraderIcon, ItemRow, ItemTooltip, priceCell } from '../ItemRow'
+import { TraderIcon, ItemRow, ItemTooltip } from '../ItemRow'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 
 const { Text } = Typography
