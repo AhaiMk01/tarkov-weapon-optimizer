@@ -14,6 +14,7 @@ import { ExplorePanel } from './components/explore/ExplorePanel'
 import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
+import 'flag-icons/css/flag-icons.min.css'
 import { amoledDarkToken } from './theme/amoledDark'
 import { darkPaletteTokens, type DarkPaletteId } from './theme/darkPalettes'
 import { lightPaletteTokens, type LightPaletteId } from './theme/lightPalettes'
@@ -30,22 +31,22 @@ const TARKOV_DEV_URL = 'https://tarkov.dev'
 const { useToken } = theme
 
 const languages = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'ru', name: 'Русский', flag: '🇷🇺' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' },
-  { code: 'es', name: 'Español', flag: '🇪🇸' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'it', name: 'Italiano', flag: '🇮🇹' },
-  { code: 'ja', name: '日本語', flag: '🇯🇵' },
-  { code: 'ko', name: '한국어', flag: '🇰🇷' },
-  { code: 'pl', name: 'Polski', flag: '🇵🇱' },
-  { code: 'pt', name: 'Português', flag: '🇧🇷' },
-  { code: 'tr', name: 'Türkçe', flag: '🇹🇷' },
-  { code: 'cs', name: 'Čeština', flag: '🇨🇿' },
-  { code: 'hu', name: 'Magyar', flag: '🇭🇺' },
-  { code: 'ro', name: 'Română', flag: '🇷🇴' },
-  { code: 'sk', name: 'Slovenčina', flag: '🇸🇰' },
+  { code: 'en', name: 'English', country: 'us' },
+  { code: 'ru', name: 'Русский', country: 'ru' },
+  { code: 'zh', name: '中文', country: 'cn' },
+  { code: 'es', name: 'Español', country: 'es' },
+  { code: 'de', name: 'Deutsch', country: 'de' },
+  { code: 'fr', name: 'Français', country: 'fr' },
+  { code: 'it', name: 'Italiano', country: 'it' },
+  { code: 'ja', name: '日本語', country: 'jp' },
+  { code: 'ko', name: '한국어', country: 'kr' },
+  { code: 'pl', name: 'Polski', country: 'pl' },
+  { code: 'pt', name: 'Português', country: 'br' },
+  { code: 'tr', name: 'Türkçe', country: 'tr' },
+  { code: 'cs', name: 'Čeština', country: 'cz' },
+  { code: 'hu', name: 'Magyar', country: 'hu' },
+  { code: 'ro', name: 'Română', country: 'ro' },
+  { code: 'sk', name: 'Slovenčina', country: 'sk' },
 ]
 
 /** Current theme preference (canonical localStorage key). */
@@ -865,7 +866,7 @@ function AppContent({
                       onChange={(v) => setThemeChoice(v as ThemeChoice)}
                       options={themeSelectOptions}
                     />
-                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
+                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><span className={`fi fi-${l.country}`} style={{ marginRight: 6 }} />{l.name}</span> }))} />
                   </div>
                 )}
               >
@@ -894,7 +895,7 @@ function AppContent({
                   onChange={(v) => setThemeChoice(v as ThemeChoice)}
                   options={themeSelectOptions}
                 />
-                <Select style={{ width: 140 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: `${l.flag} ${l.name}` }))} />
+                <Select style={{ width: 160 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><span className={`fi fi-${l.country}`} style={{ marginRight: 6 }} />{l.name}</span> }))} />
               </Space>
             )}
             </div>
