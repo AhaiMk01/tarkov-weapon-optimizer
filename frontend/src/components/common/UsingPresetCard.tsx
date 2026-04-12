@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space } from 'antd'
-import { TraderIcon, ItemRow } from '../ItemRow'
+import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space, Table } from 'antd'
+import { TraderIcon, ItemRow, ItemTooltip, priceCell } from '../ItemRow'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 
 const { Text } = Typography
@@ -21,9 +21,10 @@ interface UsingPresetCardProps {
   preset: Preset
   retainedItems?: ItemDetail[]
   compactMode?: boolean
+  viewMode?: 'detailed' | 'compact' | 'table'
 }
 
-export function UsingPresetCard({ preset, retainedItems, compactMode }: UsingPresetCardProps) {
+export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }: UsingPresetCardProps) {
   const { t } = useTranslation()
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md
@@ -88,7 +89,57 @@ export function UsingPresetCard({ preset, retainedItems, compactMode }: UsingPre
                 <Tag color="blue">{retainedItems.length}</Tag>
               </Space>
             ),
-            children: (
+            children: viewMode === 'table' ? (
+              <Table
+                dataSource={retainedItems}
+                rowKey="id"
+                pagination={false}
+                size="small"
+                scroll={{ x: 'max-content' }}
+                columns={[
+                  {
+                    title: t('ui.table_item'),
+                    dataIndex: 'name',
+                    key: 'name',
+                    render: (text: string, record: ItemDetail) => (
+                      <ItemTooltip item={record}>
+                        <Text strong style={{ fontSize: 13, cursor: 'pointer' }}>{text}</Text>
+                      </ItemTooltip>
+                    ),
+                  },
+                  {
+                    title: t('ui.table_category'),
+                    dataIndex: 'category',
+                    key: 'category',
+                    render: (_: string, record: ItemDetail) => <Text type="secondary" style={{ fontSize: 12 }}>{record.handbook_categories?.[0] ?? record.category?.split(/->|>|\//).pop()?.trim()}</Text>,
+                  },
+                  {
+                    title: t('sidebar.ergonomics'),
+                    dataIndex: 'ergonomics',
+                    key: 'ergonomics',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (val: number) => val !== 0 ? <Tag color={val > 0 ? 'blue' : 'red'} style={{ margin: 0 }}>{val > 0 ? '+' : ''}{val}</Tag> : null,
+                  },
+                  {
+                    title: t('ui.vert_recoil'),
+                    dataIndex: 'recoil_modifier',
+                    key: 'recoil',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (val: number) => val !== 0 ? <Tag color={val < 0 ? 'green' : 'red'} style={{ margin: 0 }}>{(val * 100).toFixed(1)}%</Tag> : null,
+                  },
+                  {
+                    title: t('ui.weight_label'),
+                    dataIndex: 'weight',
+                    key: 'weight',
+                    width: 100,
+                    align: 'right' as const,
+                    render: (val: number) => val ? <Tag color="cyan" style={{ margin: 0 }}>{val.toFixed(2)}kg</Tag> : null,
+                  },
+                ]}
+              />
+            ) : (
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${compactMode ? 380 : 480}px), 1fr))`, gap: 8 }}>
                 {retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}
               </div>

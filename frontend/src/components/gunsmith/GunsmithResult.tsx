@@ -56,6 +56,7 @@ export function GunsmithResult({ result, viewMode, onViewModeChange, optimizing,
               preset={result.selected_preset}
               retainedItems={result.selected_items.filter(i => result.selected_preset!.items.includes(i.id))}
               compactMode={viewMode === 'compact' || viewMode === 'table'}
+              viewMode={viewMode}
             />
           )}
           <BuildManifest result={result} viewMode={viewMode} onViewModeChange={onViewModeChange} onCopy={onCopy} weaponId={weaponId} />

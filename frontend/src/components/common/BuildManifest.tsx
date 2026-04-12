@@ -73,7 +73,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
       title: t('ui.table_category'),
       dataIndex: 'category',
       key: 'category',
-      render: (cat: string) => <Text type="secondary" style={{ fontSize: 12 }}>{cat?.split(/->|>|\//).pop()?.trim()}</Text>
+      render: (_: string, record: ItemDetail) => <Text type="secondary" style={{ fontSize: 12 }}>{record.handbook_categories?.[0] ?? record.category?.split(/->|>|\//).pop()?.trim()}</Text>
     },
     {
       title: t('sidebar.ergonomics'),
