@@ -72,6 +72,48 @@ An advanced, **client-side** weapon build optimizer for Escape from Tarkov. This
 5. **Open in Browser**:
    Visit `http://localhost:5173` (or the URL shown in your terminal).
 
+## 🐳 Deploy with Docker (Self-Hosting)
+
+Pre-built multi-arch images (`linux/amd64`, `linux/arm64`) are published to GitHub Container Registry on every release tag — suitable for home servers, VPSes, and Raspberry Pi.
+
+> The container is a pure static web server (`nginx:alpine`, ~30 MB). All optimization runs client-side in the visitor's browser via WASM — no backend, no database, no env vars needed.
+
+### Quick Start (Pre-built Image)
+
+```bash
+docker run -d \
+  --name tarkov-optimizer \
+  --restart unless-stopped \
+  -p 8080:80 \
+  ghcr.io/ahaimk01/tarkov-optimizer-frontend:latest
+```
+
+Then open `http://<your-host>:8080`.
+
+Change `8080` to any host port; the container always listens on `80` internally. Pin a specific version by replacing `:latest` with e.g. `:2.4.2`.
+
+### Build from Source
+
+If you'd rather build the image locally (e.g. from a fork):
+
+```bash
+cd frontend
+docker build -t tarkov-optimizer .
+docker run --rm -d -p 8080:80 --name tarkov-optimizer tarkov-optimizer
+```
+
+### Behind a Reverse Proxy
+
+The app is a single-page application served with an SPA fallback, so any deep-linked URL (e.g. `/explore`) returns `index.html`. Proxy the container's port as you would any static site — no WebSockets, no sticky sessions needed.
+
+### Stop / Update
+
+```bash
+docker stop tarkov-optimizer && docker rm tarkov-optimizer
+docker pull ghcr.io/ahaimk01/tarkov-optimizer-frontend:latest
+# then re-run the "Quick Start" command
+```
+
 ## 🧪 Verification & Testing
 
 This project includes a rigorous verification suite to ensure the stability and correctness of the WASM solver.

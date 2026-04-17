@@ -72,6 +72,48 @@
 5. **在浏览器中打开**:
    访问 `http://localhost:5173` (或终端中显示的 URL)。
 
+## 🐳 使用 Docker 部署（自托管）
+
+每次发布打标签（`v*`）时，都会向 GitHub Container Registry 推送多架构预构建镜像（`linux/amd64`、`linux/arm64`），适用于家庭服务器、VPS 以及树莓派等设备。
+
+> 容器仅是一个纯静态 Web 服务器（`nginx:alpine`，约 30 MB）。所有优化计算都在访问者浏览器中通过 WASM 运行——无需后端、无需数据库、无需环境变量。
+
+### 快速开始（使用预构建镜像）
+
+```bash
+docker run -d \
+  --name tarkov-optimizer \
+  --restart unless-stopped \
+  -p 8080:80 \
+  ghcr.io/ahaimk01/tarkov-optimizer-frontend:latest
+```
+
+然后访问 `http://<your-host>:8080`。
+
+宿主端口 `8080` 可改为任意端口；容器内部始终监听 `80`。如需锁定具体版本，可将 `:latest` 替换为例如 `:2.4.2`。
+
+### 从源码构建
+
+如需自行构建镜像（例如基于分叉仓库）：
+
+```bash
+cd frontend
+docker build -t tarkov-optimizer .
+docker run --rm -d -p 8080:80 --name tarkov-optimizer tarkov-optimizer
+```
+
+### 置于反向代理之后
+
+应用为单页面应用（SPA），已配置 fallback 路由，任何深链 URL（例如 `/explore`）都会返回 `index.html`。按普通静态站点反代容器端口即可——无需 WebSocket、无需会话粘连。
+
+### 停止 / 更新
+
+```bash
+docker stop tarkov-optimizer && docker rm tarkov-optimizer
+docker pull ghcr.io/ahaimk01/tarkov-optimizer-frontend:latest
+# 然后重新执行“快速开始”中的命令
+```
+
 ## 🧪 验证与测试
 
 本项目包含一套严格的验证套件，以确 WASM 求解器的稳定性和正确性。
