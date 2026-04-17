@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.4.3] — 2026-04-17
+
+### Added
+- **Docker self-hosting support**: Multi-architecture (`linux/amd64`, `linux/arm64`) Docker images are now built and published to GitHub Container Registry on every release tag. Pull with `docker pull ghcr.io/ahaimk01/tarkov-optimizer-frontend:latest` — see README for the full quick-start recipe.
+- Dockerfile and nginx config in `frontend/` support SPA fallback routing, correct WASM MIME handling, and tiered caching (immutable for hashed assets and `.wasm`, no-cache for locales and CHANGELOG).
+
 ## [v2.4.2] — 2026-04-12
 
 ### Fixed
