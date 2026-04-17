@@ -38,6 +38,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=semver,pattern={{major}}
+            type=ref,event=branch
+            type=sha,prefix=sha-
           labels: |
             org.opencontainers.image.title=Tarkov Weapon Optimizer
             org.opencontainers.image.description=Client-side weapon mod optimizer for Escape from Tarkov
