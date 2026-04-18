@@ -70,6 +70,8 @@
     "max_weight_tag": "Gewicht <=",
     "min_mag_capacity": "Min. Magazinkapazität",
     "max_moa": "Max. MOA (Streuung)",
+    "exact_moa_floor": "Exact slider floor",
+    "exact_moa_floor_tooltip": "When on, the slider minimum is computed by actually solving for the best achievable MOA (slower, exact). When off, the minimum is a theoretical estimate that may not be reachable in practice.",
     "min_mag_unit": "Schuss",
     "off": "Aus",
     "reset": "Auf Standard zurücksetzen"

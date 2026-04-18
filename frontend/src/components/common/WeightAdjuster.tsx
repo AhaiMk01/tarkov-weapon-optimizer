@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip } from 'antd'
-import { UndoOutlined } from '@ant-design/icons'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin } from 'antd'
+import { UndoOutlined, QuestionCircleOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
 
 const { Text } = Typography
@@ -30,6 +30,9 @@ interface WeightAdjusterProps {
   maxMOA: number
   onMaxMOAChange: (v: number) => void
   moaRange: { base: number; min: number; max: number }
+  useExactMOAFloor: boolean
+  onUseExactMOAFloorChange: (v: boolean) => void
+  computingMOAFloor: boolean
 }
 
 export function WeightAdjuster({
@@ -52,6 +55,9 @@ export function WeightAdjuster({
   maxMOA,
   onMaxMOAChange,
   moaRange,
+  useExactMOAFloor,
+  onUseExactMOAFloorChange,
+  computingMOAFloor,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
   const [slidersMode, setSlidersMode] = useState(() => localStorage.getItem('weightUiSliders') === 'true')
@@ -205,18 +211,30 @@ export function WeightAdjuster({
                     }} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                   </div>
                   {useMOA && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-                      <Slider
-                        style={{ flex: 1, margin: '4px 8px 24px 8px' }}
-                        value={maxMOA}
-                        onChange={onMaxMOAChange}
-                        min={sliderMin}
-                        max={sliderMax}
-                        step={0.01}
-                        marks={moaMarks}
-                      />
-                      <InputNumber size="small" style={{ width: 70 }} min={sliderMin} max={sliderMax} step={0.01} value={maxMOA} onChange={(v) => onMaxMOAChange(v || sliderMin)} />
-                    </div>
+                    <>
+                      <div style={toggleRowStyle}>
+                        <Space size={4}>
+                          <Text type="secondary" style={labelStyle}>{t('constraints.exact_moa_floor')}</Text>
+                          <Tooltip title={t('constraints.exact_moa_floor_tooltip')}>
+                            <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                          </Tooltip>
+                          {computingMOAFloor && <Spin size="small" />}
+                        </Space>
+                        <Segmented size="small" value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+                        <Slider
+                          style={{ flex: 1, margin: '4px 8px 24px 8px' }}
+                          value={maxMOA}
+                          onChange={onMaxMOAChange}
+                          min={sliderMin}
+                          max={sliderMax}
+                          step={0.01}
+                          marks={moaMarks}
+                        />
+                        <InputNumber size="small" style={{ width: 70 }} min={sliderMin} max={sliderMax} step={0.01} value={maxMOA} onChange={(v) => onMaxMOAChange(v || sliderMin)} />
+                      </div>
+                    </>
                   )}
                 </div>
               )}

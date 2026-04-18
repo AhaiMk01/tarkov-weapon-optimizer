@@ -70,6 +70,8 @@
     "max_weight_tag": "重量 ≤",
     "min_mag_capacity": "最小弹匣容量",
     "max_moa": "最大 MOA（散布）",
+    "exact_moa_floor": "精确下限",
+    "exact_moa_floor_tooltip": "开启时，滑块最小值由求解器实际求解得出（较慢但精确）。关闭时，最小值为理论估算，可能实际无法达到。",
     "min_mag_unit": "发",
     "off": "关"
   },

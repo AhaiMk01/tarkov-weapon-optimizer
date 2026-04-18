@@ -70,6 +70,8 @@
     "max_weight_tag": "Greutate <=",
     "min_mag_capacity": "Capacitate min. încărcător",
     "max_moa": "MOA max. (dispersie)",
+    "exact_moa_floor": "Exact slider floor",
+    "exact_moa_floor_tooltip": "When on, the slider minimum is computed by actually solving for the best achievable MOA (slower, exact). When off, the minimum is a theoretical estimate that may not be reachable in practice.",
     "min_mag_unit": "cartușe",
     "off": "Dezactivat",
     "reset": "Resetare la implicit"

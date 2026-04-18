@@ -137,6 +137,8 @@ export interface ModInfo {
   icon?: string;
   capacity?: number;
   accuracy_modifier?: number;
+  /** Barrel-only: centerOfImpact × 100 (MOA). Replaces weapon base_moa when installed. */
+  base_moa?: number;
 }
 
 export interface ModCategoryOption {
@@ -285,4 +287,8 @@ export const getGunsmithTasks = async (gameMode: GameMode = 'regular', lang: str
 
 export const getStatus = async (gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ timestamp: number }> => {
   return sendWorkerMessage<{ timestamp: number }>('getStatus', { lang, gameMode });
+};
+
+export const computeMOAFloor = async (weaponId: string, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ floor: number }> => {
+  return sendWorkerMessage<{ floor: number }>('computeMOAFloor', { weaponId, lang, gameMode });
 };

@@ -220,6 +220,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
       ... on ItemPropertiesBarrel {
         ergonomics
         recoilModifier
+        centerOfImpact
         slots {
           id
           name
@@ -671,6 +672,7 @@ function extractModStats(mod: RawItem): ModStats {
     ergonomics: ergo,
     recoil_modifier: recoilMod,
     accuracy_modifier: mod.accuracyModifier ?? 0,
+    center_of_impact: props.centerOfImpact ?? 0,
     offers,
     purchasable,
     reference_price_rub: !purchasable ? referencePriceRub : undefined,

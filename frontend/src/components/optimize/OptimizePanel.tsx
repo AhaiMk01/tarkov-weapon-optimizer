@@ -36,6 +36,9 @@ interface OptimizePanelProps {
   maxMOA: number
   onMaxMOAChange: (v: number) => void
   moaRange: { base: number; min: number; max: number }
+  useExactMOAFloor: boolean
+  onUseExactMOAFloorChange: (v: boolean) => void
+  computingMOAFloor: boolean
   availableMods: ModInfo[]
   loadingMods: boolean
   modCategoryOptions: ModCategoryOption[]
@@ -99,6 +102,9 @@ export function OptimizePanel(props: OptimizePanelProps) {
         maxMOA={props.maxMOA}
         onMaxMOAChange={props.onMaxMOAChange}
         moaRange={props.moaRange}
+        useExactMOAFloor={props.useExactMOAFloor}
+        onUseExactMOAFloorChange={props.onUseExactMOAFloorChange}
+        computingMOAFloor={props.computingMOAFloor}
       />
       <ModFilter
         availableMods={props.availableMods}

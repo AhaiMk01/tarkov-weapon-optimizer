@@ -47,7 +47,7 @@ function getCompatMap(data: LoadedData, weaponId: string): CompatibilityMap {
 }
 
 interface WorkerMessage {
-  type: 'loadData' | 'optimize' | 'explore' | 'getInfo' | 'getWeaponMods' | 'getGunsmithTasks' | 'getStatus';
+  type: 'loadData' | 'optimize' | 'explore' | 'getInfo' | 'getWeaponMods' | 'getGunsmithTasks' | 'getStatus' | 'computeMOAFloor';
   id: number;
   payload: {
     lang?: string;
@@ -115,6 +115,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
                 capacity: st.capacity ?? 0,
                 accuracy_modifier: st.accuracy_modifier ?? 0,
+                base_moa: (st.center_of_impact ?? 0) * 100,
               };
             })
             .filter(Boolean)
@@ -269,6 +270,59 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           });
 
           self.postMessage({ type: 'result', id, payload: { tasks } });
+          break;
+        }
+
+        case 'computeMOAFloor': {
+          const weaponId = payload.weaponId!;
+          const data = await getOrLoadData(lang, gameMode);
+          const compatMap = getCompatMap(data, weaponId);
+          const weapon = data.itemLookup[weaponId];
+
+          // Base solve params — minimize MOA by focusing the objective on accuracy-positive choices.
+          // We use default weights but tighten max_moa iteratively; each solve must honor the new cap,
+          // so feasible achievable MOA shrinks monotonically until the LP becomes infeasible.
+          const baseParams = {
+            weaponId,
+            itemLookup: data.itemLookup,
+            compatibilityMap: compatMap,
+            ergoWeight: 0,
+            recoilWeight: 0,
+            priceWeight: 1,
+            fleaAvailable: true,
+            barterAvailable: true,
+            barterExcludeDogtags: false,
+            preciseMode: resolvePreciseFlag(normalizePrecisionRequest('auto'), compatMap),
+          };
+
+          const wStats = weapon?.type === 'gun' ? weapon.stats : null;
+          if (!wStats || (wStats.center_of_impact ?? 0) <= 0) {
+            self.postMessage({ type: 'result', id, payload: { floor: 0 } });
+            break;
+          }
+
+          // Seed: solve unconstrained to get a feasible achieved MOA.
+          let floor = Infinity;
+          const seed = await solve({ ...baseParams, maxMOA: undefined });
+          if (seed.status !== 'optimal' || !seed.final_stats) {
+            self.postMessage({ type: 'result', id, payload: { floor: 0 } });
+            break;
+          }
+          floor = seed.final_stats.moa;
+
+          const MAX_ITERS = 12;
+          const EPS = 0.005;
+          for (let iter = 0; iter < MAX_ITERS; iter++) {
+            const target = floor - EPS;
+            if (target <= 0) break;
+            const res = await solve({ ...baseParams, maxMOA: target });
+            if (res.status !== 'optimal' || !res.final_stats) break;
+            const achieved = res.final_stats.moa;
+            if (achieved >= floor - 1e-4) break;
+            floor = achieved;
+          }
+
+          self.postMessage({ type: 'result', id, payload: { floor: Math.round(floor * 1000) / 1000 } });
           break;
         }
 

@@ -65,6 +65,8 @@
     "min_ergo": "Min Ergonomics",
     "min_mag_capacity": "Min Magazine Capacity",
     "max_moa": "Max MOA (Spread)",
+    "exact_moa_floor": "Exact slider floor",
+    "exact_moa_floor_tooltip": "When on, the slider's minimum is computed by actually solving for the best achievable MOA (slower, exact). When off, the minimum is a theoretical estimate that may not be reachable in practice.",
     "min_mag_unit": "rounds",
     "off": "Off",
     "min_ergo_tag": "Ergo >=",

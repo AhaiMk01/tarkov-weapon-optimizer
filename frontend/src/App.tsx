@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined } from '@ant-design/icons'
-import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks } from './api/client'
+import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
@@ -218,6 +218,10 @@ function AppContent({
   const [minMagCapacity, setMinMagCapacity] = useState(0)
   const [useMOA, setUseMOA] = useState(false)
   const [maxMOA, setMaxMOA] = useState(0)
+  const [useExactMOAFloor, setUseExactMOAFloor] = useState<boolean>(() => localStorage.getItem('useExactMOAFloor') !== 'false')
+  const [exactMOAFloor, setExactMOAFloor] = useState<number | null>(null)
+  const [computingMOAFloor, setComputingMOAFloor] = useState(false)
+  const moaFloorRequestSeq = useRef(0)
   const [includedModIds, setIncludedModIds] = useState<string[]>([])
   const [excludedModIds, setExcludedModIds] = useState<string[]>([])
   const [modSearch, setModSearch] = useState('')
@@ -269,6 +273,7 @@ function AppContent({
   }, [gameMode])
   useEffect(() => { localStorage.setItem('viewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('solverPrecision', solverPrecision) }, [solverPrecision])
+  useEffect(() => { localStorage.setItem('useExactMOAFloor', String(useExactMOAFloor)) }, [useExactMOAFloor])
   useEffect(() => {
     localStorage.setItem(
       LEVEL_CONFIG_STORAGE_KEY,
@@ -319,6 +324,24 @@ function AppContent({
     // t follows i18n.language (already a dependency)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid redundant effect re-runs
   }, [gameMode, i18n.language])
+
+  useEffect(() => {
+    setExactMOAFloor(null)
+    if (!selectedGunId || !useExactMOAFloor) return
+    const seq = ++moaFloorRequestSeq.current
+    setComputingMOAFloor(true)
+    computeMOAFloor(selectedGunId, gameMode, i18n.language || 'en')
+      .then(({ floor }) => {
+        if (seq !== moaFloorRequestSeq.current) return
+        setExactMOAFloor(floor > 0 ? floor : null)
+        setComputingMOAFloor(false)
+      })
+      .catch(err => {
+        console.error('Failed to compute MOA floor', err)
+        if (seq !== moaFloorRequestSeq.current) return
+        setComputingMOAFloor(false)
+      })
+  }, [selectedGunId, gameMode, i18n.language, useExactMOAFloor])
 
   useEffect(() => {
     if (!selectedGunId) return
@@ -385,28 +408,44 @@ function AppContent({
   const moaRange = useMemo(() => {
     const baseMOA = selectedGun?.base_moa ?? 0
     if (baseMOA <= 0) return { base: 0, min: 0, max: 0 }
-    // Group by category, take best/worst single mod per category (one per slot)
-    // Positive acc mod = better accuracy (lower MOA), negative = worse (higher MOA)
-    // finalMOA = baseMOA * (1 - totalAccMod / 100)
-    // Best (lowest) MOA: use max positive mod per category
-    // Worst (highest) MOA: use min negative mod per category
+    // Effective base MOA can be replaced by a barrel mod's centerOfImpact (stored as base_moa on mods).
+    // Widest achievable range: combine barrel-COI extremes with accuracy-modifier extremes.
     const bestByCategory: Record<string, number> = {}
     const worstByCategory: Record<string, number> = {}
+    let minBarrelMOA = Infinity
+    let maxBarrelMOA = -Infinity
     for (const m of availableMods) {
       const acc = m.accuracy_modifier ?? 0
-      if (acc === 0) continue
-      const cat = m.category_id || 'unknown'
-      if (acc > 0) bestByCategory[cat] = Math.max(bestByCategory[cat] ?? 0, acc)
-      if (acc < 0) worstByCategory[cat] = Math.min(worstByCategory[cat] ?? 0, acc)
+      if (acc !== 0) {
+        const cat = m.category_id || 'unknown'
+        if (acc > 0) bestByCategory[cat] = Math.max(bestByCategory[cat] ?? 0, acc)
+        if (acc < 0) worstByCategory[cat] = Math.min(worstByCategory[cat] ?? 0, acc)
+      }
+      const barrelMOA = m.base_moa ?? 0
+      if (barrelMOA > 0) {
+        if (barrelMOA < minBarrelMOA) minBarrelMOA = barrelMOA
+        if (barrelMOA > maxBarrelMOA) maxBarrelMOA = barrelMOA
+      }
     }
     const bestMod = Object.values(bestByCategory).reduce((s, v) => s + v, 0)
     const worstMod = Object.values(worstByCategory).reduce((s, v) => s + v, 0)
+    // If the weapon has any replaceable-barrel mod with a COI, its barrel slot is (almost always) required,
+    // so the weapon's intrinsic COI is unreachable. Use only barrel COIs as the achievable base range.
+    const hasReplaceableBarrel = minBarrelMOA < Infinity
+    const effMin = hasReplaceableBarrel ? minBarrelMOA : baseMOA
+    const effMax = hasReplaceableBarrel ? maxBarrelMOA : baseMOA
+    const effBase = hasReplaceableBarrel ? minBarrelMOA : baseMOA
+    // If we've computed the exact achievable floor via solver, use it — it respects slot-graph
+    // reachability, conflicts, and barrel-specific mod compatibility. Otherwise fall back to the
+    // theoretical per-category sum (an upper bound on improvements that may be unreachable).
+    const approxMin = Math.max(0, effMin * (1 - bestMod / 100))
+    const sliderMin = exactMOAFloor != null ? exactMOAFloor : approxMin
     return {
-      base: Math.round(baseMOA * 100) / 100,
-      min: Math.round(Math.max(0, baseMOA * (1 - bestMod / 100)) * 100) / 100,
-      max: Math.round(baseMOA * (1 - worstMod / 100) * 100) / 100,
+      base: Math.round(effBase * 100) / 100,
+      min: Math.round(sliderMin * 100) / 100,
+      max: Math.round(effMax * (1 - worstMod / 100) * 100) / 100,
     }
-  }, [selectedGun, availableMods])
+  }, [selectedGun, availableMods, exactMOAFloor])
   const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
@@ -685,7 +724,9 @@ function AppContent({
               maxMOA={maxMOA}
               onMaxMOAChange={setMaxMOA}
               moaRange={moaRange}
-
+              useExactMOAFloor={useExactMOAFloor}
+              onUseExactMOAFloorChange={setUseExactMOAFloor}
+              computingMOAFloor={computingMOAFloor}
             />
           }
           right={

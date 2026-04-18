@@ -59,6 +59,8 @@ export interface ModStats {
   ergonomics: number;
   recoil_modifier: number;
   accuracy_modifier: number;
+  /** Barrel-only: replaces weapon's intrinsic centerOfImpact when installed. 0 for non-barrel mods. */
+  center_of_impact: number;
   offers: OfferInfo[];
   /** False when API has no buyFor prices (barter-only / unlisted); build may still use x_i=1 (FiR) with buy_i=0 */
   purchasable: boolean;

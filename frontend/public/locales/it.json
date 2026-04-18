@@ -70,6 +70,8 @@
     "max_weight_tag": "Peso <=",
     "min_mag_capacity": "Capacità min. caricatore",
     "max_moa": "MOA max. (dispersione)",
+    "exact_moa_floor": "Exact slider floor",
+    "exact_moa_floor_tooltip": "When on, the slider minimum is computed by actually solving for the best achievable MOA (slower, exact). When off, the minimum is a theoretical estimate that may not be reachable in practice.",
     "min_mag_unit": "colpi",
     "off": "Disattivato",
     "reset": "Ripristina valori predefiniti"

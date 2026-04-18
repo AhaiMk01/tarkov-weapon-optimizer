@@ -100,6 +100,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
     let totalRecoilMod = 0;
     let totalAccuracyMod = 0;
     let totalWeight = wStats.weight || 0;
+    let barrelCOI = 0; // if a replaceable barrel is installed, its centerOfImpact replaces the weapon's intrinsic COI
 
     const detailedItems: ItemDetail[] = [];
 
@@ -118,6 +119,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         totalRecoilMod += ms.recoil_modifier || 0;
         totalAccuracyMod += ms.accuracy_modifier || 0;
         totalWeight += ms.weight || 0;
+        if ((ms.center_of_impact ?? 0) > 0) barrelCOI = ms.center_of_impact;
 
         // Initialize with no price/source — the buy loop below will fill in
         // price and source only for items that are actually purchased (buy_i=1).
@@ -254,8 +256,8 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
     const totalPrice = buyPrice + basePrice;
 
-    const baseCOI = wStats.center_of_impact || 0;
-    const finalMOA = baseCOI * (1 - totalAccuracyMod / 100) * 100;
+    const effectiveBaseCOI = barrelCOI > 0 ? barrelCOI : (wStats.center_of_impact || 0);
+    const finalMOA = effectiveBaseCOI * (1 - totalAccuracyMod / 100) * 100;
 
     const finalStats: FinalStats = {
       ergonomics: Math.max(0, Math.min(100, totalErgo)),

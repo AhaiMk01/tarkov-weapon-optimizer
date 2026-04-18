@@ -2,6 +2,16 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.5.0] — 2026-04-18
+
+### Added
+- **Max MOA constraint now honors replaceable barrels**: For weapons like the VPO-215 and M700, swapping to a different barrel correctly changes the displayed MOA and the hard-constraint limit uses the installed barrel's `centerOfImpact` (not the weapon's intrinsic one). LP uses an exact big-M per-barrel formulation.
+- **Exact slider floor toggle** (new "精确下限" / "Exact slider floor" row under Max MOA): when on, the slider's minimum is computed by actually solving for the lowest achievable MOA (respects slot reachability, conflicts, and barrel-specific compatibility). When off, the minimum is a theoretical per-category estimate that may not be reachable in practice. Toggle state persists to localStorage.
+
+### Fixed
+- Slider range no longer includes the weapon's intrinsic `centerOfImpact` for weapons with a required replaceable-barrel slot — the intrinsic value is never reachable in those cases.
+- Displayed final MOA now correctly reflects the installed barrel's COI instead of always using the weapon's intrinsic value.
+
 ## [v2.4.3] — 2026-04-17
 
 ### Added

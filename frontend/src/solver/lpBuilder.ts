@@ -277,6 +277,7 @@ export function buildLP(params: SolveParams): LPResult {
   const item_capacity: number[] = [0]; // magazine capacity
   const item_sighting_range: number[] = [0]; // sighting range
   const item_accuracy_mod: number[] = [0]; // accuracy modifier (percentage * 100 for integer math)
+  const item_barrel_coi: number[] = [0]; // barrel-only: centerOfImpact when installed (replaces weapon base), 0 for non-barrel mods
 
   for (let idx = 1; idx <= n_items; idx++) {
     const iid = indexToItem[idx];
@@ -301,6 +302,7 @@ export function buildLP(params: SolveParams): LPResult {
       item_capacity.push(ms.capacity ?? 0);
       item_sighting_range.push(ms.sighting_range ?? 0);
       item_accuracy_mod.push(Math.round((ms.accuracy_modifier ?? 0) * 100));
+      item_barrel_coi.push(ms.center_of_impact ?? 0);
     } else {
       item_ergo.push(0);
       item_recoil.push(0);
@@ -311,6 +313,7 @@ export function buildLP(params: SolveParams): LPResult {
       item_capacity.push(0);
       item_sighting_range.push(0);
       item_accuracy_mod.push(0);
+      item_barrel_coi.push(0);
     }
   }
 
@@ -838,21 +841,52 @@ export function buildLP(params: SolveParams): LPResult {
     }
   }
 
-  // maxMOA: finalMOA = baseCOI * (1 - sum(acc_mod)/100) * 100 <= maxMOA
-  // Rearranged: sum(acc_mod * x_i) >= (1 - maxMOA / (baseCOI * 100)) * 100
-  // Using scaled values (acc_mod * 100): sum(item_accuracy_mod[i] * x_i) >= (100 - maxMOA/baseCOI) * 100
+  // maxMOA: finalMOA = effectiveBaseCOI * (1 - sum(acc_mod)/100) * 100 <= maxMOA
+  //   effectiveBaseCOI = coi_b when a barrel mod b is installed, else weapon base COI (w).
+  // For replaceable-barrel weapons: add one big-M constraint per barrel b (exact, since x_b is binary):
+  //   when x_b = 1:  coi_b * 100 - (coi_b/100) * sum(item_accuracy_mod[i] * x_i) <= maxMOA
+  //   rearranged:    (coi_b/100) * sum(acc_mod[i] * x_i) - M * x_b >= coi_b*100 - maxMOA - M
+  //   when x_b = 0, RHS is very negative so the constraint is vacuous.
+  // For fixed-barrel weapons (no barrel mods with coi > 0): use weapon's intrinsic COI with the
+  // simple linear form sum_i (w * acc_mod[i] / 100) * x_i >= w*100 - maxMOA.
   if (params.maxMOA != null) {
     const baseCOI = weaponStats.center_of_impact ?? 0;
     if (baseCOI > 0) {
-      const minAccModScaled = Math.round((100 - params.maxMOA / baseCOI) * 100);
-      const accTerms: string[] = [];
+      const barrelIndices: number[] = [];
       for (let i = 1; i <= n_items; i++) {
-        if (item_accuracy_mod[i] !== 0) {
-          accTerms.push(`${item_accuracy_mod[i]} x_${i}`);
-        }
+        if (item_barrel_coi[i] > 0) barrelIndices.push(i);
       }
-      if (accTerms.length > 0) {
-        L(`  moa_lim: ${formatTerms(accTerms)} >= ${minAccModScaled}`);
+
+      if (barrelIndices.length > 0) {
+        const BIG_M = 1000; // safe upper bound on |coi_b*100 − maxMOA|; real values are well under 20.
+        for (const bIdx of barrelIndices) {
+          const coi_b = item_barrel_coi[bIdx];
+          const coeffByItem = new Map<number, number>();
+          for (let i = 1; i <= n_items; i++) {
+            if (item_accuracy_mod[i] !== 0) {
+              coeffByItem.set(i, (coi_b * item_accuracy_mod[i]) / 100);
+            }
+          }
+          coeffByItem.set(bIdx, (coeffByItem.get(bIdx) ?? 0) - BIG_M);
+          const terms: string[] = [];
+          for (const [i, c] of coeffByItem) {
+            if (c !== 0) terms.push(`${c.toFixed(6)} x_${i}`);
+          }
+          const rhs = coi_b * 100 - params.maxMOA - BIG_M;
+          L(`  moa_lim_${bIdx}: ${formatTerms(terms)} >= ${rhs.toFixed(6)}`);
+        }
+      } else {
+        const terms: string[] = [];
+        for (let i = 1; i <= n_items; i++) {
+          if (item_accuracy_mod[i] !== 0) {
+            const coef = (baseCOI * item_accuracy_mod[i]) / 100;
+            terms.push(`${coef.toFixed(6)} x_${i}`);
+          }
+        }
+        if (terms.length > 0) {
+          const rhs = 100 * baseCOI - params.maxMOA;
+          L(`  moa_lim: ${formatTerms(terms)} >= ${rhs.toFixed(6)}`);
+        }
       }
     }
   }
