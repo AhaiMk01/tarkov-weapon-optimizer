@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.5.2] — 2026-04-18
+
+### Fixed
+- **Exact MOA floor now correctly reports the true minimum** for weapons like M16A1/ADAR where accuracy-boosting mods exist deep in the slot graph. Previously the floor-finder used linear cap-tightening (0.005 per step, 12 iterations) which stalled well above the true minimum on weapons where the seed solve starts far from the floor. Switched to binary search between `[0, seed]`, converging in ~log₂ iterations — M16A1 now reports 2.34 instead of 3.0.
+- **Max MOA constraint is now correctly enforced when the LP skips all COI-barrel mods**. Previously, for weapons where the barrel slot is optional and replacement barrels carry a `centerOfImpact`, the big-M constraints only bound *when* a COI-barrel was installed. If the LP chose to skip every COI-barrel (using the intrinsic COI instead), the constraint became vacuous and the user's cap could be silently violated. Added a fallback constraint using the weapon's intrinsic COI, guarded by the sum of barrel indicator variables so it only binds when no COI-barrel is installed.
+
 ## [v2.5.1] — 2026-04-18
 
 ### Fixed

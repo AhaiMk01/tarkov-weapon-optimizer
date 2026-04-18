@@ -279,9 +279,8 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const compatMap = getCompatMap(data, weaponId);
           const weapon = data.itemLookup[weaponId];
 
-          // Base solve params — minimize MOA by focusing the objective on accuracy-positive choices.
-          // We use default weights but tighten max_moa iteratively; each solve must honor the new cap,
-          // so feasible achievable MOA shrinks monotonically until the LP becomes infeasible.
+          // Base solve params — weights don't matter for finding the minimum feasible MOA, only the
+          // maxMOA constraint does. We use priceWeight=1 to get a deterministic tie-breaker.
           const baseParams = {
             weaponId,
             itemLookup: data.itemLookup,
@@ -301,28 +300,34 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             break;
           }
 
-          // Seed: solve unconstrained to get a feasible achieved MOA.
-          let floor = Infinity;
+          // Seed: solve unconstrained to get a feasible achieved MOA (upper bound).
           const seed = await solve({ ...baseParams, maxMOA: undefined });
           if (seed.status !== 'optimal' || !seed.final_stats) {
             self.postMessage({ type: 'result', id, payload: { floor: 0 } });
             break;
           }
-          floor = seed.final_stats.moa;
 
-          const MAX_ITERS = 12;
-          const EPS = 0.005;
+          // Binary search for the minimum feasible MOA between [lo, hi].
+          // Invariant: hi is achievable (a build exists with MOA ≤ hi); lo is infeasible.
+          // Each iteration solves with cap=mid; if optimal, we tighten hi to the achieved value
+          // (not just mid — the LP often reports a build strictly below the cap). If infeasible,
+          // mid becomes the new lo. log2(seed/EPS) iterations converges within MAX_ITERS.
+          let hi = seed.final_stats.moa;
+          let lo = 0;
+          const EPS = 0.02;
+          const MAX_ITERS = 14;
           for (let iter = 0; iter < MAX_ITERS; iter++) {
-            const target = floor - EPS;
-            if (target <= 0) break;
-            const res = await solve({ ...baseParams, maxMOA: target });
-            if (res.status !== 'optimal' || !res.final_stats) break;
-            const achieved = res.final_stats.moa;
-            if (achieved >= floor - 1e-4) break;
-            floor = achieved;
+            if (hi - lo <= EPS) break;
+            const mid = (lo + hi) / 2;
+            const res = await solve({ ...baseParams, maxMOA: mid });
+            if (res.status === 'optimal' && res.final_stats) {
+              hi = Math.min(hi, res.final_stats.moa);
+            } else {
+              lo = mid;
+            }
           }
 
-          self.postMessage({ type: 'result', id, payload: { floor: Math.round(floor * 1000) / 1000 } });
+          self.postMessage({ type: 'result', id, payload: { floor: Math.round(hi * 1000) / 1000 } });
           break;
         }
 
