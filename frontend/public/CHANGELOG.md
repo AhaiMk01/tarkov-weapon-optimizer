@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.5.1] — 2026-04-18
+
+### Fixed
+- **Docker image no longer restart-loops on IPv6-enabled hosts**: nginx now listens on both IPv4 (`listen 80`) and IPv6 (`listen [::]:80`), and the container's HEALTHCHECK probes `127.0.0.1` instead of `localhost` to avoid IPv6 resolution ambiguity. Previously, on Docker daemons with IPv6 enabled, the healthcheck could resolve `localhost` to `::1`, fail against the v4-only nginx, mark the container unhealthy, and trigger a restart loop.
+- Removed unused `constraints.reset` key from 14 non-en/zh locale files.
+
 ## [v2.5.0] — 2026-04-18
 
 ### Added

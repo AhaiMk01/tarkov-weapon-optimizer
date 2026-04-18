@@ -73,8 +73,7 @@
     "exact_moa_floor": "Exact slider floor",
     "exact_moa_floor_tooltip": "When on, the slider minimum is computed by actually solving for the best achievable MOA (slower, exact). When off, the minimum is a theoretical estimate that may not be reachable in practice.",
     "min_mag_unit": "cartușe",
-    "off": "Dezactivat",
-    "reset": "Resetare la implicit"
+    "off": "Dezactivat"
   },
   "results": {
     "optimization_status": "Stare Optimizare",
