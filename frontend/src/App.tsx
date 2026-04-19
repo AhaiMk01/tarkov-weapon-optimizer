@@ -440,10 +440,13 @@ function AppContent({
     // theoretical per-category sum (an upper bound on improvements that may be unreachable).
     const approxMin = Math.max(0, effMin * (1 - bestMod / 100))
     const sliderMin = exactMOAFloor != null ? exactMOAFloor : approxMin
+    // Round min UP and max UP so the displayed range always contains feasible solves.
+    // Rounding min DOWN (e.g. 0.4836 → 0.48) would make the slider's leftmost position infeasible
+    // because the true floor is 0.4836. Ceiling preserves feasibility at the cost of +0.005 MOA.
     return {
       base: Math.round(effBase * 100) / 100,
-      min: Math.round(sliderMin * 100) / 100,
-      max: Math.round(effMax * (1 - worstMod / 100) * 100) / 100,
+      min: Math.ceil(sliderMin * 100) / 100,
+      max: Math.ceil(effMax * (1 - worstMod / 100) * 100) / 100,
     }
   }, [selectedGun, availableMods, exactMOAFloor])
   const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])

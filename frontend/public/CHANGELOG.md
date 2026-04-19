@@ -2,6 +2,17 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.5.3] — 2026-04-19
+
+### Fixed
+- **MOA values now match in-game display**. The conversion factor from BSG's internal `centerOfImpact` units to displayed MOA was wrong: we multiplied by 100, but the correct empirical factor is ≈ **34.3** (the widely-cited Tarkov community constant). Final MOA values were therefore ~2.9× too high — e.g. VPO-215 with its long/short barrels showed 4.10/6.00 on the site vs the real in-game 1.55/2.06; M700 barrels showed 1.41–2.35 vs the real sub-1. Added `MOA_K` constant in `lpBuilder.ts`, updated the LP big-M constraints (per-barrel + fallback + fixed-barrel), the final-stats display formula, and the weapon/barrel `base_moa` fields returned by the worker.
+- Reverted a prior incorrect hypothesis that barrel COI *adds* to weapon intrinsic COI — BSG actually *replaces* when a replaceable barrel is installed, so `effectiveBaseCOI = barrelCOI > 0 ? barrelCOI : weaponCOI`.
+- **Max MOA slider's displayed min no longer renders an infeasible cap**. Previously the exact floor was rounded to 2 decimals with `Math.round` — e.g. M700's true floor 0.4836 displayed as 0.48, but setting `maxMOA = 0.48` was infeasible. Switched to `Math.ceil` so the slider's leftmost position is always reachable (costs +0.005 MOA of display precision). Removed a re-flooring pass inside `WeightAdjuster` that undid the ceiling.
+
+### Changed
+- Result stats card now shows MOA with 3 decimal places (was 2), so small accuracy differences between mod choices are visible.
+- Removed the orange base-MOA tick from the Max MOA slider — for weapons with replaceable barrels the intrinsic value isn't reachable anyway, and showing it cluttered the slider.
+
 ## [v2.5.2] — 2026-04-18
 
 ### Fixed

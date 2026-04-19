@@ -7,6 +7,7 @@ import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
 import { solve } from './solver.ts';
+import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
 import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats } from './types.ts';
 import type { OptimizeRequest, ExploreRequest, OptimizeResponse, ExploreResponse, ExplorePoint } from '../api/client.ts';
@@ -87,7 +88,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
               image,
               category: gun.bsgCategory?.name ?? 'Unknown',
               caliber: (props.caliber ?? '').replace('Caliber', '').trim(),
-              base_moa: (props.centerOfImpact ?? 0) * 100,
+              base_moa: (props.centerOfImpact ?? 0) * MOA_K,
             };
           }).sort((a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name));
           self.postMessage({ type: 'result', id, payload: { guns: gunList } });
@@ -115,7 +116,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
                 capacity: st.capacity ?? 0,
                 accuracy_modifier: st.accuracy_modifier ?? 0,
-                base_moa: (st.center_of_impact ?? 0) * 100,
+                base_moa: (st.center_of_impact ?? 0) * MOA_K,
               };
             })
             .filter(Boolean)

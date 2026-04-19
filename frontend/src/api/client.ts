@@ -137,7 +137,7 @@ export interface ModInfo {
   icon?: string;
   capacity?: number;
   accuracy_modifier?: number;
-  /** Barrel-only: centerOfImpact × 100 (MOA). Replaces weapon base_moa when installed. */
+  /** Barrel-only: centerOfImpact × MOA_K (MOA units). Replaces weapon base_moa when installed. */
   base_moa?: number;
 }
 

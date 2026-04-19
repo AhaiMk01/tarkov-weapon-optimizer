@@ -21,6 +21,14 @@ import { getAvailablePrice } from './dataService';
 // Public interface
 // ---------------------------------------------------------------------------
 
+/**
+ * Empirical conversion factor from BSG's centerOfImpact units to in-game MOA.
+ *   displayed_MOA = effectiveCenterOfImpact * (1 - totalAccuracyMod/100) * MOA_K
+ * Calibrated against in-game values (VPO-215 short/long barrel: 2.06 / 1.55 MOA;
+ * M700 barrels: <1 MOA). Value matches the widely-cited Tarkov community constant.
+ */
+export const MOA_K = 34.3;
+
 export interface LPResult {
   lpString: string;
   indexToItem: string[];   // 1-indexed: indexToItem[1] = first item ID
@@ -841,17 +849,19 @@ export function buildLP(params: SolveParams): LPResult {
     }
   }
 
-  // maxMOA: finalMOA = effectiveBaseCOI * (1 - sum(acc_mod)/100) * 100 <= maxMOA
-  //   effectiveBaseCOI = coi_b when a barrel mod b is installed, else weapon intrinsic COI (w).
+  // maxMOA: finalMOA = effectiveBaseCOI * (1 - sum(acc_mod_real)/100) * MOA_K <= maxMOA
+  //   where acc_mod_real = item_accuracy_mod[i] / 100 (stored pre-scaled by ×100).
+  //   effectiveBaseCOI = coi_b when a barrel mod b is installed (REPLACES weapon intrinsic),
+  //                      else weapon intrinsic COI (w).
   // When any reachable barrel mod has coi > 0, we add one big-M constraint per barrel b (exact, x_b binary):
-  //   when x_b = 1:  coi_b * 100 - (coi_b/100) * sum(item_accuracy_mod[i] * x_i) <= maxMOA
-  //   rearranged:    (coi_b/100) * sum(acc_mod[i] * x_i) - M * x_b >= coi_b*100 - maxMOA - M
+  //   when x_b = 1:  coi_b*K - (coi_b*K/10000) * sum(item_accuracy_mod[i] * x_i) <= maxMOA
+  //   rearranged:    (coi_b*K/10000) * sum(acc_mod[i] * x_i) - M * x_b >= coi_b*K - maxMOA - M
   //   when x_b = 0, RHS is very negative so the constraint is vacuous.
   // If the barrel slot is OPTIONAL (weapon can run with no COI-barrel installed — e.g. M16A1),
   // we also add an intrinsic-COI fallback guarded by sum_b(x_b): when no barrel is installed,
   // the intrinsic COI applies. When any barrel is installed, a BIG_M * sum_b(x_b) term makes it vacuous.
   // For fixed-barrel weapons (no reachable barrel mods with coi > 0): use the simple linear form with
-  // the weapon's intrinsic COI: sum_i (w * acc_mod[i] / 100) * x_i >= w*100 - maxMOA.
+  // the weapon's intrinsic COI: (w*K/10000) * sum_i(acc_mod[i] * x_i) >= w*K - maxMOA.
   if (params.maxMOA != null) {
     const baseCOI = weaponStats.center_of_impact ?? 0;
     if (baseCOI > 0) {
@@ -861,13 +871,14 @@ export function buildLP(params: SolveParams): LPResult {
       }
 
       if (barrelIndices.length > 0) {
-        const BIG_M = 1000; // safe upper bound on |coi_b*100 − maxMOA|; real values are well under 20.
+        const BIG_M = 1000; // safe upper bound on |coi_b*K − maxMOA|; real values are well under 100.
         for (const bIdx of barrelIndices) {
           const coi_b = item_barrel_coi[bIdx];
+          const coefScale = (coi_b * MOA_K) / 10000;
           const coeffByItem = new Map<number, number>();
           for (let i = 1; i <= n_items; i++) {
             if (item_accuracy_mod[i] !== 0) {
-              coeffByItem.set(i, (coi_b * item_accuracy_mod[i]) / 100);
+              coeffByItem.set(i, coefScale * item_accuracy_mod[i]);
             }
           }
           coeffByItem.set(bIdx, (coeffByItem.get(bIdx) ?? 0) - BIG_M);
@@ -875,18 +886,19 @@ export function buildLP(params: SolveParams): LPResult {
           for (const [i, c] of coeffByItem) {
             if (c !== 0) terms.push(`${c.toFixed(6)} x_${i}`);
           }
-          const rhs = coi_b * 100 - params.maxMOA - BIG_M;
+          const rhs = coi_b * MOA_K - params.maxMOA - BIG_M;
           L(`  moa_lim_${bIdx}: ${formatTerms(terms)} >= ${rhs.toFixed(6)}`);
         }
 
         // Fallback for "no COI-barrel installed" — intrinsic COI applies.
-        //   (w/100) * sum_i(acc_mod[i] * x_i) + M * sum_b(x_b) >= w*100 - maxMOA
+        //   (w*K/10000) * sum_i(acc_mod[i] * x_i) + M * sum_b(x_b) >= w*K - maxMOA
         // When sum_b(x_b) >= 1 (any barrel installed), M dominates and the constraint is vacuous.
         // When sum_b(x_b) = 0 (no barrel — weapon uses intrinsic COI), the constraint binds.
+        const fbScale = (baseCOI * MOA_K) / 10000;
         const fallbackCoeffs = new Map<number, number>();
         for (let i = 1; i <= n_items; i++) {
           if (item_accuracy_mod[i] !== 0) {
-            fallbackCoeffs.set(i, (baseCOI * item_accuracy_mod[i]) / 100);
+            fallbackCoeffs.set(i, fbScale * item_accuracy_mod[i]);
           }
         }
         for (const bIdx of barrelIndices) {
@@ -897,19 +909,20 @@ export function buildLP(params: SolveParams): LPResult {
           if (c !== 0) fbTerms.push(`${c.toFixed(6)} x_${i}`);
         }
         if (fbTerms.length > 0) {
-          const fbRhs = baseCOI * 100 - params.maxMOA;
+          const fbRhs = baseCOI * MOA_K - params.maxMOA;
           L(`  moa_lim_nobarrel: ${formatTerms(fbTerms)} >= ${fbRhs.toFixed(6)}`);
         }
       } else {
+        const coefScale = (baseCOI * MOA_K) / 10000;
         const terms: string[] = [];
         for (let i = 1; i <= n_items; i++) {
           if (item_accuracy_mod[i] !== 0) {
-            const coef = (baseCOI * item_accuracy_mod[i]) / 100;
+            const coef = coefScale * item_accuracy_mod[i];
             terms.push(`${coef.toFixed(6)} x_${i}`);
           }
         }
         if (terms.length > 0) {
-          const rhs = 100 * baseCOI - params.maxMOA;
+          const rhs = baseCOI * MOA_K - params.maxMOA;
           L(`  moa_lim: ${formatTerms(terms)} >= ${rhs.toFixed(6)}`);
         }
       }

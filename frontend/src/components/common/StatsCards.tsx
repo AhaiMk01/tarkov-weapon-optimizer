@@ -28,7 +28,7 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       </Card>
       {moa != null && moa > 0 && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-          <Statistic title={t('ui.moa_label')} value={moa.toFixed(2)} />
+          <Statistic title={t('ui.moa_label')} value={moa.toFixed(3)} />
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>

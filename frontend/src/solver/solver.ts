@@ -6,7 +6,7 @@
 import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
 import type { SolveParams, GunLookupEntry } from './types';
 export type { SolveParams } from './types';
-import { buildLP } from './lpBuilder';
+import { buildLP, MOA_K } from './lpBuilder';
 import { getAvailablePrice } from './dataService';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -100,7 +100,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
     let totalRecoilMod = 0;
     let totalAccuracyMod = 0;
     let totalWeight = wStats.weight || 0;
-    let barrelCOI = 0; // if a replaceable barrel is installed, its centerOfImpact replaces the weapon's intrinsic COI
+    let barrelCOI = 0; // installed replaceable barrel's centerOfImpact — REPLACES weapon's intrinsic COI when present
 
     const detailedItems: ItemDetail[] = [];
 
@@ -256,8 +256,12 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
     const totalPrice = buyPrice + basePrice;
 
-    const effectiveBaseCOI = barrelCOI > 0 ? barrelCOI : (wStats.center_of_impact || 0);
-    const finalMOA = effectiveBaseCOI * (1 - totalAccuracyMod / 100) * 100;
+    // BSG formula: displayed MOA = effectiveBaseCOI * (1 - accMod/100) * MOA_K
+    // effectiveBaseCOI = installed replaceable-barrel COI if any, else weapon's intrinsic COI.
+    // MOA_K (~34.3) is the empirical conversion from BSG's centerOfImpact units to in-game MOA.
+    const intrinsicCOI = wStats.center_of_impact || 0;
+    const effectiveBaseCOI = barrelCOI > 0 ? barrelCOI : intrinsicCOI;
+    const finalMOA = effectiveBaseCOI * (1 - totalAccuracyMod / 100) * MOA_K;
 
     const finalStats: FinalStats = {
       ergonomics: Math.max(0, Math.min(100, totalErgo)),

@@ -72,15 +72,13 @@ export function WeightAdjuster({
   const pctRecoil = total > 0 ? Math.round(recoilWeight / total * 100) : 34
   const pctPrice = total > 0 ? 100 - pctErgo - pctRecoil : 33
 
-  // MOA slider range
-  const sliderMin = Math.floor(moaRange.min * 100) / 100
-  const sliderMax = Math.ceil(moaRange.max * 100) / 100
+  // MOA slider range — moaRange.min is already ceilinged to 2 decimals in App.tsx so the
+  // slider's leftmost position is always feasible; avoid re-flooring here.
+  const sliderMin = moaRange.min
+  const sliderMax = moaRange.max
   const moaMarks: Record<number, { label: string; style?: React.CSSProperties } | string> = {}
   if (moaRange.base > 0) {
     moaMarks[sliderMin] = { label: sliderMin.toFixed(2), style: { fontSize: 12 } }
-    if (moaRange.base > sliderMin && moaRange.base < sliderMax) {
-      moaMarks[moaRange.base] = { label: moaRange.base.toFixed(2), style: { fontSize: 12, color: '#faad14' } }
-    }
     moaMarks[sliderMax] = { label: sliderMax.toFixed(2), style: { fontSize: 12 } }
   }
 
