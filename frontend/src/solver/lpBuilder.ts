@@ -24,8 +24,6 @@ import { getAvailablePrice } from './dataService';
 /**
  * Empirical conversion factor from BSG's centerOfImpact units to in-game MOA.
  *   displayed_MOA = effectiveCenterOfImpact * (1 - totalAccuracyMod/100) * MOA_K
- * Calibrated against in-game values (VPO-215 short/long barrel: 2.06 / 1.55 MOA;
- * M700 barrels: <1 MOA). Value matches the widely-cited Tarkov community constant.
  */
 export const MOA_K = 34.3;
 
@@ -398,6 +396,7 @@ export function buildLP(params: SolveParams): LPResult {
     if (entry.type !== 'mod') continue;
     const conflicts = (entry as ModLookupEntry).conflicting_items;
     for (const cid of conflicts) {
+      if (cid === iid) continue; // self-conflict: tarkov.dev sometimes lists an item as its own conflict (e.g. AK-105 5.56 barrel) — would emit `conf_N: x_i + x_i <= 1` which HiGHS rejects as a duplicate column
       if (!itemIndex.has(cid)) continue;
       const a = itemIndex.get(iid)!;
       const b = itemIndex.get(cid)!;
@@ -853,15 +852,12 @@ export function buildLP(params: SolveParams): LPResult {
   //   where acc_mod_real = item_accuracy_mod[i] / 100 (stored pre-scaled by ×100).
   //   effectiveBaseCOI = coi_b when a barrel mod b is installed (REPLACES weapon intrinsic),
   //                      else weapon intrinsic COI (w).
-  // When any reachable barrel mod has coi > 0, we add one big-M constraint per barrel b (exact, x_b binary):
+  // Per-barrel big-M constraint (exact, x_b binary):
   //   when x_b = 1:  coi_b*K - (coi_b*K/10000) * sum(item_accuracy_mod[i] * x_i) <= maxMOA
   //   rearranged:    (coi_b*K/10000) * sum(acc_mod[i] * x_i) - M * x_b >= coi_b*K - maxMOA - M
   //   when x_b = 0, RHS is very negative so the constraint is vacuous.
-  // If the barrel slot is OPTIONAL (weapon can run with no COI-barrel installed — e.g. M16A1),
-  // we also add an intrinsic-COI fallback guarded by sum_b(x_b): when no barrel is installed,
-  // the intrinsic COI applies. When any barrel is installed, a BIG_M * sum_b(x_b) term makes it vacuous.
-  // For fixed-barrel weapons (no reachable barrel mods with coi > 0): use the simple linear form with
-  // the weapon's intrinsic COI: (w*K/10000) * sum_i(acc_mod[i] * x_i) >= w*K - maxMOA.
+  // If the barrel slot is OPTIONAL, also add an intrinsic-COI fallback guarded by sum_b(x_b).
+  // For fixed-barrel weapons: (w*K/10000) * sum_i(acc_mod[i] * x_i) >= w*K - maxMOA.
   if (params.maxMOA != null) {
     const baseCOI = weaponStats.center_of_impact ?? 0;
     if (baseCOI > 0) {
@@ -891,9 +887,6 @@ export function buildLP(params: SolveParams): LPResult {
         }
 
         // Fallback for "no COI-barrel installed" — intrinsic COI applies.
-        //   (w*K/10000) * sum_i(acc_mod[i] * x_i) + M * sum_b(x_b) >= w*K - maxMOA
-        // When sum_b(x_b) >= 1 (any barrel installed), M dominates and the constraint is vacuous.
-        // When sum_b(x_b) = 0 (no barrel — weapon uses intrinsic COI), the constraint binds.
         const fbScale = (baseCOI * MOA_K) / 10000;
         const fallbackCoeffs = new Map<number, number>();
         for (let i = 1; i <= n_items; i++) {

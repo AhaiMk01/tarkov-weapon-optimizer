@@ -258,7 +258,6 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 
     // BSG formula: displayed MOA = effectiveBaseCOI * (1 - accMod/100) * MOA_K
     // effectiveBaseCOI = installed replaceable-barrel COI if any, else weapon's intrinsic COI.
-    // MOA_K (~34.3) is the empirical conversion from BSG's centerOfImpact units to in-game MOA.
     const intrinsicCOI = wStats.center_of_impact || 0;
     const effectiveBaseCOI = barrelCOI > 0 ? barrelCOI : intrinsicCOI;
     const finalMOA = effectiveBaseCOI * (1 - totalAccuracyMod / 100) * MOA_K;

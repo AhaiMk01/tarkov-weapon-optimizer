@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.5.4] — 2026-04-20
+
+### Fixed
+- **Optimization no longer fails with `Unable to read LP model` on most assault rifles** (AK-74, M4A1, AKM, AK-74M, and any weapon whose reachable-mod tree contains a self-referencing conflict). Tarkov.dev's data lists a few items in their own `conflicting_items` array, so the LP builder emitted `conf_N: x_i + x_i <= 1`, and HiGHS's CPLEX LP reader rejects duplicate columns in a constraint row, aborting the whole parse. Added a `cid === iid` guard in the conflict loop so self-conflicts are silently dropped. Smaller rifles (e.g. AKS-74U) coincidentally avoided the bug because the self-conflicting item wasn't reachable from them. Unrelated to the v2.5.x MOA work — latent since the conflict loop was introduced.
+
 ## [v2.5.3] — 2026-04-19
 
 ### Fixed
