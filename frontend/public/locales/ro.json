@@ -95,7 +95,9 @@
     "optimize_infeasible": "Nicio configurație validă cu restricțiile curente",
     "explore_empty": "Niciun punct frontieră cu restricțiile curente",
     "gunsmith_infeasible": "Sarcina de armurier nu poate fi îndeplinită",
-    "optimize_non_optimal": "Stare solver: {{status}}"
+    "optimize_non_optimal": "Stare solver: {{status}}",
+    "refresh_done": "Cache șters, reîncarcă…",
+    "refresh_failed": "Nu se poate șterge cache"
   },
   "ui": {
     "initializing": "Se inițializează...",
@@ -170,7 +172,9 @@
     "on": "Da",
     "off": "Nu",
     "reset": "Resetare la implicit",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Forțează actualizarea datelor",
+    "refresh_data_tooltip": "Șterge datele în cache și descarcă din nou de la Tarkov.dev"
   },
   "error": {
     "title": "A apărut o eroare",

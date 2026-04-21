@@ -95,7 +95,9 @@
     "optimize_infeasible": "Aucune configuration valide avec ces contraintes",
     "explore_empty": "Aucun point de frontière avec ces contraintes",
     "gunsmith_infeasible": "Impossible de satisfaire cette tâche d’armurier",
-    "optimize_non_optimal": "État du solveur : {{status}}"
+    "optimize_non_optimal": "État du solveur : {{status}}",
+    "refresh_done": "Cache vidé, rechargement…",
+    "refresh_failed": "Impossible de vider le cache"
   },
   "ui": {
     "initializing": "Initialisation...",
@@ -170,7 +172,9 @@
     "on": "Oui",
     "off": "Non",
     "reset": "Réinitialiser par défaut",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Forcer l'actualisation des données",
+    "refresh_data_tooltip": "Vider le cache et télécharger à nouveau les données depuis Tarkov.dev"
   },
   "error": {
     "title": "Une erreur s'est produite",

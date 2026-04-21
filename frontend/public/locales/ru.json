@@ -95,7 +95,9 @@
     "optimize_infeasible": "Нет подходящей сборки при текущих ограничениях",
     "explore_empty": "Нет точек фронта при текущих ограничениях",
     "gunsmith_infeasible": "Невыполнимо для задачи оружейника",
-    "optimize_non_optimal": "Статус решателя: {{status}}"
+    "optimize_non_optimal": "Статус решателя: {{status}}",
+    "refresh_done": "Кэш очищен, перезагрузка…",
+    "refresh_failed": "Не удалось очистить кэш"
   },
   "ui": {
     "initializing": "Инициализация...",
@@ -170,7 +172,9 @@
     "on": "Вкл",
     "off": "Выкл",
     "reset": "Сбросить настройки",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Принудительно обновить данные",
+    "refresh_data_tooltip": "Очистить кэш и повторно загрузить данные с Tarkov.dev"
   },
   "error": {
     "title": "Произошла ошибка",

@@ -95,7 +95,9 @@
     "optimize_infeasible": "現在の制約では有効な構成がありません",
     "explore_empty": "現在の制約ではフロンティア点がありません",
     "gunsmith_infeasible": "ガンスミスタスクを満たせません",
-    "optimize_non_optimal": "ソルバー状態: {{status}}"
+    "optimize_non_optimal": "ソルバー状態: {{status}}",
+    "refresh_done": "キャッシュをクリア、再読み込み中…",
+    "refresh_failed": "キャッシュのクリアに失敗しました"
   },
   "ui": {
     "initializing": "初期化中...",
@@ -170,7 +172,9 @@
     "on": "オン",
     "off": "オフ",
     "reset": "デフォルトにリセット",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "データの強制更新",
+    "refresh_data_tooltip": "キャッシュをクリアし、Tarkov.devからゲームデータを再取得"
   },
   "error": {
     "title": "エラーが発生しました",

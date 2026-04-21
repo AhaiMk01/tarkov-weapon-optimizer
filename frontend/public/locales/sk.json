@@ -95,7 +95,9 @@
     "optimize_infeasible": "Pri týchto obmedzeniach neexistuje platná zostava",
     "explore_empty": "Pri týchto obmedzeniach žiadne body fronty",
     "gunsmith_infeasible": "Úlohu gunsmithella nie je možné splniť",
-    "optimize_non_optimal": "Stav riešiča: {{status}}"
+    "optimize_non_optimal": "Stav riešiča: {{status}}",
+    "refresh_done": "Vymazaná cache, opätovné načítanie…",
+    "refresh_failed": "Nepodarilo sa vymazať cache"
   },
   "ui": {
     "initializing": "Inicializácia...",
@@ -170,7 +172,9 @@
     "on": "Zap.",
     "off": "Vyp.",
     "reset": "Obnoviť predvolené",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Vynútiť obnovenie údajov",
+    "refresh_data_tooltip": "Vymazať mezipaměť herných údajov a znova ich stiahnuť z Tarkov.dev"
   },
   "error": {
     "title": "Vyskytla sa chyba",

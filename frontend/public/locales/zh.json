@@ -95,7 +95,9 @@
     "optimize_infeasible": "在这些限制下无法求解",
     "explore_empty": "这些条件下求不到最优解，可放宽限制再试",
     "gunsmith_infeasible": "按当前商人 / 跳蚤条件无法求解这个枪匠任务",
-    "optimize_non_optimal": "求解器返回状态：{{status}}"
+    "optimize_non_optimal": "求解器返回状态：{{status}}",
+    "refresh_done": "缓存已清空，重新加载中…",
+    "refresh_failed": "清空缓存失败"
   },
   "ui": {
     "initializing": "加载中…",
@@ -170,7 +172,9 @@
     "lock_action_tooltip_remove": "取消锁定 (不再强制)",
     "ban_action_tooltip_add": "禁用 (排除在外)",
     "ban_action_tooltip_remove": "取消禁用 (不再排除)",
-    "changelog_title": "更新日志"
+    "changelog_title": "更新日志",
+    "refresh_data": "强制更新数据",
+    "refresh_data_tooltip": "清空缓存并从 Tarkov.dev 重新下载游戏数据"
   },
   "trader": {
     "prapor": "Prapor",

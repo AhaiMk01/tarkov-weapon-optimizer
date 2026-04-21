@@ -96,7 +96,7 @@ export function WeightAdjuster({
                 <Button size="small" onClick={() => onWeightChange(100, 0, 0)}>{t('optimize.preset_ergo')}</Button>
                 <Button size="small" onClick={() => onWeightChange(33, 34, 33)}>{t('optimize.preset_balanced')}</Button>
                 <Button size="small" onClick={() => onWeightChange(0, 0, 100)}>{t('optimize.preset_price')}</Button>
-                <Button size="small" onClick={() => onWeightChange(50, 50, 0)}>{t('optimize.preset_performance')}</Button>
+                <Button size="small" onClick={() => onWeightChange(48, 48, 2)}>{t('optimize.preset_performance')}</Button>
                 <Button size="small" onClick={() => onWeightChange(20, 70, 10)}>{t('optimize.preset_recoil_focus')}</Button>
                 <Button size="small" onClick={() => onWeightChange(70, 20, 10)}>{t('optimize.preset_ergo_focus')}</Button>
               </Space>

@@ -95,7 +95,9 @@
     "optimize_infeasible": "Keine gültige Konfiguration bei diesen Einschränkungen",
     "explore_empty": "Keine Pareto-Punkte bei diesen Einschränkungen",
     "gunsmith_infeasible": "Gunsmith-Aufgabe mit diesen Einschränkungen nicht lösbar",
-    "optimize_non_optimal": "Solver-Status: {{status}}"
+    "optimize_non_optimal": "Solver-Status: {{status}}",
+    "refresh_done": "Cache geleert, neu laden…",
+    "refresh_failed": "Cache konnte nicht geleert werden"
   },
   "ui": {
     "initializing": "Initialisierung...",
@@ -170,7 +172,9 @@
     "on": "Ein",
     "off": "Aus",
     "reset": "Auf Standard zurücksetzen",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Daten neu laden",
+    "refresh_data_tooltip": "Zwischengespeicherte Spieldaten löschen und von Tarkov.dev neu abrufen"
   },
   "error": {
     "title": "Ein Fehler ist aufgetreten",

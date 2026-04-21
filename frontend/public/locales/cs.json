@@ -95,7 +95,9 @@
     "optimize_infeasible": "Za současných omezení neexistuje platná sestava",
     "explore_empty": "Za současných omezení žádné body fronty",
     "gunsmith_infeasible": "Úkol gunsmitha nelze splnit",
-    "optimize_non_optimal": "Stav řešiče: {{status}}"
+    "optimize_non_optimal": "Stav řešiče: {{status}}",
+    "refresh_done": "Mezipaměť vymazána, opětovné načtení...",
+    "refresh_failed": "Nepodařilo se vymazat mezipaměť"
   },
   "ui": {
     "initializing": "Inicializace...",
@@ -170,7 +172,9 @@
     "on": "Zap.",
     "off": "Vyp.",
     "reset": "Obnovit výchozí",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Vynutit obnovení dat",
+    "refresh_data_tooltip": "Vymazat mezipaměť a znovu stáhnout data z Tarkov.dev"
   },
   "error": {
     "title": "Došlo k chybě",

@@ -3,8 +3,8 @@ declare const __APP_VERSION__: string;
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
-import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined } from '@ant-design/icons'
-import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor } from './api/client'
+import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons'
+import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor, clearDataCache } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
@@ -264,8 +264,23 @@ function AppContent({
   const [optimizingGunsmith, setOptimizingGunsmith] = useState(false)
   const modsRequestSeq = useRef(0)
   const [changelogOpen, setChangelogOpen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const messageApiRef = useRef(messageApi)
   messageApiRef.current = messageApi
+
+  const handleForceRefresh = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await clearDataCache()
+      messageApi.success(t('toast.refresh_done'))
+      setTimeout(() => window.location.reload(), 400)
+    } catch (err) {
+      console.error('Force refresh failed', err)
+      messageApi.error(t('toast.refresh_failed'))
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     localStorage.setItem(GAME_MODE_STORAGE_KEY, gameMode)
@@ -889,6 +904,7 @@ function AppContent({
                 trigger={['click']}
                 dropdownRender={() => (
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <Button block icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing}>{t('ui.refresh_data')}</Button>
                     <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />
                     <Tooltip title={t('sidebar.solver_precision_tooltip')}>
                       <Segmented
@@ -918,6 +934,9 @@ function AppContent({
               </Dropdown>
             ) : (
               <Space wrap style={{ justifyContent: 'flex-end' }}>
+                <Tooltip title={t('ui.refresh_data_tooltip')}>
+                  <Button icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing} aria-label={t('ui.refresh_data')} />
+                </Tooltip>
                 <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />
                 <Tooltip title={t('sidebar.solver_precision_tooltip')}>
                   <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>

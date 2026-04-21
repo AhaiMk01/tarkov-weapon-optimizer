@@ -2,6 +2,14 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.5.5] — 2026-04-20
+
+### Added
+- **Force-refresh data button** (top-right reload icon, mobile menu entry): clears the browser's IndexedDB game-data cache and terminates the in-memory solver worker, then reloads the page so all data is re-fetched from tarkov.dev. Useful when a stale cache produces odd builds or when the project wants to pick up fresh wipe data without waiting for the 1-hour TTL to expire. Translations added for all 16 locales.
+
+### Fixed
+- **Performance preset weights changed from (50, 50, 0) to (48, 48, 2)** to break objective-function degeneracy. With `price_weight = 0`, any two builds that only differ in expensive negative-ergo / low-recoil parts (e.g. M203 + 20" barrel vs lighter layouts) had identical objective values after tie-breaker, so HiGHS could return wildly different solutions across WASM runtimes (observed: Chromium → 46.5 ergo / 47.4 recoil V, Firefox → 0.5 ergo / 40.2 recoil V on the same M4A1 LP). The 2% price nudge is small enough to preserve the "recoil + ergo" intent but large enough (≈ ₽7M swing on typical builds) to pick a single deterministic optimum.
+
 ## [v2.5.4] — 2026-04-20
 
 ### Fixed

@@ -95,7 +95,9 @@
     "optimize_infeasible": "Nessuna configurazione valida con i vincoli attuali",
     "explore_empty": "Nessun punto di frontiera con i vincoli attuali",
     "gunsmith_infeasible": "Impossibile soddisfare il compito da armaiolo",
-    "optimize_non_optimal": "Stato del risolutore: {{status}}"
+    "optimize_non_optimal": "Stato del risolutore: {{status}}",
+    "refresh_done": "Cache cancellata, ricaricamento…",
+    "refresh_failed": "Impossibile cancellare la cache"
   },
   "ui": {
     "initializing": "Inizializzazione...",
@@ -170,7 +172,9 @@
     "on": "Sì",
     "off": "No",
     "reset": "Ripristina valori predefiniti",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Forza aggiornamento dati",
+    "refresh_data_tooltip": "Cancella cache e scarica nuovamente i dati da Tarkov.dev"
   },
   "error": {
     "title": "Si è verificato un errore",

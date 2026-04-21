@@ -95,7 +95,9 @@
     "optimize_infeasible": "Sin configuración válida con las restricciones actuales",
     "explore_empty": "Sin puntos de frontera con las restricciones actuales",
     "gunsmith_infeasible": "No se cumple la tarea de armero",
-    "optimize_non_optimal": "Estado del solucionador: {{status}}"
+    "optimize_non_optimal": "Estado del solucionador: {{status}}",
+    "refresh_done": "Caché limpiado, recargando…",
+    "refresh_failed": "No se pudo limpiar la caché"
   },
   "ui": {
     "initializing": "Inicializando...",
@@ -170,7 +172,9 @@
     "on": "Sí",
     "off": "No",
     "reset": "Restablecer valores predeterminados",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Forzar recarga de datos",
+    "refresh_data_tooltip": "Limpiar datos de juego en caché y re-descargar desde Tarkov.dev"
   },
   "error": {
     "title": "Ocurrió un error",

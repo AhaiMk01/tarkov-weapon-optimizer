@@ -95,7 +95,9 @@
     "optimize_infeasible": "현재 제약으로는 유효한 구성이 없습니다",
     "explore_empty": "현재 제약으로는 프론티어 점이 없습니다",
     "gunsmith_infeasible": "건스미스 과제를 만족할 수 없습니다",
-    "optimize_non_optimal": "솔버 상태: {{status}}"
+    "optimize_non_optimal": "솔버 상태: {{status}}",
+    "refresh_done": "캐시 삭제 완료, 다시 로드 중…",
+    "refresh_failed": "캐시를 삭제할 수 없습니다"
   },
   "ui": {
     "initializing": "초기화 중...",
@@ -170,7 +172,9 @@
     "on": "켜기",
     "off": "끄기",
     "reset": "기본값으로 재설정",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "데이터 강제 새로고침",
+    "refresh_data_tooltip": "캐시된 게임 데이터를 지우고 Tarkov.dev에서 다시 가져오기"
   },
   "error": {
     "title": "오류가 발생했습니다",

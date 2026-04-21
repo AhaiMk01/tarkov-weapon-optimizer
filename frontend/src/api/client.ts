@@ -292,3 +292,19 @@ export const getStatus = async (gameMode: GameMode = 'regular', lang: string = '
 export const computeMOAFloor = async (weaponId: string, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ floor: number }> => {
   return sendWorkerMessage<{ floor: number }>('computeMOAFloor', { weaponId, lang, gameMode });
 };
+
+/**
+ * Wipe IndexedDB cache and terminate the worker (clearing its in-memory dataCache).
+ * Caller should reload the page afterwards so stores re-fetch fresh data from tarkov.dev.
+ * DB name kept in sync with `DB_NAME` in solver/dataService.ts.
+ */
+export const clearDataCache = async (): Promise<void> => {
+  resetWorker(new Error('Cache cleared by user'));
+  if (typeof indexedDB === 'undefined') return;
+  await new Promise<void>((resolve) => {
+    const req = indexedDB.deleteDatabase('tarkov-optimizer-cache');
+    req.onsuccess = () => resolve();
+    req.onerror = () => resolve();
+    req.onblocked = () => resolve();
+  });
+};

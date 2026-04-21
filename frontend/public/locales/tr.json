@@ -95,7 +95,9 @@
     "optimize_infeasible": "Mevcut kısıtlarla geçerli yapı yok",
     "explore_empty": "Mevcut kısıtlarla sınır noktası yok",
     "gunsmith_infeasible": "Silah ustası görevi karşılanamıyor",
-    "optimize_non_optimal": "Çözücü durumu: {{status}}"
+    "optimize_non_optimal": "Çözücü durumu: {{status}}",
+    "refresh_done": "Önbellek temizlendi, yeniden yüklüyor…",
+    "refresh_failed": "Önbellek temizlenemedi"
   },
   "ui": {
     "initializing": "Başlatılıyor...",
@@ -170,7 +172,9 @@
     "on": "Açık",
     "off": "Kapalı",
     "reset": "Varsayılanlara sıfırla",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Verileri güncelle",
+    "refresh_data_tooltip": "Oyun verisi önbelleğini temizle ve Tarkov.dev'den yeniden indir"
   },
   "error": {
     "title": "Bir hata oluştu",

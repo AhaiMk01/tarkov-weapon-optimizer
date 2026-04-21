@@ -95,7 +95,9 @@
     "optimize_infeasible": "Nincs érvényes összeállítás ezekkel a korlátokkal",
     "explore_empty": "Nincs frontpont ezekkel a korlátokkal",
     "gunsmith_infeasible": "A fegyverkovács feladat nem teljesíthető",
-    "optimize_non_optimal": "Megoldó állapota: {{status}}"
+    "optimize_non_optimal": "Megoldó állapota: {{status}}",
+    "refresh_done": "Gyorsítótár törölve, újratöltés…",
+    "refresh_failed": "Nem sikerült törölni a gyorsítótárat"
   },
   "ui": {
     "initializing": "Inicializálás...",
@@ -170,7 +172,9 @@
     "on": "Be",
     "off": "Ki",
     "reset": "Visszaállítás alapértelmezettre",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Adatok frissítésének kényszerítése",
+    "refresh_data_tooltip": "Gyorsítótárazott játékadatok törlése és újraletöltése a Tarkov.dev-ről"
   },
   "error": {
     "title": "Hiba történt",

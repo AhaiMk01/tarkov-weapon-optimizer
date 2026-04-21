@@ -95,7 +95,9 @@
     "optimize_infeasible": "Brak poprawnej konfiguracji przy tych ograniczeniach",
     "explore_empty": "Brak punktów granicy przy tych ograniczeniach",
     "gunsmith_infeasible": "Nie można spełnić zadania rusznikarza",
-    "optimize_non_optimal": "Status solvera: {{status}}"
+    "optimize_non_optimal": "Status solvera: {{status}}",
+    "refresh_done": "Pamięć podręczna wyczyszczona, ponowne ładowanie…",
+    "refresh_failed": "Nie udało się wyczyścić pamięci podręcznej"
   },
   "ui": {
     "initializing": "Inicjalizacja...",
@@ -170,7 +172,9 @@
     "on": "Wł.",
     "off": "Wył.",
     "reset": "Przywróć domyślne",
-    "ll_level": "LL {{level}}"
+    "ll_level": "LL {{level}}",
+    "refresh_data": "Wymuś odświeżenie danych",
+    "refresh_data_tooltip": "Wyczyść pamięć podręczną danych gry i pobierz ponownie z Tarkov.dev"
   },
   "error": {
     "title": "Wystąpił błąd",
