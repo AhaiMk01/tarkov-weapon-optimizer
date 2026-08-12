@@ -30,6 +30,8 @@ npm run preview --prefix frontend # Preview production build
 
 ### Verification Tests
 ```bash
+cd frontend && npx tsx test_json_api_adapter.ts             # JSON API shape parity + buildItemLookup + end-to-end solves (en & zh)
+cd frontend && npx tsx test_trader_access.ts                # per-trader loyalty gating + TRADER_DISABLED (0), incl. Ref barters
 cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
 cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
 ```
@@ -50,13 +52,13 @@ The frontend runs entirely in the browser with no backend:
 ```
 UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts → HiGHS WASM
                                      ↕
-                              dataService.ts → Tarkov.dev GraphQL API (via fetch)
+                              dataService.ts → tarkov.dev JSON API (via fetch)
                                      ↕
                               IndexedDB (browser cache)
 ```
 
 **Solver Pipeline (`frontend/src/solver/`):**
-1. `dataService.ts` — Fetches guns/mods from Tarkov.dev GraphQL API, builds `ItemLookup`, caches in IndexedDB
+1. `dataService.ts` — Fetches guns/mods from tarkov.dev (JSON API via `jsonApiAdapter.ts`, GraphQL as fallback), builds `ItemLookup`, caches in IndexedDB
 2. `compatibilityMap.ts` — BFS traversal from weapon to discover all reachable mods and slot relationships
 3. `lpBuilder.ts` — Builds a **CPLEX LP format** string (`buildLP`): binary-style decisions as a continuous LP with constraints matching the CP-SAT model (scaled ergo/recoil/price coefficients; auxiliary objective variable for long lines HiGHS parses poorly)
 4. `solver.ts` — Loads **HiGHS** (`highs` npm package / WASM), runs `highs.solve(lpString)`, reads column primals for `x_*`, `base_*`, `buy_*`, assembles `OptimizeResponse` and final stats
@@ -100,14 +102,39 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts �
 
 ## Data Source
 
-All weapon/mod data from **Tarkov.dev GraphQL API** (`https://api.tarkov.dev/graphql`).
+All weapon/mod data comes from **tarkov.dev**, via the **JSON API** (`https://json.tarkov.dev`).
 - Game modes: `regular`, `pve`
 - Languages: en, ru, zh, es, de, fr, it, ja, ko, pl, pt, tr, cs, hu, ro, sk
+
+**The GraphQL API (`https://api.tarkov.dev/graphql`) is down** — it has returned
+`422 {"errors":["GraphQL server unavailable. Try again later."]}` for every request since
+2026-07-21 (upstream issue [the-hideout/tarkov-api#474](https://github.com/the-hideout/tarkov-api/issues/474),
+still open with no ETA). tarkov.dev's own site does not use GraphQL either; it reads the JSON API
+(see their `src/modules/api-request.mjs`).
+
+`frontend/src/solver/jsonApiAdapter.ts` reshapes JSON API documents into the exact shape the old
+GraphQL queries returned, so every extractor in `dataService.ts` is unchanged. `fetchAllData` tries
+the JSON API first and falls back to GraphQL. Things the adapter has to reconcile:
+- Names/short names/slot names/category names are **translation keys**; real strings live in a
+  sibling `<path>_<lang>` document (resolution order: requested lang → English → the key).
+- `buyFor` does not exist — trader offers come from `buyFromTrader`, and the flea offer is
+  synthesized the same way tarkov-api's items datasource does (skipped for `noFlea` items or when
+  `lastLowPrice` is absent; priced `avg24hPrice || lastLowPrice`; `source: 'fleaMarket'`).
+- `bartersFor` does not exist — barters are a separate document, indexed by the item they offer;
+  GraphQL's `level` is `minTraderLevel`.
+- `bsgCategory` does not exist — `categories[0]` is the item's own category and the array is
+  exactly its parent chain. `handbookCategories` are IDs into a sibling document.
+- Presets, `defaultPreset`, `containsItems[].item` and `conflictingItems[]` are **IDs**, and get
+  dereferenced/rewrapped into the objects the extractors expect.
+- GraphQL's `imageLink` is a deprecated alias for `inspectImageLink` (not `gridImageLink`).
+
+**The Python/Streamlit app still queries GraphQL and is therefore non-functional** until either
+the upstream API returns or `queries.py` gets the same treatment.
 
 ## CI/CD
 
 - `.github/workflows/build.yml` — PyInstaller builds (Windows/Linux/macOS) on `v*` tags, creates GitHub Release
-- `.github/workflows/deploy.yml` — GitHub Pages deployment from `frontend-only-ghpages` branch
+- `.github/workflows/deploy.yml` — GitHub Pages deployment on push to `master` (the `frontend-only-ghpages` branch is abandoned; deploys moved to `master` in 09cdbd9)
 
 ## Internationalization
 

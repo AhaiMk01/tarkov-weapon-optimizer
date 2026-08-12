@@ -19,7 +19,7 @@ import { amoledDarkToken } from './theme/amoledDark'
 import { darkPaletteTokens, type DarkPaletteId } from './theme/darkPalettes'
 import { lightPaletteTokens, type LightPaletteId } from './theme/lightPalettes'
 import { includeCategoryInModFilter } from './solver/modCategoryFilter'
-import { DEFAULT_TRADER_LEVELS, type TraderLevels } from './solver/types'
+import { DEFAULT_TRADER_LEVELS, TRADER_DISABLED, type TraderLevels } from './solver/types'
 
 const { Header, Content, Footer } = Layout
 const { Text, Link } = Typography
@@ -62,7 +62,7 @@ const LEVEL_CONFIG_STORAGE_KEY = 'levelConfig'
 const GAME_MODE_STORAGE_KEY = 'mode'
 const GAME_MODE_LEGACY_KEY = 'gameMode'
 
-const TRADER_LEVEL_KEYS: (keyof TraderLevels)[] = ['prapor', 'skier', 'peacekeeper', 'mechanic', 'jaeger']
+const TRADER_LEVEL_KEYS: (keyof TraderLevels)[] = ['prapor', 'skier', 'peacekeeper', 'mechanic', 'jaeger', 'ref']
 
 function readStoredGameMode(): GameMode {
   const fromMode = localStorage.getItem(GAME_MODE_STORAGE_KEY)
@@ -96,7 +96,9 @@ function readStoredLevelConfig(): { playerLevel: number; fleaAvailable: boolean;
     if (o.traderLevels && typeof o.traderLevels === 'object') {
       for (const k of TRADER_LEVEL_KEYS) {
         const v = o.traderLevels[k as string]
-        if (typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= 4) {
+        // TRADER_DISABLED (0) is a valid stored value — a trader the user turned
+        // off must stay off across reloads, so the floor here is 0, not 1.
+        if (typeof v === 'number' && Number.isInteger(v) && v >= TRADER_DISABLED && v <= 4) {
           traderLevels[k] = v
         }
       }

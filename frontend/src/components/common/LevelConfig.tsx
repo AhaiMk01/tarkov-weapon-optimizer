@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { Collapse, Checkbox, Slider, Segmented, Space, Divider, Typography, Button, Tooltip } from 'antd'
 import { UndoOutlined } from '@ant-design/icons'
-import { DEFAULT_TRADER_LEVELS } from '../../solver/types'
+import { DEFAULT_TRADER_LEVELS, TRADER_DISABLED } from '../../solver/types'
 import type { TraderLevels } from '../../solver/types'
 
 const { Text } = Typography
@@ -58,12 +58,15 @@ export function LevelConfig({
               <Slider value={playerLevel} onChange={onPlayerLevelChange} min={1} max={79} />
             </div>
             <Divider style={{ margin: '8px 0' }} />
-            {(Object.keys(traderLevels) as Array<keyof TraderLevels>).map(trader => (
-              <div key={trader} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                <Text type="secondary" style={{ fontSize: 12, minWidth: 70 }}>{t(`trader.${trader}`)}</Text>
-                <Segmented size="small" value={traderLevels[trader]} onChange={(v) => onTraderLevelsChange({ ...traderLevels, [trader]: v as number })} options={[{ label: t('ui.ll_level', { level: 1 }), value: 1 }, { label: t('ui.ll_level', { level: 2 }), value: 2 }, { label: t('ui.ll_level', { level: 3 }), value: 3 }, { label: t('ui.ll_level', { level: 4 }), value: 4 }]} />
-              </div>
-            ))}
+            {(Object.keys(traderLevels) as Array<keyof TraderLevels>).map(trader => {
+              const disabled = traderLevels[trader] === TRADER_DISABLED
+              return (
+                <div key={trader} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <Text type="secondary" delete={disabled} style={{ fontSize: 12, minWidth: 70, opacity: disabled ? 0.45 : 1 }}>{t(`trader.${trader}`)}</Text>
+                  <Segmented size="small" value={traderLevels[trader]} onChange={(v) => onTraderLevelsChange({ ...traderLevels, [trader]: v as number })} options={[{ label: t('ui.off'), value: TRADER_DISABLED }, { label: t('ui.ll_level', { level: 1 }), value: 1 }, { label: t('ui.ll_level', { level: 2 }), value: 2 }, { label: t('ui.ll_level', { level: 3 }), value: 3 }, { label: t('ui.ll_level', { level: 4 }), value: 4 }]} />
+                </div>
+              )
+            })}
           </Space>
         ),
       },

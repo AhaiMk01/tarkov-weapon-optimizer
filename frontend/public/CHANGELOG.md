@@ -2,6 +2,16 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.6.0] — 2026-08-12
+
+### Fixed
+- **Data loading works again.** The tarkov.dev GraphQL API has answered every request with `422 GraphQL server unavailable` since 2026-07-21 ([the-hideout/tarkov-api#474](https://github.com/the-hideout/tarkov-api/issues/474), still open upstream with no ETA), which left the app unable to load any weapons or mods at all. Data now comes from the tarkov.dev **JSON API** (`json.tarkov.dev`) — the same source tarkov.dev's own site reads — via a new adapter that reshapes those documents into the exact shape the old GraphQL queries returned, so the solver and every extractor are untouched. GraphQL is kept as an automatic fallback in case it comes back. The new path is also lighter: ~1.3 MB brotli instead of ~16.7 MB raw, with a full cold load in under a second.
+- **Ref's loyalty level is now respected.** Ref was missing from the trader config, so `traderLevels[vendor] ?? 4` silently treated it as LL4 — the optimizer could hand you a build requiring a Ref LL4 barter (for example a ₽122k AK-74 Hexagon Wafflemaker suppressor) with no way to say otherwise. 26 mods are purchasable only through Ref.
+
+### Added
+- **Loyalty level control for Ref** in Market & Trader Access, named in all 16 locale files to match the other traders (English trader names throughout).
+- **An "Off" option on every trader's level selector**, to exclude that trader from a build entirely. Disabled traders are shown struck through, and the choice persists across reloads.
+
 ## [v2.5.5] — 2026-04-20
 
 ### Added

@@ -142,17 +142,28 @@ export interface CompatibilityMap {
 
 // --- Solver Request / Response (matching frontend API client types) ---
 
+/**
+ * Unlocked loyalty level per trader, keyed by `normalizedName`.
+ * `TRADER_DISABLED` (0) means "do not buy from this trader at all" — every
+ * trader offer requires at least LL1, so a 0 here excludes all of them via the
+ * existing level check in `getAvailablePrice`.
+ */
 export interface TraderLevels {
   prapor: number;
   skier: number;
   peacekeeper: number;
   mechanic: number;
   jaeger: number;
+  /** Ref sells weapon mods via GP-coin barters at LL1-4. */
+  ref: number;
   [key: string]: number;
 }
 
+/** Sentinel loyalty level meaning "trader disabled". */
+export const TRADER_DISABLED = 0;
+
 export const DEFAULT_TRADER_LEVELS: TraderLevels = {
-  prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4,
+  prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4, ref: 4,
 };
 
 // --- Worker Messages ---

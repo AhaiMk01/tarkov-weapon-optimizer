@@ -1,5 +1,6 @@
 /**
- * Data fetching from tarkov.dev GraphQL API + IndexedDB caching + item lookup building.
+ * Data fetching from tarkov.dev (JSON API, GraphQL fallback) + IndexedDB caching
+ * + item lookup building.
  * Ported from backend/app/services/optimizer.py and queries.py.
  */
 
@@ -7,6 +8,7 @@ import type {
   ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetInfo, TraderLevels,
 } from './types.ts';
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
+import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
 const CACHE_VERSION = 15;
@@ -365,12 +367,46 @@ type RawItem = Record<string, any>;
 interface GunQueryResult { items: RawItem[] }
 interface ModQueryResult { items: RawItem[] }
 
-export async function fetchAllData(lang: string, gameMode: string): Promise<{ guns: RawItem[]; mods: RawItem[] }> {
+/** Fetch guns and mods via the legacy GraphQL endpoint. */
+async function fetchAllDataFromGraphQL(
+  lang: string,
+  gameMode: string,
+): Promise<{ guns: RawItem[]; mods: RawItem[] }> {
   const [gunsData, modsData] = await Promise.all([
     runQuery<GunQueryResult>(GUNS_QUERY, { lang, gameMode }),
     runQuery<ModQueryResult>(MODS_QUERY, { lang, gameMode }),
   ]);
   return { guns: gunsData.items, mods: modsData.items };
+}
+
+/**
+ * Fetch guns and mods, preferring the JSON API.
+ *
+ * `api.tarkov.dev/graphql` has answered every request with
+ * "GraphQL server unavailable" since 2026-07-21 (the-hideout/tarkov-api#474),
+ * and tarkov.dev's own site reads the JSON API instead, so that is the primary
+ * source. GraphQL is kept as a fallback in case it returns and the JSON API is
+ * ever the one having a bad day.
+ */
+export async function fetchAllData(lang: string, gameMode: string): Promise<{ guns: RawItem[]; mods: RawItem[] }> {
+  const cacheKey = `json:${lang}:${gameMode}`;
+  const cached = await getCached<{ guns: RawItem[]; mods: RawItem[] }>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const data = await fetchAllDataFromJsonApi(lang, gameMode);
+    await setCache(cacheKey, data);
+    return data;
+  } catch (jsonError) {
+    try {
+      return await fetchAllDataFromGraphQL(lang, gameMode);
+    } catch (graphqlError) {
+      throw new Error(
+        `Could not load Tarkov data. JSON API: ${(jsonError as Error).message}. ` +
+        `GraphQL API: ${(graphqlError as Error).message}.`,
+      );
+    }
+  }
 }
 
 // --- Data Extraction (ported from optimizer.py) ---

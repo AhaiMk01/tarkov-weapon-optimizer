@@ -38,12 +38,15 @@ export interface OptimizeRequest {
   ergo_weight?: number;
   recoil_weight?: number;
   price_weight?: number;
+  /** Unlocked loyalty level per trader `normalizedName`; 0 disables the trader. */
   trader_levels?: {
     prapor: number;
     skier: number;
     peacekeeper: number;
     mechanic: number;
     jaeger: number;
+    ref: number;
+    [key: string]: number;
   };
   flea_available?: boolean;
   barter_available?: boolean;
