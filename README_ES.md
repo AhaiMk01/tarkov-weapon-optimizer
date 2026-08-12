@@ -2,16 +2,16 @@
 
 # Optimizador de Configuraciones de Armas de Tarkov (Versión Web) 🔫
 
-[Inglés](README.md) | [中文](README_ZH.md)
+[Inglés](README.md) | [中文](README_ZH.md) | [Español](README_ES.md)
 
 Un optimizador de configuraciones de armas avanzado y **del lado del cliente** para Escape from Tarkov. Esta herramienta se ejecuta completamente en tu navegador utilizando **WebAssembly (WASM)** y el **solucionador HiGHS** para encontrar el conjunto matemáticamente óptimo de modificaciones para cualquier arma, basándose en tus prioridades y restricciones.
 
 > **No se requiere servidor backend**: Toda la lógica, incluida la compleja matemática de optimización, se ejecuta localmente en tu máquina a través de WASM.
 
 ![Project Overview](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
-![React](https://img.shields.io/badge/React-18%2B-blue.svg)
+![React](https://img.shields.io/badge/React-19%2B-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)
-![Vite](https://img.shields.io/badge/Vite-5.0%2B-purple.svg)
+![Vite](https://img.shields.io/badge/Vite-6%2B-purple.svg)
 ![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
 ## 🚀 Características principales
@@ -31,15 +31,15 @@ Un optimizador de configuraciones de armas avanzado y **del lado del cliente** p
 - **🛒 Filtros inteligentes**:
     - Configuración de nivel de PMC y lealtad con comerciantes.
     - Activación/desactivación del Mercado Pulga.
-- **🌍 Multilingüe**: Completamente localizado en **Inglés**, **Русский** y **中文**.
+- **🌍 Multilingüe**: Completamente localizado en 16 idiomas, incluidos **English**, **Русский**, **中文** y **Español**.
 
 ## 🛠️ Tecnologías utilizadas
 
 - **Frontend**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
 - **Solucionador**: [HiGHS](https://highs.dev/) (vía WebAssembly)
     - *Estrategia*: Relajación de programación lineal + Perturbación + Redondeo voraz
-- **Datos**: [API de Tarkov.dev](https://tarkov.dev/api/) (GraphQL)
-- **Estilos**: [TailwindCSS](https://tailwindcss.com/)
+- **Datos**: [API JSON de Tarkov.dev](https://json.tarkov.dev/endpoints)
+- **UI**: [Ant Design](https://ant.design/) v6
 
 ## 📥 Instalación y ejecución
 

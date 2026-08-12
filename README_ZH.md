@@ -1,15 +1,15 @@
 # 塔科夫武器模组优化器 (Web 版) 🔫
 
-[English](README.md) | [中文](README_ZH.md)
+[English](README.md) | [中文](README_ZH.md) | [Español](README_ES.md)
 
 一个先进的、**纯客户端**《逃离塔科夫》武器改装优化工具。该工具利用 **WebAssembly (WASM)** 和 **HiGHS 求解器** 直接在您的浏览器中运行，根据您的优先级和限制条件，为您找到数学上最优的改装方案。
 
 > **无需后端**: 所有计算逻辑（包括繁重的优化数学运算）均通过 WASM 在您的本地机器上运行。
 
 ![项目概览](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
-![React](https://img.shields.io/badge/React-18%2B-blue.svg)
+![React](https://img.shields.io/badge/React-19%2B-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)
-![Vite](https://img.shields.io/badge/Vite-5.0%2B-purple.svg)
+![Vite](https://img.shields.io/badge/Vite-6%2B-purple.svg)
 ![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
 ## 🚀 主要功能
@@ -29,15 +29,15 @@
 - **🛒 智能过滤**:
     - PMC 等级和商人忠诚度设置。
     - 跳蚤市场开关。
-- **🌍 多语言支持**: 完全本地化支持 **English**、**Русский** 和 **中文**。
+- **🌍 多语言支持**: 完全本地化支持 16 种语言，包括 **English**、**Русский**、**中文** 和 **Español**。
 
 ## 🛠️ 技术栈
 
 - **前端**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
 - **求解器**: [HiGHS](https://highs.dev/) (via WebAssembly)
     - *策略*: 线性规划松弛 (LP Relaxation) + 扰动 (Perturbation) + 贪婪取整 (Greedy Rounding)
-- **数据源**: [Tarkov.dev API](https://tarkov.dev/api/) (GraphQL)
-- **样式**: [TailwindCSS](https://tailwindcss.com/)
+- **数据源**: [Tarkov.dev JSON API](https://json.tarkov.dev/endpoints)
+- **UI 组件**: [Ant Design](https://ant.design/) v6
 
 ## 📥 安装与运行
 

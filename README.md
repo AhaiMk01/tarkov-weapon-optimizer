@@ -1,15 +1,15 @@
 # Tarkov Weapon Mod Optimizer (Web Version) 🔫
 
-[English](README.md) | [中文](README_ZH.md)
+[English](README.md) | [中文](README_ZH.md) | [Español](README_ES.md)
 
 An advanced, **client-side** weapon build optimizer for Escape from Tarkov. This tool runs entirely in your browser using **WebAssembly (WASM)** and the **HiGHS Solver** to find the mathematically optimal set of modifications for any weapon based on your priorities and constraints.
 
 > **Zero Backend Required**: All logic, including the heavy optimization math, runs locally on your machine via WASM.
 
 ![Project Overview](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
-![React](https://img.shields.io/badge/React-18%2B-blue.svg)
+![React](https://img.shields.io/badge/React-19%2B-blue.svg)
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.0%2B-blue.svg)
-![Vite](https://img.shields.io/badge/Vite-5.0%2B-purple.svg)
+![Vite](https://img.shields.io/badge/Vite-6%2B-purple.svg)
 ![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
 ## 🚀 Key Features
@@ -29,15 +29,15 @@ An advanced, **client-side** weapon build optimizer for Escape from Tarkov. This
 - **🛒 Smart Filters**:
     - PMC Level & Trader Loyalty settings.
     - Flea Market toggle.
-- **🌍 Multi-language**: Fully localized in **English**, **Русский**, and **中文**.
+- **🌍 Multi-language**: Fully localized in 16 languages, including **English**, **Русский**, **中文**, and **Español**.
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
 - **Solver**: [HiGHS](https://highs.dev/) (via WebAssembly)
     - *Strategy*: Linear Programming Relaxation + Perturbation + Greedy Rounding
-- **Data**: [Tarkov.dev API](https://tarkov.dev/api/) (GraphQL)
-- **Styling**: [TailwindCSS](https://tailwindcss.com/)
+- **Data**: [Tarkov.dev JSON API](https://json.tarkov.dev/endpoints)
+- **UI**: [Ant Design](https://ant.design/) v6
 
 ## 📥 Installation & Running
 
