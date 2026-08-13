@@ -1,12 +1,10 @@
-
-
-# Optimizador de Configuraciones de Armas de Tarkov (Versión Web) 🔫
+# Optimizador de configuraciones de armas de Tarkov (versión web)
 
 [Inglés](README.md) | [中文](README_ZH.md) | [Español](README_ES.md)
 
-Un optimizador de configuraciones de armas avanzado y **del lado del cliente** para Escape from Tarkov. Esta herramienta se ejecuta completamente en tu navegador utilizando **WebAssembly (WASM)** y el **solucionador HiGHS** para encontrar el conjunto matemáticamente óptimo de modificaciones para cualquier arma, basándose en tus prioridades y restricciones.
+Un optimizador de configuraciones de armas del lado del cliente para Escape from Tarkov. Se ejecuta por completo en tu navegador, usando WebAssembly y el solucionador HiGHS para encontrar el conjunto de modificaciones matemáticamente óptimo de un arma según tus prioridades y restricciones.
 
-> **No se requiere servidor backend**: Toda la lógica, incluida la compleja matemática de optimización, se ejecuta localmente en tu máquina a través de WASM.
+No hay servidor backend. Todo, incluida la parte más pesada del cálculo, se ejecuta localmente a través de WASM.
 
 ![Project Overview](https://img.shields.io/badge/Tarkov-Optimizer-blue.svg)
 ![React](https://img.shields.io/badge/React-19%2B-blue.svg)
@@ -14,73 +12,69 @@ Un optimizador de configuraciones de armas avanzado y **del lado del cliente** p
 ![Vite](https://img.shields.io/badge/Vite-6%2B-purple.svg)
 ![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
-## 🚀 Características principales
+## Características
 
-- **🚀 Optimización instantánea**: Se ejecuta directamente en tu navegador sin latencia del servidor.
-- **🧠 Solucionador avanzado**: Utiliza el solucionador de programación lineal **HiGHS** compilado a WebAssembly para una optimización de grado industrial.
-- **🎯 Buscador de configuraciones óptimas**: Equilibra **Ergonomía**, **Retroceso** y **Precio** según tus pesos personalizados.
-- **📊 Exploración de la frontera de Pareto**: Visualiza la curva de compensación (p. ej., ergonomía frente a retroceso) para ayudarte a tomar decisiones informadas.
-- **💡 Redondeo inteligente**: Implementa un algoritmo robusto de "Redondeo Voraz" para garantizar configuraciones válidas, libres de conflictos y óptimas en enteros a partir de la relajación fraccional de programación lineal.
-- **🛡️ Restricciones fijas**:
-    - Límite de presupuesto (₽)
-    - Ergonomía mínima
-    - Retroceso vertical máximo
-    - Capacidad mínima de cargador
-    - Rango mínimo de visualización
-    - Peso máximo (kg)
-- **🛒 Filtros inteligentes**:
-    - Configuración de nivel de PMC y lealtad con comerciantes.
-    - Activación/desactivación del Mercado Pulga.
-- **🌍 Multilingüe**: Completamente localizado en 16 idiomas, incluidos **English**, **Русский**, **中文** y **Español**.
+Como el solucionador corre en el navegador, no hay latencia de servidor. Usa HiGHS, un solucionador de programación lineal compilado a WebAssembly, y equilibra ergonomía, retroceso y precio según los pesos que elijas.
 
-## 🛠️ Tecnologías utilizadas
+La relajación de programación lineal devuelve valores fraccionarios, así que un paso de redondeo voraz los convierte en una configuración válida, libre de conflictos y óptima en enteros.
 
-- **Frontend**: [React](https://react.dev/) + [Vite](https://vitejs.dev/) + [TypeScript](https://www.typescriptlang.org/)
-- **Solucionador**: [HiGHS](https://highs.dev/) (vía WebAssembly)
-    - *Estrategia*: Relajación de programación lineal + Perturbación + Redondeo voraz
-- **Datos**: [API JSON de Tarkov.dev](https://json.tarkov.dev/endpoints)
-- **UI**: [Ant Design](https://ant.design/) v6
+Cuando una sola cifra no basta para decidir, la vista de la frontera de Pareto dibuja la curva de compensación (por ejemplo, ergonomía frente a retroceso) para que veas cuánto cuesta cada opción.
 
-## 📥 Instalación y ejecución
+Restricciones fijas que puedes establecer:
 
-### Requisitos previos
-- [Node.js](https://nodejs.org/) (v18 o superior)
-- [npm](https://www.npmjs.com/) (generalmente se incluye con Node.js)
+- Límite de presupuesto (₽)
+- Ergonomía mínima
+- Retroceso vertical máximo
+- Capacidad mínima de cargador
+- Rango mínimo de visualización
+- Peso máximo (kg)
 
-### Pasos
+La disponibilidad se filtra por tu nivel de PMC y por la lealtad con cada comerciante, y puedes desactivar el Mercado Pulga.
 
-1. **Clonar el repositorio**:
+La interfaz está localizada en 16 idiomas, incluidos English, Русский, 中文 y Español.
+
+## Tecnologías utilizadas
+
+- Frontend: [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/)
+- UI: [Ant Design](https://ant.design/) v6
+- Solucionador: [HiGHS](https://highs.dev/) vía WebAssembly, con relajación de programación lineal, luego perturbación y luego redondeo voraz
+- Datos: [API JSON de Tarkov.dev](https://json.tarkov.dev/endpoints)
+
+## Instalación y ejecución
+
+Necesitas [Node.js](https://nodejs.org/) v18 o superior y [npm](https://www.npmjs.com/), que suele venir incluido.
+
+1. Clona el repositorio:
    ```bash
    git clone https://github.com/AhaiMk01/tarkov-weapon-optimizer.git
    cd tarkov-weapon-optimizer
    ```
 
-2. **Navegar al directorio del frontend**:
+2. Entra en el directorio del frontend:
    ```bash
    cd frontend
    ```
 
-3. **Instalar dependencias**:
+3. Instala las dependencias:
    ```bash
    npm install
    ```
-   *Nota: Esto verificará que el paquete WASM `highs` esté instalado correctamente.*
+   Esto también verifica que el paquete WASM `highs` quedó instalado correctamente.
 
-4. **Iniciar el servidor de desarrollo**:
+4. Inicia el servidor de desarrollo:
    ```bash
    npm run dev
    ```
 
-5. **Abrir en el navegador**:
-   Visita `http://localhost:5173` (o la URL que se muestre en tu terminal).
+5. Abre `http://localhost:5173`, o la URL que muestre la terminal.
 
-## 🐳 Implementación con Docker (Autoalojamiento)
+## Implementación con Docker (autoalojamiento)
 
-Las imágenes preconstruidas de múltiples arquitecturas (`linux/amd64`, `linux/arm64`) se publican en el Registro de Contenedores de GitHub con cada etiqueta de lanzamiento: adecuadas para servidores domésticos, VPS y Raspberry Pi.
+Cada etiqueta de lanzamiento publica imágenes preconstruidas de múltiples arquitecturas (`linux/amd64`, `linux/arm64`) en el Registro de Contenedores de GitHub, así que funcionan en servidores domésticos, VPS y Raspberry Pi.
 
-> El contenedor es un servidor web estático puro (`nginx:alpine`, ~30 MB). Toda la optimización se ejecuta del lado del cliente en el navegador del visitante a través de WASM: sin servidor backend, sin base de datos, sin variables de entorno necesarias.
+El contenedor es solo un servidor web estático (`nginx:alpine`, unos 30 MB). Toda la optimización ocurre del lado del cliente, en el navegador de quien visita la página, así que no necesitas un backend, una base de datos ni variables de entorno.
 
-### Inicio rápido (Imagen preconstruida)
+### Inicio rápido (imagen preconstruida)
 
 ```bash
 docker run -d \
@@ -92,11 +86,11 @@ docker run -d \
 
 Luego abre `http://<your-host>:8080`.
 
-Cambia `8080` por cualquier puerto del host; el contenedor siempre escucha en `80` internamente. Fija una versión específica reemplazando `:latest` por, por ejemplo, `:2.4.2`.
+Puedes cambiar `8080` por cualquier puerto del host; el contenedor siempre escucha en el `80` internamente. Para fijar una versión, reemplaza `:latest` por algo como `:2.4.2`.
 
 ### Compilar desde el código fuente
 
-Si prefieres compilar la imagen localmente (p. ej., desde un fork):
+Si prefieres construir la imagen tú mismo, por ejemplo desde un fork:
 
 ```bash
 cd frontend
@@ -106,9 +100,9 @@ docker run --rm -d -p 8080:80 --name tarkov-optimizer tarkov-optimizer
 
 ### Detrás de un proxy inverso
 
-La aplicación es una SPA (aplicación de una sola página) con un respaldo para SPA, por lo que cualquier URL enlazada en profundidad (p. ej., `/explore`) devuelve `index.html`. Haz proxy del puerto del contenedor como lo harías con cualquier sitio estático: no se necesitan WebSockets ni sesiones persistentes.
+La aplicación es una SPA con un respaldo de rutas, de modo que cualquier URL enlazada en profundidad (por ejemplo `/explore`) devuelve `index.html`. Haz proxy del puerto del contenedor como con cualquier sitio estático. No usa WebSockets y no necesita sesiones persistentes.
 
-### Detener / Actualizar
+### Detener o actualizar
 
 ```bash
 docker stop tarkov-optimizer && docker rm tarkov-optimizer
@@ -116,20 +110,20 @@ docker pull ghcr.io/ahaimk01/tarkov-optimizer-frontend:latest
 # luego vuelve a ejecutar el comando "Inicio rápido"
 ```
 
-## 🧪 Verificación y pruebas
+## Verificación y pruebas
 
-Este proyecto incluye un conjunto riguroso de verificación para garantizar la estabilidad y corrección del solucionador WASM.
+El repositorio incluye un script de verificación que ejecuta el solucionador WASM con armas reales:
 
-- **Ejecutar script de verificación**:
-  ```bash
-  npx tsx test_multi_weapon_verification.ts
-  ```
-  Este script prueba el optimizador contra armas complejas del mundo real (p. ej., AK-74, M4A1) para garantizar que genera configuraciones válidas y óptimas en enteros sin errores.
+```bash
+npx tsx test_multi_weapon_verification.ts
+```
 
-## 🤝 Contribuciones
+Optimiza armas de estructura compleja como la AK-74 y la M4A1, y comprueba que el resultado sea una configuración válida y óptima en enteros en lugar de un fallo.
 
-¡Las contribuciones son bienvenidas! No dudes en enviar un Pull Request.
+## Contribuciones
 
-## 📜 Licencia
+Los pull requests son bienvenidos.
 
-Este proyecto es para uso educativo y personal. Todos los datos son proporcionados por [Tarkov.dev](https://tarkov.dev/).
+## Licencia
+
+Este proyecto es para uso educativo y personal. Todos los datos provienen de [Tarkov.dev](https://tarkov.dev/).
