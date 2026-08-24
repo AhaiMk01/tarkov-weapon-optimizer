@@ -199,6 +199,11 @@ export interface SolveParams {
   ergoWeight?: number;
   recoilWeight?: number;
   priceWeight?: number;
+  /** Ergo weight applies to EvoErgo (ergo − k·kg) instead of raw ergonomics. */
+  useEvoErgo?: boolean;
+  /** Explicit ergo-per-kg exchange rate k (bypasses the solveEvoErgo sweep).
+   *  Single-solve default when unset is EVO_ERGO_OBJ_K (10). */
+  evoErgoK?: number;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   barterAvailable?: boolean;

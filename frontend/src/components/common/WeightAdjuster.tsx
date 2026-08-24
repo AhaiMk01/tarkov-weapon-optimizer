@@ -14,6 +14,8 @@ interface WeightAdjusterProps {
   recoilWeight: number
   priceWeight: number
   onWeightChange: (ergo: number, recoil: number, price: number) => void
+  useEvoErgo: boolean
+  onUseEvoErgoChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -40,6 +42,8 @@ export function WeightAdjuster({
   recoilWeight,
   priceWeight,
   onWeightChange,
+  useEvoErgo,
+  onUseEvoErgoChange,
   useBudget,
   onUseBudgetChange,
   maxPrice,
@@ -100,6 +104,15 @@ export function WeightAdjuster({
                 <Button size="small" onClick={() => onWeightChange(20, 70, 10)}>{t('optimize.preset_recoil_focus')}</Button>
                 <Button size="small" onClick={() => onWeightChange(70, 20, 10)}>{t('optimize.preset_ergo_focus')}</Button>
               </Space>
+              <div style={toggleRowStyle}>
+                <Space size={4}>
+                  <Text type="secondary" style={labelStyle}>{t('optimize.evo_ergo')}</Text>
+                  <Tooltip title={t('optimize.evo_ergo_tooltip')}>
+                    <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                  </Tooltip>
+                </Space>
+                <Segmented size="small" value={useEvoErgo ? 'on' : 'off'} onChange={(v) => onUseEvoErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <Text type="secondary" style={labelStyle}>{t('optimize.weight_ui_label')}</Text>
                 <Segmented

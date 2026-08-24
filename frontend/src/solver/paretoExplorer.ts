@@ -25,6 +25,7 @@ export interface ParetoParams {
   excludeItems?: string[] | null;
   includeCategories?: string[][] | null;
   excludeCategories?: string[] | null;
+  useEvoErgo?: boolean;
   steps?: number;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
@@ -48,6 +49,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     excludeItems: p.excludeItems,
     includeCategories: p.includeCategories,
     excludeCategories: p.excludeCategories,
+    useEvoErgo: p.useEvoErgo ?? false,
     traderLevels: p.traderLevels,
     fleaAvailable: p.fleaAvailable ?? true,
     barterAvailable: p.barterAvailable ?? false,

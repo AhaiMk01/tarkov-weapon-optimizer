@@ -57,7 +57,9 @@
     "weight_ui_triangle": "三角",
     "weight_ui_sliders": "スライダー",
     "generate_btn": "最適化開始",
-    "ready_description": "武器を選択し優先度を調整、最適なビルドを生成"
+    "ready_description": "武器を選択し優先度を調整、最適なビルドを生成",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "ハード制約",
@@ -174,7 +176,8 @@
     "reset": "デフォルトにリセット",
     "ll_level": "LL {{level}}",
     "refresh_data": "データの強制更新",
-    "refresh_data_tooltip": "キャッシュをクリアし、Tarkov.devからゲームデータを再取得"
+    "refresh_data_tooltip": "キャッシュをクリアし、Tarkov.devからゲームデータを再取得",
+    "evo_ergo_label": "EvoErgo"
   },
   "error": {
     "title": "エラーが発生しました",

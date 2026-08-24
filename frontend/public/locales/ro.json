@@ -57,7 +57,9 @@
     "weight_ui_triangle": "Triunghi",
     "weight_ui_sliders": "Glisoare",
     "generate_btn": "Pornește Optimizarea",
-    "ready_description": "Selectează arma și ajustează prioritățile pentru configurație optimă"
+    "ready_description": "Selectează arma și ajustează prioritățile pentru configurație optimă",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "Restricții",
@@ -174,7 +176,8 @@
     "reset": "Resetare la implicit",
     "ll_level": "LL {{level}}",
     "refresh_data": "Forțează actualizarea datelor",
-    "refresh_data_tooltip": "Șterge datele în cache și descarcă din nou de la Tarkov.dev"
+    "refresh_data_tooltip": "Șterge datele în cache și descarcă din nou de la Tarkov.dev",
+    "evo_ergo_label": "EvoErgo"
   },
   "error": {
     "title": "A apărut o eroare",

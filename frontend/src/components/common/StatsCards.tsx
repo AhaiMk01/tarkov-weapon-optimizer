@@ -10,9 +10,10 @@ interface StatsCardsProps {
   weight: number
   price: number
   moa?: number
+  evoErgo?: number
 }
 
-export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa }: StatsCardsProps) {
+export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, evoErgo }: StatsCardsProps) {
   const { t } = useTranslation()
   const { token } = useToken()
   return (
@@ -20,6 +21,11 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('sidebar.ergonomics')} value={Math.min(100, Math.max(0, ergonomics)).toFixed(1)} />
       </Card>
+      {evoErgo != null && (
+        <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
+          <Statistic title={t('ui.evo_ergo_label')} value={evoErgo.toFixed(1)} />
+        </Card>
+      )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('ui.vert_recoil')} value={recoilVertical.toFixed(1)} />
       </Card>

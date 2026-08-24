@@ -77,6 +77,7 @@ export function OptimizeResult({ result, viewMode, onViewModeChange, optimizing,
             weight={result.final_stats.total_weight}
             price={result.final_stats.total_price}
             moa={result.final_stats.moa}
+            evoErgo={result.final_stats.evo_ergo}
           />
           {result.selected_preset && (
             <UsingPresetCard

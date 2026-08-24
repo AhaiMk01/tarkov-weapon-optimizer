@@ -57,7 +57,9 @@
     "weight_ui_triangle": "Üçgen",
     "weight_ui_sliders": "Kaydırıcı",
     "generate_btn": "Optimizasyonu Başlat",
-    "ready_description": "Silah seçin ve öncelikleri ayarlayarak optimal build oluşturun"
+    "ready_description": "Silah seçin ve öncelikleri ayarlayarak optimal build oluşturun",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "Kısıtlamalar",
@@ -174,7 +176,8 @@
     "reset": "Varsayılanlara sıfırla",
     "ll_level": "LL {{level}}",
     "refresh_data": "Verileri güncelle",
-    "refresh_data_tooltip": "Oyun verisi önbelleğini temizle ve Tarkov.dev'den yeniden indir"
+    "refresh_data_tooltip": "Oyun verisi önbelleğini temizle ve Tarkov.dev'den yeniden indir",
+    "evo_ergo_label": "EvoErgo"
   },
   "error": {
     "title": "Bir hata oluştu",

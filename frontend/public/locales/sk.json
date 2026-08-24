@@ -57,7 +57,9 @@
     "weight_ui_triangle": "Trojuholník",
     "weight_ui_sliders": "Posúvače",
     "generate_btn": "Spustiť optimalizáciu",
-    "ready_description": "Vyberte zbraň a upravte priority pre optimálnu zostavu"
+    "ready_description": "Vyberte zbraň a upravte priority pre optimálnu zostavu",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "Obmedzenia",
@@ -174,7 +176,8 @@
     "reset": "Obnoviť predvolené",
     "ll_level": "LL {{level}}",
     "refresh_data": "Vynútiť obnovenie údajov",
-    "refresh_data_tooltip": "Vymazať mezipaměť herných údajov a znova ich stiahnuť z Tarkov.dev"
+    "refresh_data_tooltip": "Vymazať mezipaměť herných údajov a znova ich stiahnuť z Tarkov.dev",
+    "evo_ergo_label": "EvoErgo"
   },
   "error": {
     "title": "Vyskytla sa chyba",

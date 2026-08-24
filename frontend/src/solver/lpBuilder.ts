@@ -52,6 +52,53 @@ export interface LPResult {
 const ERGO_SCALE = 10;   // Ergo decimal precision (0.5 ergo → 5)
 const SCALE = 1000;       // Recoil modifier precision (-0.05 → -50)
 
+/**
+ * EvoErgo display constant: ergo points lost per kg of weight in the reported
+ * `evo_ergo` stat (ergo − 15·kg). 15 is the community constant (SpaceMonkey37);
+ * it is the slope of EFTForge's EED threshold curve at ~26 ergo.
+ */
+export const EVO_ERGO_K = 15;
+
+/**
+ * Default objective exchange rate when a single EvoErgo solve is run without an
+ * explicit k (e.g. Pareto exploration). 10 ≈ the threshold-curve slope at ~45
+ * build ergo — closer to real builds than 15, and empirically it recovers the
+ * true-EED-optimal build where 15 over-trades ergo for weight.
+ */
+export const EVO_ERGO_OBJ_K = 10;
+
+/**
+ * k values swept by solveEvoErgo: tangent slopes of the EED threshold curve at
+ * build ergo ≈ 26 / 45 / 70 / 100. EED is convex in ergo, so its maximizer is
+ * always attained by maximizing some tangent line ergo − k·kg; sweeping these
+ * and scoring each build with the true quadratic (eedOf) is exact up to the
+ * grid resolution.
+ */
+export const EVO_ERGO_SWEEP_KS = [15, 10, 7.5, 5.6];
+
+/**
+ * EFTForge's EvoErgoDelta (b = 0, empty mags): distance from the overswing
+ * threshold. KG(E) is the reverse-engineered ideal-weight curve; positive EED
+ * means under ideal weight (good), negative means overswing.
+ */
+export function eedOf(ergo: number, weightKg: number): number {
+  const E = Math.min(100, Math.max(0, ergo));
+  const kg = 0.0007556 * E * E + 0.02736 * E + 2.9159;
+  return -15 * (weightKg - kg);
+}
+
+/**
+ * Tangent slope of the EED threshold curve at build ergo E, expressed as the
+ * ergo-per-kg exchange rate: k(E) = 1/KG'(E). This is the k at which the
+ * linear objective ergo − k·kg locally matches true EED — ~15 at 26 ergo,
+ * ~7.5 at 70, ~5.6 at 100. Weapon-specific by construction: it depends on the
+ * ergo level the build actually reaches.
+ */
+export function eedTangentK(ergo: number): number {
+  const E = Math.min(100, Math.max(0, ergo));
+  return 1 / (2 * 0.0007556 * E + 0.02736);
+}
+
 /** RUB cost in objective when mod has no buyFor (scaled by price weight). Not counted toward maxPrice. */
 const UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB = 50_000_000;
 
@@ -503,6 +550,16 @@ export function buildLP(params: SolveParams): LPResult {
   const rw_obj = rw * SCALE * ERGO_SCALE;              // rw * 10,000
   const pw_obj = pw * ERGO_SCALE;                      // pw * 10
 
+  // EvoErgo: the ergo axis optimizes ergo − k·kg instead of raw ergo. The
+  // weight penalty attaches to each item's x_i; the naked receiver's weight is
+  // the same for every base, so it shifts the objective by a constant only.
+  // capped_ergo carries ergo×ERGO_SCALE at coefficient ergo_w*SCALE, so one
+  // real ergo point is worth ergo_w*SCALE*ERGO_SCALE objective units and one
+  // gram costs ergo_w*SCALE*ERGO_SCALE*k/1000 = ergo_w*ERGO_SCALE*k.
+  const eeGramCoeff = params.useEvoErgo
+    ? ergo_w * ERGO_SCALE * (params.evoErgoK ?? EVO_ERGO_OBJ_K)
+    : 0;
+
   const weapon_naked_ergo_scaled = Math.round(weaponStats.naked_ergonomics * ERGO_SCALE);
   const nakedRecoilV = weaponStats.naked_recoil_v;
 
@@ -532,7 +589,9 @@ export function buildLP(params: SolveParams): LPResult {
   // HiGHS's CPLEX LP reader rejects duplicate variables in a constraint row.
   for (let i = 1; i <= n_items; i++) {
     const recoilCoeff = -rw_obj * item_recoil[i];
-    const combined = recoilCoeff - 1; // parsimony penalty
+    const eePenalty = eeGramCoeff * item_weight_g[i];
+    // round to keep LP coefficients free of float noise (e.g. 1781.8899999999999)
+    const combined = Math.round((recoilCoeff - eePenalty - 1) * 1e6) / 1e6; // -1 = parsimony penalty
     objTerms.push(`${combined} x_${i}`);
   }
 

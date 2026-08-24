@@ -2,6 +2,16 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.7.0] — 2026-08-24
+
+### Added
+- **EvoErgo (weight-adjusted ergonomics) optimization mode**: When toggled on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergonomics. The solver incorporates a weight penalty into the linear objective to model the real in-game ergonomics vs weight tradeoff (derived from SpaceMonkey37's research on aim-down-sights overswing and turning dynamics).
+- **EED tangent $k$-sweep solver (`solveEvoErgo`)**: EFTForge's EvoErgoDelta metric ($\text{EED} = (100 - 0.015 \times (100 - \text{ergo})^2) - 15 \times \text{weight}_{\text{kg}}$) is quadratic and non-linear. The solver runs a candidate sweep over tangent exchange rates $k \in \{15, 10, 7.5, 5.6\}$ and the exact tangent slope $k(E) = 0.03(100 - E) + 15$, returning the globally optimal build that maximizes true quadratic EED.
+- **EvoErgo metric display**: Optimization results now display the community standard **EvoErgo** score ($\min(100, \text{ergo}) - 15 \times \text{weight}_{\text{kg}}$) in the stats overview cards alongside raw ergonomics, recoil, weight, price, and MOA.
+- **EvoErgo UI toggle**: Added an On/Off segmented switch with an informative tooltip in the Priority Weights panel. The preference is automatically saved to browser local storage.
+- **Translations for all 16 locales**: Added localized labels and tooltips for EvoErgo across all supported languages (cs, de, en, es, fr, hu, it, ja, ko, pl, pt, ro, ru, sk, tr, zh).
+- **EvoErgo verification test suite (`frontend/test_evoergo.ts`)**: Automated test verifying solver optimality, raw-ergo vs EvoErgo tradeoff properties, sweep dominance, and stat calculations across benchmark assault rifles and sniper rifles.
+
 ## [v2.6.0] — 2026-08-12
 
 ### Fixed

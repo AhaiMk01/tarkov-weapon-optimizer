@@ -6,7 +6,7 @@ import { ensureDataLoaded } from './dataService.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
-import { solve } from './solver.ts';
+import { solve, solveEvoErgo } from './solver.ts';
 import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
 import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats } from './types.ts';
@@ -132,7 +132,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const precReq = normalizePrecisionRequest(req.precise_mode);
           const usePrecise = resolvePreciseFlag(precReq, compatMap);
 
-          const result: OptimizeResponse = await solve({
+          const result: OptimizeResponse = await solveEvoErgo({
             weaponId: req.weapon_id,
             itemLookup: data.itemLookup,
             compatibilityMap: compatMap,
@@ -151,6 +151,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             ergoWeight: req.ergo_weight ?? 1,
             recoilWeight: req.recoil_weight ?? 1,
             priceWeight: req.price_weight ?? 0,
+            useEvoErgo: req.use_evo_ergo ?? false,
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             barterAvailable: req.barter_available ?? false,
@@ -190,6 +191,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             excludeItems: req.exclude_items,
             includeCategories: req.include_categories,
             excludeCategories: req.exclude_categories,
+            useEvoErgo: req.use_evo_ergo ?? false,
             steps: req.steps ?? 10,
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,

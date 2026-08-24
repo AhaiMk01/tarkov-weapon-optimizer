@@ -57,7 +57,9 @@
     "weight_ui_triangle": "Triangle",
     "weight_ui_sliders": "Sliders",
     "generate_btn": "Start Optimization",
-    "ready_description": "Select weapon and adjust priorities to generate optimal build"
+    "ready_description": "Select weapon and adjust priorities to generate optimal build",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "Hard Constraints",
@@ -174,7 +176,8 @@
     "lock_action_tooltip_remove": "Unlock (remove from required)",
     "ban_action_tooltip_add": "Ban (exclude from next build)",
     "ban_action_tooltip_remove": "Unban (remove from excluded)",
-    "changelog_title": "Changelog"
+    "changelog_title": "Changelog",
+    "evo_ergo_label": "EvoErgo"
   },
   "trader": {
     "prapor": "Prapor",

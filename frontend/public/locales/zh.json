@@ -57,7 +57,9 @@
     "weight_ui_triangle": "三角形",
     "weight_ui_sliders": "滑动条",
     "generate_btn": "开始优化",
-    "ready_description": "选好武器，调好更在意人机、后坐还是价格，求解当前条件下的最优配装。"
+    "ready_description": "选好武器，调好更在意人机、后坐还是价格，求解当前条件下的最优配装。",
+    "evo_ergo": "负重人机 (EvoErgo)",
+    "evo_ergo_tooltip": "开启后，人机权重改为优化负重加权人机：求解器会尝试多个「人机/公斤」兑换率，保留 EvoErgoDelta（距离甩枪阈值）最优的配装。显示的负重人机数值为社区指标「人机 − 15 × 重量(kg)」。来源于 SpaceMonkey37 的 EvoErgo。"
   },
   "constraints": {
     "header": "硬约束",
@@ -174,7 +176,8 @@
     "ban_action_tooltip_remove": "取消禁用 (不再排除)",
     "changelog_title": "更新日志",
     "refresh_data": "强制更新数据",
-    "refresh_data_tooltip": "清空缓存并从 Tarkov.dev 重新下载游戏数据"
+    "refresh_data_tooltip": "清空缓存并从 Tarkov.dev 重新下载游戏数据",
+    "evo_ergo_label": "负重人机"
   },
   "trader": {
     "prapor": "Prapor",

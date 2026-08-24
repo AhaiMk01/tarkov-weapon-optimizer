@@ -57,7 +57,9 @@
     "weight_ui_triangle": "Háromszög",
     "weight_ui_sliders": "Csúszkák",
     "generate_btn": "Optimalizálás indítása",
-    "ready_description": "Válasszon fegyvert és állítsa be a prioritásokat az optimális buildhez"
+    "ready_description": "Válasszon fegyvert és állítsa be a prioritásokat az optimális buildhez",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "Korlátozások",
@@ -174,7 +176,8 @@
     "reset": "Visszaállítás alapértelmezettre",
     "ll_level": "LL {{level}}",
     "refresh_data": "Adatok frissítésének kényszerítése",
-    "refresh_data_tooltip": "Gyorsítótárazott játékadatok törlése és újraletöltése a Tarkov.dev-ről"
+    "refresh_data_tooltip": "Gyorsítótárazott játékadatok törlése és újraletöltése a Tarkov.dev-ről",
+    "evo_ergo_label": "EvoErgo"
   },
   "error": {
     "title": "Hiba történt",

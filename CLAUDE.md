@@ -34,6 +34,7 @@ cd frontend && npx tsx test_json_api_adapter.ts             # JSON API shape par
 cd frontend && npx tsx test_trader_access.ts                # per-trader loyalty gating + TRADER_DISABLED (0), incl. Ref barters
 cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
 cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
+cd frontend && npx tsx test_evoergo.ts                      # EvoErgo k-sweep: solveEvoErgo maximizes true EED (quadratic), EE-off maximizes raw ergo
 ```
 
 ### PyInstaller Executable

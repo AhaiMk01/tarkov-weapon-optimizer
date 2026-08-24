@@ -213,6 +213,7 @@ function AppContent({
   const [ergoWeight, setErgoWeight] = useState(33)
   const [recoilWeight, setRecoilWeight] = useState(34)
   const [priceWeight, setPriceWeight] = useState(33)
+  const [useEvoErgo, setUseEvoErgo] = useState<boolean>(() => localStorage.getItem('useEvoErgo') === 'true')
   const [useBudget, setUseBudget] = useState(false)
   const [maxPrice, setMaxPrice] = useState(200000)
   const [minErgo, setMinErgo] = useState(0)
@@ -291,6 +292,7 @@ function AppContent({
   useEffect(() => { localStorage.setItem('viewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('solverPrecision', solverPrecision) }, [solverPrecision])
   useEffect(() => { localStorage.setItem('useExactMOAFloor', String(useExactMOAFloor)) }, [useExactMOAFloor])
+  useEffect(() => { localStorage.setItem('useEvoErgo', String(useEvoErgo)) }, [useEvoErgo])
   useEffect(() => {
     localStorage.setItem(
       LEVEL_CONFIG_STORAGE_KEY,
@@ -494,6 +496,7 @@ function AppContent({
         ergo_weight: ergoWeight,
         recoil_weight: recoilWeight,
         price_weight: priceWeight,
+        use_evo_ergo: useEvoErgo || undefined,
         max_price: useBudget ? maxPrice : undefined,
         min_ergonomics: minErgo > 0 ? minErgo : undefined,
         min_mag_capacity: useMinMag ? minMagCapacity : undefined,
@@ -534,6 +537,7 @@ function AppContent({
         weapon_id: selectedGunId,
         ignore: exploreTradeoff,
         steps: 10,
+        use_evo_ergo: useEvoErgo || undefined,
         max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
         min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
         max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
@@ -728,6 +732,8 @@ function AppContent({
               recoilWeight={recoilWeight}
               priceWeight={priceWeight}
               onWeightChange={(e, r, p) => { setErgoWeight(e); setRecoilWeight(r); setPriceWeight(p) }}
+              useEvoErgo={useEvoErgo}
+              onUseEvoErgoChange={setUseEvoErgo}
               useBudget={useBudget}
               onUseBudgetChange={setUseBudget}
               maxPrice={maxPrice}

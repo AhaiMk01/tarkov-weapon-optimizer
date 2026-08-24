@@ -57,7 +57,9 @@
     "weight_ui_triangle": "Triângulo",
     "weight_ui_sliders": "Sliders",
     "generate_btn": "Iniciar Otimização",
-    "ready_description": "Selecione arma e ajuste prioridades para build ideal"
+    "ready_description": "Selecione arma e ajuste prioridades para build ideal",
+    "evo_ergo": "EvoErgo (weight-adjusted)",
+    "evo_ergo_tooltip": "When on, the ergonomics weight optimizes weight-adjusted ergonomics instead of raw ergo: the solver tries several ergo-per-kg exchange rates and keeps the build with the best EvoErgoDelta (distance from the overswing threshold). The EvoErgo stat shown is the community metric ergo − 15 × weight (kg). Based on SpaceMonkey37’s EvoErgo."
   },
   "constraints": {
     "header": "Restrições",
@@ -174,7 +176,8 @@
     "reset": "Redefinir para padrão",
     "ll_level": "LL {{level}}",
     "refresh_data": "Forçar atualização de dados",
-    "refresh_data_tooltip": "Limpar cache e fazer download dos dados novamente de Tarkov.dev"
+    "refresh_data_tooltip": "Limpar cache e fazer download dos dados novamente de Tarkov.dev",
+    "evo_ergo_label": "EvoErgo"
   },
   "error": {
     "title": "Ocorreu um erro",
