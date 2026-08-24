@@ -180,6 +180,15 @@ export interface WorkerResponse {
   payload: unknown;
 }
 
+export interface IdealPoint {
+  zE: number;
+  nadE: number;
+  zR: number;
+  nadR: number;
+  zP: number;
+  nadP: number;
+}
+
 export interface SolveParams {
   weaponId: string;
   itemLookup: ItemLookup;
@@ -204,6 +213,16 @@ export interface SolveParams {
   /** Explicit ergo-per-kg exchange rate k (bypasses the solveEvoErgo sweep).
    *  Single-solve default when unset is EVO_ERGO_OBJ_K (10). */
   evoErgoK?: number;
+  /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
+  useTchebycheff?: boolean;
+  /** Precomputed ideal/nadir reference point for Tchebycheff scalarization. */
+  idealPoint?: IdealPoint;
+  /** Enforces that weapon weight stays strictly below the aim overswing threshold (EED >= 0). */
+  preventOverswing?: boolean;
+  /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
+  equipErgoModifier?: number | null;
+  /** Internal linear cuts for overswing enforcement. */
+  overswingCuts?: Array<{ slope: number; rhs: number }>;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   barterAvailable?: boolean;

@@ -6,10 +6,10 @@ import { ensureDataLoaded } from './dataService.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
-import { solve, solveEvoErgo } from './solver.ts';
+import { solve, solveEvoErgo, computeIdealPoint } from './solver.ts';
 import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
-import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats } from './types.ts';
+import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats, IdealPoint } from './types.ts';
 import type { OptimizeRequest, ExploreRequest, OptimizeResponse, ExploreResponse, ExplorePoint } from '../api/client.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -23,6 +23,36 @@ interface LoadedData {
 }
 
 const dataCache = new Map<string, LoadedData>();
+const idealPointCache = new Map<string, IdealPoint>();
+
+function getIdealCacheKey(lang: string, gameMode: string, req: OptimizeRequest): string {
+  return JSON.stringify({
+    lang,
+    gameMode,
+    weapon_id: req.weapon_id,
+    max_price: req.max_price,
+    min_ergonomics: req.min_ergonomics,
+    max_recoil_v: req.max_recoil_v,
+    max_recoil_sum: req.max_recoil_sum,
+    min_mag_capacity: req.min_mag_capacity,
+    min_sighting_range: req.min_sighting_range,
+    max_weight: req.max_weight,
+    max_moa: req.max_moa,
+    include_items: req.include_items,
+    exclude_items: req.exclude_items,
+    include_categories: req.include_categories,
+    exclude_categories: req.exclude_categories,
+    prevent_overswing: req.prevent_overswing,
+    equip_ergo_modifier: req.equip_ergo_modifier,
+    use_evo_ergo: req.use_evo_ergo,
+    trader_levels: req.trader_levels,
+    flea_available: req.flea_available,
+    barter_available: req.barter_available,
+    barter_exclude_dogtags: req.barter_exclude_dogtags,
+    player_level: req.player_level,
+  });
+}
+
 
 async function getOrLoadData(lang: string, gameMode: string): Promise<LoadedData> {
   const key = `${lang}:${gameMode}`;
@@ -132,6 +162,41 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const precReq = normalizePrecisionRequest(req.precise_mode);
           const usePrecise = resolvePreciseFlag(precReq, compatMap);
 
+          let idealPoint: IdealPoint | undefined;
+          if (req.use_tchebycheff) {
+            const cacheKey = getIdealCacheKey(lang, gameMode, req);
+            idealPoint = idealPointCache.get(cacheKey);
+            if (!idealPoint) {
+              idealPoint = await computeIdealPoint({
+                weaponId: req.weapon_id,
+                itemLookup: data.itemLookup,
+                compatibilityMap: compatMap,
+                maxPrice: req.max_price,
+                minErgonomics: req.min_ergonomics,
+                maxRecoilV: req.max_recoil_v,
+                maxRecoilSum: req.max_recoil_sum,
+                minMagCapacity: req.min_mag_capacity,
+                minSightingRange: req.min_sighting_range,
+                maxWeight: req.max_weight,
+                maxMOA: req.max_moa,
+                includeItems: req.include_items,
+                excludeItems: req.exclude_items,
+                includeCategories: req.include_categories,
+                excludeCategories: req.exclude_categories,
+                useEvoErgo: req.use_evo_ergo ?? false,
+                preventOverswing: req.prevent_overswing ?? false,
+                equipErgoModifier: req.equip_ergo_modifier,
+                traderLevels: req.trader_levels as TraderLevels | undefined,
+                fleaAvailable: req.flea_available ?? true,
+                barterAvailable: req.barter_available ?? false,
+                barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
+                playerLevel: req.player_level,
+                preciseMode: usePrecise,
+              });
+              idealPointCache.set(cacheKey, idealPoint);
+            }
+          }
+
           const result: OptimizeResponse = await solveEvoErgo({
             weaponId: req.weapon_id,
             itemLookup: data.itemLookup,
@@ -152,6 +217,10 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             recoilWeight: req.recoil_weight ?? 1,
             priceWeight: req.price_weight ?? 0,
             useEvoErgo: req.use_evo_ergo ?? false,
+            useTchebycheff: req.use_tchebycheff ?? false,
+            preventOverswing: req.prevent_overswing ?? false,
+            equipErgoModifier: req.equip_ergo_modifier,
+            idealPoint,
             traderLevels: req.trader_levels as TraderLevels | undefined,
             fleaAvailable: req.flea_available ?? true,
             barterAvailable: req.barter_available ?? false,
@@ -193,7 +262,9 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             excludeCategories: req.exclude_categories,
             useEvoErgo: req.use_evo_ergo ?? false,
             steps: req.steps ?? 10,
+            preventOverswing: req.prevent_overswing ?? false,
             traderLevels: req.trader_levels as TraderLevels | undefined,
+            equipErgoModifier: req.equip_ergo_modifier,
             fleaAvailable: req.flea_available ?? true,
             barterAvailable: req.barter_available ?? false,
             barterExcludeDogtags: req.barter_exclude_dogtags ?? false,

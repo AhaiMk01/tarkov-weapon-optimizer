@@ -1,3 +1,6 @@
+import type { IdealPoint } from '../solver/types';
+export type { IdealPoint } from '../solver/types';
+
 /**
  * API Client - uses Web Worker + HiGHS solver instead of HTTP backend.
  * All exported function signatures remain identical for UI compatibility.
@@ -30,6 +33,9 @@ export interface OptimizeRequest {
   min_mag_capacity?: number;
   min_sighting_range?: number;
   max_weight?: number;
+  prevent_overswing?: boolean;
+  /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
+  equip_ergo_modifier?: number;
   max_moa?: number;
   include_items?: string[];
   exclude_items?: string[];
@@ -40,6 +46,8 @@ export interface OptimizeRequest {
   price_weight?: number;
   /** Ergo weight applies to EvoErgo (ergo − 15·kg) instead of raw ergonomics. */
   use_evo_ergo?: boolean;
+  /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
+  use_tchebycheff?: boolean;
   /** Unlocked loyalty level per trader `normalizedName`; 0 disables the trader. */
   trader_levels?: {
     prapor: number;
@@ -132,6 +140,8 @@ export interface OptimizeResponse {
   slot_pairs?: [string, string][];
   /** EvoErgo mode: the objective k whose build won the EED sweep. */
   evo_ergo_k?: number;
+  /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
+  ideal_point?: IdealPoint;
 }
 
 export type GameMode = 'regular' | 'pve';

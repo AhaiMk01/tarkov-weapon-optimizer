@@ -16,6 +16,8 @@ interface WeightAdjusterProps {
   onWeightChange: (ergo: number, recoil: number, price: number) => void
   useEvoErgo: boolean
   onUseEvoErgoChange: (v: boolean) => void
+  useTchebycheff: boolean
+  onUseTchebycheffChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -35,6 +37,10 @@ interface WeightAdjusterProps {
   useExactMOAFloor: boolean
   onUseExactMOAFloorChange: (v: boolean) => void
   computingMOAFloor: boolean
+  preventOverswing: boolean
+  onPreventOverswingChange: (v: boolean) => void
+  equipErgoPenalty: number
+  onEquipErgoPenaltyChange: (v: number) => void
 }
 
 export function WeightAdjuster({
@@ -44,6 +50,8 @@ export function WeightAdjuster({
   onWeightChange,
   useEvoErgo,
   onUseEvoErgoChange,
+  useTchebycheff,
+  onUseTchebycheffChange,
   useBudget,
   onUseBudgetChange,
   maxPrice,
@@ -58,6 +66,10 @@ export function WeightAdjuster({
   onUseMOAChange,
   maxMOA,
   onMaxMOAChange,
+  preventOverswing,
+  equipErgoPenalty,
+  onEquipErgoPenaltyChange,
+  onPreventOverswingChange,
   moaRange,
   useExactMOAFloor,
   onUseExactMOAFloorChange,
@@ -113,6 +125,15 @@ export function WeightAdjuster({
                 </Space>
                 <Segmented size="small" value={useEvoErgo ? 'on' : 'off'} onChange={(v) => onUseEvoErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
               </div>
+              <div style={toggleRowStyle}>
+                <Space size={4}>
+                  <Text type="secondary" style={labelStyle}>{t('optimize.tchebycheff')}</Text>
+                  <Tooltip title={t('optimize.tchebycheff_tooltip')}>
+                    <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                  </Tooltip>
+                </Space>
+                <Segmented size="small" value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+              </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <Text type="secondary" style={labelStyle}>{t('optimize.weight_ui_label')}</Text>
                 <Segmented
@@ -152,9 +173,59 @@ export function WeightAdjuster({
         {
           key: 'constraints',
           label: <span style={{ userSelect: 'none' }}>{t('constraints.header')}</span>,
-          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0) }} /></Tooltip>,
+          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} /></Tooltip>,
           children: (
             <Space direction="vertical" style={{ width: '100%' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={toggleRowStyle}>
+                  <Space size={4}>
+                    <Text type="secondary" style={labelStyle}>{t('constraints.prevent_overswing')}</Text>
+                    <Tooltip title={t('constraints.prevent_overswing_tooltip')}>
+                      <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                    </Tooltip>
+                  </Space>
+                  <Segmented size="small" value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                </div>
+                {preventOverswing && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '0 4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Space size={4}>
+                        <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.equip_ergo_penalty')}</Text>
+                        <Tooltip title={t('constraints.equip_ergo_penalty_tooltip')}>
+                          <QuestionCircleOutlined style={{ color: '#888', fontSize: 11 }} />
+                        </Tooltip>
+                      </Space>
+                      <InputNumber
+                        size="small"
+                        style={{ width: 75 }}
+                        min={-50}
+                        max={0}
+                        step={1}
+                        value={equipErgoPenalty}
+                        onChange={(v) => onEquipErgoPenaltyChange(v ?? 0)}
+                        formatter={(v) => `${v}%`}
+                        parser={(v) => Number(v?.replace('%', '') || 0)}
+                      />
+                    </div>
+                    <Slider
+                      style={{ margin: '4px 6px 18px 6px' }}
+                      min={-40}
+                      max={0}
+                      step={1}
+                      value={equipErgoPenalty}
+                      onChange={onEquipErgoPenaltyChange}
+                      marks={{
+                        [-40]: { label: '-40%', style: { fontSize: 11 } },
+                        [-30]: { label: '-30%', style: { fontSize: 11 } },
+                        [-20]: { label: '-20%', style: { fontSize: 11 } },
+                        [-10]: { label: '-10%', style: { fontSize: 11 } },
+                        0: { label: '0%', style: { fontSize: 11 } },
+                      }}
+                      tooltip={{ formatter: (v) => `${v}%` }}
+                    />
+                  </div>
+                )}
+              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={toggleRowStyle}>
                   <Text type="secondary" style={labelStyle}>{t('constraints.budget_limit')}</Text>

@@ -26,6 +26,8 @@ export interface ParetoParams {
   includeCategories?: string[][] | null;
   excludeCategories?: string[] | null;
   useEvoErgo?: boolean;
+  preventOverswing?: boolean;
+  equipErgoModifier?: number | null;
   steps?: number;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
@@ -50,6 +52,8 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     includeCategories: p.includeCategories,
     excludeCategories: p.excludeCategories,
     useEvoErgo: p.useEvoErgo ?? false,
+    preventOverswing: p.preventOverswing ?? false,
+    equipErgoModifier: p.equipErgoModifier,
     traderLevels: p.traderLevels,
     fleaAvailable: p.fleaAvailable ?? true,
     barterAvailable: p.barterAvailable ?? false,
@@ -114,18 +118,35 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
 
     if (resultLow.status === 'infeasible') return [];
     let rangeMin = Math.floor(resultLow.final_stats!.ergonomics);
-    let rangeMax = resultHigh.status !== 'infeasible' ? Math.floor(resultHigh.final_stats!.ergonomics) : 100;
+    let rangeMax = resultHigh.status !== 'infeasible' ? Math.ceil(resultHigh.final_stats!.ergonomics) : 100;
 
     if (minErgonomics != null) rangeMin = Math.max(rangeMin, minErgonomics);
     rangeMin = Math.max(0, rangeMin);
     rangeMax = Math.min(100, rangeMax);
     if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
-    const stepSize = steps > 1 ? (rangeMax - rangeMin) / (steps - 1) : 0;
 
-    for (let i = 0; i < steps; i++) {
-      const target = Math.floor(rangeMin + i * stepSize);
-      const result = await runSolve(RECOIL_WEIGHTS, { minErgonomics: target });
-      addPoint(result);
+    addPoint(resultLow);
+    addPoint(resultHigh);
+
+    const stepSize = Math.max(1, (rangeMax - rangeMin) / Math.max(steps, 10));
+    let currentE = rangeMin;
+
+    while (currentE < rangeMax) {
+      currentE += stepSize;
+      if (currentE >= rangeMax) break;
+
+      // AUGMECON: minimize recoil with small augmentation on ergo
+      const result = await runSolve(
+        { ergoWeight: 0.01, recoilWeight: 1, priceWeight: TB },
+        { minErgonomics: currentE }
+      );
+      if (result.status === 'optimal' && result.final_stats) {
+        addPoint(result);
+        const s = result.final_stats.ergonomics;
+        if (s > currentE) {
+          currentE = s;
+        }
+      }
     }
   } else if (ignore === 'recoil') {
     const resultLow = await runSolve(PRICE_WEIGHTS);
@@ -133,18 +154,34 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
 
     if (resultLow.status === 'infeasible') return [];
     let rangeMin = Math.floor(resultLow.final_stats!.ergonomics);
-    let rangeMax = resultHigh.status !== 'infeasible' ? Math.floor(resultHigh.final_stats!.ergonomics) : 100;
+    let rangeMax = resultHigh.status !== 'infeasible' ? Math.ceil(resultHigh.final_stats!.ergonomics) : 100;
 
     if (minErgonomics != null) rangeMin = Math.max(rangeMin, minErgonomics);
     rangeMin = Math.max(0, rangeMin);
     rangeMax = Math.min(100, rangeMax);
     if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
-    const stepSize = steps > 1 ? (rangeMax - rangeMin) / (steps - 1) : 0;
 
-    for (let i = 0; i < steps; i++) {
-      const target = Math.floor(rangeMin + i * stepSize);
-      const result = await runSolve(PRICE_WEIGHTS, { minErgonomics: target });
-      addPoint(result);
+    addPoint(resultLow);
+    addPoint(resultHigh);
+
+    const stepSize = Math.max(1, (rangeMax - rangeMin) / Math.max(steps, 10));
+    let currentE = rangeMin;
+
+    while (currentE < rangeMax) {
+      currentE += stepSize;
+      if (currentE >= rangeMax) break;
+
+      const result = await runSolve(
+        { ergoWeight: 0.01, recoilWeight: TB, priceWeight: 1 },
+        { minErgonomics: currentE }
+      );
+      if (result.status === 'optimal' && result.final_stats) {
+        addPoint(result);
+        const s = result.final_stats.ergonomics;
+        if (s > currentE) {
+          currentE = s;
+        }
+      }
     }
   } else if (ignore === 'ergo') {
     const resultLow = await runSolve(RECOIL_WEIGHTS, { minErgonomics: minErgonomics });
@@ -156,12 +193,28 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
 
     if (maxRecoilV != null) rangeMax = Math.min(rangeMax, maxRecoilV);
     if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
-    const stepSize = steps > 1 ? (rangeMax - rangeMin) / (steps - 1) : 0;
 
-    for (let i = 0; i < steps; i++) {
-      const target = rangeMin + i * stepSize;
-      const result = await runSolve(PRICE_WEIGHTS, { minErgonomics: minErgonomics, maxRecoilV: target });
-      addPoint(result);
+    addPoint(resultLow);
+    addPoint(resultHigh);
+
+    const stepSize = (rangeMax - rangeMin) / Math.max(steps, 10);
+    let currentR = rangeMin;
+
+    while (currentR < rangeMax) {
+      currentR += stepSize;
+      if (currentR >= rangeMax) break;
+
+      const result = await runSolve(
+        { ergoWeight: TB, recoilWeight: 0.01, priceWeight: 1 },
+        { minErgonomics: minErgonomics, maxRecoilV: currentR }
+      );
+      if (result.status === 'optimal' && result.final_stats) {
+        addPoint(result);
+        const s = result.final_stats.recoil_vertical;
+        if (s > currentR) {
+          currentR = s;
+        }
+      }
     }
   }
 

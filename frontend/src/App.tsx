@@ -3,11 +3,12 @@ declare const __APP_VERSION__: string;
 import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
-import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined } from '@ant-design/icons'
+import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor, clearDataCache } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
+import { MethodologyModal } from './components/common/MethodologyModal'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
 import { ExplorePanel } from './components/explore/ExplorePanel'
@@ -214,12 +215,15 @@ function AppContent({
   const [recoilWeight, setRecoilWeight] = useState(34)
   const [priceWeight, setPriceWeight] = useState(33)
   const [useEvoErgo, setUseEvoErgo] = useState<boolean>(() => localStorage.getItem('useEvoErgo') === 'true')
+  const [useTchebycheff, setUseTchebycheff] = useState<boolean>(() => localStorage.getItem('useTchebycheff') === 'true')
   const [useBudget, setUseBudget] = useState(false)
   const [maxPrice, setMaxPrice] = useState(200000)
   const [minErgo, setMinErgo] = useState(0)
   const [useMinMag, setUseMinMag] = useState(false)
   const [minMagCapacity, setMinMagCapacity] = useState(0)
   const [useMOA, setUseMOA] = useState(false)
+  const [preventOverswing, setPreventOverswing] = useState<boolean>(() => localStorage.getItem('preventOverswing') === 'true')
+  const [equipErgoPenalty, setEquipErgoPenalty] = useState<number>(() => Number(localStorage.getItem('equipErgoPenalty') ?? 0))
   const [maxMOA, setMaxMOA] = useState(0)
   const [useExactMOAFloor, setUseExactMOAFloor] = useState<boolean>(() => localStorage.getItem('useExactMOAFloor') !== 'false')
   const [exactMOAFloor, setExactMOAFloor] = useState<number | null>(null)
@@ -267,6 +271,7 @@ function AppContent({
   const [optimizingGunsmith, setOptimizingGunsmith] = useState(false)
   const modsRequestSeq = useRef(0)
   const [changelogOpen, setChangelogOpen] = useState(false)
+  const [methodologyOpen, setMethodologyOpen] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const messageApiRef = useRef(messageApi)
   messageApiRef.current = messageApi
@@ -293,6 +298,9 @@ function AppContent({
   useEffect(() => { localStorage.setItem('solverPrecision', solverPrecision) }, [solverPrecision])
   useEffect(() => { localStorage.setItem('useExactMOAFloor', String(useExactMOAFloor)) }, [useExactMOAFloor])
   useEffect(() => { localStorage.setItem('useEvoErgo', String(useEvoErgo)) }, [useEvoErgo])
+  useEffect(() => { localStorage.setItem('useTchebycheff', String(useTchebycheff)) }, [useTchebycheff])
+  useEffect(() => { localStorage.setItem('preventOverswing', String(preventOverswing)) }, [preventOverswing])
+  useEffect(() => { localStorage.setItem('equipErgoPenalty', String(equipErgoPenalty)) }, [equipErgoPenalty])
   useEffect(() => {
     localStorage.setItem(
       LEVEL_CONFIG_STORAGE_KEY,
@@ -497,10 +505,13 @@ function AppContent({
         recoil_weight: recoilWeight,
         price_weight: priceWeight,
         use_evo_ergo: useEvoErgo || undefined,
+        use_tchebycheff: useTchebycheff || undefined,
         max_price: useBudget ? maxPrice : undefined,
         min_ergonomics: minErgo > 0 ? minErgo : undefined,
         min_mag_capacity: useMinMag ? minMagCapacity : undefined,
         max_moa: useMOA ? maxMOA : undefined,
+        prevent_overswing: preventOverswing || undefined,
+        equip_ergo_modifier: preventOverswing ? equipErgoPenalty / 100 : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -543,6 +554,8 @@ function AppContent({
         max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
         min_mag_capacity: useMinMag ? minMagCapacity : undefined,
         max_moa: useMOA ? maxMOA : undefined,
+        prevent_overswing: preventOverswing || undefined,
+        equip_ergo_modifier: preventOverswing ? equipErgoPenalty / 100 : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -734,6 +747,8 @@ function AppContent({
               onWeightChange={(e, r, p) => { setErgoWeight(e); setRecoilWeight(r); setPriceWeight(p) }}
               useEvoErgo={useEvoErgo}
               onUseEvoErgoChange={setUseEvoErgo}
+              useTchebycheff={useTchebycheff}
+              onUseTchebycheffChange={setUseTchebycheff}
               useBudget={useBudget}
               onUseBudgetChange={setUseBudget}
               maxPrice={maxPrice}
@@ -749,6 +764,10 @@ function AppContent({
               onUseMOAChange={(v) => { setUseMOA(v); if (v && maxMOA === 0) setMaxMOA(moaRange.base) }}
               maxMOA={maxMOA}
               onMaxMOAChange={setMaxMOA}
+              preventOverswing={preventOverswing}
+              onPreventOverswingChange={setPreventOverswing}
+              equipErgoPenalty={equipErgoPenalty}
+              onEquipErgoPenaltyChange={setEquipErgoPenalty}
               moaRange={moaRange}
               useExactMOAFloor={useExactMOAFloor}
               onUseExactMOAFloorChange={setUseExactMOAFloor}
@@ -1004,9 +1023,14 @@ function AppContent({
               {t('ui.footer_github')}
             </Link>
             <span style={{ opacity: 0.3 }}>•</span>
+            <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
+              <BulbOutlined aria-hidden />
+              {t('ui.methodology_title')}
+            </Link>
+            <span style={{ opacity: 0.3 }}>•</span>
             <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setChangelogOpen(true)}>
               <HistoryOutlined aria-hidden />
-              Changelog
+              {t('ui.changelog_title')}
             </Link>
             <span style={{ opacity: 0.3 }}>•</span>
             <span>
@@ -1020,6 +1044,7 @@ function AppContent({
           </div>
         </Footer>
         <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
+        <MethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />
       </Layout>
       )}
     </AntApp>

@@ -4,9 +4,9 @@
  */
 
 import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
-import type { SolveParams, GunLookupEntry } from './types';
-export type { SolveParams } from './types';
-import { buildLP, MOA_K, EVO_ERGO_K, EVO_ERGO_SWEEP_KS, eedOf, eedTangentK } from './lpBuilder';
+import type { SolveParams, GunLookupEntry, IdealPoint } from './types';
+export type { SolveParams, IdealPoint } from './types';
+import { buildLP, MOA_K, EVO_ERGO_K, EVO_ERGO_OBJ_K, EVO_ERGO_SWEEP_KS, eedOf, eedTangentK } from './lpBuilder';
 import { getAvailablePrice } from './dataService';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -19,11 +19,39 @@ let highsCorrupted = false;
 async function loadHiGHS() {
   const base = import.meta.env?.BASE_URL || '/';
 
-  // Node / test environment
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  if (typeof (globalThis as any).WorkerGlobalScope === 'undefined' && typeof (globalThis as any).window === 'undefined') {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore — dynamic require for Node
+  // Node / test environment: use custom WASM build from public/ if present on disk
+  const g = globalThis as unknown as {
+    WorkerGlobalScope?: unknown;
+    window?: unknown;
+    process?: { cwd: () => string };
+  };
+  if (typeof g.WorkerGlobalScope === 'undefined' && typeof g.window === 'undefined') {
+    try {
+      const cwd = g.process?.cwd?.() || '.';
+      // @ts-expect-error — dynamic node import for test environments
+      const fs = await import('fs');
+      // @ts-expect-error — dynamic node import for test environments
+      const path = await import('path');
+      const wasmPath = path.resolve(cwd, 'public/highs.wasm');
+      const jsPath = path.resolve(cwd, 'public/highs.js');
+      if (fs.existsSync(wasmPath) && fs.existsSync(jsPath)) {
+        const wasmBinary = new Uint8Array(fs.readFileSync(wasmPath));
+        const jsSource = fs.readFileSync(jsPath, 'utf8');
+        const exports = {} as Record<string, unknown>;
+        const module = { exports };
+        // @ts-expect-error — dynamic node import for test environments
+        const { createRequire } = await import('module');
+        const nodeRequire = createRequire(import.meta.url);
+        new Function('module', 'exports', 'require', '__dirname', '__filename', jsSource)(
+          module, exports, nodeRequire, cwd, 'highs.js'
+        );
+        const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<unknown>;
+        return loader({ wasmBinary });
+      }
+    } catch {
+      // Fallback to stock npm package
+    }
+
     const loader = (await import('highs')).default;
     return loader();
   }
@@ -49,14 +77,82 @@ async function loadHiGHS() {
   return loader({ wasmBinary });
 }
 
+/**
+ * Computes the ideal z* and nadir reference points across 3 endpoint solves
+ * (pure ergo, pure recoil, pure price). Used by augmented Tchebycheff scalarization.
+ */
+export async function computeIdealPoint(params: SolveParams): Promise<IdealPoint> {
+  const baseParams: SolveParams = {
+    ...params,
+    useTchebycheff: false,
+    idealPoint: undefined,
+  };
+
+  const [ergoRes, recoilRes, priceRes] = await Promise.all([
+    solve({ ...baseParams, ergoWeight: 100, recoilWeight: 0, priceWeight: 0 }),
+    solve({ ...baseParams, ergoWeight: 0, recoilWeight: 100, priceWeight: 0 }),
+    solve({ ...baseParams, ergoWeight: 0, recoilWeight: 0, priceWeight: 100 }),
+  ]);
+
+  const evalPt = (r: OptimizeResponse) => {
+    const s = r.final_stats;
+    if (!s) return { fE: 500, fR: 0, fP: 100000 };
+    let fE = Math.min(100, Math.max(0, s.ergonomics)) * 10;
+    if (params.useEvoErgo) {
+      const k = params.evoErgoK ?? EVO_ERGO_OBJ_K;
+      fE = fE - k * 10 * s.total_weight;
+    }
+    const fR = r.selected_items.reduce((a, it) => a + Math.round((it.recoil_modifier ?? 0) * 1000), 0);
+    const fP = s.total_price;
+    return { fE, fR, fP };
+  };
+
+  const pay = [evalPt(ergoRes), evalPt(recoilRes), evalPt(priceRes)];
+  const zE = Math.max(...pay.map(p => p.fE));
+  const nadE = Math.min(...pay.map(p => p.fE));
+  const zR = Math.min(...pay.map(p => p.fR));
+  const nadR = Math.max(...pay.map(p => p.fR));
+  const zP = Math.min(...pay.map(p => p.fP));
+  const nadP = Math.max(...pay.map(p => p.fP));
+
+  return { zE, nadE, zR, nadR, zP, nadP };
+}
+
 export async function solve(params: SolveParams): Promise<OptimizeResponse> {
   const startTime = performance.now();
+
+    if (params.preventOverswing && (!params.overswingCuts || params.overswingCuts.length === 0)) {
+      const b = Math.max(-0.9, Math.min(0.5, params.equipErgoModifier ?? 0));
+      const cuts: Array<{ slope: number; rhs: number }> = [];
+      let res = await solve({ ...params, preventOverswing: false, overswingCuts: cuts });
+      for (let iter = 0; iter < 4; iter++) {
+        if (res.status !== 'optimal' || !res.final_stats) break;
+        const s = res.final_stats;
+        const eed = eedOf(s.ergonomics, s.total_weight, b);
+        if (eed >= -0.05) break;
+
+        const E_raw = Math.min(100, Math.max(0, s.ergonomics));
+        const E_eff = E_raw * (1 + b);
+        const slopeEff = 2 * 0.0007556 * E_eff + 0.02736;
+        const slopeRaw = slopeEff * (1 + b);
+        const KG = 0.0007556 * E_eff * E_eff + 0.02736 * E_eff + 2.9159;
+        const rhs = KG - slopeEff * E_eff;
+        cuts.push({ slope: slopeRaw, rhs });
+
+        res = await solve({ ...params, preventOverswing: false, overswingCuts: [...cuts] });
+      }
+      return res;
+    }
 
   try {
     if (!highs || highsCorrupted) {
       highs = await loadHiGHS();
       highsCorrupted = false;
     }
+    if (params.useTchebycheff && !params.idealPoint) {
+      params.idealPoint = await computeIdealPoint(params);
+    }
+
 
     const lp = buildLP(params);
     const result = highs.solve(lp.lpString);
@@ -269,7 +365,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       total_price: totalPrice,
       total_weight: totalWeight,
       evo_ergo: Math.max(0, Math.min(100, totalErgo)) - EVO_ERGO_K * totalWeight,
-      eed: eedOf(totalErgo, totalWeight),
+      eed: eedOf(totalErgo, totalWeight, params.equipErgoModifier ?? 0),
       moa: finalMOA,
     };
 
@@ -328,6 +424,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       final_stats: finalStats,
       solve_time_ms: performance.now() - startTime,
       slot_pairs: slotPairs,
+      ideal_point: params.idealPoint,
     };
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message

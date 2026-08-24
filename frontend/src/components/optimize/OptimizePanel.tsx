@@ -22,6 +22,8 @@ interface OptimizePanelProps {
   onWeightChange: (ergo: number, recoil: number, price: number) => void
   useEvoErgo: boolean
   onUseEvoErgoChange: (v: boolean) => void
+  useTchebycheff: boolean
+  onUseTchebycheffChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -40,6 +42,10 @@ interface OptimizePanelProps {
   moaRange: { base: number; min: number; max: number }
   useExactMOAFloor: boolean
   onUseExactMOAFloorChange: (v: boolean) => void
+  preventOverswing: boolean
+  onPreventOverswingChange: (v: boolean) => void
+  equipErgoPenalty: number
+  onEquipErgoPenaltyChange: (v: number) => void
   computingMOAFloor: boolean
   availableMods: ModInfo[]
   loadingMods: boolean
@@ -90,6 +96,8 @@ export function OptimizePanel(props: OptimizePanelProps) {
         onWeightChange={props.onWeightChange}
         useEvoErgo={props.useEvoErgo}
         onUseEvoErgoChange={props.onUseEvoErgoChange}
+        useTchebycheff={props.useTchebycheff}
+        onUseTchebycheffChange={props.onUseTchebycheffChange}
         useBudget={props.useBudget}
         onUseBudgetChange={props.onUseBudgetChange}
         maxPrice={props.maxPrice}
@@ -105,6 +113,10 @@ export function OptimizePanel(props: OptimizePanelProps) {
         onUseMOAChange={props.onUseMOAChange}
         maxMOA={props.maxMOA}
         onMaxMOAChange={props.onMaxMOAChange}
+        preventOverswing={props.preventOverswing}
+        onPreventOverswingChange={props.onPreventOverswingChange}
+        equipErgoPenalty={props.equipErgoPenalty}
+        onEquipErgoPenaltyChange={props.onEquipErgoPenaltyChange}
         moaRange={props.moaRange}
         useExactMOAFloor={props.useExactMOAFloor}
         onUseExactMOAFloorChange={props.onUseExactMOAFloorChange}

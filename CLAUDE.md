@@ -35,6 +35,8 @@ cd frontend && npx tsx test_trader_access.ts                # per-trader loyalty
 cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
 cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
 cd frontend && npx tsx test_evoergo.ts                      # EvoErgo k-sweep: solveEvoErgo maximizes true EED (quadratic), EE-off maximizes raw ergo
+cd frontend && npx tsx test_tchebycheff.ts                   # Augmented Tchebycheff scalarization: ideal-point, non-convex Pareto builds, budget separation
+cd frontend && npx tsx test_prevent_overswing.ts              # Prevent overswing hard constraint: EED >= 0 cutting planes on heavy/DMR platforms
 ```
 
 ### PyInstaller Executable

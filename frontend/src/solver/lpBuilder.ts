@@ -77,12 +77,16 @@ export const EVO_ERGO_OBJ_K = 10;
 export const EVO_ERGO_SWEEP_KS = [15, 10, 7.5, 5.6];
 
 /**
- * EFTForge's EvoErgoDelta (b = 0, empty mags): distance from the overswing
- * threshold. KG(E) is the reverse-engineered ideal-weight curve; positive EED
- * means under ideal weight (good), negative means overswing.
+ * EFTForge's EvoErgoDelta: distance from the overswing threshold.
+ * KG(E) is SpaceMonkey37's reverse-engineered ideal-weight curve; positive EED
+ * means under ideal weight (good, no overswing), negative means overswing.
+ *
+ * @param ergo Raw weapon ergonomics
+ * @param weightKg Total weapon weight in kg
+ * @param equipErgoModifier Decimal percentage penalty from gear (e.g. -0.15 for -15% armor penalty)
  */
-export function eedOf(ergo: number, weightKg: number): number {
-  const E = Math.min(100, Math.max(0, ergo));
+export function eedOf(ergo: number, weightKg: number, equipErgoModifier = 0): number {
+  const E = Math.min(100, Math.max(0, ergo)) * (1 + equipErgoModifier);
   const kg = 0.0007556 * E * E + 0.02736 * E + 2.9159;
   return -15 * (weightKg - kg);
 }
@@ -91,16 +95,20 @@ export function eedOf(ergo: number, weightKg: number): number {
  * Tangent slope of the EED threshold curve at build ergo E, expressed as the
  * ergo-per-kg exchange rate: k(E) = 1/KG'(E). This is the k at which the
  * linear objective ergo − k·kg locally matches true EED — ~15 at 26 ergo,
- * ~7.5 at 70, ~5.6 at 100. Weapon-specific by construction: it depends on the
- * ergo level the build actually reaches.
+ * ~7.5 at 70, ~5.6 at 100.
  */
-export function eedTangentK(ergo: number): number {
-  const E = Math.min(100, Math.max(0, ergo));
-  return 1 / (2 * 0.0007556 * E + 0.02736);
+export function eedTangentK(ergo: number, equipErgoModifier = 0): number {
+  const E = Math.min(100, Math.max(0, ergo)) * (1 + equipErgoModifier);
+  return 1 / ((2 * 0.0007556 * E + 0.02736) * Math.max(0.01, 1 + equipErgoModifier));
 }
 
 /** RUB cost in objective when mod has no buyFor (scaled by price weight). Not counted toward maxPrice. */
 const UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB = 50_000_000;
+function fmt(x: number): string {
+  if (Number.isInteger(x)) return String(x);
+  return x.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
+}
+
 
 // ---------------------------------------------------------------------------
 // buildLP — pure function: SolveParams → LPResult
@@ -577,37 +585,141 @@ export function buildLP(params: SolveParams): LPResult {
   L('Maximize');
 
   const objTerms: string[] = [];
+  const isTchebycheff = !!(params.useTchebycheff && params.idealPoint);
+  const tchAuxRows: string[] = [];
+  const tchFreeBounds: string[] = [];
 
-  // Ergo term: ew * SCALE * capped_ergo
-  const ergoObjCoeff = ergo_w * SCALE;
-  if (ergoObjCoeff !== 0) {
-    objTerms.push(`${ergoObjCoeff} capped_ergo`);
-  }
+  if (isTchebycheff && params.idealPoint) {
+    const { zE, nadE, zR, nadR, zP, nadP } = params.idealPoint;
+    const rgE = Math.max(zE - nadE, 1);
+    const rgR = Math.max(nadR - zR, 1);
+    const rgP = Math.max(nadP - zP, 1);
 
-  // Recoil + parsimony terms per item.  Parsimony (-1 per selected item) is
-  // merged into the recoil coefficient so that each x_i appears only once —
-  // HiGHS's CPLEX LP reader rejects duplicate variables in a constraint row.
-  for (let i = 1; i <= n_items; i++) {
-    const recoilCoeff = -rw_obj * item_recoil[i];
-    const eePenalty = eeGramCoeff * item_weight_g[i];
-    // round to keep LP coefficients free of float noise (e.g. 1781.8899999999999)
-    const combined = Math.round((recoilCoeff - eePenalty - 1) * 1e6) / 1e6; // -1 = parsimony penalty
-    objTerms.push(`${combined} x_${i}`);
-  }
+    const ewRaw = Math.max(0, params.ergoWeight ?? 0);
+    const rwRaw = Math.max(0, params.recoilWeight ?? 0);
+    const pwRaw = Math.max(0, params.priceWeight ?? 0);
+    const sumW = ewRaw + rwRaw + pwRaw || 1;
+    const LE = ewRaw / sumW;
+    const LR = rwRaw / sumW;
+    const LP = pwRaw / sumW;
 
-  // Price terms for buy variables: (-pw_obj) * item_price_objective[i] * buy_i
-  for (let i = 1; i <= n_items; i++) {
-    const priceCoeff = -pw_obj * item_price_objective[i];
-    if (priceCoeff !== 0) {
-      objTerms.push(`${priceCoeff} buy_${i}`);
+    const CH = 50;
+    const chunkDef = (terms: [number, string][], name: string): string[] => {
+      const subs: string[] = [];
+      for (let c = 0; c * CH < terms.length; c++) {
+        const sub = `${name}_sub_${c}`;
+        subs.push(sub);
+        const body = terms.slice(c * CH, (c + 1) * CH).map(([coef, v]) => {
+          const formatted = fmt(Math.abs(coef));
+          return coef >= 0 ? `- ${formatted} ${v}` : `+ ${formatted} ${v}`;
+        }).join(' ');
+        tchAuxRows.push(`  ${name}_def_${c}: ${sub} ${body} = 0`);
+      }
+      tchAuxRows.push(`  ${name}_link: ${name}_tot ${subs.map(s => `- ${s}`).join(' ')} = 0`);
+      return subs;
+    };
+
+    // Recoil modifier sum: item_recoil[i] * x_i
+    const recTerms: [number, string][] = [];
+    for (let i = 1; i <= n_items; i++) {
+      if (item_recoil[i] !== 0) recTerms.push([item_recoil[i], `x_${i}`]);
     }
-  }
+    const recSubs = chunkDef(recTerms, 'rec');
 
-  // Price terms for base variables: (-pw_obj) * base_price[b] * base_b
-  for (let b = 0; b < n_bases; b++) {
-    const priceCoeff = -pw_obj * basePrices[b];
-    if (priceCoeff !== 0) {
-      objTerms.push(`${priceCoeff} base_${b + 1}`);
+    // Price: item_price_objective[i] * buy_i + basePrices[b] * base_{b+1}
+    const priTerms: [number, string][] = [];
+    for (let i = 1; i <= n_items; i++) {
+      if (item_price_objective[i] !== 0) priTerms.push([item_price_objective[i], `buy_${i}`]);
+    }
+    for (let b = 0; b < n_bases; b++) {
+      if (basePrices[b] !== 0) priTerms.push([basePrices[b], `base_${b + 1}`]);
+    }
+    const priSubs = chunkDef(priTerms, 'pri');
+
+    // EvoErgo weight penalty if active
+    let eeSubs: string[] = [];
+    if (params.useEvoErgo) {
+      const eeTerms: [number, string][] = [];
+      for (let i = 1; i <= n_items; i++) {
+        if (item_weight_g[i] !== 0) eeTerms.push([item_weight_g[i], `x_${i}`]);
+      }
+      eeSubs = chunkDef(eeTerms, 'ee');
+    }
+
+    // Gap definitions
+    if (params.useEvoErgo) {
+      const k = params.evoErgoK ?? EVO_ERGO_OBJ_K;
+      const eeCoeff = 0.01 * k;
+      tchAuxRows.push(`  gap_e_def: ${fmt(rgE)} g_e + capped_ergo - ${fmt(eeCoeff)} ee_tot = ${fmt(zE)}`);
+    } else {
+      tchAuxRows.push(`  gap_e_def: ${fmt(rgE)} g_e + capped_ergo = ${fmt(zE)}`);
+    }
+    tchAuxRows.push(`  gap_r_def: ${fmt(rgR)} g_r - rec_tot = ${fmt(-zR)}`);
+    tchAuxRows.push(`  gap_p_def: ${fmt(rgP)} g_p - pri_tot = ${fmt(-zP)}`);
+
+    // Tchebycheff upper bounds on gap (t >= lambda_i * g_i)
+    if (LE > 0) tchAuxRows.push(`  tch_e: tch_t - ${fmt(LE)} g_e >= 0`);
+    if (LR > 0) tchAuxRows.push(`  tch_r: tch_t - ${fmt(LR)} g_r >= 0`);
+    if (LP > 0) tchAuxRows.push(`  tch_p: tch_t - ${fmt(LP)} g_p >= 0`);
+
+    // Objective
+    const OBJ_SCALE = 1000;
+    const RHO = 0.01;
+    const EPS_TIEBREAK = 0.001;
+
+    objTerms.push(`-${OBJ_SCALE} tch_t`);
+    objTerms.push(`-${fmt(OBJ_SCALE * RHO * Math.max(LE, EPS_TIEBREAK))} g_e`);
+    objTerms.push(`-${fmt(OBJ_SCALE * RHO * Math.max(LR, EPS_TIEBREAK))} g_r`);
+    objTerms.push(`-${fmt(OBJ_SCALE * RHO * Math.max(LP, EPS_TIEBREAK))} g_p`);
+    for (let i = 1; i <= n_items; i++) {
+      objTerms.push(`-0.0001 x_${i}`);
+    }
+
+    tchFreeBounds.push(
+      '  -inf <= rec_tot <= inf',
+      '  -inf <= pri_tot <= inf',
+      '  0 <= g_e <= 100',
+      '  0 <= g_r <= 100',
+      '  0 <= g_p <= 100',
+      '  0 <= tch_t <= 100',
+      ...recSubs.map(s => `  -inf <= ${s} <= inf`),
+      ...priSubs.map(s => `  -inf <= ${s} <= inf`)
+    );
+    if (params.useEvoErgo) {
+      tchFreeBounds.push('  -inf <= ee_tot <= inf', ...eeSubs.map(s => `  -inf <= ${s} <= inf`));
+    }
+  } else {
+    // Ergo term: ew * SCALE * capped_ergo
+    const ergoObjCoeff = ergo_w * SCALE;
+    if (ergoObjCoeff !== 0) {
+      objTerms.push(`${ergoObjCoeff} capped_ergo`);
+    }
+
+    // Recoil + parsimony terms per item.  Parsimony (-1 per selected item) is
+    // merged into the recoil coefficient so that each x_i appears only once —
+    // HiGHS's CPLEX LP reader rejects duplicate variables in a constraint row.
+    for (let i = 1; i <= n_items; i++) {
+      const recoilCoeff = -rw_obj * item_recoil[i];
+      const eePenalty = eeGramCoeff * item_weight_g[i];
+      // round to keep LP coefficients free of float noise (e.g. 1781.8899999999999)
+      const combined = Math.round((recoilCoeff - eePenalty - 1) * 1e6) / 1e6; // -1 = parsimony penalty
+      objTerms.push(`${combined} x_${i}`);
+    }
+
+    // Price terms for buy variables: (-pw_obj) * item_price_objective[i] * buy_i
+    for (let i = 1; i <= n_items; i++) {
+      const priceCoeff = -pw_obj * item_price_objective[i];
+      if (priceCoeff !== 0) {
+        objTerms.push(`${priceCoeff} buy_${i}`);
+      }
+    }
+
+    // Price terms for base variables: (-pw_obj) * base_price[b] * base_b
+    for (let b = 0; b < n_bases; b++) {
+      const priceCoeff = -pw_obj * basePrices[b];
+      if (priceCoeff !== 0) {
+        objTerms.push(`${priceCoeff} base_${b + 1}`);
+      }
     }
   }
 
@@ -654,6 +766,11 @@ export function buildLP(params: SolveParams): LPResult {
     }
     // total_obj = sum(sub vars)
     L(`  obj_link: total_obj - ${subVars.join(' - ')} = 0`);
+    if (tchAuxRows.length > 0) {
+      for (const row of tchAuxRows) {
+        L(row);
+      }
+    }
   }
 
   // --- 1. Base sum: exactly one base selected ---
@@ -906,6 +1023,28 @@ export function buildLP(params: SolveParams): LPResult {
       L(`  weight_lim: ${formatTerms(weightTerms)} <= ${weightBudget}`);
     }
   }
+  // overswingCuts: linear tangent cuts to enforce Weight <= Threshold(Ergo) (EED >= 0)
+  if (params.overswingCuts && params.overswingCuts.length > 0) {
+    const baseWeightG = Math.round(weaponStats.weight * 1000);
+    for (let c = 0; c < params.overswingCuts.length; c++) {
+      const { slope, rhs } = params.overswingCuts[c];
+      const weightTerms: string[] = [];
+      for (let i = 1; i <= n_items; i++) {
+        if (item_weight_g[i] !== 0) {
+          weightTerms.push(`${item_weight_g[i]} x_${i}`);
+        }
+      }
+      const ergoCoeff = Math.round(100 * slope * 1e4) / 1e4;
+      const rhsLimit = Math.round((rhs * 1000 - baseWeightG) * 100) / 100;
+      if (ergoCoeff !== 0) {
+        weightTerms.push(`-${ergoCoeff} capped_ergo`);
+      }
+      if (weightTerms.length > 0) {
+        L(`  no_overswing_${c}: ${formatTerms(weightTerms)} <= ${rhsLimit}`);
+      }
+    }
+  }
+
 
   // maxMOA: finalMOA = effectiveBaseCOI * (1 - sum(acc_mod_real)/100) * MOA_K <= maxMOA
   //   where acc_mod_real = item_accuracy_mod[i] / 100 (stored pre-scaled by ×100).
@@ -1022,6 +1161,11 @@ export function buildLP(params: SolveParams): LPResult {
   const nSubVars = Math.ceil(objTerms.length / 50);
   for (let s = 0; s < nSubVars; s++) {
     L(`  -inf <= obj_sub_${s} <= inf`);
+  }
+  if (tchFreeBounds.length > 0) {
+    for (const b of tchFreeBounds) {
+      L(b);
+    }
   }
   L('');
 

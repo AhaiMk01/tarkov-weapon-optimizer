@@ -11,9 +11,10 @@ interface StatsCardsProps {
   price: number
   moa?: number
   evoErgo?: number
+  eed?: number
 }
 
-export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, evoErgo }: StatsCardsProps) {
+export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, evoErgo, eed }: StatsCardsProps) {
   const { t } = useTranslation()
   const { token } = useToken()
   return (
@@ -24,6 +25,15 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       {evoErgo != null && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
           <Statistic title={t('ui.evo_ergo_label')} value={evoErgo.toFixed(1)} />
+        </Card>
+      )}
+      {eed != null && (
+        <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
+          <Statistic
+            title={t('ui.eed_label')}
+            value={eed > 0 ? `+${eed.toFixed(1)}` : eed.toFixed(1)}
+            valueStyle={{ color: eed >= 0 ? token.colorSuccess : token.colorError }}
+          />
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>

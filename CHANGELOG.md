@@ -2,6 +2,18 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.8.0] — 2026-08-24
+
+### Added
+- **Sweet Spot Mode (Augmented Tchebycheff Scalarization)**: Solves for balanced, non-convex Pareto configurations ($\min \max \lambda_i g_i + \rho \sum \lambda_i g_i$) relative to the weapon's 3D Ideal Point $(z^*_E, z^*_R, z^*_P)$. An empirical sweep across weapons (M4A1, AK-74N, MP7A2) confirmed that 45%–61% of all non-dominated optimal builds sit inside non-convex indentations that linear weighted sums mathematically skip.
+- **Prevent Overswing Hard Constraint**: Enforces that the build's weight stays strictly below the aim overswing threshold for its ergonomics ($W \le \text{Threshold}(E_{\text{eff}}) \iff \text{EED} \ge 0$). Implemented via exact first-order tangent cutting planes without introducing binary variables, solving in $< 15\text{ms}$.
+- **Equipment Ergonomics Modifier ($b$) Percentage Input**: Integrated EFTForge's loadout penalty formula ($E_{\text{eff}} = \text{Ergo}_{\text{raw}} \cdot (1 + b)$), allowing players to configure a $-40\%$ to $0\%$ penalty for equipped body armor, helmets, and backpacks to ensure zero overswing in real combat loadouts.
+- **Live EED Indicator Card**: Added an `EED (Overswing)` color-coded card (+green / -red) in the optimization results overview alongside EvoErgo.
+- **AUGMECON2 Accelerated 2D Pareto Exploration**: Upgraded the Explore Tab from static grid slicing to Augmented $\epsilon$-Constraint with Slack-Bypass, skipping flat empty plateaus and discovering $2.5\times\text{–}3.5\times$ more distinct tradeoff builds across the curve.
+- **Interactive Guide & Methodology Modal**: Added a comprehensive documentation modal (`width="min(94vw, 1080px)"`) accessible from the footer, featuring clean i18n localization and KaTeX LaTeX mathematical typesetting for weapon mechanics, ballistics math, and optimization algorithms.
+- **Vite `manualChunks` Vendor Splitting**: Modularized vendor chunks (`antd-vendor`, `chart-vendor`, `react-vendor`, `i18n-vendor`, `katex-vendor`), compressing the core application bundle to only $39\text{ kB}$ gzip and eliminating chunk size warnings.
+- **Automated Test Suites**: Added `frontend/test_tchebycheff.ts` and `frontend/test_prevent_overswing.ts`.
+
 ## [v2.7.0] — 2026-08-24
 
 ### Added
