@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Stratégie de compromis",
-    "ready_description": "Sélectionnez arme et stratégie d'analyse, explorez frontière de Pareto",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Sélectionnez une ou plusieurs armes et une stratégie, explorez la frontière de Pareto. Les armes supplémentaires se superposent sur le même graphique.",
+    "limit_price": "Prix max",
+    "limit_recoil": "Recul V max",
+    "limit_ergo": "Ergo min",
+    "compare_weapons": "Comparer des armes",
+    "compare_placeholder": "Rechercher des armes à ajouter (max {{max}})",
+    "compare_hint": "Utilisez + / − comme pour le filtre de mods. Une arme correspond à n = 1 ; les autres se superposent. Marchands, budget, compromis et filtre de mods sont partagés.",
+    "comparing": "Exploration de {{name}} ({{current}}/{{total}})",
+    "weapon": "Arme",
+    "compare_status": "{{returned}}/{{total}} armes ont renvoyé une frontière"
   },
   "optimize": {
     "header": "Ajustement des poids",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Impossible de satisfaire cette tâche d’armurier",
     "optimize_non_optimal": "État du solveur : {{status}}",
     "refresh_done": "Cache vidé, rechargement…",
-    "refresh_failed": "Impossible de vider le cache"
+    "refresh_failed": "Impossible de vider le cache",
+    "explore_compare_partial": "Échec de l'exploration de {{failed}} arme(s) sur {{total}}",
+    "explore_infeasible": "Aucune frontière réalisable pour {{names}}"
   },
   "ui": {
     "initializing": "Initialisation...",

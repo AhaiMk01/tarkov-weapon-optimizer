@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "侧重方向",
-    "ready_description": "选好武器和分析侧重，查看人机、后坐与价格之间的权衡。",
+    "ready_description": "选一把或多把武器和分析侧重，查看帕累托前沿。多把枪会叠在同一张图上。",
     "limit_price": "最高价格",
     "limit_recoil": "最高垂直后坐",
-    "limit_ergo": "最低人机"
+    "limit_ergo": "最低人机",
+    "compare_weapons": "对比武器",
+    "compare_placeholder": "搜索要添加的武器（最多 {{max}} 把）",
+    "compare_hint": "和模组筛选一样用 + / −。一把就是 n = 1，多把叠在同一张图上。商人、预算、权衡与模组包含/排除设置共用。",
+    "comparing": "正在探索 {{name}}（{{current}}/{{total}}）",
+    "weapon": "武器",
+    "compare_status": "{{returned}}/{{total}} 把武器返回了前沿"
   },
   "optimize": {
     "header": "属性权重",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "按当前商人 / 跳蚤条件无法求解这个枪匠任务",
     "optimize_non_optimal": "求解器返回状态：{{status}}",
     "refresh_done": "缓存已清空，重新加载中…",
-    "refresh_failed": "清空缓存失败"
+    "refresh_failed": "清空缓存失败",
+    "explore_compare_partial": "{{total}} 把武器中有 {{failed}} 把探索失败",
+    "explore_infeasible": "当前约束下无可行前沿（{{names}}）"
   },
   "ui": {
     "initializing": "加载中…",

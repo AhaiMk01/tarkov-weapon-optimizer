@@ -29,6 +29,7 @@ No hay servidor backend. Todo, incluida la parte más pesada del cálculo, se ej
 
 ### Exploración y guía integrada
 - **Curva de exploración de compensaciones 2D**: Explora gráficos de compensación (Ergonomía vs. Retroceso, Ergonomía vs. Precio, Retroceso vs. Precio) para ver cuánto cuesta cada punto de mejora.
+- **Comparar armas en un mismo gráfico**: Añade armas extra en el mismo selector; sus curvas de Pareto se superponen con las mismas reglas de comerciantes y presupuesto. Exporta cualquier punto a EFTForge.
 - **Indicadores en tiempo real**: Tarjetas visuales que muestran al instante el estado de sobreoscilación, la eficiencia de peso y las estadísticas del arma.
 - **Guía de armas integrada**: Consulta la documentación dentro de la aplicación sobre mecánicas de armas de Tarkov, balística y físicas de apuntado.
 - **100% del lado del cliente y privado**: Se ejecuta por completo en tu navegador sin retrasos de servidor, cuentas ni inicio de sesión.

@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Trade-off Strategy",
-    "ready_description": "Select weapon and analysis strategy, explore Pareto frontier",
+    "ready_description": "Select one or more weapons and an analysis strategy, then explore the Pareto frontier. Extra guns overlay on the same chart.",
     "limit_price": "Max Price",
     "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "limit_ergo": "Min Ergo",
+    "compare_weapons": "Compare weapons",
+    "compare_placeholder": "Search weapons to add (max {{max}})",
+    "compare_hint": "Use + / − like the mod filter. One weapon is n = 1; extra weapons overlay on the same chart. Trader, budget, trade-off, and mod include/exclude settings are shared.",
+    "comparing": "Exploring {{name}} ({{current}}/{{total}})",
+    "weapon": "Weapon",
+    "compare_status": "{{returned}}/{{total}} weapons returned a frontier"
   },
   "optimize": {
     "header": "Weight Adjustment",
@@ -105,7 +111,9 @@
     "optimize_infeasible": "No valid build for current constraints",
     "explore_empty": "No frontier points under current constraints",
     "gunsmith_infeasible": "No build satisfies this gunsmith task",
-    "optimize_non_optimal": "Solver status: {{status}}"
+    "optimize_non_optimal": "Solver status: {{status}}",
+    "explore_compare_partial": "Failed to explore {{failed}} of {{total}} weapons",
+    "explore_infeasible": "No feasible frontier for {{names}}"
   },
   "ui": {
     "initializing": "Initializing...",

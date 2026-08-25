@@ -11,7 +11,7 @@ import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
-import { ExplorePanel } from './components/explore/ExplorePanel'
+import { ExplorePanel, MAX_EXPLORE_WEAPONS } from './components/explore/ExplorePanel'
 import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
@@ -189,6 +189,34 @@ function initialAutoLightPalette(): LightPaletteId {
   return choiceToLightPalette(readStoredThemeChoice()) ?? readStoredAutoLightPalette()
 }
 
+function modCategoryOptionsFrom(mods: ModInfo[]): ModCategoryOption[] {
+  const usedIds = new Set(mods.map(m => m.category_id).filter(Boolean))
+  const byId = new Map<string, { name: string; normalized: string; childIds: string[] }>()
+  for (const m of mods) {
+    if (!m.category_id || !m.category) continue
+    if (!byId.has(m.category_id)) {
+      const displayName = (m.handbook_categories && m.handbook_categories.length > 0)
+        ? m.handbook_categories[0]
+        : (m.category.split(' > ').pop() || m.category)
+      byId.set(m.category_id, {
+        name: displayName,
+        normalized: m.category_normalized ?? '',
+        childIds: m.category_child_ids ?? [],
+      })
+    }
+  }
+  return [...byId.entries()]
+    .filter(([, meta]) =>
+      includeCategoryInModFilter({
+        categoryNormalized: meta.normalized,
+        childCategoryIds: meta.childIds,
+        usedCategoryIds: usedIds,
+      }),
+    )
+    .map(([id, meta]) => ({ id, name: meta.name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+}
+
 function AppContent({
   themeChoice,
   setThemeChoice,
@@ -262,6 +290,13 @@ function AppContent({
   }>({})
   const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
+  const [exploreWeaponIds, setExploreWeaponIds] = useState<string[]>([])
+  const [exploreRunIds, setExploreRunIds] = useState<string[]>([])
+  const [exploreAvailableMods, setExploreAvailableMods] = useState<ModInfo[]>([])
+  const [loadingExploreMods, setLoadingExploreMods] = useState(false)
+  const exploreModsRequestSeq = useRef(0)
+  const exploreRunSeq = useRef(0)
+  const [exploreProgress, setExploreProgress] = useState<{ current: number; total: number; name: string } | null>(null)
   const [useExploreBudget, setUseExploreBudget] = useState(false)
   const [exploreBudgetValue, setExploreBudgetValue] = useState<number>(0)
   const [resultTradeoff, setResultTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
@@ -336,7 +371,17 @@ function AppContent({
     Promise.all([getInfo(gameMode, lang), getGunsmithTasks(gameMode, lang)])
       .then(([infoData, tasksData]) => {
         setGuns(infoData.guns)
-        if (infoData.guns.length > 0) setSelectedGunId(infoData.guns[0].id)
+        if (infoData.guns.length > 0) {
+          const first = infoData.guns[0].id
+          setSelectedGunId(first)
+          setExploreWeaponIds(prev => {
+            if (prev.length > 1) {
+              const valid = prev.filter(id => infoData.guns.some(g => g.id === id))
+              return valid.length > 0 ? valid : [first]
+            }
+            return [first]
+          })
+        }
         setGunsmithTasks(tasksData.tasks)
         if (tasksData.tasks.length > 0) setSelectedTaskName(tasksData.tasks[0].task_name)
         const elapsed = Date.now() - startTime
@@ -378,10 +423,6 @@ function AppContent({
       .then(data => {
         if (seq !== modsRequestSeq.current) return
         setAvailableMods(data.mods)
-        setIncludedModIds([])
-        setExcludedModIds([])
-        setIncludedCategories([])
-        setExcludedCategories([])
         setLoadingMods(false)
       })
       .catch(err => {
@@ -391,6 +432,43 @@ function AppContent({
       })
   }, [selectedGunId, gameMode, i18n.language])
 
+  useEffect(() => {
+    const ids = (exploreWeaponIds && exploreWeaponIds.length > 1)
+      ? [...new Set(exploreWeaponIds)]
+      : []
+    if (ids.length <= 1) {
+      exploreModsRequestSeq.current += 1
+      setExploreAvailableMods([])
+      setLoadingExploreMods(false)
+      return
+    }
+    const seq = ++exploreModsRequestSeq.current
+    setLoadingExploreMods(true)
+    Promise.all(ids.map(id => getWeaponMods(id, gameMode, i18n.language || 'en')))
+      .then(results => {
+        if (seq !== exploreModsRequestSeq.current) return
+        const byId = new Map<string, ModInfo>()
+        for (const data of results) {
+          for (const mod of data.mods) byId.set(mod.id, mod)
+        }
+        setExploreAvailableMods([...byId.values()])
+        setLoadingExploreMods(false)
+      })
+      .catch(err => {
+        console.error('Failed to fetch explore mods', err)
+        if (seq !== exploreModsRequestSeq.current) return
+        setLoadingExploreMods(false)
+      })
+  }, [exploreWeaponIds, gameMode, i18n.language])
+
+  const exploreFilterAnchor = exploreWeaponIds[0] ?? selectedGunId
+  useEffect(() => {
+    setIncludedModIds([])
+    setExcludedModIds([])
+    setIncludedCategories([])
+    setExcludedCategories([])
+  }, [exploreFilterAnchor, gameMode, i18n.language])
+
   const categories = useMemo(() => {
     const filtered = selectedCaliber === 'All' ? guns : guns.filter(g => g.caliber === selectedCaliber)
     return ['All', ...new Set(filtered.map(g => g.category))].sort()
@@ -399,34 +477,10 @@ function AppContent({
     const filtered = selectedCategory === 'All' ? guns : guns.filter(g => g.category === selectedCategory)
     return ['All', ...new Set(filtered.map(g => g.caliber))].sort()
   }, [guns, selectedCategory])
-  const modCategoryOptions = useMemo((): ModCategoryOption[] => {
-    const usedIds = new Set(availableMods.map(m => m.category_id).filter(Boolean))
-    const byId = new Map<string, { name: string; normalized: string; childIds: string[] }>()
-    for (const m of availableMods) {
-      if (!m.category_id || !m.category) continue
-      if (!byId.has(m.category_id)) {
-        const displayName = (m.handbook_categories && m.handbook_categories.length > 0)
-          ? m.handbook_categories[0]
-          : (m.category.split(' > ').pop() || m.category)
-
-        byId.set(m.category_id, {
-          name: displayName,
-          normalized: m.category_normalized ?? '',
-          childIds: m.category_child_ids ?? [],
-        })
-      }
-    }
-    return [...byId.entries()]
-      .filter(([, meta]) =>
-        includeCategoryInModFilter({
-          categoryNormalized: meta.normalized,
-          childCategoryIds: meta.childIds,
-          usedCategoryIds: usedIds,
-        }),
-      )
-      .map(([id, meta]) => ({ id, name: meta.name }))
-      .sort((a, b) => a.name.localeCompare(b.name))
-  }, [availableMods])
+  const modCategoryOptions = useMemo(() => modCategoryOptionsFrom(availableMods), [availableMods])
+  const exploreComparing = exploreWeaponIds.length > 1
+  const exploreFilterMods = exploreComparing ? exploreAvailableMods : availableMods
+  const exploreModCategoryOptions = useMemo(() => modCategoryOptionsFrom(exploreFilterMods), [exploreFilterMods])
   const availableMagCapacities = useMemo(() => {
     const caps = availableMods.filter(m => m.capacity && m.capacity > 0).map(m => m.capacity!)
     return [...new Set(caps)].sort((a, b) => a - b)
@@ -480,10 +534,13 @@ function AppContent({
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
   useEffect(() => {
+    if (exploreWeaponIds.length > 1) return
     if (filteredGuns.length > 0 && !filteredGuns.find(g => g.id === selectedGunId)) {
-      setSelectedGunId(filteredGuns[0].id)
+      const nextId = filteredGuns[0].id
+      setSelectedGunId(nextId)
+      setExploreWeaponIds(prev => prev.length <= 1 ? [nextId] : prev)
     }
-  }, [filteredGuns, selectedGunId])
+  }, [filteredGuns, selectedGunId, exploreWeaponIds])
   useEffect(() => {
     if (selectedCategory !== 'All' && !categories.includes(selectedCategory)) {
       setSelectedCategory('All')
@@ -540,50 +597,127 @@ function AppContent({
     }
   }
 
+  const clearOptimizeGunExtras = () => {
+    setResult(null)
+    setMinMagCapacity(0)
+    setUseMOA(false)
+    setMaxMOA(0)
+    setUseMinMag(false)
+  }
+
+  const handleExploreWeaponIdsChange = (ids: string[]) => {
+    const next = [...new Set(ids.filter(Boolean))].slice(0, MAX_EXPLORE_WEAPONS)
+    setExploreWeaponIds(next)
+    if (next.length === 0) return
+    if (next.length === 1) {
+      if (next[0] !== selectedGunId) {
+        setSelectedGunId(next[0])
+        clearOptimizeGunExtras()
+      }
+      return
+    }
+    if (selectedGunId && !next.includes(selectedGunId)) {
+      setSelectedGunId(next[0])
+      clearOptimizeGunExtras()
+    }
+  }
+
   const handleExplore = async () => {
-    if (!selectedGunId) return
+    const weaponIds = [...new Set(exploreWeaponIds)].slice(0, MAX_EXPLORE_WEAPONS)
+    if (weaponIds.length === 0) return
+    const runId = ++exploreRunSeq.current
+    const gunName = (id: string) => guns.find(g => g.id === id)?.name ?? id
+    const shared = {
+      ignore: exploreTradeoff,
+      steps: 10,
+      use_evo_ergo: useEvoErgo || undefined,
+      max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
+      min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
+      max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
+      min_mag_capacity: useMinMag ? minMagCapacity : undefined,
+      max_moa: useMOA ? maxMOA : undefined,
+      prevent_overswing: preventOverswing || undefined,
+      equip_ergo_modifier: preventOverswing ? equipErgoPenalty / 100 : undefined,
+      trader_levels: traderLevels,
+      player_level: playerLevel,
+      flea_available: fleaAvailable,
+      barter_available: barterAvailable,
+      barter_exclude_dogtags: barterExcludeDogtags,
+      precise_mode: solverPrecision,
+      include_items: includedModIds.length > 0 ? includedModIds : undefined,
+      exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
+      include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
+      exclude_categories: excludedCategories.length > 0 ? excludedCategories : undefined,
+    } as const
+
     setExploring(true)
+    setExploreRunIds(weaponIds)
+    setExploreResult([])
+    setExploreSolveTime(undefined)
+    setResultTradeoff(exploreTradeoff)
+    setExploreProgress({ current: 1, total: weaponIds.length, name: gunName(weaponIds[0]) })
+
+    const allPoints: ExplorePoint[] = []
+    let totalTime = 0
+    let errorCount = 0
+    const infeasibleIds: string[] = []
+    let lastPrecision: { request?: SolverPrecisionMode; resolved?: 'fast' | 'precise' } = {}
+
     try {
-      const res = await explore({
-        weapon_id: selectedGunId,
-        ignore: exploreTradeoff,
-        steps: 10,
-        use_evo_ergo: useEvoErgo || undefined,
-        max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
-        min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
-        max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
-        min_mag_capacity: useMinMag ? minMagCapacity : undefined,
-        max_moa: useMOA ? maxMOA : undefined,
-        prevent_overswing: preventOverswing || undefined,
-        equip_ergo_modifier: preventOverswing ? equipErgoPenalty / 100 : undefined,
-        include_items: includedModIds.length > 0 ? includedModIds : undefined,
-        exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
-        include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
-        exclude_categories: excludedCategories.length > 0 ? excludedCategories : undefined,
-        trader_levels: traderLevels,
-        player_level: playerLevel,
-        flea_available: fleaAvailable,
-        barter_available: barterAvailable,
-        barter_exclude_dogtags: barterExcludeDogtags,
-        precise_mode: solverPrecision,
-      }, gameMode, i18n.language || 'en')
-      setExploreResult(res.points)
-      setExploreSolveTime(res.total_solve_time_ms)
-      setExplorePrecisionMeta({
-        request: res.precision_request,
-        resolved: res.precision_resolved,
-      })
-      setResultTradeoff(exploreTradeoff)
-      if (res.points.length > 0) {
+      for (let i = 0; i < weaponIds.length; i++) {
+        if (runId !== exploreRunSeq.current) return
+        const id = weaponIds[i]
+        setExploreProgress({ current: i + 1, total: weaponIds.length, name: gunName(id) })
+        try {
+          const res = await explore({
+            ...shared,
+            weapon_id: id,
+          }, gameMode, i18n.language || 'en')
+          if (runId !== exploreRunSeq.current) return
+          if (res.points.length === 0) {
+            infeasibleIds.push(id)
+          } else {
+            allPoints.push(...res.points.map(p => ({
+              ...p,
+              weapon_id: id,
+              weapon_name: gunName(id),
+            })))
+          }
+          totalTime += res.total_solve_time_ms ?? 0
+          lastPrecision = {
+            request: res.precision_request,
+            resolved: res.precision_resolved,
+          }
+          setExploreResult([...allPoints])
+          setExploreSolveTime(totalTime)
+          setExplorePrecisionMeta(lastPrecision)
+        } catch (err) {
+          errorCount += 1
+          console.error(`Exploration failed for ${id}`, err)
+        }
+      }
+
+      if (runId !== exploreRunSeq.current) return
+      if (errorCount > 0 && allPoints.length > 0) {
+        messageApi.warning(t('toast.explore_compare_partial', { failed: errorCount, total: weaponIds.length }))
+      } else if (allPoints.length > 0) {
         messageApi.success(t('toast.explore_success'))
+      } else if (errorCount === weaponIds.length) {
+        messageApi.error(t('toast.explore_failed'))
+      } else if (infeasibleIds.length > 0) {
+        messageApi.warning(t('toast.explore_infeasible', { names: infeasibleIds.map(gunName).join(', ') }))
       } else {
         messageApi.warning(t('toast.explore_empty'))
       }
     } catch (err) {
+      if (runId !== exploreRunSeq.current) return
       console.error('Exploration failed', err)
       messageApi.error(t('toast.explore_failed'))
     } finally {
-      setExploring(false)
+      if (runId === exploreRunSeq.current) {
+        setExploring(false)
+        setExploreProgress(null)
+      }
     }
   }
 
@@ -687,11 +821,8 @@ function AppContent({
 
   const handleGunChange = (id: string) => {
     setSelectedGunId(id)
-    setResult(null)
-    setMinMagCapacity(0)
-    setUseMOA(false)
-    setMaxMOA(0)
-    setUseMinMag(false)
+    setExploreWeaponIds(prev => prev.length <= 1 ? [id] : prev)
+    clearOptimizeGunExtras()
   }
 
   const commonPanelProps = {
@@ -801,6 +932,11 @@ function AppContent({
           left={
             <ExplorePanel
               {...commonPanelProps}
+              availableMods={exploreFilterMods}
+              loadingMods={exploreComparing ? loadingExploreMods : loadingMods}
+              modCategoryOptions={exploreModCategoryOptions}
+              selectedGunIds={exploreWeaponIds}
+              onGunIdsChange={handleExploreWeaponIdsChange}
               exploreTradeoff={exploreTradeoff}
               onExploreTradeoffChange={setExploreTradeoff}
               useExploreBudget={useExploreBudget}
@@ -816,9 +952,11 @@ function AppContent({
               explorePrecision={explorePrecisionMeta}
               resultTradeoff={resultTradeoff}
               exploring={exploring}
+              exploreProgress={exploreProgress}
               onExplore={handleExplore}
-              disabled={!selectedGunId}
-              weaponId={selectedGunId ?? undefined}
+              disabled={exploreWeaponIds.length === 0}
+              weaponId={exploreWeaponIds[0]}
+              runWeaponIds={exploreRunIds}
             />
           }
         />

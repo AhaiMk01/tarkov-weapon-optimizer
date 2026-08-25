@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Estratégia de Compensação",
-    "ready_description": "Selecione arma e estratégia de análise, explore a fronteira de Pareto",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Selecione uma ou mais armas e uma estratégia, explore a fronteira de Pareto. Armas extras se sobrepõem no mesmo gráfico.",
+    "limit_price": "Preço máx.",
+    "limit_recoil": "Recuo V máx.",
+    "limit_ergo": "Ergo mín.",
+    "compare_weapons": "Comparar armas",
+    "compare_placeholder": "Pesquisar armas para adicionar (máx. {{max}})",
+    "compare_hint": "Use + / − como no filtro de mods. Uma arma é n = 1; extras se sobrepõem no mesmo gráfico. Traders, orçamento, compensação e incluir/excluir mods são compartilhados.",
+    "comparing": "Explorando {{name}} ({{current}}/{{total}})",
+    "weapon": "Arma",
+    "compare_status": "{{returned}}/{{total}} armas retornaram uma fronteira"
   },
   "optimize": {
     "header": "Ajuste de Pesos",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Não é possível cumprir a tarefa de armeiro",
     "optimize_non_optimal": "Estado do solucionador: {{status}}",
     "refresh_done": "Cache limpo, recarregando…",
-    "refresh_failed": "Falha ao limpar cache"
+    "refresh_failed": "Falha ao limpar cache",
+    "explore_compare_partial": "Falha ao explorar {{failed}} de {{total}} armas",
+    "explore_infeasible": "Sem fronteira viável para {{names}}"
   },
   "ui": {
     "initializing": "A inicializar...",

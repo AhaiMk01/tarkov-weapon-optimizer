@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Kompromiss-Strategie",
-    "ready_description": "Waffe und Analysestrategie wählen, Pareto-Grenze erkunden",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Wähle eine oder mehrere Waffen und eine Strategie, erkunde die Pareto-Grenze. Weitere Waffen liegen auf demselben Diagramm.",
+    "limit_price": "Max. Preis",
+    "limit_recoil": "Max. Rückstoß V",
+    "limit_ergo": "Min. Ergo",
+    "compare_weapons": "Waffen vergleichen",
+    "compare_placeholder": "Waffen zum Hinzufügen suchen (max. {{max}})",
+    "compare_hint": "Nutze + / − wie beim Mod-Filter. Eine Waffe ist n = 1; weitere liegen auf demselben Diagramm. Händler, Budget, Kompromiss und Mod-Filter gelten gemeinsam.",
+    "comparing": "Untersuche {{name}} ({{current}}/{{total}})",
+    "weapon": "Waffe",
+    "compare_status": "{{returned}}/{{total}} Waffen lieferten eine Frontier"
   },
   "optimize": {
     "header": "Gewichtsanpassung",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Gunsmith-Aufgabe mit diesen Einschränkungen nicht lösbar",
     "optimize_non_optimal": "Solver-Status: {{status}}",
     "refresh_done": "Cache geleert, neu laden…",
-    "refresh_failed": "Cache konnte nicht geleert werden"
+    "refresh_failed": "Cache konnte nicht geleert werden",
+    "explore_compare_partial": "{{failed}} von {{total}} Waffen konnten nicht untersucht werden",
+    "explore_infeasible": "Keine zulässige Frontier für {{names}}"
   },
   "ui": {
     "initializing": "Initialisierung...",

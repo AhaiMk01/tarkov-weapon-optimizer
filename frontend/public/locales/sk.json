@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Stratégia kompromisov",
-    "ready_description": "Vyberte zbraň a stratégiu analýzy, preskúmajte Pareto hranicu",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Vyberte jednu alebo viac zbraní a stratégiu, preskúmajte Pareto hranicu. Ďalšie zbrane sa prekryjú na tom istom grafe.",
+    "limit_price": "Max. cena",
+    "limit_recoil": "Max. spätný ráz V",
+    "limit_ergo": "Min. ergo",
+    "compare_weapons": "Porovnať zbrane",
+    "compare_placeholder": "Hľadať zbrane na pridanie (max. {{max}})",
+    "compare_hint": "Použite + / − ako pri filtri módov. Jedna zbraň je n = 1; ďalšie sa prekryjú na tom istom grafe. Obchodníci, rozpočet, kompromis a filter módov sú zdieľané.",
+    "comparing": "Preskúmavam {{name}} ({{current}}/{{total}})",
+    "weapon": "Zbraň",
+    "compare_status": "{{returned}}/{{total}} zbraní vrátilo frontier"
   },
   "optimize": {
     "header": "Úprava váh",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Úlohu gunsmithella nie je možné splniť",
     "optimize_non_optimal": "Stav riešiča: {{status}}",
     "refresh_done": "Vymazaná cache, opätovné načítanie…",
-    "refresh_failed": "Nepodarilo sa vymazať cache"
+    "refresh_failed": "Nepodarilo sa vymazať cache",
+    "explore_compare_partial": "Nepodarilo sa preskúmať {{failed}} z {{total}} zbraní",
+    "explore_infeasible": "Žiadny dosiahnuteľný frontier pre {{names}}"
   },
   "ui": {
     "initializing": "Inicializácia...",

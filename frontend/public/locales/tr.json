@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Ödünleşim Stratejisi",
-    "ready_description": "Silah ve analiz stratejisi seçin, Pareto sınırını keşfedin",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Bir veya daha fazla silah ve analiz stratejisi seçip Pareto sınırını keşfedin. Ek silahlar aynı grafikte üst üste biner.",
+    "limit_price": "Maks. fiyat",
+    "limit_recoil": "Maks. dikey geri tepme",
+    "limit_ergo": "Min. ergo",
+    "compare_weapons": "Silahları karşılaştır",
+    "compare_placeholder": "Eklenecek silahları ara (en fazla {{max}})",
+    "compare_hint": "Mod filtresindeki gibi + / − kullanın. Tek silah n = 1’dir; ekstra silahlar aynı grafikte bindirilir. Tüccar, bütçe, ödünleşim ve mod dahil/hariç tutma paylaşılır.",
+    "comparing": "{{name}} inceleniyor ({{current}}/{{total}})",
+    "weapon": "Silah",
+    "compare_status": "{{returned}}/{{total}} silah bir frontier döndürdü"
   },
   "optimize": {
     "header": "Ağırlık Ayarı",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Silah ustası görevi karşılanamıyor",
     "optimize_non_optimal": "Çözücü durumu: {{status}}",
     "refresh_done": "Önbellek temizlendi, yeniden yüklüyor…",
-    "refresh_failed": "Önbellek temizlenemedi"
+    "refresh_failed": "Önbellek temizlenemedi",
+    "explore_compare_partial": "{{total}} silahtan {{failed}} tanesi incelenemedi",
+    "explore_infeasible": "{{names}} için uygulanabilir frontier yok"
   },
   "ui": {
     "initializing": "Başlatılıyor...",

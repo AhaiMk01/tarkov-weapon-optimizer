@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Стратегия компромиссов",
-    "ready_description": "Выберите оружие и стратегию анализа, исследуйте границу Парето",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Выберите одно или несколько оружий и стратегию, исследуйте границу Парето. Дополнительные стволы накладываются на тот же график.",
+    "limit_price": "Макс. цена",
+    "limit_recoil": "Макс. отдача V",
+    "limit_ergo": "Мин. эрго",
+    "compare_weapons": "Сравнить оружие",
+    "compare_placeholder": "Найдите стволы для добавления (макс. {{max}})",
+    "compare_hint": "Используйте + / − как в фильтре модов. Одно оружие — это n = 1; остальные накладываются на тот же график. Торговцы, бюджет, компромисс и фильтр модов общие.",
+    "comparing": "Анализ {{name}} ({{current}}/{{total}})",
+    "weapon": "Оружие",
+    "compare_status": "{{returned}}/{{total}} оружия вернули фронт"
   },
   "optimize": {
     "header": "Настройка весов",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Невыполнимо для задачи оружейника",
     "optimize_non_optimal": "Статус решателя: {{status}}",
     "refresh_done": "Кэш очищен, перезагрузка…",
-    "refresh_failed": "Не удалось очистить кэш"
+    "refresh_failed": "Не удалось очистить кэш",
+    "explore_compare_partial": "Не удалось исследовать {{failed}} из {{total}} единиц оружия",
+    "explore_infeasible": "Нет допустимого фронта для {{names}}"
   },
   "ui": {
     "initializing": "Инициализация...",

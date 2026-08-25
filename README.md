@@ -29,6 +29,7 @@ There is no backend. Everything, including the heavy optimization math, runs loc
 
 ### Exploration & Built-in Guide
 - **2D Tradeoff Exploration Curve**: Explore smooth trade-off charts (Ergonomics vs. Recoil, Ergonomics vs. Price, Recoil vs. Price) to see what every point of ergo or recoil costs.
+- **Compare Weapons on One Chart**: Add extra guns from the same Select Weapon control; their Pareto curves overlay under the same trader and budget rules. Export any point to EFTForge.
 - **Instant Stat Indicators**: Color-coded cards show real-time weapon stats, weight efficiency, and overswing status.
 - **Built-in Weapon Guide**: In-app guide explaining Tarkov weapon stats, ballistics, overswing mechanics, and optimizer features.
 - **100% Client-Side & Private**: Runs entirely in your browser with zero server delay—no account, login, or backend required.

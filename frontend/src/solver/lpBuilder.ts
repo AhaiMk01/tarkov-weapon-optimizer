@@ -1120,17 +1120,23 @@ export function buildLP(params: SolveParams): LPResult {
     }
   }
 
-  // includeItems: force specific items from params (implicit deps are UI-only; see requiredItemDeps + worker)
+  // includeItems: force specific items from params (implicit deps are UI-only; see requiredItemDeps + worker).
+  // An id with no variable on this weapon is infeasible — do not drop the row.
   if (params.includeItems) {
+    let missingIncl = 0;
     for (const iid of params.includeItems) {
       const idx = itemIndex.get(iid);
       if (idx !== undefined) {
         L(`  incl_${idx}: x_${idx} = 1`);
+      } else {
+        L(`  incl_unavail_${missingIncl}: 0 >= 1`);
+        missingIncl += 1;
       }
     }
   }
 
-  // includeCategories: OR within each group, at least one item from each group
+  // includeCategories: OR within each group, at least one item from each group.
+  // An empty group is infeasible — the gun cannot satisfy that required category.
   if (params.includeCategories) {
     for (let g = 0; g < params.includeCategories.length; g++) {
       const catGroup = params.includeCategories[g];
@@ -1148,6 +1154,8 @@ export function buildLP(params: SolveParams): LPResult {
       if (matchingItems.length > 0) {
         const sumExpr = matchingItems.map(i => `x_${i}`).join(' + ');
         L(`  catreq_${g}: ${sumExpr} >= 1`);
+      } else {
+        L(`  catreq_${g}: 0 >= 1`);
       }
     }
   }

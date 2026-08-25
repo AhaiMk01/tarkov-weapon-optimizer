@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "절충 전략",
-    "ready_description": "무기와 분석 전략을 선택하여 파레토 경계 탐색",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "무기를 하나 이상 고르고 분석 전략을 선택한 뒤 파레토 경계를 탐색하세요. 추가 무기는 같은 차트에 겹칩니다.",
+    "limit_price": "최대 가격",
+    "limit_recoil": "최대 수직 반동",
+    "limit_ergo": "최소 에르고",
+    "compare_weapons": "무기 비교",
+    "compare_placeholder": "추가할 무기 검색 (최대 {{max}})",
+    "compare_hint": "모드 필터처럼 + / − 를 사용하세요. 한 정은 n = 1이고, 추가 무기는 같은 차트에 겹칩니다. 상인·예산·트레이드오프·모드 포함/제외는 공유됩니다.",
+    "comparing": "{{name}} 탐색 중 ({{current}}/{{total}})",
+    "weapon": "무기",
+    "compare_status": "{{returned}}/{{total}}정이 프론티어를 반환했습니다"
   },
   "optimize": {
     "header": "가중치 조정",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "건스미스 과제를 만족할 수 없습니다",
     "optimize_non_optimal": "솔버 상태: {{status}}",
     "refresh_done": "캐시 삭제 완료, 다시 로드 중…",
-    "refresh_failed": "캐시를 삭제할 수 없습니다"
+    "refresh_failed": "캐시를 삭제할 수 없습니다",
+    "explore_compare_partial": "{{total}}정 중 {{failed}}정 탐색 실패",
+    "explore_infeasible": "{{names}}에 대해 실행 가능한 프론티어가 없습니다"
   },
   "ui": {
     "initializing": "초기화 중...",

@@ -6,6 +6,9 @@ import { LevelConfig } from '../common/LevelConfig'
 import type { Gun, ModInfo, ModCategoryOption } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
 
+/** Max weapons on one Explore chart, including the n = 1 single-frontier case. */
+export const MAX_EXPLORE_WEAPONS = 6
+
 interface ExplorePanelProps {
   guns: Gun[]
   selectedGunId: string
@@ -17,6 +20,8 @@ interface ExplorePanelProps {
   categories: string[]
   calibers: string[]
   filteredGuns: Gun[]
+  selectedGunIds: string[]
+  onGunIdsChange: (ids: string[]) => void
   exploreTradeoff: 'price' | 'recoil' | 'ergo'
   onExploreTradeoffChange: (v: 'price' | 'recoil' | 'ergo') => void
   useExploreBudget: boolean
@@ -65,6 +70,11 @@ export function ExplorePanel(props: ExplorePanelProps) {
         categories={props.categories}
         calibers={props.calibers}
         filteredGuns={props.filteredGuns}
+        multiple
+        selectedGunIds={props.selectedGunIds}
+        onGunIdsChange={props.onGunIdsChange}
+        maxCount={MAX_EXPLORE_WEAPONS}
+        hint={t('explore.compare_hint')}
       />
       <Card size="small" title={<span style={{ userSelect: 'none' }}>{t('explore.tradeoff_strategy')}</span>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

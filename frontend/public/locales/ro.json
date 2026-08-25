@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategie de Compromis",
-    "ready_description": "Selectează arma și strategia de analiză, explorează frontiera Pareto",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Selectează una sau mai multe arme și o strategie, explorează frontiera Pareto. Armele extra se suprapun pe același grafic.",
+    "limit_price": "Preț max.",
+    "limit_recoil": "Recul V max.",
+    "limit_ergo": "Ergo min.",
+    "compare_weapons": "Compară arme",
+    "compare_placeholder": "Caută arme de adăugat (max. {{max}})",
+    "compare_hint": "Folosește + / − ca la filtrul de moduri. O armă este n = 1; cele extra se suprapun pe același grafic. Comercianți, buget, compromis și filtrul de moduri sunt comune.",
+    "comparing": "Explorare {{name}} ({{current}}/{{total}})",
+    "weapon": "Armă",
+    "compare_status": "{{returned}}/{{total}} arme au returnat o frontieră"
   },
   "optimize": {
     "header": "Ajustare Ponderi",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Sarcina de armurier nu poate fi îndeplinită",
     "optimize_non_optimal": "Stare solver: {{status}}",
     "refresh_done": "Cache șters, reîncarcă…",
-    "refresh_failed": "Nu se poate șterge cache"
+    "refresh_failed": "Nu se poate șterge cache",
+    "explore_compare_partial": "Explorarea a eșuat pentru {{failed}} din {{total}} arme",
+    "explore_infeasible": "Nicio frontieră fezabilă pentru {{names}}"
   },
   "ui": {
     "initializing": "Se inițializează...",

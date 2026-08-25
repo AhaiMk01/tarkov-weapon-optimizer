@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategia Kompromisu",
-    "ready_description": "Wybierz broń i strategię analizy, eksploruj granicę Pareto",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Wybierz jedną lub więcej broni i strategię, eksploruj granicę Pareto. Dodatkowe bronie nakładają się na ten sam wykres.",
+    "limit_price": "Maks. cena",
+    "limit_recoil": "Maks. odrzut V",
+    "limit_ergo": "Min. ergo",
+    "compare_weapons": "Porównaj bronie",
+    "compare_placeholder": "Szukaj broni do dodania (maks. {{max}})",
+    "compare_hint": "Użyj + / − jak w filtrze modów. Jedna broń to n = 1; kolejne nakładają się na ten sam wykres. Handlarze, budżet, kompromis i filtr modów są wspólne.",
+    "comparing": "Eksploracja {{name}} ({{current}}/{{total}})",
+    "weapon": "Broń",
+    "compare_status": "{{returned}}/{{total}} broni zwróciło frontier"
   },
   "optimize": {
     "header": "Dostosowanie Wag",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Nie można spełnić zadania rusznikarza",
     "optimize_non_optimal": "Status solvera: {{status}}",
     "refresh_done": "Pamięć podręczna wyczyszczona, ponowne ładowanie…",
-    "refresh_failed": "Nie udało się wyczyścić pamięci podręcznej"
+    "refresh_failed": "Nie udało się wyczyścić pamięci podręcznej",
+    "explore_compare_partial": "Nie udało się zbadać {{failed}} z {{total}} broni",
+    "explore_infeasible": "Brak osiągalnego frontier dla {{names}}"
   },
   "ui": {
     "initializing": "Inicjalizacja...",

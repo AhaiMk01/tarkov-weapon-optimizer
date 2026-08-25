@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategie kompromisů",
-    "ready_description": "Vyberte zbraň a strategii analýzy, prozkoumejte Pareto hranici",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Vyberte jednu nebo více zbraní a strategii, prozkoumejte Pareto hranici. Další zbraně se překryjí na stejném grafu.",
+    "limit_price": "Max. cena",
+    "limit_recoil": "Max. zpětný ráz V",
+    "limit_ergo": "Min. ergo",
+    "compare_weapons": "Porovnat zbraně",
+    "compare_placeholder": "Hledat zbraně k přidání (max. {{max}})",
+    "compare_hint": "Použijte + / − jako u filtru módů. Jedna zbraň je n = 1; další se překryjí na stejném grafu. Obchodníci, rozpočet, kompromis a filtr módů jsou sdílené.",
+    "comparing": "Prozkoumávám {{name}} ({{current}}/{{total}})",
+    "weapon": "Zbraň",
+    "compare_status": "{{returned}}/{{total}} zbraní vrátilo frontier"
   },
   "optimize": {
     "header": "Úprava vah",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Úkol gunsmitha nelze splnit",
     "optimize_non_optimal": "Stav řešiče: {{status}}",
     "refresh_done": "Mezipaměť vymazána, opětovné načtení...",
-    "refresh_failed": "Nepodařilo se vymazat mezipaměť"
+    "refresh_failed": "Nepodařilo se vymazat mezipaměť",
+    "explore_compare_partial": "Nepodařilo se prozkoumat {{failed}} z {{total}} zbraní",
+    "explore_infeasible": "Žádný dosažitelný frontier pro {{names}}"
   },
   "ui": {
     "initializing": "Inicializace...",

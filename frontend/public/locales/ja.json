@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "トレードオフ戦略",
-    "ready_description": "武器と分析戦略を選択、パレート境界を探索",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "武器を1丁以上選んで分析方針を決め、パレート前線を探索します。追加の武器は同じグラフに重なります。",
+    "limit_price": "最大価格",
+    "limit_recoil": "最大垂直反動",
+    "limit_ergo": "最低エルゴ",
+    "compare_weapons": "武器を比較",
+    "compare_placeholder": "追加する武器を検索（最大 {{max}}）",
+    "compare_hint": "モッドフィルターと同じく + / − を使います。1丁は n = 1、追加分は同じグラフに重ねます。トレーダー・予算・トレードオフ・モッド指定／除外は共有されます。",
+    "comparing": "{{name}} を探索中（{{current}}/{{total}}）",
+    "weapon": "武器",
+    "compare_status": "{{returned}}/{{total}} 丁がフロンティアを返しました"
   },
   "optimize": {
     "header": "重み調整",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "ガンスミスタスクを満たせません",
     "optimize_non_optimal": "ソルバー状態: {{status}}",
     "refresh_done": "キャッシュをクリア、再読み込み中…",
-    "refresh_failed": "キャッシュのクリアに失敗しました"
+    "refresh_failed": "キャッシュのクリアに失敗しました",
+    "explore_compare_partial": "{{total}} 丁中 {{failed}} 丁の探索に失敗しました",
+    "explore_infeasible": "{{names}} には実行可能なフロンティアがありません"
   },
   "ui": {
     "initializing": "初期化中...",

@@ -2,6 +2,18 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.10.0] — 2026-08-25
+
+### Added
+- **Multi-weapon Explore comparison**: Pick 1–6 guns in the same Select Weapon card with +/− tags (one gun is just n = 1). Their Pareto frontiers overlay on one trade-off chart under shared trader, budget, and trade-off settings. Mod include/exclude is shared across the selected weapons. The table and EFTForge export follow the selected point's weapon.
+
+### Fixed
+- **Optimize mod catalog**: Optimize include/exclude, magazine, and MOA lists stay on the selected gun. Explore unions mods only for the compare-set filter.
+- **Required mods on compare**: A required item or category a gun cannot take makes that gun infeasible instead of being silently ignored.
+- **Explore selection state**: Explore keeps an explicit weapon id list (n = 1 is `[id]`, not a null alias of Optimize). Include/exclude resets when the first tagged Explore gun, game mode, or language changes.
+- **Explore run isolation**: A newer Run Analysis ignores stale solves. Worker errors toast a partial warning without also saying complete. Guns with no feasible front are named.
+- **Compare status line**: Shows how many of the requested guns returned a frontier, plus Optimal/Feasible on those points. Auto-precision is only tagged for a single-gun run.
+
 ## [v2.8.1] — 2026-08-25
 
 ### Fixed

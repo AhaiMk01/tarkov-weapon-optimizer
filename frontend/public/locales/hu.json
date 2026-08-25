@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Kompromisszum stratégia",
-    "ready_description": "Válasszon fegyvert és elemzési stratégiát, fedezze fel a Pareto-határt",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Válassz egy vagy több fegyvert és stratégiát, fedezd fel a Pareto-határt. További fegyverek ugyanarra a diagramra kerülnek.",
+    "limit_price": "Max. ár",
+    "limit_recoil": "Max. függőleges visszarúgás",
+    "limit_ergo": "Min. ergo",
+    "compare_weapons": "Fegyverek összehasonlítása",
+    "compare_placeholder": "Fegyver keresése hozzáadáshoz (max. {{max}})",
+    "compare_hint": "A + / − gombok a modszűrőhöz hasonlóan működnek. Egy fegyver az n = 1; a többi ugyanarra a diagramra kerül. Kereskedő, költségvetés, kompromisszum és modszűrő közös.",
+    "comparing": "{{name}} vizsgálata ({{current}}/{{total}})",
+    "weapon": "Fegyver",
+    "compare_status": "{{returned}}/{{total}} fegyver adott frontier-t"
   },
   "optimize": {
     "header": "Súlyok beállítása",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "A fegyverkovács feladat nem teljesíthető",
     "optimize_non_optimal": "Megoldó állapota: {{status}}",
     "refresh_done": "Gyorsítótár törölve, újratöltés…",
-    "refresh_failed": "Nem sikerült törölni a gyorsítótárat"
+    "refresh_failed": "Nem sikerült törölni a gyorsítótárat",
+    "explore_compare_partial": "{{total}} fegyverből {{failed}} vizsgálata sikertelen",
+    "explore_infeasible": "Nincs elérhető frontier: {{names}}"
   },
   "ui": {
     "initializing": "Inicializálás...",

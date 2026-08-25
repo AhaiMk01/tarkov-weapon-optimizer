@@ -39,10 +39,16 @@
   },
   "explore": {
     "tradeoff_strategy": "Strategia di Compromesso",
-    "ready_description": "Seleziona arma e strategia di analisi, esplora frontiera di Pareto",
-    "limit_price": "Max Price",
-    "limit_recoil": "Max Recoil V",
-    "limit_ergo": "Min Ergo"
+    "ready_description": "Seleziona una o più armi e una strategia, esplora la frontiera di Pareto. Le armi extra si sovrappongono sullo stesso grafico.",
+    "limit_price": "Prezzo max",
+    "limit_recoil": "Rinculo V max",
+    "limit_ergo": "Ergo min",
+    "compare_weapons": "Confronta armi",
+    "compare_placeholder": "Cerca armi da aggiungere (max {{max}})",
+    "compare_hint": "Usa + / − come nel filtro mod. Un'arma è n = 1; le altre si sovrappongono sullo stesso grafico. Trader, budget, compromesso e includi/escludi mod sono condivisi.",
+    "comparing": "Esplorazione {{name}} ({{current}}/{{total}})",
+    "weapon": "Arma",
+    "compare_status": "{{returned}}/{{total}} armi hanno restituito una frontiera"
   },
   "optimize": {
     "header": "Regolazione Pesi",
@@ -105,7 +111,9 @@
     "gunsmith_infeasible": "Impossibile soddisfare il compito da armaiolo",
     "optimize_non_optimal": "Stato del risolutore: {{status}}",
     "refresh_done": "Cache cancellata, ricaricamento…",
-    "refresh_failed": "Impossibile cancellare la cache"
+    "refresh_failed": "Impossibile cancellare la cache",
+    "explore_compare_partial": "Esplorazione non riuscita per {{failed}} di {{total}} armi",
+    "explore_infeasible": "Nessuna frontiera fattibile per {{names}}"
   },
   "ui": {
     "initializing": "Inizializzazione...",

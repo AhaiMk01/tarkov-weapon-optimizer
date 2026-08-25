@@ -183,6 +183,9 @@ export interface ExplorePoint {
   slot_pairs?: [string, string][];
   status: string;
   solve_time_ms?: number;
+  /** Set by the UI when overlaying multiple weapons on one explore chart. */
+  weapon_id?: string;
+  weapon_name?: string;
 }
 
 export interface ExploreResponse {
