@@ -14,32 +14,34 @@ There is no backend. Everything, including the heavy optimization math, runs loc
 
 ## Features
 
-Because the solver runs in the browser, there is no server latency. It uses HiGHS, a linear programming solver compiled to WebAssembly, and balances ergonomics, recoil, and price according to weights you choose.
+### Mathematical Optimization Engine
+- **Multi-Objective Solver**: Balances ergonomics, vertical recoil, and price using [HiGHS](https://highs.dev/) (a high-performance mixed-integer linear programming solver compiled to WebAssembly) running inside dedicated Web Workers.
+- **Sweet Spot Mode (Augmented Tchebycheff Scalarization)**: Solves for balanced, non-convex Pareto configurations relative to the weapon's 3D Ideal Point ($z^*_E, z^*_R, z^*_P$). Discovers optimal sweet-spot builds located in non-convex trade-off indentations that linear weighted sums mathematically skip.
+- **EvoErgo (Weight-Adjusted Ergonomics) Mode**: Optimizes weight-adjusted ergonomics and true quadratic EvoErgoDelta ($\text{EED} = (100 - 0.015 \cdot (100 - E)^2) - 15 \cdot W$) via a tangent $k$-sweep solver, matching real in-game ADS speed and overswing physics.
+- **Conflict Resolution & Feasibility**: Resolves complex weapon slot trees, mutual exclusions, parent requirements, and nested multi-slot dependencies using LP relaxation, perturbation, and greedy integer rounding.
 
-An LP relaxation returns fractional answers, so a greedy rounding step turns them into a loadout that is valid, conflict free, and integer optimal.
+### Hard Constraints & Modding Controls
+- **Prevent Overswing Constraint**: Enforces $W \le \text{Threshold}(E_{\text{eff}}) \iff \text{EED} \ge 0$ via exact tangent cutting planes, guaranteeing zero sight overswing when snapping to ADS.
+- **Equipment Ergo Penalty ($b$) Input**: Configures a $-40\%$ to $0\%$ penalty to model the impact of equipped body armor, helmets, and backpacks on effective ergonomics.
+- **Stat Bounds**: Set hard limits on maximum vertical recoil, minimum ergonomics, maximum weight (kg), and budget (₽).
+- **Weapon Ballistics & MOA Limits**: Set maximum dispersion (MOA) using exact in-game BSG formulas ($K \approx 34.3$) and barrel replacement rules.
+- **Functional Requirements**: Enforce minimum magazine capacity, minimum sighting range, and specific caliber configurations.
+- **Trader & Market Filters**: Filter parts by PMC level, trader loyalty levels (LL1–LL4), and toggle Flea Market availability.
+- **Preset Retention & Part Locking**: Retain base preset components with one click, lock preferred mods (e.g. favorite optic or muzzle device), or blacklist unwanted parts.
 
-When a single number cannot capture the decision, the Pareto frontier view plots the trade-off curve (ergonomics against recoil, for example) so you can see what each choice costs.
-
-Hard constraints you can set:
-
-- Budget limit (₽)
-- Minimum ergonomics
-- Maximum vertical recoil
-- Minimum magazine capacity
-- Minimum sighting range
-- Maximum weight (kg)
-
-Availability is filtered by your PMC level and trader loyalty levels, and you can switch the flea market off.
-
-The interface is localized in 16 languages, including English, Русский, 中文, and Español.
+### Analysis, Exploration & Usability
+- **AUGMECON2 Accelerated 2D Pareto Exploration**: Fast Augmented $\epsilon$-Constraint exploration with slack bypass across Ergo vs. Recoil, Ergo vs. Price, and Recoil vs. Price curves.
+- **Live EED & EvoErgo Metrics**: Color-coded stat cards (+green / -red) providing instant feedback on overswing and weight efficiency.
+- **Interactive Guide & Methodology Modal**: Built-in mathematical reference with KaTeX rendering for Tarkov weapon mechanics, recoil formulas, and optimization algorithms.
+- **100% Client-Side & Offline Ready**: Zero server latency or tracking; all calculations execute locally in the browser.
+- **16 Languages Supported**: cs, de, en, es, fr, hu, it, ja, ko, pl, pt, ro, ru, sk, tr, zh.
 
 ## Tech stack
 
-- Frontend: [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/)
-- UI: [Ant Design](https://ant.design/) v6
-- Solver: [HiGHS](https://highs.dev/) via WebAssembly, using LP relaxation, then perturbation, then greedy rounding
-- Data: [Tarkov.dev JSON API](https://json.tarkov.dev/endpoints)
-
+- **Frontend**: [React](https://react.dev/) 19, [Vite](https://vitejs.dev/) 6, [TypeScript](https://www.typescriptlang.org/)
+- **UI & Visualization**: [Ant Design](https://ant.design/) v6, [Recharts](https://recharts.org/), [KaTeX](https://katex.org/)
+- **Optimization Solver**: [HiGHS](https://highs.dev/) via WebAssembly (MILP / LP Relaxation / Augmented Tchebycheff / AUGMECON2 / Cutting Planes)
+- **Data Source**: [Tarkov.dev JSON API](https://json.tarkov.dev/endpoints)
 ## Installation
 
 You need [Node.js](https://nodejs.org/) v18 or higher and [npm](https://www.npmjs.com/), which usually ships with it.

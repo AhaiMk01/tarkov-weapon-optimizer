@@ -14,32 +14,34 @@ No hay servidor backend. Todo, incluida la parte más pesada del cálculo, se ej
 
 ## Características
 
-Como el solucionador corre en el navegador, no hay latencia de servidor. Usa HiGHS, un solucionador de programación lineal compilado a WebAssembly, y equilibra ergonomía, retroceso y precio según los pesos que elijas.
+### Motor de optimización matemática
+- **Solucionador multiobjetivo**: Equilibra ergonomía, retroceso vertical y precio mediante [HiGHS](https://highs.dev/) (solucionador de programación lineal entera mixta de alto rendimiento compilado en WebAssembly) ejecutándose en Web Workers dedicados.
+- **Modo Sweet Spot (Escalarización de Tchebycheff aumentada)**: Resuelve configuraciones de Pareto no convexas equilibradas respecto al punto ideal 3D del arma ($z^*_E, z^*_R, z^*_P$). Descubre configuraciones óptimas en hendiduras no convexas que las sumas lineales ponderadas omiten matemáticamente.
+- **Modo EvoErgo (Ergonomía ajustada al peso)**: Optimiza la ergonomía ajustada al peso y la métrica cuadrática real EvoErgoDelta ($\text{EED} = (100 - 0.015 \cdot (100 - E)^2) - 15 \cdot W$) mediante un solucionador de barrido de tangentes $k$, reflejando la velocidad real de apuntado (ADS) y la física de sobreoscilación del juego.
+- **Resolución de conflictos y factibilidad**: Resuelve árboles de modificaciones complejos, exclusiones mutuas, requisitos de ranura principal y dependencias múltiples usando relajación LP, perturbación y redondeo entero voraz.
 
-La relajación de programación lineal devuelve valores fraccionarios, así que un paso de redondeo voraz los convierte en una configuración válida, libre de conflictos y óptima en enteros.
+### Restricciones fijas y control de modificaciones
+- **Restricción de prevención de sobreoscilación (Prevent Overswing)**: Aplica $W \le \text{Threshold}(E_{\text{eff}}) \iff \text{EED} \ge 0$ mediante planos de corte tangentes exactos, garantizando cero sobreoscilación de la mira al apuntar.
+- **Penalización de ergonomía de equipo ($b$)**: Configura una penalización de $-40\%$ a $0\%$ para modelar el impacto de armaduras, cascos y mochilas equipadas.
+- **Límites de estadísticas**: Fija límites estrictos de retroceso vertical máximo, ergonomía mínima, peso máximo (kg) y presupuesto (₽).
+- **Balística y límites de dispersión (MOA)**: Fija la dispersión máxima (MOA) utilizando las fórmulas reales del juego de BSG ($K \approx 34.3$) y las reglas de reemplazo de cañones.
+- **Requisitos funcionales**: Exige capacidad mínima de cargador, alcance mínimo de mira y calibres específicos.
+- **Filtros de comerciantes y Mercado Pulga**: Filtra piezas por nivel de PMC, nivel de lealtad de comerciantes (LL1–LL4) y activa o desactiva el Mercado Pulga.
+- **Retención de preajustes y bloqueo de piezas**: Conserva las piezas del preajuste base con un solo clic, bloquea componentes preferidos (por ejemplo, tu mira o silenciador favorito) o excluye piezas no deseadas.
 
-Cuando una sola cifra no basta para decidir, la vista de la frontera de Pareto dibuja la curva de compensación (por ejemplo, ergonomía frente a retroceso) para que veas cuánto cuesta cada opción.
-
-Restricciones fijas que puedes establecer:
-
-- Límite de presupuesto (₽)
-- Ergonomía mínima
-- Retroceso vertical máximo
-- Capacidad mínima de cargador
-- Rango mínimo de visualización
-- Peso máximo (kg)
-
-La disponibilidad se filtra por tu nivel de PMC y por la lealtad con cada comerciante, y puedes desactivar el Mercado Pulga.
-
-La interfaz está localizada en 16 idiomas, incluidos English, Русский, 中文 y Español.
+### Análisis, exploración y experiencia de usuario
+- **Exploración de Pareto 2D acelerada con AUGMECON2**: Exploración rápida mediante $\epsilon$-restricciones aumentadas con omisión de holgura en curvas de Ergonomía vs. Retroceso, Ergonomía vs. Precio y Retroceso vs. Precio.
+- **Métricas EED y EvoErgo en tiempo real**: Tarjetas con código de color (+verde / -rojo) que ofrecen retroalimentación instantánea sobre la sobreoscilación y la eficiencia de peso.
+- **Guía interactiva y modal de metodología**: Documentación matemática integrada con renderizado KaTeX para la física de armas de Tarkov, fórmulas de retroceso y algoritmos del solucionador.
+- **100% del lado del cliente y listo para usar sin conexión**: Cero latencia de servidor y sin rastreo; todos los cálculos se realizan localmente en el navegador.
+- **16 idiomas disponibles**: cs, de, en, es, fr, hu, it, ja, ko, pl, pt, ro, ru, sk, tr, zh.
 
 ## Tecnologías utilizadas
 
-- Frontend: [React](https://react.dev/), [Vite](https://vitejs.dev/), [TypeScript](https://www.typescriptlang.org/)
-- UI: [Ant Design](https://ant.design/) v6
-- Solucionador: [HiGHS](https://highs.dev/) vía WebAssembly, con relajación de programación lineal, luego perturbación y luego redondeo voraz
-- Datos: [API JSON de Tarkov.dev](https://json.tarkov.dev/endpoints)
-
+- **Frontend**: [React](https://react.dev/) 19, [Vite](https://vitejs.dev/) 6, [TypeScript](https://www.typescriptlang.org/)
+- **UI y visualización**: [Ant Design](https://ant.design/) v6, [Recharts](https://recharts.org/), [KaTeX](https://katex.org/)
+- **Solucionador de optimización**: [HiGHS](https://highs.dev/) vía WebAssembly (MILP / Relajación LP / Tchebycheff aumentado / AUGMECON2 / Planos de corte)
+- **Fuente de datos**: [API JSON de Tarkov.dev](https://json.tarkov.dev/endpoints)
 ## Instalación y ejecución
 
 Necesitas [Node.js](https://nodejs.org/) v18 o superior y [npm](https://www.npmjs.com/), que suele venir incluido.

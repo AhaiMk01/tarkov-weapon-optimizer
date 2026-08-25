@@ -12,34 +12,36 @@
 ![Vite](https://img.shields.io/badge/Vite-6%2B-purple.svg)
 ![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
-## 功能
+## 功能特点
 
-求解过程在浏览器里跑，所以没有服务器延迟。它使用编译为 WebAssembly 的 HiGHS 线性规划求解器，按照你给出的权重在人机工效、后坐力和价格之间取得平衡。
+### 数学优化引擎
+- **多目标求解器**：基于编译为 WebAssembly 的高性能 [HiGHS](https://highs.dev/) 混合整数线性规划 (MILP) 求解器，在 Web Worker 中运行，毫秒级平衡人机工效、垂直后坐力和价格。
+- **甜点模式 (增广切比雪夫标量化 / Sweet Spot)**：以武器的 3D 理想点 ($z^*_E, z^*_R, z^*_P$) 为基准求解非凸帕累托最优配置，挖掘出线性加权求和在数学上无法触达的平衡“甜点改装”。
+- **EvoErgo（重量自适应人机工效）优化**：基于切线 $k$-sweep 候选求解算法，优化二次非线性 EvoErgoDelta 指标（$\text{EED} = (100 - 0.015 \cdot (100 - \text{Ergo})^2) - 15 \cdot \text{Weight}$），贴合游戏内实际开镜速度与枪口过冲物理机制。
+- **冲突消解与整数可行性**：通过 LP 松弛、扰动分析与贪婪取整算法，精准处理复杂的配件树、互斥槽位、父级依赖与多槽位冲突。
 
-线性规划松弛解是小数解，因此还有一步“贪婪取整”，把它转换成有效、无冲突且整数最优的配置。
+### 硬性约束与改装定制
+- **防止开镜过冲硬约束 (Prevent Overswing)**：利用一阶切线割平面精确约束 $W \le \text{Threshold}(E_{\text{eff}}) \iff \text{EED} \ge 0$，确保在快速开镜甩枪时绝无晃动过冲。
+- **装备人机惩罚系数 ($b$)**：可自定义 $-40\%$ 至 $0\%$ 的护甲/头盔/背包负重惩罚，确保实战全装状态下的零过冲。
+- **属性上下限**：可设定最大垂直后坐力、最低人机工效、最大重量 (kg) 及预算上限 (₽)。
+- **精度与 MOA 限制**：采用 BSG 游戏内真实精度换算常数 ($K \approx 34.3$) 与可替换枪管规则，支持设定最大 MOA 散布上限。
+- **功能性约束**：支持指定最低弹匣容量、最低瞄准距离及口径转换方案。
+- **商人等级与跳蚤过滤**：根据你的 PMC 等级和商人忠诚度等级 (LL1–LL4) 过滤可购买配件，支持一键开关跳蚤市场。
+- **预设保留与配件锁定**：一键保留武器自带原厂配件，支持锁定心仪配件（如特定光学瞄具/消音器）或排除不想要的配件。
 
-有些取舍没法用一个数字概括，这时可以用帕累托前沿视图画出权衡曲线（例如人机工效与后坐力的对比），看清每个选择的代价。
-
-可以设定的硬性约束：
-
-- 预算限制 (₽)
-- 最低人机工效
-- 最大垂直后坐力
-- 最小弹匣容量
-- 最小瞄准距离
-- 最大重量 (kg)
-
-可购买范围会按你的 PMC 等级和商人忠诚度过滤，跳蚤市场也可以单独关掉。
-
-界面已本地化为 16 种语言，包括 English、Русский、中文 和 Español。
+### 分析图表与使用体验
+- **AUGMECON2 加速 2D 帕累托前沿探索**：采用增广 $\epsilon$-约束与松弛绕过算法，极速绘制人机-后坐力、人机-价格、后坐力-价格权衡曲线。
+- **实时 EED & EvoErgo 指标卡**：直观颜色编码（绿/红）展示开镜过冲状态与重量人机效率。
+- **交互式原理与方法论指南**：内置 KaTeX 数学公式排版的算法与游戏物理机制解析文档。
+- **100% 纯客户端运行**：无需后端，零延迟，无数据上传，支持离线与 PWA。
+- **支持 16 种语言**：cs、de、en、es、fr、hu、it、ja、ko、pl、pt、ro、ru、sk、tr、zh。
 
 ## 技术栈
 
-- 前端：[React](https://react.dev/)、[Vite](https://vitejs.dev/)、[TypeScript](https://www.typescriptlang.org/)
-- UI 组件：[Ant Design](https://ant.design/) v6
-- 求解器：[HiGHS](https://highs.dev/)，通过 WebAssembly 运行，流程为线性规划松弛 (LP Relaxation)、扰动 (Perturbation)、贪婪取整 (Greedy Rounding)
-- 数据源：[Tarkov.dev JSON API](https://json.tarkov.dev/endpoints)
-
+- **前端**：[React](https://react.dev/) 19、[Vite](https://vitejs.dev/) 6、[TypeScript](https://www.typescriptlang.org/)
+- **UI 与可视化**：[Ant Design](https://ant.design/) v6、[Recharts](https://recharts.org/)、[KaTeX](https://katex.org/)
+- **求解器**：[HiGHS](https://highs.dev/)（WebAssembly / MILP / 线性规划松弛 / 增广切比雪夫标量化 / AUGMECON2 / 割平面法）
+- **数据源**：[Tarkov.dev JSON API](https://json.tarkov.dev/endpoints)
 ## 安装与运行
 
 需要 [Node.js](https://nodejs.org/) v18 或更高版本，以及 [npm](https://www.npmjs.com/)（通常随 Node.js 一起安装）。
