@@ -12,30 +12,27 @@ No hay servidor backend. Todo, incluida la parte más pesada del cálculo, se ej
 ![Vite](https://img.shields.io/badge/Vite-6%2B-purple.svg)
 ![WASM](https://img.shields.io/badge/WASM-Powered-orange.svg)
 
-## Características
+## Características principales
 
-### Motor de optimización matemática
-- **Solucionador multiobjetivo**: Equilibra ergonomía, retroceso vertical y precio mediante [HiGHS](https://highs.dev/) (solucionador de programación lineal entera mixta de alto rendimiento compilado en WebAssembly) ejecutándose en Web Workers dedicados.
-- **Modo Sweet Spot (Escalarización de Tchebycheff aumentada)**: Resuelve configuraciones de Pareto no convexas equilibradas respecto al punto ideal 3D del arma ($z^*_E, z^*_R, z^*_P$). Descubre configuraciones óptimas en hendiduras no convexas que las sumas lineales ponderadas omiten matemáticamente.
-- **Modo EvoErgo (Ergonomía ajustada al peso)**: Optimiza la ergonomía ajustada al peso y la métrica cuadrática real EvoErgoDelta ($\text{EED} = (100 - 0.015 \cdot (100 - E)^2) - 15 \cdot W$) mediante un solucionador de barrido de tangentes $k$, reflejando la velocidad real de apuntado (ADS) y la física de sobreoscilación del juego.
-- **Resolución de conflictos y factibilidad**: Resuelve árboles de modificaciones complejos, exclusiones mutuas, requisitos de ranura principal y dependencias múltiples usando relajación LP, perturbación y redondeo entero voraz.
+### Modos de optimización inteligente
+- **Modo "Punto óptimo" (Sweet Spot)**: Encuentra configuraciones equilibradas (gran ergonomía, bajo retroceso y precio razonable) sin gastar de más en rendimientos decrecientes.
+- **EvoErgo (Ergonomía ajustada al peso)**: Optimiza la ergonomía teniendo en cuenta el peso del arma, maximizando la velocidad real de apuntado (ADS) y el manejo en partida.
+- **Controles deslizantes de prioridad**: Ajusta los pesos para priorizar ergonomía, reducción de retroceso vertical o presupuesto según tu estilo de juego.
 
-### Restricciones fijas y control de modificaciones
-- **Restricción de prevención de sobreoscilación (Prevent Overswing)**: Aplica $W \le \text{Threshold}(E_{\text{eff}}) \iff \text{EED} \ge 0$ mediante planos de corte tangentes exactos, garantizando cero sobreoscilación de la mira al apuntar.
-- **Penalización de ergonomía de equipo ($b$)**: Configura una penalización de $-40\%$ a $0\%$ para modelar el impacto de armaduras, cascos y mochilas equipadas.
-- **Límites de estadísticas**: Fija límites estrictos de retroceso vertical máximo, ergonomía mínima, peso máximo (kg) y presupuesto (₽).
-- **Balística y límites de dispersión (MOA)**: Fija la dispersión máxima (MOA) utilizando las fórmulas reales del juego de BSG ($K \approx 34.3$) y las reglas de reemplazo de cañones.
-- **Requisitos funcionales**: Exige capacidad mínima de cargador, alcance mínimo de mira y calibres específicos.
-- **Filtros de comerciantes y Mercado Pulga**: Filtra piezas por nivel de PMC, nivel de lealtad de comerciantes (LL1–LL4) y activa o desactiva el Mercado Pulga.
-- **Retención de preajustes y bloqueo de piezas**: Conserva las piezas del preajuste base con un solo clic, bloquea componentes preferidos (por ejemplo, tu mira o silenciador favorito) o excluye piezas no deseadas.
+### Restricciones de combate real y personalización
+- **Evitar sobreoscilación al apuntar (Prevent Overswing)**: Asegura que el peso del arma no supere el límite para su ergonomía, eliminando la oscilación de la mira al apuntar rápido (ADS).
+- **Penalización por armadura y equipo**: Configura la penalización de ergonomía de tu chaleco, casco y mochila (-40% a 0%) para mantener cero sobreoscilación con equipamiento completo.
+- **Límites de estadísticas fijos**: Fija límites estrictos de retroceso máximo, ergonomía mínima, peso máximo, presupuesto (₽) y dispersión máxima (MOA).
+- **Requisitos funcionales**: Exige capacidad mínima de cargador, alcance mínimo de mira y configuraciones de calibre.
+- **Filtros de comerciantes y Mercado Pulga**: Filtra piezas según tu nivel de PMC y nivel de comerciantes (LL1–LL4), o desactiva los precios del Mercado Pulga.
+- **Conservar piezas de serie y bloquear favoritos**: Conserva las piezas de fábrica con un clic, fija accesorios favoritos (como miras o silenciadores) o excluye piezas no deseadas.
 
-### Análisis, exploración y experiencia de usuario
-- **Exploración de Pareto 2D acelerada con AUGMECON2**: Exploración rápida mediante $\epsilon$-restricciones aumentadas con omisión de holgura en curvas de Ergonomía vs. Retroceso, Ergonomía vs. Precio y Retroceso vs. Precio.
-- **Métricas EED y EvoErgo en tiempo real**: Tarjetas con código de color (+verde / -rojo) que ofrecen retroalimentación instantánea sobre la sobreoscilación y la eficiencia de peso.
-- **Guía interactiva y modal de metodología**: Documentación matemática integrada con renderizado KaTeX para la física de armas de Tarkov, fórmulas de retroceso y algoritmos del solucionador.
-- **100% del lado del cliente y listo para usar sin conexión**: Cero latencia de servidor y sin rastreo; todos los cálculos se realizan localmente en el navegador.
-- **16 idiomas disponibles**: cs, de, en, es, fr, hu, it, ja, ko, pl, pt, ro, ru, sk, tr, zh.
-
+### Exploración y guía integrada
+- **Curva de exploración de compensaciones 2D**: Explora gráficos de compensación (Ergonomía vs. Retroceso, Ergonomía vs. Precio, Retroceso vs. Precio) para ver cuánto cuesta cada punto de mejora.
+- **Indicadores en tiempo real**: Tarjetas visuales que muestran al instante el estado de sobreoscilación, la eficiencia de peso y las estadísticas del arma.
+- **Guía de armas integrada**: Consulta la documentación dentro de la aplicación sobre mecánicas de armas de Tarkov, balística y físicas de apuntado.
+- **100% del lado del cliente y privado**: Se ejecuta por completo en tu navegador sin retrasos de servidor, cuentas ni inicio de sesión.
+- **Disponible en 16 idiomas**: Español, English, Русский, 中文, Deutsch, Français y 10 más.
 ## Tecnologías utilizadas
 
 - **Frontend**: [React](https://react.dev/) 19, [Vite](https://vitejs.dev/) 6, [TypeScript](https://www.typescriptlang.org/)
