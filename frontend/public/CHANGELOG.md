@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.8.1] — 2026-08-25
+
+### Fixed
+- **Docker Multi-Arch Build Performance**: Added `--platform=$BUILDPLATFORM` to the Dockerfile frontend build stage so static assets compile natively on the runner host architecture (`amd64`), eliminating QEMU user-mode emulation deadlocks and 6-hour execution hangs during `npm ci` on `linux/arm64`.
+- **CI Workflow Execution Timeout**: Added `timeout-minutes: 15` to the Docker build GitHub Actions workflow to prevent indefinite runner hangs.
+
 ## [v2.8.0] — 2026-08-24
 
 ### Added
