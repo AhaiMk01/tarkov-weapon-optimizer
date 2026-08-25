@@ -91,6 +91,18 @@ NUL
 # --- Project-specific ---
 api_cache_debug.json
 logs/
+*.log
+
+# --- LaTeX build artifacts ---
+*.aux
+*.nav
+*.out
+*.snm
+*.toc
+*.vrb
+*.bbl
+*.blg
+*.synctex.gz
 
 # Debug / local docs scratch (uncomment if you keep notes out of repo)
 # docs/

@@ -502,9 +502,263 @@
 %     \end{columns}
 % \end{frame}
 
-% Section 4: Features
-\section{Key Features}
+% Section 4: Advanced Scalarization: Sweet Spot Mode
+\section{Advanced Scalarization: Sweet Spot Mode}
 
+% Slide: Limitation of Linear Weighted Sum
+\begin{frame}{The Limitation of Linear Weighted Sum}
+    \textbf{Traditional Formulation:} $\max \; W_E \cdot \text{Ergo} - W_R \cdot \text{Recoil} - W_P \cdot \text{Price}$
+    
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.52\textwidth}
+        \textbf{The Non-Convexity Problem:}
+        \begin{itemize}
+            \item Linear weighted sum sweeps \textbf{straight hyperplanes} across the objective space.
+            \item In Tarkov, mod compatibility creates \textbf{non-convex indentations} (e.g., discrete trade-offs between heavy suppressors vs. lightweight compensators).
+            \item \textbf{Mathematical Blind Spot:} Any point located inside a non-convex pocket \textbf{cannot be found by linear sums} under \textit{any} choice of weights $(W_E, W_R, W_P)$!
+        \end{itemize}
+
+        \column{0.48\textwidth}
+        \begin{block}{Empirical Finding (Tarkov Datasets)}
+            Across common benchmark weapons (M4A1, AK-74N, MP7A2):
+            \begin{itemize}
+                \item \textbf{45\%--61\%} of all Pareto-optimal builds lie in non-convex pockets!
+                \item Linear weights jump directly from extreme-recoil to extreme-ergo, missing the best \textbf{"Sweet Spot"} builds.
+            \end{itemize}
+        \end{block}
+    \end{columns}
+\end{frame}
+
+% Slide: The 3D Ideal Reference Point
+\begin{frame}{The 3D Ideal Reference Point}
+    \textbf{Idea:} Instead of arbitrary linear slopes, measure distance to a \textbf{Utopian Ideal Target}.
+    
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{1. Utopia Ideal Point ($\mathbf{z}^*$):}
+        \begin{itemize}
+            \item $z^*_E = \max_{\mathbf{x}} \text{Ergo}(\mathbf{x})$ \quad (Best achievable Ergo)
+            \item $z^*_R = \min_{\mathbf{x}} \text{Recoil}(\mathbf{x})$ \quad (Best achievable Recoil)
+            \item $z^*_P = \min_{\mathbf{x}} \text{Price}(\mathbf{x})$ \quad (Cheapest viable build)
+        \end{itemize}
+        \textit{Computed instantly via 3 single-objective solves.}
+
+        \column{0.5\textwidth}
+        \textbf{2. Normalized Gap to Target ($g_i$):}
+        For each objective $i \in \{E, R, P\}$:
+        \[
+        g_i(\mathbf{x}) = \frac{|f_i(\mathbf{x}) - z^*_i|}{\text{Range}_i} \in [0, 1]
+        \]
+        \begin{itemize}
+            \item $g_i = 0$: Reaches the theoretical best.
+            \item Dimensionless and scale-invariant across Ergo, Recoil \%, and Roubles (₽).
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Augmented Tchebycheff Formulation
+\begin{frame}{Augmented Tchebycheff Scalarization}
+    \textbf{Mathematical Formulation (Sweet Spot Mode):}
+    \[
+    \min_{\mathbf{x}, \alpha} \left( \alpha + \rho \sum_{i \in \{E, R, P\}} \lambda_i \cdot g_i(\mathbf{x}) \right)
+    \]
+    \[
+    \text{subject to:} \quad \lambda_i \cdot g_i(\mathbf{x}) \le \alpha, \quad \forall i \in \{E, R, P\}
+    \]
+
+    \vspace{0.2cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{Why This Works:}
+        \begin{itemize}
+            \item $\alpha = \max_i (\lambda_i g_i(\mathbf{x}))$ minimizes the \textbf{worst-case deficit}.
+            \item Pulls the build uniformly towards the Ideal Point from all directions.
+            \item Small augmentation term $\rho \sum \lambda_i g_i$ ($\rho = 10^{-4}$) guarantees \textbf{strict Pareto optimality} (eliminates flat weak optima).
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{MILP Integration Advantages:}
+        \begin{itemize}
+            \item Requires only \textbf{1 extra continuous variable} ($\alpha$).
+            \item \textbf{Zero binary variables added} $\implies$ solve time remains $< 15\text{ms}$.
+            \item Discovers non-convex sweet spots with 100\% mathematical proof of optimality.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Geometric Intuition: Hyperplanes vs L-Contours
+\begin{frame}{Geometric Intuition: Hyperplane vs. $L_\infty$ Contour}
+    \begin{center}
+    \begin{tikzpicture}[scale=0.82]
+        % Axes
+        \draw[->, thick] (0,0) -- (6.5,0) node[right] {\small Recoil / Price Deficit ($g_R$)};
+        \draw[->, thick] (0,0) -- (0,4.6) node[above] {\small Ergo Deficit ($g_E$)};
+
+        % Non-convex Pareto front
+        \draw[very thick, blue] (1.0, 4.0) to[out=-50, in=165] (2.6, 2.3) to[out=-15, in=125] (4.2, 2.0) to[out=-55, in=170] (5.8, 0.7);
+
+        % Ideal Point z*
+        \node[fill=green!70!black, circle, inner sep=2.5pt, label={[font=\footnotesize, green!70!black]below left:$\mathbf{z}^* = (0, 0)$ (Ideal Point)}] at (0.2, 0.2) {};
+
+        % Linear Hyperplane tangent touching extremes, missing the knee
+        \draw[dashed, red, thick] (0.2, 4.8) -- (6.6, -0.2) node[right, font=\scriptsize, red] {Linear Hyperplane};
+        \node[fill=red, circle, inner sep=2pt, label={[font=\scriptsize]above right:Extreme A}] at (1.0, 4.0) {};
+        \node[fill=red, circle, inner sep=2pt, label={[font=\scriptsize]above right:Extreme B}] at (5.8, 0.7) {};
+
+        % Tchebycheff L-contour
+        \draw[thick, purple] (2.6, 4.2) -- (2.6, 2.3) -- (6.0, 2.3) node[above, font=\scriptsize, purple] {$L_\infty$ Contour Level Set};
+        \node[fill=purple, star, star points=5, inner sep=2.5pt, label={[font=\scriptsize, purple]above right:\textbf{Sweet Spot!}}] at (2.6, 2.3) {};
+
+        \node[draw, rounded corners, fill=yellow!15, font=\scriptsize, align=center] at (3.8, 3.4) {Non-convex indentations\\(Skipped by linear sums)};
+    \end{tikzpicture}
+    \end{center}
+    \textbf{Key Takeaway:} Straight lines bridge across concave regions, while L-shaped Chebyshev contours penetrate deep into the "knee" to find balanced builds.
+\end{frame}
+
+% Section 5: Aiming Physics & EvoErgo Optimization
+\section{Aiming Physics \& EvoErgo Optimization}
+
+% Slide: In-Game ADS Physics Problem
+\begin{frame}{In-Game ADS Physics \& The Overswing Problem}
+    \textbf{The Real-World Tarkov Combat Dilemma:}
+    \begin{itemize}
+        \item High Ergonomics speeds up Aim-Down-Sights (ADS) transition and reduces arm stamina drain.
+        \item However, heavy weapon weight introduces \textbf{rotational momentum and inertia}.
+    \end{itemize}
+
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \begin{block}{What is Sight Overswing?}
+            When quickly snapping to aim, a weapon whose weight exceeds its ergonomic handling limit will \textbf{sway past the target reticle} before settling.
+            \begin{itemize}
+                \item Causes missed first shots in high-tempo CQB.
+                \item A 100-ergo, 7.5\,kg build overswings violently.
+                \item A 65-ergo, 3.2\,kg build snaps instantly and stably.
+            \end{itemize}
+        \end{block}
+
+        \column{0.5\textwidth}
+        \begin{center}
+        \textit{"Raw Ergonomics is misleading without accounting for weapon weight."}
+        
+        \vspace{0.3cm}
+        \textbf{Community Research:}\\
+        SpaceMonkey37 \& EFTForge established the empirical relationship between Ergonomics, Weight, and Overswing.
+        \end{center}
+    \end{columns}
+\end{frame}
+
+% Slide: Quadratic EvoErgoDelta (EED)
+\begin{frame}{The Quadratic EvoErgoDelta ($\text{EED}$) Metric}
+    \textbf{Community Formulation (SpaceMonkey37 / EFTForge):}
+    \[
+    \text{EED} = \left[ 100 - 0.015 \cdot (100 - \text{Ergo})^2 \right] - 15 \cdot \text{Weight}_{\text{kg}}
+    \]
+
+    \vspace{0.2cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{The Physical Meaning of $\text{EED}$:}
+        \begin{itemize}
+            \item \textcolor{green!60!black}{\textbf{$\text{EED} \ge 0$ (Zero Overswing)}}: Weight is within the ergonomic threshold; sights snap cleanly on target.
+            \item \textcolor{red!80!black}{\textbf{$\text{EED} < 0$ (Overswing Detected)}}: Weapon inertia causes crosshair sway upon entering ADS.
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{Linearized Approximation (EvoErgo):}
+        \[
+        \text{EvoErgo} = \min(100, \text{Ergo}) - 15 \cdot \text{Weight}_{\text{kg}}
+        \]
+        \begin{itemize}
+            \item Standard community linear score displayed in results overview cards.
+            \item Balances ergonomics and weight directly at a 1:15 kg exchange rate.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Linearizing Quadratic EED via Tangent k-Sweep
+\begin{frame}{Solving Non-Linear EED: The Tangent $k$-Sweep Solver}
+    \textbf{Optimization Challenge:} $\text{EED}$ is quadratic and non-linear, but LP/MIP solvers require linear objectives for sub-millisecond execution.
+
+    \vspace{0.3cm}
+    \textbf{Tangent Exchange Rate:} The marginal value of ergonomics varies with current ergo $E$:
+    \[
+    k(E) = \frac{\partial \text{EED}}{\partial E} = 0.03 \cdot (100 - E) + 15 \quad (\text{Exchange slope } \Delta W / \Delta E)
+    \]
+
+    \vspace{0.2cm}
+    \begin{block}{The Tangent $k$-Sweep Algorithm (\texttt{solveEvoErgo})}
+        \begin{enumerate}
+            \item Run candidate linear solves across benchmark exchange rates $k \in \{15.0, 10.0, 7.5, 5.6\}$ and $k(E_0)$.
+            \item Obtain integer-feasible candidate loadouts $\mathbf{x}^{(1)}, \mathbf{x}^{(2)}, \dots, \mathbf{x}^{(m)}$.
+            \item Evaluate exact quadratic $\text{EED}(\mathbf{x}^{(j)})$ on each candidate.
+            \item Return the global maximum $\mathbf{x}^* = \arg\max \text{EED}(\mathbf{x}^{(j)})$ in $< 10\text{ms}$.
+        \end{enumerate}
+    \end{block}
+\end{frame}
+
+% Slide: Prevent Overswing Hard Constraint
+\begin{frame}{Hard Constraint: Prevent Sight Overswing}
+    \textbf{Requirement:} Ensure the optimized weapon guarantees \textbf{Zero Overswing} ($\text{EED} \ge 0$).
+    \[
+    \text{Weight}_{\text{kg}} \le \text{Threshold}(E_{\text{eff}}) = \frac{100 - 0.015 \cdot (100 - E_{\text{eff}})^2}{15}
+    \]
+
+    \vspace{-0.1cm}
+    \begin{columns}
+        \column{0.55\textwidth}
+        \begin{center}
+        \begin{tikzpicture}[scale=0.75]
+            \draw[->, thick] (0,0) -- (5.5,0) node[right] {\scriptsize $E_{\text{eff}}$};
+            \draw[->, thick] (0,0) -- (0,4.2) node[above] {\scriptsize $W$ (kg)};
+
+            \fill[green!15, opacity=0.8] (0.5, 0) -- (0.5, 0.6) to[out=40, in=195] (3.0, 2.3) to[out=15, in=180] (5.0, 3.3) -- (5.0, 0) -- cycle;
+            \draw[very thick, teal] (0.5, 0.6) to[out=40, in=195] (3.0, 2.3) to[out=15, in=180] (5.0, 3.3);
+
+            \node[font=\tiny, green!50!black, align=center] at (2.8, 1.0) {\textbf{Zero Overswing Zone}\\($\text{EED} \ge 0$)};
+            \node[font=\tiny, red!70!black, align=center] at (1.8, 3.2) {\textbf{Overswing Zone}\\($\text{EED} < 0$)};
+
+            \draw[dashed, thick, orange] (1.6, 1.4) -- (4.4, 3.2) node[above, font=\tiny, orange] {Tangent Plane};
+            \node[fill=blue, circle, inner sep=1.5pt] at (3.0, 2.3) {};
+        \end{tikzpicture}
+        \end{center}
+
+        \column{0.45\textwidth}
+        \textbf{Tangent Cutting Planes:}
+        \begin{itemize}
+            \item Replaces the quadratic curve with first-order tangent cuts:
+            \[
+            W \le T(E_0) + T'(E_0)(E - E_0)
+            \]
+            \item Convex upper bound: zero binary variables needed, solving in $< 15\text{ms}$.
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Equipment Ergonomics Modifier (b)
+\begin{frame}{Equipment Ergonomics Modifier ($b$)}
+    \textbf{Real Combat Scenario:} Body armor, armored rigs, helmets, and backpacks reduce your effective ergonomics.
+
+    \vspace{0.3cm}
+    \begin{block}{Effective Ergonomics Loadout Formula}
+        \[
+        E_{\text{eff}} = E_{\text{weapon}} \cdot (1 + b), \quad b \in [-0.40, \; 0.00]
+        \]
+        \begin{itemize}
+            \item $b$: Total equipment ergo penalty percentage from player loadout.
+            \item Example: A heavy Tier-6 Zabralo armor ($b = -28\%$) + Altyn helmet ($b = -7\%$) $\implies b = -35\%$.
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.3cm}
+    \textbf{Player Benefit:} The optimizer automatically adjusts the overswing threshold to account for your armor, guaranteeing that the build snaps with zero sway in full raid gear.
+\end{frame}
+
+% Section 6: Key Features
+\section{Key Features}
 % Slide: Gunsmith Task Solver
 \begin{frame}{Gunsmith Task Solver}
     \textbf{Problem:} Gunsmith quests require building weapons to exact specifications.
@@ -592,14 +846,14 @@
 \end{frame}
 
 % Slide: Future Work
-\begin{frame}{Future Work & Unimplemented Features}
+\begin{frame}{Future Work \& Unimplemented Features}
     \begin{itemize}
         \item \textbf{Hidden Weapon Stats}: Currently unable to retrieve hidden weapon stats, such as recoil angle.
         \item \textbf{Trader Barters}: Currently unable to retrieve trader barter items and their calculated prices.
     \end{itemize}
 \end{frame}
 
-% Section 5: Conclusion
+% Section 7: Conclusion
 \section{Conclusion}
 
 % Acknowledgements

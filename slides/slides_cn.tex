@@ -445,9 +445,262 @@
 %     \end{columns}
 % \end{frame}
 
-% Section 4: Features
-\section{特色功能}
+% Section 4: Advanced Scalarization: Sweet Spot Mode
+\section{高级标量化：甜点模式 (Sweet Spot)}
 
+% Slide: Limitation of Linear Weighted Sum
+\begin{frame}{传统线性加权求和的局限性}
+    \textbf{传统目标函数：} $\max \; W_E \cdot \text{人机} - W_R \cdot \text{后坐力} - W_P \cdot \text{价格}$
+    
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.52\textwidth}
+        \textbf{非凸帕累托前沿问题：}
+        \begin{itemize}
+            \item 线性加权求和在目标空间中以\textbf{直线超平面}进行扫描。
+            \item 塔科夫配件改装空间具有离散组合特性，存在明显的\textbf{非凸凹陷区域}（如重型消音器 vs 轻量制退器的跳跃权衡）。
+            \item \textbf{数学盲区：}位于非凸凹陷内部的配置点，在\textbf{任意线性权重组合} $(W_E, W_R, W_P)$ 下都无法被求解器触达！
+        \end{itemize}
+
+        \column{0.48\textwidth}
+        \begin{block}{实证分析数据}
+            对常见基准武器（M4A1、AK-74N、MP7A2）进行穷举分析发现：
+            \begin{itemize}
+                \item 真实帕累托前沿中 \textbf{45\%--61\%} 的非支配最优配置位于非凸凹陷区！
+                \item 线性权重会直接从极限后坐力跳跃到极限人机，跳过最实用的\textbf{“甜点改装”}。
+            \end{itemize}
+        \end{block}
+    \end{columns}
+\end{frame}
+
+% Slide: The 3D Ideal Reference Point
+\begin{frame}{3D 理想参考点 (Ideal Point)}
+    \textbf{核心思路：}放弃任意斜率的线性权重，转而度量与\textbf{乌托邦理想目标点}的差距。
+    
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{1. 乌托邦理想点 ($\mathbf{z}^*$)：}
+        \begin{itemize}
+            \item $z^*_E = \max_{\mathbf{x}} \text{Ergo}(\mathbf{x})$ \quad (单目标最高人机)
+            \item $z^*_R = \min_{\mathbf{x}} \text{Recoil}(\mathbf{x})$ \quad (单目标最低后坐力)
+            \item $z^*_P = \min_{\mathbf{x}} \text{Price}(\mathbf{x})$ \quad (单目标最低价格)
+        \end{itemize}
+        \textit{通过3次独立的单目标求解在毫秒内获得。}
+
+        \column{0.5\textwidth}
+        \textbf{2. 归一化目标差距 ($g_i$)：}
+        对各个目标维度 $i \in \{E, R, P\}$：
+        \[
+        g_i(\mathbf{x}) = \frac{|f_i(\mathbf{x}) - z^*_i|}{\text{Range}_i} \in [0, 1]
+        \]
+        \begin{itemize}
+            \item $g_i = 0$：达到理论最佳极限。
+            \item 消除人机点数、后坐力百分比与卢布价格之间的量纲差异。
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Augmented Tchebycheff Formulation
+\begin{frame}{增广切比雪夫标量化 (Augmented Tchebycheff)}
+    \textbf{数学建模（甜点模式）：}
+    \[
+    \min_{\mathbf{x}, \alpha} \left( \alpha + \rho \sum_{i \in \{E, R, P\}} \lambda_i \cdot g_i(\mathbf{x}) \right)
+    \]
+    \[
+    \text{约束条件：} \quad \lambda_i \cdot g_i(\mathbf{x}) \le \alpha, \quad \forall i \in \{E, R, P\}
+    \]
+
+    \vspace{0.2cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{算法优势：}
+        \begin{itemize}
+            \item $\alpha = \max_i (\lambda_i g_i(\mathbf{x}))$ 最小化\textbf{最大维度的短板}，促进水桶级均衡。
+            \item 增广项 $\rho \sum \lambda_i g_i$ ($\rho = 10^{-4}$) 严格保证\textbf{强帕累托最优}，剔除平坦弱解。
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{工程实现特性：}
+        \begin{itemize}
+            \item 仅引入 \textbf{1 个连续辅助变量} ($\alpha$)。
+            \item \textbf{不增加任何 0-1 整数变量}，求解时间保持在 $< 15\text{ms}$。
+            \item 100\% 挖掘非凸帕累托甜点改装方案。
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Geometric Intuition: Hyperplanes vs L-Contours
+\begin{frame}{几何直观：超平面 vs. $L_\infty$ 等值线}
+    \begin{center}
+    \begin{tikzpicture}[scale=0.82]
+        % Axes
+        \draw[->, thick] (0,0) -- (6.5,0) node[right] {\small 后坐力/价格差距 ($g_R$)};
+        \draw[->, thick] (0,0) -- (0,4.6) node[above] {\small 人机差距 ($g_E$)};
+
+        % Non-convex Pareto front
+        \draw[very thick, blue] (1.0, 4.0) to[out=-50, in=165] (2.6, 2.3) to[out=-15, in=125] (4.2, 2.0) to[out=-55, in=170] (5.8, 0.7);
+
+        % Ideal Point z*
+        \node[fill=green!70!black, circle, inner sep=2.5pt, label={[font=\footnotesize, green!70!black]below left:$\mathbf{z}^* = (0, 0)$ (理想点)}] at (0.2, 0.2) {};
+
+        % Linear Hyperplane tangent touching extremes, missing the knee
+        \draw[dashed, red, thick] (0.2, 4.8) -- (6.6, -0.2) node[right, font=\scriptsize, red] {线性超平面};
+        \node[fill=red, circle, inner sep=2pt, label={[font=\scriptsize]above right:极端配置 A}] at (1.0, 4.0) {};
+        \node[fill=red, circle, inner sep=2pt, label={[font=\scriptsize]above right:极端配置 B}] at (5.8, 0.7) {};
+
+        % Tchebycheff L-contour
+        \draw[thick, purple] (2.6, 4.2) -- (2.6, 2.3) -- (6.0, 2.3) node[above, font=\scriptsize, purple] {$L_\infty$ 等值线};
+        \node[fill=purple, star, star points=5, inner sep=2.5pt, label={[font=\scriptsize, purple]above right:\textbf{甜点配置！}}] at (2.6, 2.3) {};
+
+        \node[draw, rounded corners, fill=yellow!15, font=\scriptsize, align=center] at (3.8, 3.4) {非凸凹陷区\\(线性加权无法触达)};
+    \end{tikzpicture}
+    \end{center}
+    \textbf{几何结论：}直线切平面只能触及外凸极值点，而切比雪夫 L 型角等值线能深入非凸凹陷中，精准定位均衡甜点解。
+\end{frame}
+
+% Section 5: Aiming Physics & EvoErgo Optimization
+\section{真实开镜物理与 EvoErgo 优化}
+
+% Slide: In-Game ADS Physics Problem
+\begin{frame}{游戏内开镜机制与过冲甩头 (Overswing)}
+    \textbf{实战中的物理矛盾：}
+    \begin{itemize}
+        \item 高人机工效可加快开镜瞄准（ADS）过渡速度并降低体力消耗。
+        \item 但枪械重量过大会带来\textbf{转动惯性与晃动}。
+    \end{itemize}
+
+    \vspace{0.3cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \begin{block}{什么是瞄准过冲 (Overswing)？}
+            当枪械重量超过当前人机工效的承载阈值时，快速开镜会\textbf{甩过准星中心点并反向晃动}。
+            \begin{itemize}
+                \item 导致第一发定位延迟，极度影响近战胜率。
+                \item 100 人机、7.5\,kg 的全装武器会出现剧烈过冲晃动。
+                \item 65 人机、3.2\,kg 的轻量化武器能做到瞬间平稳锁头。
+            \end{itemize}
+        \end{block}
+
+        \column{0.5\textwidth}
+        \begin{center}
+        \textit{"脱离重量单独看人机数值是失真的。"}
+        
+        \vspace{0.3cm}
+        \textbf{社区实测研究：}\\
+        SpaceMonkey37 与 EFTForge 建立了人机、重量与过冲的实证非线性模型。
+        \end{center}
+    \end{columns}
+\end{frame}
+
+% Slide: Quadratic EvoErgoDelta (EED)
+\begin{frame}{二次非线性 EvoErgoDelta ($\text{EED}$) 指标}
+    \textbf{社区公式 (SpaceMonkey37 / EFTForge)：}
+    \[
+    \text{EED} = \left[ 100 - 0.015 \cdot (100 - \text{人机})^2 \right] - 15 \cdot \text{重量}_{\text{kg}}
+    \]
+
+    \vspace{0.2cm}
+    \begin{columns}
+        \column{0.5\textwidth}
+        \textbf{$\text{EED}$ 的物理意义：}
+        \begin{itemize}
+            \item \textcolor{green!60!black}{\textbf{$\text{EED} \ge 0$（无开镜过冲）}}：重量在人机承载阈值以内，快速开镜指哪打哪。
+            \item \textcolor{red!80!black}{\textbf{$\text{EED} < 0$（存在开镜过冲）}}：转动惯性过大，开镜后产生枪口晃动。
+        \end{itemize}
+
+        \column{0.5\textwidth}
+        \textbf{线性近似分值 (EvoErgo)：}
+        \[
+        \text{EvoErgo} = \min(100, \text{人机}) - 15 \cdot \text{重量}_{\text{kg}}
+        \]
+        \begin{itemize}
+            \item 结果面板展示的标准社区分值。
+            \item 以 1:15 kg 的交换比直观衡量人机与重量的综合效率。
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Linearizing Quadratic EED via Tangent k-Sweep
+\begin{frame}{二次 EED 的线性化求解：切线 $k$-Sweep 算法}
+    \textbf{求解难点：}$\text{EED}$ 包含二次非线性项，但求解器需要线性目标函数以实现毫秒级响应。
+
+    \vspace{0.3cm}
+    \textbf{切线交换率：}边际人机价值随当前人机点数 $E$ 动态变化：
+    \[
+    k(E) = \frac{\partial \text{EED}}{\partial E} = 0.03 \cdot (100 - E) + 15 \quad (\text{切线斜率 } \Delta W / \Delta E)
+    \]
+
+    \vspace{0.2cm}
+    \begin{block}{切线 $k$-Sweep 候选求解算法 (\texttt{solveEvoErgo})}
+        \begin{enumerate}
+            \item 在基准交换率 $k \in \{15.0, 10.0, 7.5, 5.6\}$ 及 $k(E_0)$ 上并行运行线性求解。
+            \item 获得多个满足整数约束的候选配置 $\mathbf{x}^{(1)}, \mathbf{x}^{(2)}, \dots, \mathbf{x}^{(m)}$。
+            \item 对所有候选解计算精确的二次 $\text{EED}(\mathbf{x}^{(j)})$ 指标。
+            \item 在 $< 10\text{ms}$ 内返回使二次 $\text{EED}$ 全局最大的改装方案。
+        \end{enumerate}
+    \end{block}
+\end{frame}
+
+% Slide: Prevent Overswing Hard Constraint
+\begin{frame}{硬性约束：防止开镜过冲 (Prevent Overswing)}
+    \textbf{硬性要求：}确保武器在任何情况下绝不过冲（$\text{EED} \ge 0$）。
+    \[
+    \text{重量}_{\text{kg}} \le \text{阈值}(E_{\text{eff}}) = \frac{100 - 0.015 \cdot (100 - E_{\text{eff}})^2}{15}
+    \]
+
+    \vspace{-0.1cm}
+    \begin{columns}
+        \column{0.55\textwidth}
+        \begin{center}
+        \begin{tikzpicture}[scale=0.75]
+            \draw[->, thick] (0,0) -- (5.5,0) node[right] {\scriptsize $E_{\text{eff}}$};
+            \draw[->, thick] (0,0) -- (0,4.2) node[above] {\scriptsize $W$ (kg)};
+
+            \fill[green!15, opacity=0.8] (0.5, 0) -- (0.5, 0.6) to[out=40, in=195] (3.0, 2.3) to[out=15, in=180] (5.0, 3.3) -- (5.0, 0) -- cycle;
+            \draw[very thick, teal] (0.5, 0.6) to[out=40, in=195] (3.0, 2.3) to[out=15, in=180] (5.0, 3.3);
+
+            \node[font=\tiny, green!50!black, align=center] at (2.8, 1.0) {\textbf{零过冲安全区}\\($\text{EED} \ge 0$)};
+            \node[font=\tiny, red!70!black, align=center] at (1.8, 3.2) {\textbf{过冲晃动区}\\($\text{EED} < 0$)};
+
+            \draw[dashed, thick, orange] (1.6, 1.4) -- (4.4, 3.2) node[above, font=\tiny, orange] {切线割平面};
+            \node[fill=blue, circle, inner sep=1.5pt] at (3.0, 2.3) {};
+        \end{tikzpicture}
+        \end{center}
+
+        \column{0.45\textwidth}
+        \textbf{切线割平面线性化：}
+        \begin{itemize}
+            \item 用一阶切线不等式包络非线性曲线：
+            \[
+            W \le T(E_0) + T'(E_0)(E - E_0)
+            \]
+            \item 凸上界剪枝，无需引入额外 0-1 变量，求解时间 $< 15\text{ms}$。
+        \end{itemize}
+    \end{columns}
+\end{frame}
+
+% Slide: Equipment Ergonomics Modifier (b)
+\begin{frame}{装备人机工效惩罚系数 ($b$)}
+    \textbf{实战环境考量：}防弹衣、防弹弹挂、战术头盔和大型背包会大幅削减有效人机工效。
+
+    \vspace{0.3cm}
+    \begin{block}{有效人机工效公式}
+        \[
+        E_{\text{eff}} = E_{\text{weapon}} \cdot (1 + b), \quad b \in [-0.40, \; 0.00]
+        \]
+        \begin{itemize}
+            \item $b$：防具与装备的总人机惩罚百分比。
+            \item 例：重型6级甲 Zabralo ($b = -28\%$) + 阿尔金头盔 ($b = -7\%$) $\implies b = -35\%$。
+        \end{itemize}
+    \end{block}
+
+    \vspace{0.3cm}
+    \textbf{实战价值：}求解器自动计算装备削减后的有效人机并动态收紧过冲重量阈值，保证全装实战中开镜指哪打哪。
+\end{frame}
+
+% Section 6: Key Features
+\section{特色功能}
 % Slide: Gunsmith Task Solver
 \begin{frame}{枪匠任务求解器}
     \textbf{背景：}枪匠任务要求玩家按照指定规格改装武器，对新手玩家具有一定难度。
@@ -536,9 +789,8 @@
     \end{itemize}
 \end{frame}
 
-% Section 5: Conclusion
+% Section 7: Conclusion
 \section{总结}
-
 % Acknowledgements
 \begin{frame}{致谢}
     \begin{center}
