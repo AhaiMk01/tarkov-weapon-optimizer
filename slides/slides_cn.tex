@@ -749,29 +749,75 @@
 \end{frame}
 
 % Slide 9: Pareto Frontier
-\begin{frame}{帕累托前沿分析}
-    \textbf{概念说明：}
-    \begin{itemize}
-        \item 帕累托前沿展示了两个冲突目标（如后坐力与人机工效）之间的最优权衡曲线。
-    \end{itemize}
+\begin{frame}{帕累托前沿分析：实枪实测数据 (M4A1)}
+    \textbf{核心概念：}帕累托前沿代表了非支配最优解的边界——在不牺牲其他属性的前提下，没有任何单项属性可以被进一步提升。
 
+    \vspace{0.1cm}
     \begin{center}
-    \begin{tikzpicture}[scale=0.85]
-        \draw[->] (0,0) -- (6,0) node[right] {\small 后坐力};
-        \draw[->] (0,0) -- (0,4) node[above] {\small 人机};
+    \begin{tikzpicture}[scale=0.88]
+        % Grid
+        \draw[step=1cm, gray!20, very thin] (0.5,0.4) grid (6.8,3.6);
 
-        \draw[thick, blue] (0.5, 1) to[out=45, in=180] (2.5, 2.8) to[out=0, in=135] (5, 3.3);
+        % Axes
+        \draw[->, thick] (0.5,0.4) -- (7.0,0.4) node[right] {\small 人机工效 ($E$)};
+        \draw[->, thick] (0.5,0.4) -- (0.5,3.8) node[above] {\small 垂直后坐力 ($R$，越低越好)};
 
-        \node[fill=red, circle, inner sep=2pt, label={[font=\scriptsize]left:低后座}] at (0.5, 1) {};
-        \node[fill=green, circle, inner sep=2pt, label={[font=\scriptsize]below right:均衡}] at (2.5, 2.8) {};
-        \node[fill=red, circle, inner sep=2pt, label={[font=\scriptsize]right:高人机}] at (5, 3.3) {};
+        % Axis tick labels
+        \node[below, font=\tiny] at (1.13, 0.4) {40};
+        \node[below, font=\tiny] at (2.86, 0.4) {60};
+        \node[below, font=\tiny] at (4.60, 0.4) {80};
+        \node[below, font=\tiny] at (6.07, 0.4) {100};
 
-        \node[font=\small] at (1.2, 3.5) {不可达};
-        \node[font=\small] at (4.5, 1) {非最优};
+        \node[left, font=\tiny] at (0.5, 0.67) {45};
+        \node[left, font=\tiny] at (0.5, 1.43) {55};
+        \node[left, font=\tiny] at (0.5, 2.38) {65};
+        \node[left, font=\tiny] at (0.5, 3.33) {75};
+
+        % Dominated Region & Infeasible Region
+        \fill[red!5, opacity=0.7] (1.13, 0.67) -- (1.56, 0.76) -- (2.00, 0.86) -- (2.86, 1.05) -- (3.73, 1.24) -- (4.60, 1.43) -- (5.46, 1.71) -- (5.90, 1.90) -- (6.07, 2.28) -- (6.8, 2.28) -- (6.8, 3.6) -- (0.5, 3.6) -- (0.5, 0.67) -- cycle;
+        \node[font=\footnotesize, red!70!black, align=center] at (2.2, 3.1) {\textbf{受支配区域 (被包络)}\\(非最优改装配置)};
+
+        \node[font=\footnotesize, gray!80, align=center] at (5.0, 0.8) {\textit{物理不可达区域}};
+
+        % Suboptimal Sample points (Random Feasible Builds)
+        \foreach \px/\py in {
+            0.87/1.43, 2.51/1.43, 2.60/2.19, 1.39/2.00, 1.56/2.09, 3.47/2.95,
+            6.07/3.23, 5.81/2.09, 3.81/2.95, 3.55/3.33, 2.51/2.00, 5.64/2.00,
+            2.86/1.33, 2.95/1.14, 2.25/2.66, 3.38/2.76, 1.47/1.43, 2.17/1.81,
+            2.51/1.14, 2.77/1.33, 2.08/1.43, 2.60/2.57, 1.91/1.62, 1.47/1.52,
+            3.47/2.09, 4.07/1.52, 2.17/1.05, 4.20/2.30, 3.10/1.80, 5.20/2.70
+        } {
+            \node[fill=gray!60, circle, inner sep=1.2pt] at (\px, \py) {};
+        }
+
+        % True Pareto Frontier (Connected Curve)
+        \draw[very thick, blue!80!black] 
+            (1.13, 0.67) -- (1.56, 0.76) -- (2.00, 0.86) -- (2.86, 1.05) -- 
+            (3.73, 1.24) -- (4.60, 1.43) -- (5.46, 1.71) -- (5.90, 1.90) -- (6.07, 2.28);
+
+        % Pareto Points markers
+        \foreach \px/\py in {
+            1.13/0.67, 1.56/0.76, 2.00/0.86, 2.86/1.05,
+            3.73/1.24, 4.60/1.43, 5.46/1.71, 5.90/1.90, 6.07/2.28
+        } {
+            \node[fill=blue!90!black, draw=white, circle, inner sep=1.8pt] at (\px, \py) {};
+        }
+
+        % Highlighted builds
+        \node[fill=red!80!black, star, star points=5, inner sep=2.2pt, label={[font=\tiny, red!80!black]above:极限后坐 (47)}] at (1.13, 0.67) {};
+        \node[fill=green!60!black, star, star points=5, inner sep=2.2pt, label={[font=\tiny, green!60!black]below right:甜点均衡 (73人机 / 53后坐)}] at (3.73, 1.24) {};
+        \node[fill=purple!80!black, star, star points=5, inner sep=2.2pt, label={[font=\tiny, purple!80!black]right:极限人机 (100)}] at (6.07, 2.28) {};
+
+        % Legend box
+        \draw[fill=white, draw=gray!40, rounded corners] (0.7, 1.9) rectangle (3.0, 2.7);
+        \node[fill=blue!90!black, circle, inner sep=1.4pt] at (0.9, 2.5) {};
+        \node[right, font=\tiny] at (1.0, 2.5) {真实帕累托前沿 (数学最优)};
+        \node[fill=gray!60, circle, inner sep=1.2pt] at (0.9, 2.1) {};
+        \node[right, font=\tiny] at (1.0, 2.1) {随机有效改装 (劣解样本)};
     \end{tikzpicture}
     \end{center}
-
-    \textbf{应用价值}：帮助玩家直观判断后坐力与人机工效之间的权衡，选择最适合自己的配置方案。
+    \vspace{-0.2cm}
+    \textbf{实战启示：}点云内部的配置存在严重的性能浪费（相同人机却高出十几点后坐力）。优化器在数学上保证玩家始终位于蓝色最优边界。
 \end{frame}
 
 % Slide: Pareto Visualization

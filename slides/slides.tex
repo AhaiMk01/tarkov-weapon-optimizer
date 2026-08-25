@@ -813,29 +813,75 @@
 \end{frame}
 
 % Slide 9: Pareto Frontier
-\begin{frame}{Pareto Frontier Analysis}
-    \textbf{What is it?}
-    \begin{itemize}
-        \item A curve showing the trade-off between two conflicting goals (e.g., Price vs. Recoil).
-    \end{itemize}
+\begin{frame}{Pareto Frontier Analysis: Real Weapon Benchmark (M4A1)}
+    \textbf{Core Concept:} The Pareto Frontier represents the boundary of non-dominated builds where no stat can be improved without sacrificing another.
 
+    \vspace{0.1cm}
     \begin{center}
-    \begin{tikzpicture}[scale=0.8]
-        \draw[->] (0,0) -- (6,0) node[right] {Price (\$)};
-        \draw[->] (0,0) -- (0,4) node[above] {Recoil (Lower is better)};
-        
-        \draw[thick, blue] (1, 3.5) to[out=-45, in=135] (2, 2) to[out=-45, in=160] (5, 0.5);
-        
-        \node[fill=red, circle, inner sep=1.5pt, label=right:Cheap but bad] at (1, 3.5) {};
-        \node[fill=green, circle, inner sep=1.5pt, label=right:Balanced] at (2, 2) {};
-        \node[fill=red, circle, inner sep=1.5pt, label=right:Expensive but good] at (5, 0.5) {};
-        
-        \node at (3, 3) {Impossible Zone};
-        \node at (1.5, 0.5) {Inefficient Zone};
+    \begin{tikzpicture}[scale=0.88]
+        % Grid
+        \draw[step=1cm, gray!20, very thin] (0.5,0.4) grid (6.8,3.6);
+
+        % Axes
+        \draw[->, thick] (0.5,0.4) -- (7.0,0.4) node[right] {\small Ergonomics ($E$)};
+        \draw[->, thick] (0.5,0.4) -- (0.5,3.8) node[above] {\small Vertical Recoil ($R$, lower is better)};
+
+        % Axis tick labels
+        \node[below, font=\tiny] at (1.13, 0.4) {40};
+        \node[below, font=\tiny] at (2.86, 0.4) {60};
+        \node[below, font=\tiny] at (4.60, 0.4) {80};
+        \node[below, font=\tiny] at (6.07, 0.4) {100};
+
+        \node[left, font=\tiny] at (0.5, 0.67) {45};
+        \node[left, font=\tiny] at (0.5, 1.43) {55};
+        \node[left, font=\tiny] at (0.5, 2.38) {65};
+        \node[left, font=\tiny] at (0.5, 3.33) {75};
+
+        % Dominated Region & Infeasible Region
+        \fill[red!5, opacity=0.7] (1.13, 0.67) -- (1.56, 0.76) -- (2.00, 0.86) -- (2.86, 1.05) -- (3.73, 1.24) -- (4.60, 1.43) -- (5.46, 1.71) -- (5.90, 1.90) -- (6.07, 2.28) -- (6.8, 2.28) -- (6.8, 3.6) -- (0.5, 3.6) -- (0.5, 0.67) -- cycle;
+        \node[font=\footnotesize, red!70!black, align=center] at (2.2, 3.1) {\textbf{Dominated Region}\\(Sub-optimal builds)};
+
+        \node[font=\footnotesize, gray!80, align=center] at (5.0, 0.8) {\textit{Infeasible Region}};
+
+        % Suboptimal Sample points (Random Feasible Builds)
+        \foreach \px/\py in {
+            0.87/1.43, 2.51/1.43, 2.60/2.19, 1.39/2.00, 1.56/2.09, 3.47/2.95,
+            6.07/3.23, 5.81/2.09, 3.81/2.95, 3.55/3.33, 2.51/2.00, 5.64/2.00,
+            2.86/1.33, 2.95/1.14, 2.25/2.66, 3.38/2.76, 1.47/1.43, 2.17/1.81,
+            2.51/1.14, 2.77/1.33, 2.08/1.43, 2.60/2.57, 1.91/1.62, 1.47/1.52,
+            3.47/2.09, 4.07/1.52, 2.17/1.05, 4.20/2.30, 3.10/1.80, 5.20/2.70
+        } {
+            \node[fill=gray!60, circle, inner sep=1.2pt] at (\px, \py) {};
+        }
+
+        % True Pareto Frontier (Connected Curve)
+        \draw[very thick, blue!80!black] 
+            (1.13, 0.67) -- (1.56, 0.76) -- (2.00, 0.86) -- (2.86, 1.05) -- 
+            (3.73, 1.24) -- (4.60, 1.43) -- (5.46, 1.71) -- (5.90, 1.90) -- (6.07, 2.28);
+
+        % Pareto Points markers
+        \foreach \px/\py in {
+            1.13/0.67, 1.56/0.76, 2.00/0.86, 2.86/1.05,
+            3.73/1.24, 4.60/1.43, 5.46/1.71, 5.90/1.90, 6.07/2.28
+        } {
+            \node[fill=blue!90!black, draw=white, circle, inner sep=1.8pt] at (\px, \py) {};
+        }
+
+        % Highlighted builds
+        \node[fill=red!80!black, star, star points=5, inner sep=2.2pt, label={[font=\tiny, red!80!black]above:Min Recoil (47)}] at (1.13, 0.67) {};
+        \node[fill=green!60!black, star, star points=5, inner sep=2.2pt, label={[font=\tiny, green!60!black]below right:Sweet Spot (73 E / 53 R)}] at (3.73, 1.24) {};
+        \node[fill=purple!80!black, star, star points=5, inner sep=2.2pt, label={[font=\tiny, purple!80!black]right:Max Ergo (100)}] at (6.07, 2.28) {};
+
+        % Legend box
+        \draw[fill=white, draw=gray!40, rounded corners] (0.7, 1.9) rectangle (3.0, 2.7);
+        \node[fill=blue!90!black, circle, inner sep=1.4pt] at (0.9, 2.5) {};
+        \node[right, font=\tiny] at (1.0, 2.5) {Pareto Frontier (Optimal)};
+        \node[fill=gray!60, circle, inner sep=1.2pt] at (0.9, 2.1) {};
+        \node[right, font=\tiny] at (1.0, 2.1) {Random Valid Builds (Dominated)};
     \end{tikzpicture}
     \end{center}
-    
-    \textbf{Why use it?} Allows users to see if spending an extra 50k Roubles actually gives a significant benefit.
+    \vspace{-0.2cm}
+    \textbf{Takeaway:} Points inside the cloud represent wasted performance (e.g. higher recoil for the same ergonomics). The optimizer mathematically guarantees you stay on the blue boundary.
 \end{frame}
 
 % Slide: Pareto Visualization
