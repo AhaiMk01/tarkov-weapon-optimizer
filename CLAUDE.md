@@ -32,6 +32,7 @@ npm run preview --prefix frontend # Preview production build
 ```bash
 cd frontend && npx tsx test_json_api_adapter.ts             # JSON API shape parity + buildItemLookup + end-to-end solves (en & zh)
 cd frontend && npx tsx test_trader_access.ts                # per-trader loyalty gating + TRADER_DISABLED (0), incl. Ref barters
+cd frontend && npx tsx test_naked_base_availability.ts       # naked receiver honours trader loyalty levels / TRADER_DISABLED
 cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
 cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
 cd frontend && npx tsx test_evoergo.ts                      # EvoErgo k-sweep: solveEvoErgo maximizes true EED (quadratic), EE-off maximizes raw ergo

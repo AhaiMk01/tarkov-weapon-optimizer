@@ -303,7 +303,12 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
     };
 
     if (selectedBaseId === 'naked') {
-      basePrice = wStats.price < 100_000_000 ? wStats.price : 0;
+      // Same availability filtering the LP priced this base with, so the
+      // reported price and seller match what the solver actually paid.
+      const [nakedPrice, nakedSource, , nakedLabel] = getAvailablePrice(
+        wStats, traderLevels, fleaAvailable, playerLevel, barterAvailable, barterExcludeDogtags,
+      );
+      basePrice = nakedPrice;
       const gunData = weapon.data as Record<string, unknown>;
       presetDetail = {
         id: params.weaponId,
@@ -312,7 +317,8 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
         items: [],
         icon: (gunData.iconLink ?? gunData.iconLinkFallback ?? wStats.default_preset_image) as string | undefined,
         image_large: (gunData.image512pxLink ?? gunData.imageLink ?? gunData.image8xLink) as string | undefined,
-        source: wStats.price_source !== 'not_available' ? wStats.price_source : undefined,
+        source: nakedSource ?? undefined,
+        purchase_label: nakedLabel ?? undefined,
         ...weaponTooltip,
       };
     } else if (selectedBaseId) {

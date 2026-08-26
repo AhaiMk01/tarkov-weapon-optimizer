@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.10.1] — 2026-08-26
+
+### Fixed
+- **Bare receiver ignored trader availability**: The naked-gun base was priced from the weapon's cheapest trader offer without any availability filtering, so trader loyalty levels and disabled traders never gated it — every mod and preset was filtered, the receiver alone was not. A build could include a receiver the configured traders do not sell. The base now resolves through the same availability path as mods and presets, in both the solver and the results panel. **Builds can now cost more, or become infeasible, under restricted trader settings — that is the corrected answer.** Example: with Mechanic disabled, the M4A1 previously used their ₽22,997 receiver anyway; it now falls back to a purchasable preset at ₽218,143.
+- **Unpurchasable guns**: A weapon with no trader offer now reports price 0 / `not_available`, matching how presets already reported it, instead of a 999999999 placeholder that downstream availability checks read back as a real, purchasable price.
+
 ## [v2.10.0] — 2026-08-25
 
 ### Added

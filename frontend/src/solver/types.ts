@@ -49,6 +49,8 @@ export interface GunStats {
   deviation_curve: number;
   recoil_angle: number;
   recoil_dispersion: number;
+  /** Purchase paths for the bare receiver. Trader offers only — see extractGunStats. */
+  offers: OfferInfo[];
   price: number;
   price_source: string;
 }

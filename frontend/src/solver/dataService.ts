@@ -536,28 +536,45 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
 function extractGunStats(gun: RawItem): GunStats {
   const props = gun.properties ?? {};
   const buyFor = gun.buyFor ?? [];
-  let lowestPrice = 0;
-  let priceSource = 'basePrice';
 
-  if (buyFor.length) {
-    const traderOffers = buyFor.filter(
-      (offer: RawItem) => typeof offer === 'object' && offer?.source !== 'fleaMarket'
-    );
-    if (traderOffers.length) {
-      const minOffer = traderOffers.reduce((min: RawItem, o: RawItem) =>
-        (o.priceRUB ?? Infinity) < (min.priceRUB ?? Infinity) ? o : min
-        , traderOffers[0]);
-      lowestPrice = minOffer.priceRUB ?? 0;
-      priceSource = minOffer.source ?? 'market';
-    }
+  // Every offer is kept, with its trader level, so the naked base can go
+  // through getAvailablePrice() like mods and presets do. Collapsing to a
+  // single cheapest price here is what let the bare receiver bypass trader
+  // loyalty levels and TRADER_DISABLED entirely.
+  //
+  // Flea offers stay excluded, matching Python extract_gun_stats: the naked
+  // gun is only purchasable via direct trader offers, and flea-only guns must
+  // use a preset base instead.
+  const offers: OfferInfo[] = [];
+  for (const offer of buyFor) {
+    if (typeof offer !== 'object' || !offer) continue;
+    const source = offer.source ?? '';
+    if (source === 'fleaMarket') continue;
+    const price = offer.priceRUB ?? 0;
+    if (price <= 0) continue;
+    const vendor = offer.vendor ?? {};
+    offers.push({
+      price,
+      source,
+      vendor_name: vendor.name ?? '',
+      vendor_normalized: vendor.normalizedName ?? '',
+      trader_level: vendor.minTraderLevel ?? 1,
+    });
   }
+  offers.sort((a, b) => a.price - b.price);
 
-  if (lowestPrice === 0) {
-    // No direct trader offers for naked gun — mark as not purchasable.
-    // Matches Python extract_gun_stats: naked gun is only purchasable via
-    // direct trader offers; flea-only guns must use preset bases instead.
-    lowestPrice = 999999999;
-    priceSource = 'not_available';
+  // Cheapest offer ignoring availability settings — display fallback only.
+  // Callers that must respect trader levels use getAvailablePrice(stats).
+  // No offers means no purchase path: price 0 + 'not_available', the same
+  // convention extractAllPresets uses. (This used to be a 999999999 sentinel,
+  // which getAvailablePrice's no-offers fallback read as a real price and
+  // reported as *available* — every caller then needed a magic ceiling to
+  // undo it.)
+  let lowestPrice = 0;
+  let priceSource = 'not_available';
+  if (offers.length) {
+    lowestPrice = offers[0].price;
+    priceSource = offers[0].source;
   }
 
   const defaultPreset = props.defaultPreset ?? {};
@@ -592,6 +609,7 @@ function extractGunStats(gun: RawItem): GunStats {
     deviation_curve: props.deviationCurve ?? 0,
     recoil_angle: props.recoilAngle ?? 0,
     recoil_dispersion: props.recoilDispersion ?? 0,
+    offers,
     price: lowestPrice,
     price_source: priceSource,
   };

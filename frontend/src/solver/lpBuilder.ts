@@ -271,8 +271,22 @@ export function buildLP(params: SolveParams): LPResult {
   const basePrices: number[] = [];
   const baseIsNaked: number[] = [];
 
-  const nakedGunPriceRaw = weaponStats.price ?? 0;
-  const nakedGunPurchasable = nakedGunPriceRaw > 0 && nakedGunPriceRaw < 100_000_000;
+  // Naked base goes through getAvailablePrice like every mod and preset, so
+  // trader loyalty levels and TRADER_DISABLED gate the bare receiver too.
+  // (weaponStats.price is the unfiltered cheapest offer — reading it directly
+  // let the LP buy a receiver the player's trader settings forbid.)
+  // Gun offers are trader-only, so the flea and player-level arguments never
+  // decide anything here; they are passed for signature parity.
+  const [nakedAvailPrice, , nakedAvailable] = getAvailablePrice(
+    weaponStats,
+    params.traderLevels ?? undefined,
+    params.fleaAvailable ?? true,
+    params.playerLevel ?? null,
+    params.barterAvailable ?? false,
+    params.barterExcludeDogtags ?? false,
+  );
+  const nakedGunPriceRaw = nakedAvailPrice;
+  const nakedGunPurchasable = nakedAvailable && nakedGunPriceRaw > 0;
   if (nakedGunPurchasable) {
     baseIds.push('naked');
     basePrices.push(nakedGunPriceRaw);
