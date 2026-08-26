@@ -342,20 +342,29 @@ function AppContent({
       JSON.stringify({ playerLevel, fleaAvailable, barterAvailable, barterExcludeDogtags, traderLevels }),
     )
   }, [playerLevel, fleaAvailable, barterAvailable, barterExcludeDogtags, traderLevels])
-  const themeSelectOptions = useMemo(
+  // Canonical theme list. Icon and text are kept apart so the same entry can
+  // render as a full-width Select row (mobile sheet) and as a bare icon on the
+  // header's compact trigger button.
+  const themeOptions = useMemo(
     () => [
       // Light themes disabled — item images lack transparent backgrounds
-      // { value: 'light_primer' as const, label: <Space size={6}><SunOutlined />{t('ui.theme_light_primer')}</Space> },
-      // { value: 'light_paper' as const, label: <Space size={6}><ReadOutlined />{t('ui.theme_light_paper')}</Space> },
-      // { value: 'light_latte' as const, label: <Space size={6}><CoffeeOutlined />{t('ui.theme_light_latte')}</Space> },
-      { value: 'dark_onedark' as const, label: <Space size={6}><MoonOutlined />{t('ui.theme_dark_onedark')}</Space> },
-      { value: 'dark_github' as const, label: <Space size={6}><GithubOutlined />{t('ui.theme_dark_github')}</Space> },
-      { value: 'dark_tokyo' as const, label: <Space size={6}><CloudOutlined />{t('ui.theme_dark_tokyo')}</Space> },
-      { value: 'amoled' as const, label: <Space size={6}><BlockOutlined />{t('ui.theme_amoled')}</Space> },
-      // { value: 'auto' as const, label: <Space size={6}><SyncOutlined />{t('ui.theme_auto')}</Space> },
+      // { value: 'light_primer' as const, icon: <SunOutlined />, label: t('ui.theme_light_primer') },
+      // { value: 'light_paper' as const, icon: <ReadOutlined />, label: t('ui.theme_light_paper') },
+      // { value: 'light_latte' as const, icon: <CoffeeOutlined />, label: t('ui.theme_light_latte') },
+      { value: 'dark_onedark' as const, icon: <MoonOutlined />, label: t('ui.theme_dark_onedark') },
+      { value: 'dark_github' as const, icon: <GithubOutlined />, label: t('ui.theme_dark_github') },
+      { value: 'dark_tokyo' as const, icon: <CloudOutlined />, label: t('ui.theme_dark_tokyo') },
+      { value: 'amoled' as const, icon: <BlockOutlined />, label: t('ui.theme_amoled') },
+      // { value: 'auto' as const, icon: <SyncOutlined />, label: t('ui.theme_auto') },
     ],
     [t],
   )
+  const themeSelectOptions = useMemo(
+    () => themeOptions.map(o => ({ value: o.value, label: <Space size={6}>{o.icon}{o.label}</Space> })),
+    [themeOptions],
+  )
+  const activeTheme = themeOptions.find(o => o.value === themeChoice) ?? themeOptions[0]
+  const activeLanguage = languages.find(l => i18n.language?.startsWith(l.code)) ?? languages[0]
   useEffect(() => {
     document.title = t('app.title')
     document.documentElement.lang = i18n.language?.split('-')[0] || 'en'
@@ -1116,14 +1125,44 @@ function AppContent({
                     />
                   </span>
                 </Tooltip>
-                <Select
-                  style={{ minWidth: 268 }}
-                  popupMatchSelectWidth={false}
-                  value={themeChoice}
-                  onChange={(v) => setThemeChoice(v as ThemeChoice)}
-                  options={themeSelectOptions}
-                />
-                <Select style={{ width: 160 }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><span className={`fi fi-${l.country}`} style={{ marginRight: 6 }} />{l.name}</span> }))} />
+                {/* Theme and language collapse to icon triggers: the two full
+                    Selects cost ~430px of header width and wrapped the row on
+                    narrow desktops. The current choice stays readable as the
+                    button's icon, with the name in its tooltip. */}
+                {/* Tooltip must sit OUTSIDE Dropdown: Dropdown clones its single
+                    child to inject the trigger handler, and a Tooltip in between
+                    swallows the click so the menu never opens. */}
+                <Tooltip title={activeTheme.label}>
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      selectable: true,
+                      selectedKeys: [themeChoice],
+                      items: themeOptions.map(o => ({ key: o.value, icon: o.icon, label: o.label })),
+                      onClick: ({ key }) => setThemeChoice(key as ThemeChoice),
+                    }}
+                  >
+                    <Button icon={activeTheme.icon} aria-label={activeTheme.label} />
+                  </Dropdown>
+                </Tooltip>
+                <Tooltip title={activeLanguage.name}>
+                  <Dropdown
+                    trigger={['click']}
+                    menu={{
+                      selectable: true,
+                      selectedKeys: [activeLanguage.code],
+                      style: { maxHeight: 360, overflowY: 'auto' },
+                      items: languages.map(l => ({
+                        key: l.code,
+                        icon: <span className={`fi fi-${l.country}`} />,
+                        label: l.name,
+                      })),
+                      onClick: ({ key }) => i18n.changeLanguage(key),
+                    }}
+                  >
+                    <Button icon={<span className={`fi fi-${activeLanguage.country}`} />} aria-label={activeLanguage.name} />
+                  </Dropdown>
+                </Tooltip>
               </Space>
             )}
             </div>
