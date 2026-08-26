@@ -12,22 +12,26 @@ interface ChangelogModalProps {
 
 export function ChangelogModal({ open, onClose }: ChangelogModalProps) {
   const [html, setHtml] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [failed, setFailed] = useState(false)
   const { token } = useToken()
 
+  // Derived, not stored: we are loading exactly while the modal is open and
+  // the fetch has neither landed nor failed. Storing it meant a synchronous
+  // setState in the effect body, which cascades renders
+  // (react-hooks/set-state-in-effect).
+  const loading = open && !html && !failed
+
   useEffect(() => {
-    if (open && !html) {
-      setLoading(true)
-      fetch(`${import.meta.env.BASE_URL}CHANGELOG.md`)
-        .then(r => r.text())
-        .then(text => {
-          // Skip the "# Changelog" title and description line
-          const body = text.replace(/^#\s+Changelog\s*\n+.*?\n/, '')
-          setHtml(marked.parse(body, { async: false }) as string)
-        })
-        .finally(() => setLoading(false))
-    }
-  }, [open, html])
+    if (!open || html || failed) return
+    fetch(`${import.meta.env.BASE_URL}CHANGELOG.md`)
+      .then(r => r.text())
+      .then(text => {
+        // Skip the "# Changelog" title and description line
+        const body = text.replace(/^#\s+Changelog\s*\n+.*?\n/, '')
+        setHtml(marked.parse(body, { async: false }) as string)
+      })
+      .catch(() => setFailed(true))
+  }, [open, html, failed])
 
   const { t } = useTranslation()
   return (

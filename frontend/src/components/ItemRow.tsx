@@ -1,8 +1,8 @@
 import { SettingOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
 import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
-import i18n from '../i18n'
 import type { ItemDetail } from '../api/client'
+import { priceCell } from './priceCell'
 
 const { Text } = Typography
 const { useToken } = theme
@@ -26,6 +26,10 @@ const traderIcons: Record<string, { icon: string; name: string }> = {
 export type BarterReq = { name: string; count: number; unit_price: number; icon?: string }
 
 function BarterTooltip({ requirements, children }: { requirements?: BarterReq[]; children: React.ReactElement }) {
+  // Hooks must run before any early return — an instance that first renders
+  // without requirements and later with them would otherwise change its hook
+  // count and throw (e.g. toggling barters on and re-solving).
+  const { t } = useTranslation()
   if (!requirements?.length) return children
   const lines = requirements.map((r, i) => (
     <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
@@ -34,7 +38,6 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
     </div>
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
-  const { t } = useTranslation()
   return (
     <Tooltip overlayStyle={{ maxWidth: 400 }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
       {children}
@@ -325,19 +328,4 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       </div>
     </div>
   )
-}
-
-export function priceCell(item: ItemDetail) {
-  const { t } = i18n
-  if (item.purchasable === false && item.reference_price_rub != null && item.reference_price_rub > 0) {
-    return (
-      <span title={t('ui.not_purchasable_tooltip')}>
-        0 <Text type="secondary">({t('ui.ref_price_label')} ₽{item.reference_price_rub.toLocaleString()})</Text>
-      </span>
-    )
-  }
-  if (item.purchasable === false) {
-    return <span title={t('ui.not_purchasable_tooltip')}>0</span>
-  }
-  return `₽${item.price.toLocaleString()}`
 }

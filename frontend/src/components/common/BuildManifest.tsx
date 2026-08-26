@@ -2,7 +2,8 @@ import { useTranslation } from 'react-i18next'
 import { Table, Card, Space, Segmented, Button, Typography, Tag } from 'antd'
 import { CopyOutlined, ExportOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
-import { ItemRow, ItemTooltip, TraderIcon, priceCell } from '../ItemRow'
+import { ItemRow, ItemTooltip, TraderIcon } from '../ItemRow'
+import { priceCell } from '../priceCell'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 import { useMemo } from 'react'
 
@@ -103,7 +104,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
       key: 'price',
       width: 140,
       align: 'right' as const,
-      render: (_: any, record: ItemDetail) => <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>{priceCell(record)}</Tag>
+      render: (_: unknown, record: ItemDetail) => <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>{priceCell(record)}</Tag>
     },
     {
       title: t('ui.weight_label'),
@@ -126,7 +127,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
         <Segmented
           size="small"
           value={viewMode}
-          onChange={(v) => onViewModeChange(v as any)}
+          onChange={(v) => onViewModeChange(v as BuildManifestProps['viewMode'])}
           options={[
             { label: t('ui.detailed'), value: 'detailed' },
             { label: t('ui.compact'), value: 'compact' },

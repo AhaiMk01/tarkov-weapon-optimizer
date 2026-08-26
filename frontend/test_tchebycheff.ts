@@ -15,7 +15,7 @@
 import { fetchAllData, buildItemLookup } from './src/solver/dataService.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { solve, computeIdealPoint } from './src/solver/solver.ts';
-import type { ItemLookup, SolveParams, GunLookupEntry, ModStats } from './src/solver/types.ts';
+import type { ItemLookup, SolveParams } from './src/solver/types.ts';
 import { DEFAULT_TRADER_LEVELS } from './src/solver/types.ts';
 
 let failures = 0;
@@ -39,7 +39,6 @@ async function runWeaponTests(lookup: ItemLookup, weaponName: string) {
     }
   }
   if (!weaponId) throw new Error(`Weapon not found: ${weaponName}`);
-  const weapon = lookup[weaponId] as GunLookupEntry;
   const cmap = buildCompatibilityMap(weaponId, lookup);
 
   const base: SolveParams = {

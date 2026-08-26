@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- probes raw solver stats */
 import { solve } from './src/solver/solver';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap';
 import type { ItemLookup, GunStats, ModStats, SolveParams } from './src/solver/types';

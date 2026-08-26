@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- probes raw solver stats */
 
 import { buildLP } from './src/solver/lpBuilder.ts';
-import { ItemLookup, CompatibilityMap, GunLookupEntry, ModLookupEntry, SlotInfo, TraderLevels, DEFAULT_TRADER_LEVELS, SolveParams } from './src/solver/types.ts';
+import { ItemLookup, CompatibilityMap, DEFAULT_TRADER_LEVELS, SolveParams } from './src/solver/types.ts';
 import { fetchAllData, buildItemLookup } from './src/solver/dataService.ts';
 import * as fs from 'fs';
 
@@ -66,7 +67,7 @@ function buildCompatibilityMap(itemLookup: ItemLookup): CompatibilityMap {
 }
 
 // Use installed 'highs' package (WASM wrapper)
-// @ts-ignore
+// @ts-expect-error — the 'highs' package ships no type declarations
 import highsLoader from 'highs';
 
 async function solveLP(lpString: string) {
@@ -78,7 +79,7 @@ async function solveLP(lpString: string) {
 
 async function runTest(weaponName: string, weaponId: string,
     itemLookup: ItemLookup, compatibilityMap: CompatibilityMap,
-    availableItems: Record<string, number>, itemPrices: Record<string, [number, string]>) {
+    _availableItems: Record<string, number>, _itemPrices: Record<string, [number, string]>) {
     try {
         const weaponEntry = itemLookup[weaponId];
         if (!weaponEntry || weaponEntry.type !== 'gun') {
@@ -208,13 +209,11 @@ async function runTest(weaponName: string, weaponId: string,
                     continue;
                 }
 
-                let placed = false;
                 for (const slotId of potentialSlots) {
                     if (!occupiedSlots.has(slotId)) {
                         if (val >= 0.5) {
                             occupiedSlots.add(slotId);
                             selectedIds.add(itemId);
-                            placed = true;
                         }
                         break;
                     }

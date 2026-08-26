@@ -188,7 +188,7 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
     const resultHigh = await runSolve(PRICE_WEIGHTS, { minErgonomics: minErgonomics });
 
     if (resultLow.status === 'infeasible') return [];
-    let rangeMin = resultLow.final_stats!.recoil_vertical;
+    const rangeMin = resultLow.final_stats!.recoil_vertical;
     let rangeMax = resultHigh.status !== 'infeasible' ? resultHigh.final_stats!.recoil_vertical : nakedRecoilV;
 
     if (maxRecoilV != null) rangeMax = Math.min(rangeMax, maxRecoilV);
