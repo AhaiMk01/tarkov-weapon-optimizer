@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.10.2] — 2026-08-30
+
+### Performance
+- **Single-Pass EvoErgo Solver**: Replaced the 4–6 step multi-$k$ iterative tangent grid sweep in `solveEvoErgo` with a closed-form weapon-specific tangent estimator $k^*(E_{\text{base}}, b) = \text{eedTangentK}(\min(95, E_{\text{base}} + 25), b)$. Resolves EvoErgo optimization in a single LP pass, reducing solve latency by $\sim 9\times$ ($\sim 60\text{--}80\text{ ms}$ vs $\sim 500\text{--}800\text{ ms}$) and reducing combined EvoErgo + Tchebycheff solve time by $\sim 10\times$ ($\sim 350\text{ ms}$ vs $\sim 3{,}000\text{ ms}$) with $95.5\%$ exact match across all weapons.
+
 ## [v2.10.1] — 2026-08-26
 
 ### Fixed

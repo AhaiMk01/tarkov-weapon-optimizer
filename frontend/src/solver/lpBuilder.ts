@@ -102,6 +102,15 @@ export function eedTangentK(ergo: number, equipErgoModifier = 0): number {
   return 1 / ((2 * 0.0007556 * E + 0.02736) * Math.max(0.01, 1 + equipErgoModifier));
 }
 
+/**
+ * Estimates the optimal tangent exchange rate k for a weapon based on its
+ * naked receiver ergonomics, anticipating a typical +25 ergo gain from attachments.
+ */
+export function estimateEvoErgoK(baseErgo: number, equipErgoModifier = 0): number {
+  const estimatedBuildErgo = Math.min(95, Math.max(25, baseErgo + 25));
+  return eedTangentK(estimatedBuildErgo, equipErgoModifier);
+}
+
 /** RUB cost in objective when mod has no buyFor (scaled by price weight). Not counted toward maxPrice. */
 const UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB = 50_000_000;
 function fmt(x: number): string {
@@ -578,8 +587,10 @@ export function buildLP(params: SolveParams): LPResult {
   // capped_ergo carries ergo×ERGO_SCALE at coefficient ergo_w*SCALE, so one
   // real ergo point is worth ergo_w*SCALE*ERGO_SCALE objective units and one
   // gram costs ergo_w*SCALE*ERGO_SCALE*k/1000 = ergo_w*ERGO_SCALE*k.
+  const baseErgo = weaponStats.naked_ergonomics ?? 40;
+  const eeK = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
   const eeGramCoeff = params.useEvoErgo
-    ? ergo_w * ERGO_SCALE * (params.evoErgoK ?? EVO_ERGO_OBJ_K)
+    ? ergo_w * ERGO_SCALE * eeK
     : 0;
 
   const weapon_naked_ergo_scaled = Math.round(weaponStats.naked_ergonomics * ERGO_SCALE);
@@ -662,7 +673,7 @@ export function buildLP(params: SolveParams): LPResult {
 
     // Gap definitions
     if (params.useEvoErgo) {
-      const k = params.evoErgoK ?? EVO_ERGO_OBJ_K;
+      const k = params.evoErgoK ?? estimateEvoErgoK(weaponStats.naked_ergonomics ?? 40, params.equipErgoModifier ?? 0);
       const eeCoeff = 0.01 * k;
       tchAuxRows.push(`  gap_e_def: ${fmt(rgE)} g_e + capped_ergo - ${fmt(eeCoeff)} ee_tot = ${fmt(zE)}`);
     } else {
