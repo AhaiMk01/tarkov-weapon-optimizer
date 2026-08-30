@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.10.3] — 2026-08-30
+
+### Performance
+- **Compact Tchebycheff LP Formulation**: Streamlined the Augmented Tchebycheff Scalarization MILP formulation by folding normalized gap definitions and augmentation terms directly into the minimax bound inequalities and objective vector. Eliminates dozens of auxiliary continuous variables (`g_e, g_r, g_p, rec_tot, pri_tot, ee_tot`) and equality constraints, reducing Tchebycheff solve latency by $\sim 2\times$ ($\sim 260\text{--}480\text{ ms}$ vs $\sim 500\text{--}950\text{ ms}$) with $100\%$ mathematical equivalence.
+
 ## [v2.10.2] — 2026-08-30
 
 ### Performance
