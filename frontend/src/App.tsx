@@ -11,7 +11,7 @@ import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
-import { ExplorePanel, MAX_EXPLORE_WEAPONS } from './components/explore/ExplorePanel'
+import { ExplorePanel } from './components/explore/ExplorePanel'
 import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
@@ -597,7 +597,7 @@ function AppContent({
   }
 
   const handleExploreWeaponIdsChange = (ids: string[]) => {
-    const next = [...new Set(ids.filter(Boolean))].slice(0, MAX_EXPLORE_WEAPONS)
+    const next = [...new Set(ids.filter(Boolean))]
     setExploreWeaponIds(next)
     if (next.length === 0) return
     if (next.length === 1) {
@@ -614,7 +614,7 @@ function AppContent({
   }
 
   const handleExplore = async () => {
-    const weaponIds = [...new Set(exploreWeaponIds)].slice(0, MAX_EXPLORE_WEAPONS)
+    const weaponIds = [...new Set(exploreWeaponIds)]
     if (weaponIds.length === 0) return
     const runId = ++exploreRunSeq.current
     const gunName = (id: string) => guns.find(g => g.id === id)?.name ?? id
