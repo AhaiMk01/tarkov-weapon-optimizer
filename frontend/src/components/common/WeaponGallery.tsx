@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Empty, Input, Modal, Segmented, Select, Space, Typography, theme } from 'antd'
+import { App as AntApp, Button, Empty, Input, Modal, Segmented, Select, Space, Typography, theme } from 'antd'
 import { CheckOutlined, SearchOutlined } from '@ant-design/icons'
 import type { Gun } from '../../api/client'
 import { caliberLabel, caliberRank, categoryRank } from './caliberLabels'
@@ -301,6 +301,10 @@ export function WeaponGallery({
 }: WeaponGalleryProps) {
   const { t } = useTranslation()
   const { token } = useToken()
+  // Static Modal.confirm renders outside the ConfigProvider tree and so ignores
+  // the active theme -- it comes up in default light on a dark app. The App
+  // instance is themed.
+  const { modal } = AntApp.useApp()
   const [search, setSearch] = useState('')
   const [groupMode, setGroupMode] = useState<GroupMode>('caliber')
   // Caliber/class narrowing lives here rather than in the sidebar: it is a way of
@@ -502,7 +506,7 @@ export function WeaponGallery({
                         }
                         const nextCount = new Set([...selectedIds, ...ids]).size
                         if (nextCount > SELECT_ALL_WARN_AT) {
-                          Modal.confirm({
+                          modal.confirm({
                             title: t('gallery.select_all_confirm_title'),
                             content: t('gallery.select_all_confirm', { count: nextCount }),
                             okText: t('gallery.select_all'),
