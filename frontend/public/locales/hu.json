@@ -57,9 +57,7 @@
     "cancel_run": "Cancel",
     "resolution": "Frontier detail",
     "resolution_tooltip": "How finely each weapon's frontier is sampled. Roughly one solve per step, per weapon, so a fine sweep over many weapons takes noticeably longer.",
-    "resolution_coarse": "Coarse",
-    "resolution_standard": "Standard",
-    "resolution_fine": "Fine"
+    "resolution_cost": "~{{solves}} solves for the current selection"
   },
   "optimize": {
     "header": "Súlyok beállítása",

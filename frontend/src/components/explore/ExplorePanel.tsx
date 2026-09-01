@@ -1,10 +1,27 @@
 import { useTranslation } from 'react-i18next'
-import { Card, InputNumber, Select, Segmented, Tooltip, Typography } from 'antd'
+import { Card, InputNumber, Select, Segmented, Slider, Tooltip, Typography } from 'antd'
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
 import type { Gun, ModInfo, ModCategoryOption } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
+
+/**
+ * explorePareto clamps with Math.max(steps, 10), so anything lower is ignored.
+ */
+const MIN_EXPLORE_STEPS = 10
+
+/**
+ * Two of the three sweeps step over ergonomics with
+ * stepSize = Math.max(1, range / steps), so once steps passes a weapon's ergo
+ * range the step size hits its 1-unit floor and further steps add nothing.
+ *
+ * 81 is the widest ergo range across all 171 weapons, measured by
+ * bench_ergo_range.ts (SVDS 7.62x54R, 10..91; median 33, p95 69). Past it no
+ * ergo-axis sweep can gain a point. The recoil-axis sweep has no floor and would
+ * keep refining, but this is already far beyond a useful comparison size.
+ */
+const MAX_EXPLORE_STEPS = 81
 
 interface ExplorePanelProps {
   guns: Gun[]
@@ -68,24 +85,30 @@ export function ExplorePanel(props: ExplorePanelProps) {
             { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price') },
           ]} />
           
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <Tooltip title={t('explore.resolution_tooltip')}>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                {t('explore.resolution')}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <Tooltip title={t('explore.resolution_tooltip')}>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {t('explore.resolution')}
+                </Typography.Text>
+              </Tooltip>
+              <Typography.Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+                {props.exploreSteps}
               </Typography.Text>
-            </Tooltip>
-            <Segmented
-              size="small"
+            </div>
+            <Slider
               value={props.exploreSteps}
-              onChange={v => props.onExploreStepsChange(Number(v))}
-              options={[
-                // 10 is the solver's own floor (steps below it are clamped); past
-                // ~40 the step size hits its 1-unit minimum and adds nothing.
-                { label: t('explore.resolution_coarse'), value: 10 },
-                { label: t('explore.resolution_standard'), value: 20 },
-                { label: t('explore.resolution_fine'), value: 40 },
-              ]}
+              onChange={props.onExploreStepsChange}
+              min={MIN_EXPLORE_STEPS}
+              max={MAX_EXPLORE_STEPS}
+              step={1}
+              tooltip={{ open: false }}
             />
+            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
+              {t('explore.resolution_cost', {
+                solves: props.exploreSteps * Math.max(1, props.selectedGunIds.length),
+              })}
+            </Typography.Text>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
