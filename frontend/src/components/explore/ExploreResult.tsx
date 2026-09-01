@@ -194,9 +194,9 @@ export function ExploreResult({
     name: s.name,
     color: s.color,
     points: s.data,
-    bestErgo: Math.max(...s.data.map(p => p.ergo)),
-    lowestRecoil: Math.min(...s.data.map(p => p.recoil_v)),
-    cheapest: Math.min(...s.data.map(p => p.price)),
+    bestErgo: s.data.length ? Math.max(...s.data.map(p => p.ergo)) : 0,
+    lowestRecoil: s.data.length ? Math.min(...s.data.map(p => p.recoil_v)) : 0,
+    cheapest: s.data.length ? Math.min(...s.data.map(p => p.price)) : 0,
   })), [series])
   const actionLabel = exploring && exploreProgress && exploreProgress.total > 1
     ? t('explore.comparing', {
