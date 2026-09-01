@@ -294,6 +294,10 @@ function AppContent({
   const [loadingExploreMods, setLoadingExploreMods] = useState(false)
   const exploreModsRequestSeq = useRef(0)
   const exploreRunSeq = useRef(0)
+  /** Set by the Cancel button. Distinct from exploreRunSeq: a bumped sequence
+   *  means "a newer run owns the results", a raised flag means "this run should
+   *  stop but its finished work is still the current result". */
+  const cancelRequested = useRef(false)
   const [exploreProgress, setExploreProgress] = useState<{ current: number; total: number; name: string } | null>(null)
   const [useExploreBudget, setUseExploreBudget] = useState(false)
   const [exploreBudgetValue, setExploreBudgetValue] = useState<number>(0)
@@ -614,9 +618,9 @@ function AppContent({
   }
 
   /**
-   * Cancels an in-flight Explore run. Bumping the sequence makes the loop bail at
-   * its next checkpoint; the run's own `finally` is guarded on the same id and so
-   * will not fire, which is why the flags are cleared here.
+   * Cancels an in-flight Explore run. Raises a flag rather than bumping the run
+   * sequence: bumping cannot be told apart from a newer run starting, and a
+   * superseded run must drop its results while a cancelled one keeps them.
    *
    * The solve already dispatched to the worker still finishes -- there is no abort
    * channel into HiGHS -- so cancellation takes effect after the current weapon,
@@ -624,7 +628,7 @@ function AppContent({
    */
   const handleExploreCancel = () => {
     if (!exploring) return
-    exploreRunSeq.current += 1
+    cancelRequested.current = true
     setExploring(false)
     setExploreProgress(null)
   }
@@ -633,6 +637,7 @@ function AppContent({
     const weaponIds = [...new Set(exploreWeaponIds)]
     if (weaponIds.length === 0) return
     const runId = ++exploreRunSeq.current
+    cancelRequested.current = false
     const gunName = (id: string) => guns.find(g => g.id === id)?.name ?? id
     const shared = {
       ignore: exploreTradeoff,
@@ -680,7 +685,9 @@ function AppContent({
             ...shared,
             weapon_id: id,
           }, gameMode, i18n.language || 'en')
-          // Commit this weapon before honouring cancel: HiGHS cannot abort, so
+          // A newer run owns the results now -- drop these rather than write over it.
+          if (runId !== exploreRunSeq.current) return
+          // Cancel is honoured only after committing: HiGHS cannot abort, so
           // "after the current weapon" includes its points, not just the wait.
           if (res.points.length === 0) {
             infeasibleIds.push(id)
@@ -699,14 +706,14 @@ function AppContent({
           setExploreResult([...allPoints])
           setExploreSolveTime(totalTime)
           setExplorePrecisionMeta(lastPrecision)
-          if (runId !== exploreRunSeq.current) return
+          if (cancelRequested.current) return
         } catch (err) {
           errorCount += 1
           console.error(`Exploration failed for ${id}`, err)
         }
       }
 
-      if (runId !== exploreRunSeq.current) return
+      if (runId !== exploreRunSeq.current || cancelRequested.current) return
       if (errorCount > 0 && allPoints.length > 0) {
         messageApi.warning(t('toast.explore_compare_partial', { failed: errorCount, total: weaponIds.length }))
       } else if (allPoints.length > 0) {
