@@ -126,7 +126,8 @@
   );
 }
 
-.wg-card img {
+.wg-card img,
+.wg-card-img-slot {
   position: relative;
   z-index: 1;
   display: block;

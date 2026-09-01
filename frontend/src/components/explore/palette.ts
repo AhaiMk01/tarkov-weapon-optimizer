@@ -112,3 +112,11 @@ function buildPalette(token: PaletteTokens, count: number): string[] {
 export function seriesPalette(token: PaletteTokens, count: number): string[] {
   return buildPalette(token, count)
 }
+
+/** Index into a palette without wrapping back to colour 0 if generation
+ *  stopped early (exhausted gamut). Wrapping is what made weapon 7 match
+ *  weapon 1 before this file existed. */
+export function paletteColorAt(palette: string[], index: number): string {
+  if (palette.length === 0) return '#888888'
+  return palette[Math.min(Math.max(0, index), palette.length - 1)]
+}

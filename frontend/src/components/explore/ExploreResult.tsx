@@ -7,7 +7,7 @@ import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, Responsive
 import { EmptyState } from '../common/EmptyState'
 import { BuildManifest } from '../common/BuildManifest'
 import type { ExplorePoint, OptimizeResponse, SolverPrecisionMode } from '../../api/client'
-import { seriesPalette } from './palette'
+import { paletteColorAt, seriesPalette } from './palette'
 
 const { Text } = Typography
 const { useToken } = theme
@@ -91,18 +91,18 @@ export function ExploreResult({
       else grouped.set(id, [point])
     }
     const entries = [...grouped.entries()]
-    const palette = seriesPalette(token, entries.length)
-    return entries.map(([id, points], index) => ({
-      id,
-      name: points[0]?.weapon_name || id,
-      color: palette[index % palette.length],
-      data: [...points].sort((a, b) => a[xKey] - b[xKey]),
-    }))
-  }, [exploreResult, weaponId, token, xKey])
-
-  useEffect(() => {
-    setPinned(null)
-  }, [exploreResult])
+    const palette = seriesPalette(token, Math.max(entries.length, runWeaponIds?.length ?? 0, 1))
+    return entries.map(([id, points], index) => {
+      const runIndex = runWeaponIds?.indexOf(id) ?? -1
+      const colorIndex = runIndex >= 0 ? runIndex : index
+      return {
+        id,
+        name: points[0]?.weapon_name || id,
+        color: paletteColorAt(palette, colorIndex),
+        data: [...points].sort((a, b) => a[xKey] - b[xKey]),
+      }
+    })
+  }, [exploreResult, weaponId, token, xKey, runWeaponIds])
 
 
   const runTotal = Math.max(runWeaponIds?.length ?? 0, series.length)
@@ -171,6 +171,19 @@ export function ExploreResult({
   useEffect(() => {
     setPinned(null)
   }, [chartHeight])
+  // Streaming setExploreResult([...allPoints]) keeps the same point objects, so a
+  // pin must survive identity changes of the array. Drop it only when the run is
+  // cleared or the pinned point is no longer in the frontier.
+  useEffect(() => {
+    if (exploreResult.length === 0) {
+      setPinned(null)
+      return
+    }
+    setPinned(prev => {
+      if (!prev) return prev
+      return exploreResult.includes(prev.point) ? prev : null
+    })
+  }, [exploreResult])
   const [manifestView, setManifestView] = useState<'detailed' | 'compact' | 'table'>('detailed')
 
   /** One row per weapon instead of one per frontier point: 16 weapons produced
@@ -258,6 +271,11 @@ export function ExploreResult({
         loading={exploring}
         disabled={disabled}
         onAction={onExplore}
+        extra={exploring && onCancelExplore ? (
+          <Button danger size="large" icon={<StopOutlined />} onClick={onCancelExplore}>
+            {t('explore.cancel_run')}
+          </Button>
+        ) : undefined}
       />
     )
   }

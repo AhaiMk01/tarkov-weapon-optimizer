@@ -10,6 +10,10 @@ const { useToken } = theme
 
 type GroupMode = 'caliber' | 'category'
 
+/** Group "select all" past this many weapons needs a confirm: a precise
+ *  comparison is ~11 solves per weapon at ~21s each. */
+const SELECT_ALL_WARN_AT = 12
+
 interface WeaponGalleryProps {
   open: boolean
   onClose: () => void
@@ -255,13 +259,17 @@ function GunCard({
       onAnimationEnd={() => setEntering(false)}
     >
       <div className="wg-card-shadow" aria-hidden="true" />
-      <img
-        src={gun.image}
-        alt=""
-        loading="lazy"
-        onLoad={e => e.currentTarget.classList.add('wg-loaded')}
-        onError={e => e.currentTarget.classList.add('wg-loaded')}
-      />
+      {gun.image ? (
+        <img
+          src={gun.image}
+          alt=""
+          loading="lazy"
+          onLoad={e => e.currentTarget.classList.add('wg-loaded')}
+          onError={e => e.currentTarget.classList.add('wg-loaded')}
+        />
+      ) : (
+        <div className="wg-card-img-slot" aria-hidden="true" />
+      )}
       <div className="wg-name">{gun.name}</div>
       <div className="wg-meta">{meta}</div>
       <div className="wg-card-light" aria-hidden="true" />
@@ -487,7 +495,22 @@ export function WeaponGallery({
                       className="wg-group-action"
                       onClick={() => {
                         const ids = group.guns.map(g => g.id)
-                        onPickMany(ids, !ids.every(id => selectedSet.has(id)))
+                        const allSelected = ids.every(id => selectedSet.has(id))
+                        if (allSelected) {
+                          onPickMany(ids, false)
+                          return
+                        }
+                        const nextCount = new Set([...selectedIds, ...ids]).size
+                        if (nextCount > SELECT_ALL_WARN_AT) {
+                          Modal.confirm({
+                            title: t('gallery.select_all_confirm_title'),
+                            content: t('gallery.select_all_confirm', { count: nextCount }),
+                            okText: t('gallery.select_all'),
+                            onOk: () => onPickMany(ids, true),
+                          })
+                          return
+                        }
+                        onPickMany(ids, true)
                       }}
                     >
                       {group.guns.every(g => selectedSet.has(g.id))

@@ -680,7 +680,8 @@ function AppContent({
             ...shared,
             weapon_id: id,
           }, gameMode, i18n.language || 'en')
-          if (runId !== exploreRunSeq.current) return
+          // Commit this weapon before honouring cancel: HiGHS cannot abort, so
+          // "after the current weapon" includes its points, not just the wait.
           if (res.points.length === 0) {
             infeasibleIds.push(id)
           } else {
@@ -698,6 +699,7 @@ function AppContent({
           setExploreResult([...allPoints])
           setExploreSolveTime(totalTime)
           setExplorePrecisionMeta(lastPrecision)
+          if (runId !== exploreRunSeq.current) return
         } catch (err) {
           errorCount += 1
           console.error(`Exploration failed for ${id}`, err)
