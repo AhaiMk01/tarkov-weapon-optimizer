@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.11.1] — 2026-09-01
+
+### Added
+- **Frontier detail control**: Explore's sweep granularity was hardcoded, so the only way to get a denser frontier was to edit the source. It is now a slider in the Trade-off Strategy card. Both bounds come from the solver rather than being picked by eye: `explorePareto` ignores anything below 10, and the ceiling of 81 is the widest ergonomics range across all 171 weapons (SVDS 7.62x54R, 10..91; median 33) — past it the step size hits its one-unit floor and further steps cannot add a point. Cost scales with steps × weapons, so a fine sweep over a large comparison is noticeably slower; Cancel is available throughout.
+
 ## [v2.11.0] — 2026-09-01
 
 ### Added
