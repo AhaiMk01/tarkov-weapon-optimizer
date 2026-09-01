@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, Button, Card, Collapse, Drawer, Grid, Table, Tag, Typography, theme } from 'antd'
-import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, ExportOutlined, SettingOutlined } from '@ant-design/icons'
+import { Alert, Button, Card, Collapse, Drawer, Grid, Space, Table, Tag, Typography, theme } from 'antd'
+import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, ExportOutlined, SettingOutlined, StopOutlined } from '@ant-design/icons'
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { EmptyState } from '../common/EmptyState'
@@ -26,6 +26,8 @@ interface ExploreResultProps {
   exploring: boolean
   exploreProgress?: ExploreProgress | null
   onExplore: () => void
+  /** Stops an in-flight run; partial results stay on screen. */
+  onCancelExplore?: () => void
   disabled: boolean
   weaponId?: string
   /** Weapon ids requested for the current/last Explore run (denominator for n/m status). */
@@ -68,6 +70,7 @@ export function ExploreResult({
   exploring,
   exploreProgress,
   onExplore,
+  onCancelExplore,
   disabled,
   weaponId,
   runWeaponIds,
@@ -295,7 +298,20 @@ export function ExploreResult({
         }
         icon={statusComplete ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
         showIcon
-        action={<Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={onExplore}>{actionLabel}</Button>}
+        action={
+          <Space>
+            <Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={onExplore}>
+              {actionLabel}
+            </Button>
+            {exploring && onCancelExplore && (
+              // The primary button is loading-locked while a run is in flight, so
+              // without this there is no way to stop a long multi-weapon sweep.
+              <Button danger icon={<StopOutlined />} onClick={onCancelExplore}>
+                {t('explore.cancel_run')}
+              </Button>
+            )}
+          </Space>
+        }
       />
       </div>
       <Card size="small" style={{ flex: '0 0 auto' }}>

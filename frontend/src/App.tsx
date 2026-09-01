@@ -613,6 +613,22 @@ function AppContent({
     }
   }
 
+  /**
+   * Cancels an in-flight Explore run. Bumping the sequence makes the loop bail at
+   * its next checkpoint; the run's own `finally` is guarded on the same id and so
+   * will not fire, which is why the flags are cleared here.
+   *
+   * The solve already dispatched to the worker still finishes -- there is no abort
+   * channel into HiGHS -- so cancellation takes effect after the current weapon,
+   * not instantly. Points already collected stay on screen.
+   */
+  const handleExploreCancel = () => {
+    if (!exploring) return
+    exploreRunSeq.current += 1
+    setExploring(false)
+    setExploreProgress(null)
+  }
+
   const handleExplore = async () => {
     const weaponIds = [...new Set(exploreWeaponIds)]
     if (weaponIds.length === 0) return
@@ -938,6 +954,7 @@ function AppContent({
               exploring={exploring}
               exploreProgress={exploreProgress}
               onExplore={handleExplore}
+              onCancelExplore={handleExploreCancel}
               disabled={exploreWeaponIds.length === 0}
               weaponId={exploreWeaponIds[0]}
               runWeaponIds={exploreRunIds}
