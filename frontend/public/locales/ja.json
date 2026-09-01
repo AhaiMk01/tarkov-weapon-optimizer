@@ -48,7 +48,15 @@
     "compare_hint": "モッドフィルターと同じく + / − を使います。1丁は n = 1、追加分は同じグラフに重ねます。トレーダー・予算・トレードオフ・モッド指定／除外は共有されます。",
     "comparing": "{{name}} を探索中（{{current}}/{{total}}）",
     "weapon": "武器",
-    "compare_status": "{{returned}}/{{total}} 丁がフロンティアを返しました"
+    "compare_status": "{{returned}}/{{total}} 丁がフロンティアを返しました",
+    "frontier_points": "Points",
+    "best_ergo": "Best ergo",
+    "lowest_recoil": "Lowest recoil",
+    "cheapest": "Cheapest",
+    "view_build": "View build ({{count}})",
+    "build_detail": "Build detail",
+    "results_list": "Frontier details",
+    "cancel_run": "Cancel"
   },
   "optimize": {
     "header": "重み調整",
@@ -271,5 +279,22 @@
     "precision_auto": "Auto Mode (Default): Intelligently switches based on weapon mod tree size. Compact trees (≤ 220 reachable mods, e.g. SMGs, DMRs, pistols) run in Precise Mode, while massive trees (M4A1, AK-74) run in Fast Mode to deliver fluid real-time responses.",
     "glossary_precision_title": "Solver Precision (Auto / Fast / Precise)",
     "glossary_precision_desc": "Controls the depth of multi-slot integer variable formulation. Auto selects Precise for compact weapons and Fast for massive assault rifle trees."
+  },
+  "gallery": {
+    "title": "Weapon gallery",
+    "count": "{{count}} weapons",
+    "search_placeholder": "Search name, caliber or class...",
+    "by_caliber": "By caliber",
+    "by_category": "By class",
+    "no_match": "No weapon matches this search",
+    "selected_count": "{{count}} / {{max}} selected",
+    "done": "Done",
+    "nothing_selected": "Choose a weapon",
+    "add_weapon": "Add weapon",
+    "clear_filters": "Clear filters",
+    "select_all": "Select all",
+    "deselect_all": "Clear",
+    "selected_count_nomax": "{{count}} selected",
+    "clear_all": "Clear all"
   }
 }

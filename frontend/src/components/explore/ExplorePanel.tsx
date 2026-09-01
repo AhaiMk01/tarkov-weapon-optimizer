@@ -13,13 +13,6 @@ interface ExplorePanelProps {
   guns: Gun[]
   selectedGunId: string
   onGunChange: (id: string) => void
-  selectedCategory: string
-  onCategoryChange: (category: string) => void
-  selectedCaliber: string
-  onCaliberChange: (caliber: string) => void
-  categories: string[]
-  calibers: string[]
-  filteredGuns: Gun[]
   selectedGunIds: string[]
   onGunIdsChange: (ids: string[]) => void
   exploreTradeoff: 'price' | 'recoil' | 'ergo'
@@ -63,13 +56,6 @@ export function ExplorePanel(props: ExplorePanelProps) {
         guns={props.guns}
         selectedGunId={props.selectedGunId}
         onGunChange={props.onGunChange}
-        selectedCategory={props.selectedCategory}
-        onCategoryChange={props.onCategoryChange}
-        selectedCaliber={props.selectedCaliber}
-        onCaliberChange={props.onCaliberChange}
-        categories={props.categories}
-        calibers={props.calibers}
-        filteredGuns={props.filteredGuns}
         multiple
         selectedGunIds={props.selectedGunIds}
         onGunIdsChange={props.onGunIdsChange}

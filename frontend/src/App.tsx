@@ -237,8 +237,6 @@ function AppContent({
   const [result, setResult] = useState<OptimizeResponse | null>(null)
   const [availableMods, setAvailableMods] = useState<ModInfo[]>([])
   const [loadingMods, setLoadingMods] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState<string>('All')
-  const [selectedCaliber, setSelectedCaliber] = useState<string>('All')
   const [ergoWeight, setErgoWeight] = useState(33)
   const [recoilWeight, setRecoilWeight] = useState(34)
   const [priceWeight, setPriceWeight] = useState(33)
@@ -478,14 +476,6 @@ function AppContent({
     setExcludedCategories([])
   }, [exploreFilterAnchor, gameMode, i18n.language])
 
-  const categories = useMemo(() => {
-    const filtered = selectedCaliber === 'All' ? guns : guns.filter(g => g.caliber === selectedCaliber)
-    return ['All', ...new Set(filtered.map(g => g.category))].sort()
-  }, [guns, selectedCaliber])
-  const calibers = useMemo(() => {
-    const filtered = selectedCategory === 'All' ? guns : guns.filter(g => g.category === selectedCategory)
-    return ['All', ...new Set(filtered.map(g => g.caliber))].sort()
-  }, [guns, selectedCategory])
   const modCategoryOptions = useMemo(() => modCategoryOptionsFrom(availableMods), [availableMods])
   const exploreComparing = exploreWeaponIds.length > 1
   const exploreFilterMods = exploreComparing ? exploreAvailableMods : availableMods
@@ -539,27 +529,19 @@ function AppContent({
       max: Math.ceil(effMax * (1 - worstMod / 100) * 100) / 100,
     }
   }, [selectedGun, availableMods, exactMOAFloor])
-  const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
+  // Seed a default pick once data lands, and recover if the current id vanishes
+  // across a language/game-mode reload. The category/caliber narrowing that used
+  // to drive this now lives inside the weapon gallery as pure view state.
   useEffect(() => {
     if (exploreWeaponIds.length > 1) return
-    if (filteredGuns.length > 0 && !filteredGuns.find(g => g.id === selectedGunId)) {
-      const nextId = filteredGuns[0].id
+    if (guns.length > 0 && !guns.find(g => g.id === selectedGunId)) {
+      const nextId = guns[0].id
       setSelectedGunId(nextId)
       setExploreWeaponIds(prev => prev.length <= 1 ? [nextId] : prev)
     }
-  }, [filteredGuns, selectedGunId, exploreWeaponIds])
-  useEffect(() => {
-    if (selectedCategory !== 'All' && !categories.includes(selectedCategory)) {
-      setSelectedCategory('All')
-    }
-  }, [categories, selectedCategory])
-  useEffect(() => {
-    if (selectedCaliber !== 'All' && !calibers.includes(selectedCaliber)) {
-      setSelectedCaliber('All')
-    }
-  }, [calibers, selectedCaliber])
+  }, [guns, selectedGunId, exploreWeaponIds])
 
   const handleOptimize = async () => {
     if (!selectedGunId) return
@@ -838,13 +820,6 @@ function AppContent({
     guns,
     selectedGunId,
     onGunChange: handleGunChange,
-    selectedCategory,
-    onCategoryChange: setSelectedCategory,
-    selectedCaliber,
-    onCaliberChange: setSelectedCaliber,
-    categories,
-    calibers,
-    filteredGuns,
     availableMods,
     loadingMods,
     modCategoryOptions,

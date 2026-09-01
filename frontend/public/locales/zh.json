@@ -48,7 +48,15 @@
     "compare_hint": "和模组筛选一样用 + / −。一把就是 n = 1，多把叠在同一张图上。商人、预算、权衡与模组包含/排除设置共用。",
     "comparing": "正在探索 {{name}}（{{current}}/{{total}}）",
     "weapon": "武器",
-    "compare_status": "{{returned}}/{{total}} 把武器返回了前沿"
+    "compare_status": "{{returned}}/{{total}} 把武器返回了前沿",
+    "frontier_points": "前沿点",
+    "best_ergo": "最佳人机",
+    "lowest_recoil": "最低后坐",
+    "cheapest": "最低价",
+    "view_build": "查看配装 ({{count}})",
+    "build_detail": "配装详情",
+    "results_list": "前沿明细",
+    "cancel_run": "取消"
   },
   "optimize": {
     "header": "属性权重",
@@ -271,5 +279,22 @@
     "precision_auto": "自动模式 (Auto - 默认)：根据武器可装配件树规模智能自选。配件数 ≤ 220 的紧凑武器（手枪、冲锋枪、连发狙）自动启用【精确模式】；配件数庞大的突击步枪（M4A1、AK-74）自动选用【快速模式】，兼顾极致响应速度与配装品质。",
     "glossary_precision_title": "求解精度 (Auto / Fast / Precise)",
     "glossary_precision_desc": "控制多槽位战术配件的整数规划建模深度。自动模式在小枪上启用全局精确建模，在庞大配件树上启用毫秒级快速求解。"
+  },
+  "gallery": {
+    "title": "武器图库",
+    "count": "{{count}} 把武器",
+    "search_placeholder": "搜索名称、口径或类型...",
+    "by_caliber": "按口径",
+    "by_category": "按类型",
+    "no_match": "没有匹配的武器",
+    "selected_count": "已选 {{count}} / {{max}}",
+    "done": "完成",
+    "nothing_selected": "选择武器",
+    "add_weapon": "添加武器",
+    "clear_filters": "清除筛选",
+    "select_all": "全选",
+    "deselect_all": "取消",
+    "selected_count_nomax": "已选 {{count}}",
+    "clear_all": "清空"
   }
 }
