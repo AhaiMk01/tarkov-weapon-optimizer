@@ -54,7 +54,12 @@
     "view_build": "查看配装 ({{count}})",
     "build_detail": "配装详情",
     "results_list": "前沿明细",
-    "cancel_run": "取消"
+    "cancel_run": "取消",
+    "resolution": "前沿精度",
+    "resolution_tooltip": "每把武器前沿的采样密度。每一步约一次求解，因此多武器高精度扫描耗时明显更长。",
+    "resolution_coarse": "粗略",
+    "resolution_standard": "标准",
+    "resolution_fine": "精细"
   },
   "optimize": {
     "header": "属性权重",

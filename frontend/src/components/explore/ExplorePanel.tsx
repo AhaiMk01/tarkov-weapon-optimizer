@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, InputNumber, Select, Segmented, Typography } from 'antd'
+import { Card, InputNumber, Select, Segmented, Tooltip, Typography } from 'antd'
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
@@ -13,6 +13,8 @@ interface ExplorePanelProps {
   selectedGunIds: string[]
   onGunIdsChange: (ids: string[]) => void
   exploreTradeoff: 'price' | 'recoil' | 'ergo'
+  exploreSteps: number
+  onExploreStepsChange: (v: number) => void
   onExploreTradeoffChange: (v: 'price' | 'recoil' | 'ergo') => void
   useExploreBudget: boolean
   onUseExploreBudgetChange: (v: boolean) => void
@@ -66,6 +68,26 @@ export function ExplorePanel(props: ExplorePanelProps) {
             { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price') },
           ]} />
           
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <Tooltip title={t('explore.resolution_tooltip')}>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {t('explore.resolution')}
+              </Typography.Text>
+            </Tooltip>
+            <Segmented
+              size="small"
+              value={props.exploreSteps}
+              onChange={v => props.onExploreStepsChange(Number(v))}
+              options={[
+                // 10 is the solver's own floor (steps below it are clamped); past
+                // ~40 the step size hits its 1-unit minimum and adds nothing.
+                { label: t('explore.resolution_coarse'), value: 10 },
+                { label: t('explore.resolution_standard'), value: 20 },
+                { label: t('explore.resolution_fine'), value: 40 },
+              ]}
+            />
+          </div>
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>

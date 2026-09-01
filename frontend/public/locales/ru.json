@@ -54,7 +54,12 @@
     "view_build": "View build ({{count}})",
     "build_detail": "Build detail",
     "results_list": "Frontier details",
-    "cancel_run": "Cancel"
+    "cancel_run": "Cancel",
+    "resolution": "Frontier detail",
+    "resolution_tooltip": "How finely each weapon's frontier is sampled. Roughly one solve per step, per weapon, so a fine sweep over many weapons takes noticeably longer.",
+    "resolution_coarse": "Coarse",
+    "resolution_standard": "Standard",
+    "resolution_fine": "Fine"
   },
   "optimize": {
     "header": "Настройка весов",

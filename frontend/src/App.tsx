@@ -288,6 +288,9 @@ function AppContent({
   }>({})
   const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
+  /** Sweep granularity per weapon. Costs roughly one solve per step, per weapon,
+   *  so it multiplies with the number of weapons being compared. */
+  const [exploreSteps, setExploreSteps] = useState(10)
   const [exploreWeaponIds, setExploreWeaponIds] = useState<string[]>([])
   const [exploreRunIds, setExploreRunIds] = useState<string[]>([])
   const [exploreAvailableMods, setExploreAvailableMods] = useState<ModInfo[]>([])
@@ -641,7 +644,7 @@ function AppContent({
     const gunName = (id: string) => guns.find(g => g.id === id)?.name ?? id
     const shared = {
       ignore: exploreTradeoff,
-      steps: 10,
+      steps: exploreSteps,
       use_evo_ergo: useEvoErgo || undefined,
       max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
       min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
@@ -948,6 +951,8 @@ function AppContent({
               onGunIdsChange={handleExploreWeaponIdsChange}
               exploreTradeoff={exploreTradeoff}
               onExploreTradeoffChange={setExploreTradeoff}
+              exploreSteps={exploreSteps}
+              onExploreStepsChange={setExploreSteps}
               useExploreBudget={useExploreBudget}
               onUseExploreBudgetChange={setUseExploreBudget}
               exploreBudgetValue={exploreBudgetValue}
