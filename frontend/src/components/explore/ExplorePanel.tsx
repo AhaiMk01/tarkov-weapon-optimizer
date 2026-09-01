@@ -104,11 +104,6 @@ export function ExplorePanel(props: ExplorePanelProps) {
               step={1}
               tooltip={{ open: false }}
             />
-            <Typography.Text type="secondary" style={{ fontSize: 11 }}>
-              {t('explore.resolution_cost', {
-                solves: props.exploreSteps * Math.max(1, props.selectedGunIds.length),
-              })}
-            </Typography.Text>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

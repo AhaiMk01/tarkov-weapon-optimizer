@@ -56,8 +56,7 @@
     "results_list": "前沿明细",
     "cancel_run": "取消",
     "resolution": "前沿精度",
-    "resolution_tooltip": "每把武器前沿的采样密度。每一步约一次求解，因此多武器高精度扫描耗时明显更长。",
-    "resolution_cost": "当前选择约 {{solves}} 次求解"
+    "resolution_tooltip": "每把武器前沿的采样密度。每一步约一次求解，因此多武器高精度扫描耗时明显更长。"
   },
   "optimize": {
     "header": "属性权重",
