@@ -43,12 +43,20 @@
     "limit_price": "Preț max.",
     "limit_recoil": "Recul V max.",
     "limit_ergo": "Ergo min.",
-    "compare_weapons": "Compară arme",
-    "compare_placeholder": "Caută arme de adăugat (max. {{max}})",
-    "compare_hint": "Folosește + / − ca la filtrul de moduri. O armă este n = 1; cele extra se suprapun pe același grafic. Comercianți, buget, compromis și filtrul de moduri sunt comune.",
+    "compare_hint": "Deschide galeria pentru a adăuga arme. O armă este o singură frontieră; cele extra se suprapun pe același grafic. Negustori, buget, compromis și includere/excludere de moduri sunt comune.",
     "comparing": "Explorare {{name}} ({{current}}/{{total}})",
     "weapon": "Armă",
-    "compare_status": "{{returned}}/{{total}} arme au returnat o frontieră"
+    "compare_status": "{{returned}}/{{total}} arme au returnat o frontieră",
+    "frontier_points": "Points",
+    "best_ergo": "Best ergo",
+    "lowest_recoil": "Lowest recoil",
+    "cheapest": "Cheapest",
+    "view_build": "View build ({{count}})",
+    "build_detail": "Build detail",
+    "results_list": "Frontier details",
+    "cancel_run": "Cancel",
+    "resolution": "Frontier detail",
+    "resolution_tooltip": "How finely each weapon's frontier is sampled. Roughly one solve per step, per weapon, so a fine sweep over many weapons takes noticeably longer."
   },
   "optimize": {
     "header": "Ajustare Ponderi",
@@ -271,5 +279,24 @@
     "precision_auto": "Auto Mode (Default): Intelligently switches based on weapon mod tree size. Compact trees (≤ 220 reachable mods, e.g. SMGs, DMRs, pistols) run in Precise Mode, while massive trees (M4A1, AK-74) run in Fast Mode to deliver fluid real-time responses.",
     "glossary_precision_title": "Solver Precision (Auto / Fast / Precise)",
     "glossary_precision_desc": "Controls the depth of multi-slot integer variable formulation. Auto selects Precise for compact weapons and Fast for massive assault rifle trees."
+  },
+  "gallery": {
+    "title": "Weapon gallery",
+    "count": "{{count}} weapons",
+    "search_placeholder": "Search name, caliber or class...",
+    "by_caliber": "By caliber",
+    "by_category": "By class",
+    "no_match": "No weapon matches this search",
+    "selected_count": "{{count}} / {{max}} selected",
+    "done": "Done",
+    "nothing_selected": "Choose a weapon",
+    "add_weapon": "Add weapon",
+    "clear_filters": "Clear filters",
+    "select_all": "Select all",
+    "select_all_confirm_title": "Selectezi multe arme?",
+    "select_all_confirm": "Se vor selecta {{count}} arme. Comparațiile mari durează mai mult, mai ales în modul Precise.",
+    "deselect_all": "Clear",
+    "selected_count_nomax": "{{count}} selected",
+    "clear_all": "Clear all"
   }
 }

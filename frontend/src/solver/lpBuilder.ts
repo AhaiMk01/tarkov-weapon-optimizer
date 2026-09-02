@@ -102,6 +102,15 @@ export function eedTangentK(ergo: number, equipErgoModifier = 0): number {
   return 1 / ((2 * 0.0007556 * E + 0.02736) * Math.max(0.01, 1 + equipErgoModifier));
 }
 
+/**
+ * Estimates the optimal tangent exchange rate k for a weapon based on its
+ * naked receiver ergonomics, anticipating a typical +25 ergo gain from attachments.
+ */
+export function estimateEvoErgoK(baseErgo: number, equipErgoModifier = 0): number {
+  const estimatedBuildErgo = Math.min(95, Math.max(25, baseErgo + 25));
+  return eedTangentK(estimatedBuildErgo, equipErgoModifier);
+}
+
 /** RUB cost in objective when mod has no buyFor (scaled by price weight). Not counted toward maxPrice. */
 const UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB = 50_000_000;
 function fmt(x: number): string {
@@ -578,8 +587,10 @@ export function buildLP(params: SolveParams): LPResult {
   // capped_ergo carries ergo×ERGO_SCALE at coefficient ergo_w*SCALE, so one
   // real ergo point is worth ergo_w*SCALE*ERGO_SCALE objective units and one
   // gram costs ergo_w*SCALE*ERGO_SCALE*k/1000 = ergo_w*ERGO_SCALE*k.
+  const baseErgo = weaponStats.naked_ergonomics ?? 40;
+  const eeK = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
   const eeGramCoeff = params.useEvoErgo
-    ? ergo_w * ERGO_SCALE * (params.evoErgoK ?? EVO_ERGO_OBJ_K)
+    ? ergo_w * ERGO_SCALE * eeK
     : 0;
 
   const weapon_naked_ergo_scaled = Math.round(weaponStats.naked_ergonomics * ERGO_SCALE);
@@ -617,91 +628,102 @@ export function buildLP(params: SolveParams): LPResult {
     const LR = rwRaw / sumW;
     const LP = pwRaw / sumW;
 
-    const CH = 50;
-    const chunkDef = (terms: [number, string][], name: string): string[] => {
-      const subs: string[] = [];
-      for (let c = 0; c * CH < terms.length; c++) {
-        const sub = `${name}_sub_${c}`;
-        subs.push(sub);
-        const body = terms.slice(c * CH, (c + 1) * CH).map(([coef, v]) => {
-          const formatted = fmt(Math.abs(coef));
-          return coef >= 0 ? `- ${formatted} ${v}` : `+ ${formatted} ${v}`;
-        }).join(' ');
-        tchAuxRows.push(`  ${name}_def_${c}: ${sub} ${body} = 0`);
-      }
-      tchAuxRows.push(`  ${name}_link: ${name}_tot ${subs.map(s => `- ${s}`).join(' ')} = 0`);
-      return subs;
-    };
-
-    // Recoil modifier sum: item_recoil[i] * x_i
-    const recTerms: [number, string][] = [];
-    for (let i = 1; i <= n_items; i++) {
-      if (item_recoil[i] !== 0) recTerms.push([item_recoil[i], `x_${i}`]);
-    }
-    const recSubs = chunkDef(recTerms, 'rec');
-
-    // Price: item_price_objective[i] * buy_i + basePrices[b] * base_{b+1}
-    const priTerms: [number, string][] = [];
-    for (let i = 1; i <= n_items; i++) {
-      if (item_price_objective[i] !== 0) priTerms.push([item_price_objective[i], `buy_${i}`]);
-    }
-    for (let b = 0; b < n_bases; b++) {
-      if (basePrices[b] !== 0) priTerms.push([basePrices[b], `base_${b + 1}`]);
-    }
-    const priSubs = chunkDef(priTerms, 'pri');
-
-    // EvoErgo weight penalty if active
-    let eeSubs: string[] = [];
-    if (params.useEvoErgo) {
-      const eeTerms: [number, string][] = [];
-      for (let i = 1; i <= n_items; i++) {
-        if (item_weight_g[i] !== 0) eeTerms.push([item_weight_g[i], `x_${i}`]);
-      }
-      eeSubs = chunkDef(eeTerms, 'ee');
-    }
-
-    // Gap definitions
-    if (params.useEvoErgo) {
-      const k = params.evoErgoK ?? EVO_ERGO_OBJ_K;
-      const eeCoeff = 0.01 * k;
-      tchAuxRows.push(`  gap_e_def: ${fmt(rgE)} g_e + capped_ergo - ${fmt(eeCoeff)} ee_tot = ${fmt(zE)}`);
-    } else {
-      tchAuxRows.push(`  gap_e_def: ${fmt(rgE)} g_e + capped_ergo = ${fmt(zE)}`);
-    }
-    tchAuxRows.push(`  gap_r_def: ${fmt(rgR)} g_r - rec_tot = ${fmt(-zR)}`);
-    tchAuxRows.push(`  gap_p_def: ${fmt(rgP)} g_p - pri_tot = ${fmt(-zP)}`);
-
-    // Tchebycheff upper bounds on gap (t >= lambda_i * g_i)
-    if (LE > 0) tchAuxRows.push(`  tch_e: tch_t - ${fmt(LE)} g_e >= 0`);
-    if (LR > 0) tchAuxRows.push(`  tch_r: tch_t - ${fmt(LR)} g_r >= 0`);
-    if (LP > 0) tchAuxRows.push(`  tch_p: tch_t - ${fmt(LP)} g_p >= 0`);
-
-    // Objective
     const OBJ_SCALE = 1000;
     const RHO = 0.01;
     const EPS_TIEBREAK = 0.001;
 
+    // Minimizer of t in objective: -OBJ_SCALE * tch_t
     objTerms.push(`-${OBJ_SCALE} tch_t`);
-    objTerms.push(`-${fmt(OBJ_SCALE * RHO * Math.max(LE, EPS_TIEBREAK))} g_e`);
-    objTerms.push(`-${fmt(OBJ_SCALE * RHO * Math.max(LR, EPS_TIEBREAK))} g_r`);
-    objTerms.push(`-${fmt(OBJ_SCALE * RHO * Math.max(LP, EPS_TIEBREAK))} g_p`);
-    for (let i = 1; i <= n_items; i++) {
-      objTerms.push(`-0.0001 x_${i}`);
+
+    const eeK = params.useEvoErgo
+      ? (params.evoErgoK ?? estimateEvoErgoK(weaponStats.naked_ergonomics ?? 40, params.equipErgoModifier ?? 0))
+      : 0;
+    const eeCoeff = 0.01 * eeK;
+
+    // Augmentation terms:
+    // -rho * LE * gE = (OBJ_SCALE * RHO * max(LE, eps) / rgE) * (capped_ergo - eeCoeff * ee_sum)
+    const ergoAugFactor = (OBJ_SCALE * RHO * Math.max(LE, EPS_TIEBREAK)) / rgE;
+    if (ergoAugFactor !== 0) {
+      objTerms.push(`${fmt(ergoAugFactor)} capped_ergo`);
     }
 
-    tchFreeBounds.push(
-      '  -inf <= rec_tot <= inf',
-      '  -inf <= pri_tot <= inf',
-      '  0 <= g_e <= 100',
-      '  0 <= g_r <= 100',
-      '  0 <= g_p <= 100',
-      '  0 <= tch_t <= 100',
-      ...recSubs.map(s => `  -inf <= ${s} <= inf`),
-      ...priSubs.map(s => `  -inf <= ${s} <= inf`)
-    );
-    if (params.useEvoErgo) {
-      tchFreeBounds.push('  -inf <= ee_tot <= inf', ...eeSubs.map(s => `  -inf <= ${s} <= inf`));
+    // -rho * LR * gR = - (OBJ_SCALE * RHO * max(LR, eps) / rgR) * rec_sum
+    const recAugFactor = (OBJ_SCALE * RHO * Math.max(LR, EPS_TIEBREAK)) / rgR;
+
+    // -rho * LP * gP = - (OBJ_SCALE * RHO * max(LP, eps) / rgP) * pri_sum
+    const priAugFactor = (OBJ_SCALE * RHO * Math.max(LP, EPS_TIEBREAK)) / rgP;
+
+    for (let i = 1; i <= n_items; i++) {
+      const recPart = item_recoil[i] !== 0 ? -recAugFactor * item_recoil[i] : 0;
+      const eePart = eeCoeff !== 0 && item_weight_g[i] !== 0 ? -ergoAugFactor * eeCoeff * item_weight_g[i] : 0;
+      const combined = Math.round((recPart + eePart - 0.0001) * 1e6) / 1e6;
+      if (combined !== 0) {
+        objTerms.push(`${fmt(combined)} x_${i}`);
+      }
     }
+
+    for (let i = 1; i <= n_items; i++) {
+      if (item_price_objective[i] !== 0) {
+        const coef = Math.round((-priAugFactor * item_price_objective[i]) * 1e6) / 1e6;
+        if (coef !== 0) objTerms.push(`${fmt(coef)} buy_${i}`);
+      }
+    }
+    for (let b = 0; b < n_bases; b++) {
+      if (basePrices[b] !== 0) {
+        const coef = Math.round((-priAugFactor * basePrices[b]) * 1e6) / 1e6;
+        if (coef !== 0) objTerms.push(`${fmt(coef)} base_${b + 1}`);
+      }
+    }
+
+    // Direct bounding inequalities (t >= lambda_i * g_i):
+    // 1. tch_e: rgE * tch_t + LE * capped_ergo - (LE * eeCoeff) * ee_sum >= LE * zE
+    if (LE > 0) {
+      const eeTerms: string[] = [];
+      if (eeCoeff !== 0) {
+        for (let i = 1; i <= n_items; i++) {
+          if (item_weight_g[i] !== 0) {
+            const coef = LE * eeCoeff * item_weight_g[i];
+            eeTerms.push(`- ${fmt(coef)} x_${i}`);
+          }
+        }
+      }
+      const eeBody = eeTerms.length > 0 ? ` ${eeTerms.join(' ')}` : '';
+      tchAuxRows.push(`  tch_e: ${fmt(rgE)} tch_t + ${fmt(LE)} capped_ergo${eeBody} >= ${fmt(LE * zE)}`);
+    }
+
+    // 2. tch_r: rgR * tch_t - LR * rec_sum >= -LR * zR
+    if (LR > 0) {
+      const recTerms: string[] = [];
+      for (let i = 1; i <= n_items; i++) {
+        if (item_recoil[i] !== 0) {
+          const coef = LR * item_recoil[i];
+          recTerms.push(coef >= 0 ? `- ${fmt(coef)} x_${i}` : `+ ${fmt(Math.abs(coef))} x_${i}`);
+        }
+      }
+      const recBody = recTerms.length > 0 ? ` ${recTerms.join(' ')}` : '';
+      tchAuxRows.push(`  tch_r: ${fmt(rgR)} tch_t${recBody} >= ${fmt(-LR * zR)}`);
+    }
+
+    // 3. tch_p: rgP * tch_t - LP * pri_sum >= -LP * zP
+    if (LP > 0) {
+      const priTerms: string[] = [];
+      for (let i = 1; i <= n_items; i++) {
+        if (item_price_objective[i] !== 0) {
+          const coef = LP * item_price_objective[i];
+          priTerms.push(coef >= 0 ? `- ${fmt(coef)} buy_${i}` : `+ ${fmt(Math.abs(coef))} buy_${i}`);
+        }
+      }
+      for (let b = 0; b < n_bases; b++) {
+        if (basePrices[b] !== 0) {
+          const coef = LP * basePrices[b];
+          priTerms.push(coef >= 0 ? `- ${fmt(coef)} base_${b + 1}` : `+ ${fmt(Math.abs(coef))} base_${b + 1}`);
+        }
+      }
+      const priBody = priTerms.length > 0 ? ` ${priTerms.join(' ')}` : '';
+      tchAuxRows.push(`  tch_p: ${fmt(rgP)} tch_t${priBody} >= ${fmt(-LP * zP)}`);
+    }
+
+    tchFreeBounds.push('  0 <= tch_t <= 100');
   } else {
     // Ergo term: ew * SCALE * capped_ergo
     const ergoObjCoeff = ergo_w * SCALE;

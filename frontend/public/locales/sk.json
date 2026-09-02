@@ -43,12 +43,20 @@
     "limit_price": "Max. cena",
     "limit_recoil": "Max. spätný ráz V",
     "limit_ergo": "Min. ergo",
-    "compare_weapons": "Porovnať zbrane",
-    "compare_placeholder": "Hľadať zbrane na pridanie (max. {{max}})",
-    "compare_hint": "Použite + / − ako pri filtri módov. Jedna zbraň je n = 1; ďalšie sa prekryjú na tom istom grafe. Obchodníci, rozpočet, kompromis a filter módov sú zdieľané.",
+    "compare_hint": "Galéria slúži na pridanie zbraní. Jedna zbraň je jedna hranica; ďalšie sa prekryjú na tom istom grafe. Obchodníci, rozpočet, kompromis a zahrnutie/vylúčenie módov sa zdieľajú.",
     "comparing": "Preskúmavam {{name}} ({{current}}/{{total}})",
     "weapon": "Zbraň",
-    "compare_status": "{{returned}}/{{total}} zbraní vrátilo frontier"
+    "compare_status": "{{returned}}/{{total}} zbraní vrátilo frontier",
+    "frontier_points": "Points",
+    "best_ergo": "Best ergo",
+    "lowest_recoil": "Lowest recoil",
+    "cheapest": "Cheapest",
+    "view_build": "View build ({{count}})",
+    "build_detail": "Build detail",
+    "results_list": "Frontier details",
+    "cancel_run": "Cancel",
+    "resolution": "Frontier detail",
+    "resolution_tooltip": "How finely each weapon's frontier is sampled. Roughly one solve per step, per weapon, so a fine sweep over many weapons takes noticeably longer."
   },
   "optimize": {
     "header": "Úprava váh",
@@ -271,5 +279,24 @@
     "precision_auto": "Auto Mode (Default): Intelligently switches based on weapon mod tree size. Compact trees (≤ 220 reachable mods, e.g. SMGs, DMRs, pistols) run in Precise Mode, while massive trees (M4A1, AK-74) run in Fast Mode to deliver fluid real-time responses.",
     "glossary_precision_title": "Solver Precision (Auto / Fast / Precise)",
     "glossary_precision_desc": "Controls the depth of multi-slot integer variable formulation. Auto selects Precise for compact weapons and Fast for massive assault rifle trees."
+  },
+  "gallery": {
+    "title": "Weapon gallery",
+    "count": "{{count}} weapons",
+    "search_placeholder": "Search name, caliber or class...",
+    "by_caliber": "By caliber",
+    "by_category": "By class",
+    "no_match": "No weapon matches this search",
+    "selected_count": "{{count}} / {{max}} selected",
+    "done": "Done",
+    "nothing_selected": "Choose a weapon",
+    "add_weapon": "Add weapon",
+    "clear_filters": "Clear filters",
+    "select_all": "Select all",
+    "select_all_confirm_title": "Vybrať veľa zbraní?",
+    "select_all_confirm": "Tým sa vyberie {{count}} zbraní. Veľké porovnania trvajú dlhšie, zvlášť v režime Precise.",
+    "deselect_all": "Clear",
+    "selected_count_nomax": "{{count}} selected",
+    "clear_all": "Clear all"
   }
 }

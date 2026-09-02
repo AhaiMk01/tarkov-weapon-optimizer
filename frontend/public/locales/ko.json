@@ -43,12 +43,20 @@
     "limit_price": "최대 가격",
     "limit_recoil": "최대 수직 반동",
     "limit_ergo": "최소 에르고",
-    "compare_weapons": "무기 비교",
-    "compare_placeholder": "추가할 무기 검색 (최대 {{max}})",
-    "compare_hint": "모드 필터처럼 + / − 를 사용하세요. 한 정은 n = 1이고, 추가 무기는 같은 차트에 겹칩니다. 상인·예산·트레이드오프·모드 포함/제외는 공유됩니다.",
+    "compare_hint": "갤러리에서 무기를 추가하세요. 한 정은 하나의 프론티어이고, 추가 무기는 같은 차트에 겹칩니다. 상인·예산·트레이드오프·모드 포함/제외는 공유됩니다.",
     "comparing": "{{name}} 탐색 중 ({{current}}/{{total}})",
     "weapon": "무기",
-    "compare_status": "{{returned}}/{{total}}정이 프론티어를 반환했습니다"
+    "compare_status": "{{returned}}/{{total}}정이 프론티어를 반환했습니다",
+    "frontier_points": "Points",
+    "best_ergo": "Best ergo",
+    "lowest_recoil": "Lowest recoil",
+    "cheapest": "Cheapest",
+    "view_build": "View build ({{count}})",
+    "build_detail": "Build detail",
+    "results_list": "Frontier details",
+    "cancel_run": "Cancel",
+    "resolution": "Frontier detail",
+    "resolution_tooltip": "How finely each weapon's frontier is sampled. Roughly one solve per step, per weapon, so a fine sweep over many weapons takes noticeably longer."
   },
   "optimize": {
     "header": "가중치 조정",
@@ -271,5 +279,24 @@
     "precision_auto": "Auto Mode (Default): Intelligently switches based on weapon mod tree size. Compact trees (≤ 220 reachable mods, e.g. SMGs, DMRs, pistols) run in Precise Mode, while massive trees (M4A1, AK-74) run in Fast Mode to deliver fluid real-time responses.",
     "glossary_precision_title": "Solver Precision (Auto / Fast / Precise)",
     "glossary_precision_desc": "Controls the depth of multi-slot integer variable formulation. Auto selects Precise for compact weapons and Fast for massive assault rifle trees."
+  },
+  "gallery": {
+    "title": "Weapon gallery",
+    "count": "{{count}} weapons",
+    "search_placeholder": "Search name, caliber or class...",
+    "by_caliber": "By caliber",
+    "by_category": "By class",
+    "no_match": "No weapon matches this search",
+    "selected_count": "{{count}} / {{max}} selected",
+    "done": "Done",
+    "nothing_selected": "Choose a weapon",
+    "add_weapon": "Add weapon",
+    "clear_filters": "Clear filters",
+    "select_all": "Select all",
+    "select_all_confirm_title": "무기를 많이 선택할까요?",
+    "select_all_confirm": "{{count}}정의 무기를 선택합니다. 비교가 클수록 더 오래 걸리며, Precise 모드에서는 특히 깁니다.",
+    "deselect_all": "Clear",
+    "selected_count_nomax": "{{count}} selected",
+    "clear_all": "Clear all"
   }
 }

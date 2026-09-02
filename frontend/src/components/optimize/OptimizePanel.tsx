@@ -9,13 +9,6 @@ interface OptimizePanelProps {
   guns: Gun[]
   selectedGunId: string
   onGunChange: (id: string) => void
-  selectedCategory: string
-  onCategoryChange: (category: string) => void
-  selectedCaliber: string
-  onCaliberChange: (caliber: string) => void
-  categories: string[]
-  calibers: string[]
-  filteredGuns: Gun[]
   ergoWeight: number
   recoilWeight: number
   priceWeight: number
@@ -81,13 +74,6 @@ export function OptimizePanel(props: OptimizePanelProps) {
         guns={props.guns}
         selectedGunId={props.selectedGunId}
         onGunChange={props.onGunChange}
-        selectedCategory={props.selectedCategory}
-        onCategoryChange={props.onCategoryChange}
-        selectedCaliber={props.selectedCaliber}
-        onCaliberChange={props.onCaliberChange}
-        categories={props.categories}
-        calibers={props.calibers}
-        filteredGuns={props.filteredGuns}
       />
       <WeightAdjuster
         ergoWeight={props.ergoWeight}

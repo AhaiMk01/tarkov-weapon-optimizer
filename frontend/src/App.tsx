@@ -11,7 +11,7 @@ import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
-import { ExplorePanel, MAX_EXPLORE_WEAPONS } from './components/explore/ExplorePanel'
+import { ExplorePanel } from './components/explore/ExplorePanel'
 import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
@@ -237,8 +237,6 @@ function AppContent({
   const [result, setResult] = useState<OptimizeResponse | null>(null)
   const [availableMods, setAvailableMods] = useState<ModInfo[]>([])
   const [loadingMods, setLoadingMods] = useState(false)
-  const [selectedCategory, setSelectedCategory] = useState<string>('All')
-  const [selectedCaliber, setSelectedCaliber] = useState<string>('All')
   const [ergoWeight, setErgoWeight] = useState(33)
   const [recoilWeight, setRecoilWeight] = useState(34)
   const [priceWeight, setPriceWeight] = useState(33)
@@ -290,12 +288,19 @@ function AppContent({
   }>({})
   const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
+  /** Sweep granularity per weapon. Costs roughly one solve per step, per weapon,
+   *  so it multiplies with the number of weapons being compared. */
+  const [exploreSteps, setExploreSteps] = useState(10)
   const [exploreWeaponIds, setExploreWeaponIds] = useState<string[]>([])
   const [exploreRunIds, setExploreRunIds] = useState<string[]>([])
   const [exploreAvailableMods, setExploreAvailableMods] = useState<ModInfo[]>([])
   const [loadingExploreMods, setLoadingExploreMods] = useState(false)
   const exploreModsRequestSeq = useRef(0)
   const exploreRunSeq = useRef(0)
+  /** Set by the Cancel button. Distinct from exploreRunSeq: a bumped sequence
+   *  means "a newer run owns the results", a raised flag means "this run should
+   *  stop but its finished work is still the current result". */
+  const cancelRequested = useRef(false)
   const [exploreProgress, setExploreProgress] = useState<{ current: number; total: number; name: string } | null>(null)
   const [useExploreBudget, setUseExploreBudget] = useState(false)
   const [exploreBudgetValue, setExploreBudgetValue] = useState<number>(0)
@@ -478,14 +483,6 @@ function AppContent({
     setExcludedCategories([])
   }, [exploreFilterAnchor, gameMode, i18n.language])
 
-  const categories = useMemo(() => {
-    const filtered = selectedCaliber === 'All' ? guns : guns.filter(g => g.caliber === selectedCaliber)
-    return ['All', ...new Set(filtered.map(g => g.category))].sort()
-  }, [guns, selectedCaliber])
-  const calibers = useMemo(() => {
-    const filtered = selectedCategory === 'All' ? guns : guns.filter(g => g.category === selectedCategory)
-    return ['All', ...new Set(filtered.map(g => g.caliber))].sort()
-  }, [guns, selectedCategory])
   const modCategoryOptions = useMemo(() => modCategoryOptionsFrom(availableMods), [availableMods])
   const exploreComparing = exploreWeaponIds.length > 1
   const exploreFilterMods = exploreComparing ? exploreAvailableMods : availableMods
@@ -539,27 +536,19 @@ function AppContent({
       max: Math.ceil(effMax * (1 - worstMod / 100) * 100) / 100,
     }
   }, [selectedGun, availableMods, exactMOAFloor])
-  const filteredGuns = useMemo(() => guns.filter(gun => (selectedCategory === 'All' || gun.category === selectedCategory) && (selectedCaliber === 'All' || gun.caliber === selectedCaliber)), [guns, selectedCategory, selectedCaliber])
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
+  // Seed a default pick once data lands, and recover if the current id vanishes
+  // across a language/game-mode reload. The category/caliber narrowing that used
+  // to drive this now lives inside the weapon gallery as pure view state.
   useEffect(() => {
     if (exploreWeaponIds.length > 1) return
-    if (filteredGuns.length > 0 && !filteredGuns.find(g => g.id === selectedGunId)) {
-      const nextId = filteredGuns[0].id
+    if (guns.length > 0 && !guns.find(g => g.id === selectedGunId)) {
+      const nextId = guns[0].id
       setSelectedGunId(nextId)
       setExploreWeaponIds(prev => prev.length <= 1 ? [nextId] : prev)
     }
-  }, [filteredGuns, selectedGunId, exploreWeaponIds])
-  useEffect(() => {
-    if (selectedCategory !== 'All' && !categories.includes(selectedCategory)) {
-      setSelectedCategory('All')
-    }
-  }, [categories, selectedCategory])
-  useEffect(() => {
-    if (selectedCaliber !== 'All' && !calibers.includes(selectedCaliber)) {
-      setSelectedCaliber('All')
-    }
-  }, [calibers, selectedCaliber])
+  }, [guns, selectedGunId, exploreWeaponIds])
 
   const handleOptimize = async () => {
     if (!selectedGunId) return
@@ -615,7 +604,7 @@ function AppContent({
   }
 
   const handleExploreWeaponIdsChange = (ids: string[]) => {
-    const next = [...new Set(ids.filter(Boolean))].slice(0, MAX_EXPLORE_WEAPONS)
+    const next = [...new Set(ids.filter(Boolean))]
     setExploreWeaponIds(next)
     if (next.length === 0) return
     if (next.length === 1) {
@@ -631,14 +620,31 @@ function AppContent({
     }
   }
 
+  /**
+   * Cancels an in-flight Explore run. Raises a flag rather than bumping the run
+   * sequence: bumping cannot be told apart from a newer run starting, and a
+   * superseded run must drop its results while a cancelled one keeps them.
+   *
+   * The solve already dispatched to the worker still finishes -- there is no abort
+   * channel into HiGHS -- so cancellation takes effect after the current weapon,
+   * not instantly. Points already collected stay on screen.
+   */
+  const handleExploreCancel = () => {
+    if (!exploring) return
+    cancelRequested.current = true
+    setExploring(false)
+    setExploreProgress(null)
+  }
+
   const handleExplore = async () => {
-    const weaponIds = [...new Set(exploreWeaponIds)].slice(0, MAX_EXPLORE_WEAPONS)
+    const weaponIds = [...new Set(exploreWeaponIds)]
     if (weaponIds.length === 0) return
     const runId = ++exploreRunSeq.current
+    cancelRequested.current = false
     const gunName = (id: string) => guns.find(g => g.id === id)?.name ?? id
     const shared = {
       ignore: exploreTradeoff,
-      steps: 10,
+      steps: exploreSteps,
       use_evo_ergo: useEvoErgo || undefined,
       max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
       min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
@@ -682,7 +688,10 @@ function AppContent({
             ...shared,
             weapon_id: id,
           }, gameMode, i18n.language || 'en')
+          // A newer run owns the results now -- drop these rather than write over it.
           if (runId !== exploreRunSeq.current) return
+          // Cancel is honoured only after committing: HiGHS cannot abort, so
+          // "after the current weapon" includes its points, not just the wait.
           if (res.points.length === 0) {
             infeasibleIds.push(id)
           } else {
@@ -700,13 +709,14 @@ function AppContent({
           setExploreResult([...allPoints])
           setExploreSolveTime(totalTime)
           setExplorePrecisionMeta(lastPrecision)
+          if (cancelRequested.current) return
         } catch (err) {
           errorCount += 1
           console.error(`Exploration failed for ${id}`, err)
         }
       }
 
-      if (runId !== exploreRunSeq.current) return
+      if (runId !== exploreRunSeq.current || cancelRequested.current) return
       if (errorCount > 0 && allPoints.length > 0) {
         messageApi.warning(t('toast.explore_compare_partial', { failed: errorCount, total: weaponIds.length }))
       } else if (allPoints.length > 0) {
@@ -838,13 +848,6 @@ function AppContent({
     guns,
     selectedGunId,
     onGunChange: handleGunChange,
-    selectedCategory,
-    onCategoryChange: setSelectedCategory,
-    selectedCaliber,
-    onCaliberChange: setSelectedCaliber,
-    categories,
-    calibers,
-    filteredGuns,
     availableMods,
     loadingMods,
     modCategoryOptions,
@@ -948,6 +951,8 @@ function AppContent({
               onGunIdsChange={handleExploreWeaponIdsChange}
               exploreTradeoff={exploreTradeoff}
               onExploreTradeoffChange={setExploreTradeoff}
+              exploreSteps={exploreSteps}
+              onExploreStepsChange={setExploreSteps}
               useExploreBudget={useExploreBudget}
               onUseExploreBudgetChange={setUseExploreBudget}
               exploreBudgetValue={exploreBudgetValue}
@@ -963,6 +968,7 @@ function AppContent({
               exploring={exploring}
               exploreProgress={exploreProgress}
               onExplore={handleExplore}
+              onCancelExplore={handleExploreCancel}
               disabled={exploreWeaponIds.length === 0}
               weaponId={exploreWeaponIds[0]}
               runWeaponIds={exploreRunIds}

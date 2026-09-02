@@ -43,12 +43,20 @@
     "limit_price": "Maks. cena",
     "limit_recoil": "Maks. odrzut V",
     "limit_ergo": "Min. ergo",
-    "compare_weapons": "Porównaj bronie",
-    "compare_placeholder": "Szukaj broni do dodania (maks. {{max}})",
-    "compare_hint": "Użyj + / − jak w filtrze modów. Jedna broń to n = 1; kolejne nakładają się na ten sam wykres. Handlarze, budżet, kompromis i filtr modów są wspólne.",
+    "compare_hint": "Otwórz galerię, aby dodać broń. Jedna broń to jedna granica Pareto; kolejne nakładają się na ten sam wykres. Handlarze, budżet, kompromis oraz włączanie/wyłączanie modów są wspólne.",
     "comparing": "Eksploracja {{name}} ({{current}}/{{total}})",
     "weapon": "Broń",
-    "compare_status": "{{returned}}/{{total}} broni zwróciło frontier"
+    "compare_status": "{{returned}}/{{total}} broni zwróciło frontier",
+    "frontier_points": "Points",
+    "best_ergo": "Best ergo",
+    "lowest_recoil": "Lowest recoil",
+    "cheapest": "Cheapest",
+    "view_build": "View build ({{count}})",
+    "build_detail": "Build detail",
+    "results_list": "Frontier details",
+    "cancel_run": "Cancel",
+    "resolution": "Frontier detail",
+    "resolution_tooltip": "How finely each weapon's frontier is sampled. Roughly one solve per step, per weapon, so a fine sweep over many weapons takes noticeably longer."
   },
   "optimize": {
     "header": "Dostosowanie Wag",
@@ -271,5 +279,24 @@
     "precision_auto": "Auto Mode (Default): Intelligently switches based on weapon mod tree size. Compact trees (≤ 220 reachable mods, e.g. SMGs, DMRs, pistols) run in Precise Mode, while massive trees (M4A1, AK-74) run in Fast Mode to deliver fluid real-time responses.",
     "glossary_precision_title": "Solver Precision (Auto / Fast / Precise)",
     "glossary_precision_desc": "Controls the depth of multi-slot integer variable formulation. Auto selects Precise for compact weapons and Fast for massive assault rifle trees."
+  },
+  "gallery": {
+    "title": "Weapon gallery",
+    "count": "{{count}} weapons",
+    "search_placeholder": "Search name, caliber or class...",
+    "by_caliber": "By caliber",
+    "by_category": "By class",
+    "no_match": "No weapon matches this search",
+    "selected_count": "{{count}} / {{max}} selected",
+    "done": "Done",
+    "nothing_selected": "Choose a weapon",
+    "add_weapon": "Add weapon",
+    "clear_filters": "Clear filters",
+    "select_all": "Select all",
+    "select_all_confirm_title": "Zaznaczyć wiele broni?",
+    "select_all_confirm": "Zaznaczy to {{count}} broni. Duże porównania trwają dłużej, zwłaszcza w trybie Precise.",
+    "deselect_all": "Clear",
+    "selected_count_nomax": "{{count}} selected",
+    "clear_all": "Clear all"
   }
 }
