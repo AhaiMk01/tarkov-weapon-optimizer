@@ -79,7 +79,7 @@ function inGamut(h: number, c: number, l: number): boolean {
 
 /**
  * Colours are built as a prefix: entry `n` only depends on entries before it, so
- * `seriesColorAt(token, n)` is the same value no matter how many series exist.
+ * `seriesPalette(token, count)[n]` is the same value for every count > n.
  */
 function buildPalette(token: PaletteTokens, count: number): string[] {
   const curated = curatedColors(token)

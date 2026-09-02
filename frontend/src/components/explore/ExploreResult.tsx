@@ -82,6 +82,16 @@ export function ExploreResult({
   const xLabel = resultTradeoff === 'ergo' ? t('ui.chart_recoil_v') : t('ui.chart_ergonomics')
   const yLabel = resultTradeoff === 'price' ? t('ui.chart_recoil_v') : t('ui.chart_price')
 
+  /** Series count drives the palette. Kept separate from `series` so appending a
+   *  weapon's points mid-run does not regenerate every colour: the palette build
+   *  is ~30ms at 171 weapons and the run appends once per weapon. */
+  const paletteSize = useMemo(() => {
+    const ids = new Set<string>()
+    for (const point of exploreResult) ids.add(point.weapon_id || weaponId || 'default')
+    return Math.max(ids.size, runWeaponIds?.length ?? 0, 1)
+  }, [exploreResult, weaponId, runWeaponIds])
+  const palette = useMemo(() => seriesPalette(token, paletteSize), [token, paletteSize])
+
   const series = useMemo(() => {
     const grouped = new Map<string, ExplorePoint[]>()
     for (const point of exploreResult) {
@@ -91,7 +101,6 @@ export function ExploreResult({
       else grouped.set(id, [point])
     }
     const entries = [...grouped.entries()]
-    const palette = seriesPalette(token, Math.max(entries.length, runWeaponIds?.length ?? 0, 1))
     return entries.map(([id, points], index) => {
       const runIndex = runWeaponIds?.indexOf(id) ?? -1
       const colorIndex = runIndex >= 0 ? runIndex : index
@@ -102,7 +111,7 @@ export function ExploreResult({
         data: [...points].sort((a, b) => a[xKey] - b[xKey]),
       }
     })
-  }, [exploreResult, weaponId, token, xKey, runWeaponIds])
+  }, [exploreResult, weaponId, palette, xKey, runWeaponIds])
 
 
   const runTotal = Math.max(runWeaponIds?.length ?? 0, series.length)

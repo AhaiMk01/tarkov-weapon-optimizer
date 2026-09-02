@@ -71,7 +71,7 @@ function isDarkColor(color: string): boolean {
  */
 function useCardProximityEffect(root: HTMLDivElement | null, deps: unknown[]) {
   const cardsRef = useRef<{ card: HTMLElement; rect: DOMRect | null; lit: boolean }[]>([])
-  const rafPending = useRef(false)
+  const rafHandle = useRef<number | null>(null)
   const tiltedRef = useRef<HTMLElement | null>(null)
 
   const measure = useCallback(() => {
@@ -130,10 +130,9 @@ function useCardProximityEffect(root: HTMLDivElement | null, deps: unknown[]) {
     }
 
     const onMove = (e: MouseEvent) => {
-      if (rafPending.current) return
-      rafPending.current = true
-      requestAnimationFrame(() => {
-        rafPending.current = false
+      if (rafHandle.current != null) return
+      rafHandle.current = requestAnimationFrame(() => {
+        rafHandle.current = null
         for (const entry of cardsRef.current) {
           const { card, rect } = entry
           if (!rect) continue
@@ -206,6 +205,12 @@ function useCardProximityEffect(root: HTMLDivElement | null, deps: unknown[]) {
       root.removeEventListener('mouseleave', onLeave)
       root.removeEventListener('scroll', measure)
       window.removeEventListener('resize', measure)
+      // A frame scheduled just before the gallery closed would otherwise run and
+      // write styles into nodes that are already detached.
+      if (rafHandle.current != null) {
+        cancelAnimationFrame(rafHandle.current)
+        rafHandle.current = null
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [root, measure, ...deps])
