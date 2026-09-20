@@ -137,8 +137,10 @@ the upstream API returns or `queries.py` gets the same treatment.
 
 ## CI/CD
 
-- `.github/workflows/build.yml` — PyInstaller builds (Windows/Linux/macOS) on `v*` tags, creates GitHub Release
-- `.github/workflows/deploy.yml` — GitHub Pages deployment on push to `master` (the `frontend-only-ghpages` branch is abandoned; deploys moved to `master` in 09cdbd9)
+- `.github/workflows/deploy.yml` — GitHub Pages. The `build` job runs on every PR to `master` (the only PR check: `npm ci` + `npm run build`, which includes `tsc`); the `deploy` job runs only on push to `master`, or a manual dispatch on `master`. (The `frontend-only-ghpages` branch is abandoned; deploys moved to `master` in 09cdbd9.)
+- `.github/workflows/docker.yml` — **runs on every `v*` tag push**: builds the multi-arch frontend image and publishes it to `ghcr.io/<owner>/tarkov-optimizer-frontend` (semver + `sha-` tags). So step 8 of the release checklist publishes an image. A manual dispatch from a branch publishes `<branch>` and `sha-` tags only.
+- `.github/workflows/build.yml` — PyInstaller executables + GitHub Release. **Manual dispatch only**: its `v*` tag trigger is commented out while executable builds are paused, and its actions are still on the pre-Node-24 versions.
+- `.github/dependabot.yml` — monthly PRs for GitHub Actions versions.
 
 ## Internationalization
 
