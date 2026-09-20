@@ -200,8 +200,9 @@
     "refresh_data": "데이터 강제 새로고침",
     "refresh_data_tooltip": "캐시된 게임 데이터를 지우고 Tarkov.dev에서 다시 가져오기",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (조준 여유)",
-    "methodology_title": "가이드 및 방법론"
+    "methodology_title": "가이드 및 방법론",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "오류가 발생했습니다",
@@ -297,6 +298,21 @@
     "select_all_confirm": "{{count}}정의 무기를 선택합니다. 비교가 클수록 더 오래 걸리며, Precise 모드에서는 특히 깁니다.",
     "deselect_all": "Clear",
     "selected_count_nomax": "{{count}} selected",
-    "clear_all": "Clear all"
+    "clear_all": "Clear all",
+    "browse_mods": "Browse parts",
+    "mods_title": "Choose parts",
+    "mods_search_placeholder": "Search parts by name",
+    "mod_category": "Part category",
+    "mods_hint": "Click to require · − to ban",
+    "mods_selected": "{{included}} required, {{excluded}} banned",
+    "mod_ban": "Ban this part",
+    "mod_unban": "Stop banning",
+    "mods_loading": "Loading parts…",
+    "mods_count": "{{count}} parts",
+    "zoom": "Magnification",
+    "zoom_variable": "Variable",
+    "mod_blocked": "Incompatible with a part you require",
+    "mods_blocked_count": "{{count}} ruled out",
+    "mod_group_other": "기타"
   }
 }

@@ -200,8 +200,9 @@
     "refresh_data": "强制更新数据",
     "refresh_data_tooltip": "清空缓存并从 Tarkov.dev 重新下载游戏数据",
     "evo_ergo_label": "负重人机",
-    "eed_label": "过摆余量 (EED)",
-    "methodology_title": "算法与机制说明"
+    "methodology_title": "算法与机制说明",
+    "eed_label_ok": "EED（无过摆）",
+    "eed_label_over": "EED（过摆）"
   },
   "trader": {
     "prapor": "Prapor",
@@ -297,6 +298,21 @@
     "select_all_confirm": "将选中 {{count}} 把武器。对比越多越慢，Precise 模式下更明显。",
     "deselect_all": "取消",
     "selected_count_nomax": "已选 {{count}}",
-    "clear_all": "清空"
+    "clear_all": "清空",
+    "browse_mods": "浏览配件",
+    "mods_title": "选择配件",
+    "mods_search_placeholder": "按名称搜索配件",
+    "mod_category": "配件类别",
+    "mods_hint": "点击必选 · − 禁用",
+    "mods_selected": "必选 {{included}}，禁用 {{excluded}}",
+    "mod_ban": "禁用此配件",
+    "mod_unban": "取消禁用",
+    "mods_loading": "正在加载配件…",
+    "mods_count": "{{count}} 个配件",
+    "zoom": "倍率",
+    "zoom_variable": "可变倍",
+    "mod_blocked": "与已必选的配件冲突",
+    "mods_blocked_count": "已排除 {{count}}",
+    "mod_group_other": "其他"
   }
 }

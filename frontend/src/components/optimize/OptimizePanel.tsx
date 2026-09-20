@@ -2,7 +2,7 @@ import { WeaponSelector } from '../common/WeaponSelector'
 import { WeightAdjuster } from '../common/WeightAdjuster'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
-import type { Gun, ModInfo, ModCategoryOption } from '../../api/client'
+import type { Gun, ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
 
 interface OptimizePanelProps {
@@ -41,6 +41,7 @@ interface OptimizePanelProps {
   onEquipErgoPenaltyChange: (v: number) => void
   computingMOAFloor: boolean
   availableMods: ModInfo[]
+  modCompat?: ModCompatibility
   loadingMods: boolean
   modCategoryOptions: ModCategoryOption[]
   includedCategories: string[]
@@ -51,6 +52,8 @@ interface OptimizePanelProps {
   excludedModIds: string[]
   onIncludedModIdsChange: (v: string[]) => void
   onExcludedModIdsChange: (v: string[]) => void
+  onToggleModInclude: (id: string) => void
+  onToggleModExclude: (id: string) => void
   categorySearch: string
   onCategorySearchChange: (v: string) => void
   modSearch: string
@@ -110,6 +113,7 @@ export function OptimizePanel(props: OptimizePanelProps) {
       />
       <ModFilter
         availableMods={props.availableMods}
+        modCompat={props.modCompat}
         loadingMods={props.loadingMods}
         modCategoryOptions={props.modCategoryOptions}
         includedCategories={props.includedCategories}
@@ -120,6 +124,8 @@ export function OptimizePanel(props: OptimizePanelProps) {
         excludedModIds={props.excludedModIds}
         onIncludedModIdsChange={props.onIncludedModIdsChange}
         onExcludedModIdsChange={props.onExcludedModIdsChange}
+        onToggleModInclude={props.onToggleModInclude}
+        onToggleModExclude={props.onToggleModExclude}
         categorySearch={props.categorySearch}
         onCategorySearchChange={props.onCategorySearchChange}
         modSearch={props.modSearch}

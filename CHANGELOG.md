@@ -2,6 +2,21 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.12.0] — 2026-09-20
+
+### Added
+- **Parts gallery**: The mod filter's search box only showed results once you typed, capped at ten, so requiring or banning a part meant already knowing its name. "Browse parts" opens every part the weapon can reach as an icon grid grouped by handbook category, with a name search and a category scope. Clicking a card requires the part; the corner toggle bans it. It sits alongside the search box rather than replacing it, and both edit the same lists.
+- **Incompatible parts are greyed out**: Once a part is required, anything that provably cannot share a build with it is ruled out — parts that conflict with it, and parts whose every possible slot is already claimed by a required part with no choice of slot. This is a necessary condition, not a sufficient one: budget, trader levels and other constraints can still make a selectable part infeasible, and the solver remains the authority. The search box applies the same rule, so it can no longer add a part the gallery has ruled out. Not offered when Explore is comparing several weapons, since one weapon's slot layout says nothing about another's.
+- **Magnification on sights**: Sight cards show their power ("1x", "1-6x", "2.5-8x"), and the gallery can filter by it. A power matches any sight whose range reaches it, so a 2-7x appears under 2x, 4x and 7x; "1x" is the exception and means non-magnifying sights only. Only powers the current weapon's sights actually have are offered.
+
+### Changed
+- **Required and banned are one state per part**: Requiring a banned part now un-bans it, and the reverse, everywhere the two can be set — the gallery, and the lock and ban buttons on the build manifest.
+- The weapon gallery's card and cursor effect were extracted so both galleries share them. Cards are memoised and the hover effect measures at most once per frame, which is what keeps a grid of several hundred parts responsive.
+
+### Fixed
+- **EED label**: The stat card was titled "EED (Overswing)" whatever the value, so a healthy build read as if it overswung. It now says "No overswing" at EED ≥ 0 — the same threshold that already picked the value's colour, so the two cannot disagree.
+- **A part could be both required and banned**: The build manifest's lock and ban buttons each edited their own list without checking the other, which forced the part in and out at once and made the solve infeasible.
+
 ## [v2.11.1] — 2026-09-01
 
 ### Added

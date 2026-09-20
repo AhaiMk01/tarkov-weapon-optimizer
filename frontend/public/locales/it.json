@@ -200,8 +200,9 @@
     "refresh_data": "Forza aggiornamento dati",
     "refresh_data_tooltip": "Cancella cache e scarica nuovamente i dati da Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Inerzia)",
-    "methodology_title": "Guida e Metodologia"
+    "methodology_title": "Guida e Metodologia",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Si è verificato un errore",
@@ -297,6 +298,21 @@
     "select_all_confirm": "Verranno selezionate {{count}} armi. I confronti grandi richiedono più tempo, soprattutto in modalità Precise.",
     "deselect_all": "Clear",
     "selected_count_nomax": "{{count}} selected",
-    "clear_all": "Clear all"
+    "clear_all": "Clear all",
+    "browse_mods": "Browse parts",
+    "mods_title": "Choose parts",
+    "mods_search_placeholder": "Search parts by name",
+    "mod_category": "Part category",
+    "mods_hint": "Click to require · − to ban",
+    "mods_selected": "{{included}} required, {{excluded}} banned",
+    "mod_ban": "Ban this part",
+    "mod_unban": "Stop banning",
+    "mods_loading": "Loading parts…",
+    "mods_count": "{{count}} parts",
+    "zoom": "Magnification",
+    "zoom_variable": "Variable",
+    "mod_blocked": "Incompatible with a part you require",
+    "mods_blocked_count": "{{count}} ruled out",
+    "mod_group_other": "Altro"
   }
 }

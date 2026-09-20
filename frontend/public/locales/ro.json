@@ -200,8 +200,9 @@
     "refresh_data": "Forțează actualizarea datelor",
     "refresh_data_tooltip": "Șterge datele în cache și descarcă din nou de la Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Balans)",
-    "methodology_title": "Ghid și metodologie"
+    "methodology_title": "Ghid și metodologie",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "A apărut o eroare",
@@ -297,6 +298,21 @@
     "select_all_confirm": "Se vor selecta {{count}} arme. Comparațiile mari durează mai mult, mai ales în modul Precise.",
     "deselect_all": "Clear",
     "selected_count_nomax": "{{count}} selected",
-    "clear_all": "Clear all"
+    "clear_all": "Clear all",
+    "browse_mods": "Browse parts",
+    "mods_title": "Choose parts",
+    "mods_search_placeholder": "Search parts by name",
+    "mod_category": "Part category",
+    "mods_hint": "Click to require · − to ban",
+    "mods_selected": "{{included}} required, {{excluded}} banned",
+    "mod_ban": "Ban this part",
+    "mod_unban": "Stop banning",
+    "mods_loading": "Loading parts…",
+    "mods_count": "{{count}} parts",
+    "zoom": "Magnification",
+    "zoom_variable": "Variable",
+    "mod_blocked": "Incompatible with a part you require",
+    "mods_blocked_count": "{{count}} ruled out",
+    "mod_group_other": "Altele"
   }
 }

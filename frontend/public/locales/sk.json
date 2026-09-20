@@ -200,8 +200,9 @@
     "refresh_data": "Vynútiť obnovenie údajov",
     "refresh_data_tooltip": "Vymazať mezipaměť herných údajov a znova ich stiahnuť z Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Prekmit)",
-    "methodology_title": "Sprievodca a metodika"
+    "methodology_title": "Sprievodca a metodika",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Vyskytla sa chyba",
@@ -297,6 +298,21 @@
     "select_all_confirm": "Tým sa vyberie {{count}} zbraní. Veľké porovnania trvajú dlhšie, zvlášť v režime Precise.",
     "deselect_all": "Clear",
     "selected_count_nomax": "{{count}} selected",
-    "clear_all": "Clear all"
+    "clear_all": "Clear all",
+    "browse_mods": "Browse parts",
+    "mods_title": "Choose parts",
+    "mods_search_placeholder": "Search parts by name",
+    "mod_category": "Part category",
+    "mods_hint": "Click to require · − to ban",
+    "mods_selected": "{{included}} required, {{excluded}} banned",
+    "mod_ban": "Ban this part",
+    "mod_unban": "Stop banning",
+    "mods_loading": "Loading parts…",
+    "mods_count": "{{count}} parts",
+    "zoom": "Magnification",
+    "zoom_variable": "Variable",
+    "mod_blocked": "Incompatible with a part you require",
+    "mods_blocked_count": "{{count}} ruled out",
+    "mod_group_other": "Ostatné"
   }
 }

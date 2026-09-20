@@ -85,6 +85,8 @@ interface WorkerMessage {
     gameMode?: string;
     request?: OptimizeRequest | ExploreRequest;
     weaponId?: string;
+    /** getWeaponMods: also return the conflict/slot graph. */
+    withCompat?: boolean;
   };
 }
 
@@ -145,13 +147,53 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 category_child_ids: Array.isArray(st.category_child_ids) ? st.category_child_ids : [],
                 icon: (itemData.iconLink ?? itemData.imageLink) as string | undefined,
                 capacity: st.capacity ?? 0,
+                zoom_min: st.zoom_min,
+                zoom_max: st.zoom_max,
                 accuracy_modifier: st.accuracy_modifier ?? 0,
                 base_moa: (st.center_of_impact ?? 0) * MOA_K,
               };
             })
             .filter(Boolean)
             .sort((a, b) => (a!.name as string).localeCompare(b!.name as string));
-          self.postMessage({ type: 'result', id, payload: { mods: modList } });
+          if (!payload.withCompat) {
+            self.postMessage({ type: 'result', id, payload: { mods: modList } });
+            break;
+          }
+          // Enough of the compatibility graph for the UI to grey out parts that
+          // cannot coexist with what the user has already required. Scoped to the
+          // reachable set, and only the entries that actually constrain anything.
+          const reachable = new Set(Object.keys(compatMap.reachable_items));
+          const conflicts: Record<string, string[]> = {};
+          for (const mid of reachable) {
+            const entry = data.itemLookup[mid];
+            if (!entry || entry.type !== 'mod') continue;
+            for (const cid of entry.conflicting_items) {
+              // Some items list themselves; that would block every build.
+              if (cid === mid || !reachable.has(cid)) continue;
+              // Stored both ways so a lookup never has to scan the other side.
+              (conflicts[mid] ??= []).push(cid);
+              (conflicts[cid] ??= []).push(mid);
+            }
+          }
+          for (const key of Object.keys(conflicts)) {
+            conflicts[key] = [...new Set(conflicts[key])];
+          }
+          // Slots an item can be INSTALLED IN -- the inverse of slot_items.
+          // Not item_to_slots, which lists the slots an item itself provides for
+          // further attachments; that is the opposite direction and is empty for
+          // every leaf part.
+          const slotsByItem: Record<string, string[]> = {};
+          for (const [slotId, allowed] of Object.entries(compatMap.slot_items)) {
+            for (const iid of allowed) {
+              if (!reachable.has(iid)) continue;
+              (slotsByItem[iid] ??= []).push(slotId);
+            }
+          }
+          self.postMessage({
+            type: 'result',
+            id,
+            payload: { mods: modList, conflicts, slots_by_item: slotsByItem },
+          });
           break;
         }
 
