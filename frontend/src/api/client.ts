@@ -157,6 +157,9 @@ export interface ModInfo {
   category_child_ids: string[];
   icon?: string;
   capacity?: number;
+  /** Magnification range for sights; equal values mean fixed power. */
+  zoom_min?: number;
+  zoom_max?: number;
   accuracy_modifier?: number;
   /** Barrel-only: centerOfImpact × MOA_K (MOA units). Replaces weapon base_moa when installed. */
   base_moa?: number;
@@ -293,8 +296,28 @@ export const getInfo = async (gameMode: GameMode = 'regular', lang: string = 'en
   return sendWorkerMessage<InfoResponse>('getInfo', { lang, gameMode });
 };
 
-export const getWeaponMods = async (weaponId: string, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ mods: ModInfo[] }> => {
-  return sendWorkerMessage<{ mods: ModInfo[] }>('getWeaponMods', { weaponId, lang, gameMode });
+/**
+ * Slice of the compatibility graph the mod picker needs to grey out parts that
+ * cannot coexist with the current picks. `conflicts` is symmetric; `slots_by_item`
+ * lists every slot an item could occupy. Only built when asked for -- see
+ * `withCompat` on getWeaponMods.
+ */
+export interface ModCompatibility {
+  conflicts: Record<string, string[]>;
+  slots_by_item: Record<string, string[]>;
+}
+
+/**
+ * `withCompat` adds the conflict/slot graph. Off by default: Explore's comparison
+ * fetches one list per weapon and would throw every one of those graphs away.
+ */
+export const getWeaponMods = async (
+  weaponId: string,
+  gameMode: GameMode = 'regular',
+  lang: string = 'en',
+  opts: { withCompat?: boolean } = {},
+): Promise<{ mods: ModInfo[] } & Partial<ModCompatibility>> => {
+  return sendWorkerMessage<{ mods: ModInfo[] } & Partial<ModCompatibility>>('getWeaponMods', { weaponId, lang, gameMode, withCompat: opts.withCompat === true });
 };
 
 export const optimize = async (request: OptimizeRequest, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<OptimizeResponse> => {

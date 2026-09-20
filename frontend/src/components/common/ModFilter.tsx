@@ -1,7 +1,10 @@
+import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography, Tooltip } from 'antd'
-import { PlusOutlined, MinusOutlined, UndoOutlined } from '@ant-design/icons'
-import type { ModInfo, ModCategoryOption } from '../../api/client'
+import { PlusOutlined, MinusOutlined, UndoOutlined, AppstoreOutlined } from '@ant-design/icons'
+import type { ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
+import { ModGallery } from './ModGallery'
+import { computeBlockedModIds } from './modBlocking'
 
 const { useToken } = theme
 const { Text } = Typography
@@ -10,6 +13,7 @@ const hintStyle = { fontSize: 12, lineHeight: 1.45, display: 'block' as const }
 
 interface ModFilterProps {
   availableMods: ModInfo[]
+  modCompat?: ModCompatibility
   loadingMods: boolean
   modCategoryOptions: ModCategoryOption[]
   includedCategories: string[]
@@ -20,6 +24,10 @@ interface ModFilterProps {
   excludedModIds: string[]
   onIncludedModIdsChange: (v: string[]) => void
   onExcludedModIdsChange: (v: string[]) => void
+  /** Move one part in/out of required / banned, keeping the two lists disjoint.
+   *  Owned by App so the build manifest's lock/ban buttons follow the same rule. */
+  onToggleModInclude: (id: string) => void
+  onToggleModExclude: (id: string) => void
   categorySearch: string
   onCategorySearchChange: (v: string) => void
   modSearch: string
@@ -29,6 +37,7 @@ interface ModFilterProps {
 
 export function ModFilter({
   availableMods,
+  modCompat,
   loadingMods,
   modCategoryOptions,
   includedCategories,
@@ -39,6 +48,8 @@ export function ModFilter({
   excludedModIds,
   onIncludedModIdsChange,
   onExcludedModIdsChange,
+  onToggleModInclude,
+  onToggleModExclude,
   categorySearch,
   onCategorySearchChange,
   modSearch,
@@ -46,10 +57,19 @@ export function ModFilter({
 }: ModFilterProps) {
   const { t } = useTranslation()
   const { token } = useToken()
+  const [galleryOpen, setGalleryOpen] = useState(false)
+
+  // One blocked set for both ways of requiring a part, so the dropdown cannot
+  // add something the gallery has greyed out.
+  const blockedIds = useMemo(
+    () => computeBlockedModIds(modCompat, includedModIds, availableMods),
+    [modCompat, includedModIds, availableMods],
+  )
 
   const searchedMods = modSearch ? availableMods.filter(m => m.name.toLowerCase().includes(modSearch.toLowerCase()) && !includedModIds.includes(m.id) && !excludedModIds.includes(m.id)).slice(0, 10) : []
 
   return (
+    <>
     <Collapse size="small" items={[
       {
         key: 'mods',
@@ -103,6 +123,15 @@ export function ModFilter({
             <Text type="secondary" style={hintStyle}>
               {t('sidebar.mod_filter_mods_hint')}
             </Text>
+            <Button
+              block
+              icon={<AppstoreOutlined />}
+              onClick={() => setGalleryOpen(true)}
+              disabled={availableMods.length === 0}
+              loading={loadingMods}
+            >
+              {t('gallery.browse_mods')}
+            </Button>
             <Select
               showSearch
               style={{ width: '100%' }}
@@ -114,17 +143,19 @@ export function ModFilter({
               filterOption={false}
               notFoundContent={null}
               loading={loadingMods}
-              options={searchedMods.map(m => ({ value: m.id, label: m.name, icon: m.icon }))}
+              options={searchedMods.map(m => ({ value: m.id, label: m.name, icon: m.icon, disabled: blockedIds.has(m.id) }))}
               optionRender={(option) => {
                 const mod = searchedMods.find(m => m.id === option.value)
+                const blocked = blockedIds.has(option.value as string)
                 return (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }} title={blocked ? t('gallery.mod_blocked') : undefined}>
                     <Space>
                       {mod?.icon && <img src={mod.icon} alt="" style={{ width: 24, height: 24, objectFit: 'contain' }} />}
                       <span>{option.label}</span>
                     </Space>
                     <Space size={4}>
-                      <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedModIdsChange([...includedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorSuccess }} />
+                      {/* Blocked parts can still be banned, just not required. */}
+                      {!blocked && <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedModIdsChange([...includedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorSuccess }} />}
                       <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedModIdsChange([...excludedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorError }} />
                     </Space>
                   </div>
@@ -139,5 +170,18 @@ export function ModFilter({
         ),
       },
     ]} />
+    <ModGallery
+      open={galleryOpen}
+      onClose={() => setGalleryOpen(false)}
+      mods={availableMods}
+      blockedIds={blockedIds}
+      loading={loadingMods}
+      includedIds={includedModIds}
+      excludedIds={excludedModIds}
+      onToggleInclude={onToggleModInclude}
+      onToggleExclude={onToggleModExclude}
+      onClearAll={() => { onIncludedModIdsChange([]); onExcludedModIdsChange([]) }}
+    />
+    </>
   )
 }

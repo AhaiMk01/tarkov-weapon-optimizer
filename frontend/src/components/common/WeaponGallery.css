@@ -254,6 +254,63 @@
   border-color: var(--wg-accent);
   background: var(--wg-selected-bg);
 }
+/* Mods are tri-state: required, banned, or neither. Banned reads as a warning
+   rather than a second kind of selection, so it takes the error colour and
+   fades the item itself. */
+.wg-card.wg-excluded {
+  border-color: var(--wg-danger);
+  background: var(--wg-danger-bg);
+}
+.wg-card.wg-excluded img {
+  opacity: 0.45;
+  filter: grayscale(0.7);
+}
+.wg-check-danger {
+  background: var(--wg-danger);
+}
+/* Corner toggle for the banned state; only surfaces on hover or focus so the
+   grid stays a wall of items rather than a wall of buttons. */
+.wg-card-action {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--wg-muted);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  /* Invisible must also mean untouchable: opacity alone left a hit target in
+     the corner of every card that banned the part when tapped. */
+  pointer-events: none;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+}
+.wg-card-action:hover {
+  color: var(--wg-danger);
+  background: var(--wg-card-wash);
+}
+.wg-card-action:focus-visible {
+  outline: 2px solid var(--wg-danger);
+  outline-offset: 1px;
+}
+.wg-card:hover .wg-card-action,
+.wg-card:focus-within .wg-card-action,
+.wg-card.wg-excluded .wg-card-action {
+  opacity: 1;
+  pointer-events: auto;
+}
+.wg-card.wg-excluded .wg-card-action {
+  color: var(--wg-danger);
+}
 
 .wg-check {
   position: absolute;
@@ -330,6 +387,11 @@
   .wg-card:active {
     border-color: var(--wg-accent);
     opacity: 0.85;
+  }
+  /* No hover to reveal it, so the ban toggle is always there to be found. */
+  .wg-card-action {
+    opacity: 1;
+    pointer-events: auto;
   }
 }
 

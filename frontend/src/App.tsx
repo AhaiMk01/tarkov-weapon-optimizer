@@ -1,11 +1,11 @@
 declare const __APP_VERSION__: string;
 
-import { useState, useEffect, useMemo, useRef, type CSSProperties } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor, clearDataCache } from './api/client'
-import type { Gun, OptimizeResponse, ModInfo, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
+import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
@@ -236,6 +236,7 @@ function AppContent({
   const [optimizing, setOptimizing] = useState(false)
   const [result, setResult] = useState<OptimizeResponse | null>(null)
   const [availableMods, setAvailableMods] = useState<ModInfo[]>([])
+  const [modCompat, setModCompat] = useState<ModCompatibility>({ conflicts: {}, slots_by_item: {} })
   const [loadingMods, setLoadingMods] = useState(false)
   const [ergoWeight, setErgoWeight] = useState(33)
   const [recoilWeight, setRecoilWeight] = useState(34)
@@ -433,10 +434,11 @@ function AppContent({
     if (!selectedGunId) return
     const seq = ++modsRequestSeq.current
     setLoadingMods(true)
-    getWeaponMods(selectedGunId, gameMode, i18n.language || 'en')
+    getWeaponMods(selectedGunId, gameMode, i18n.language || 'en', { withCompat: true })
       .then(data => {
         if (seq !== modsRequestSeq.current) return
         setAvailableMods(data.mods)
+        setModCompat({ conflicts: data.conflicts ?? {}, slots_by_item: data.slots_by_item ?? {} })
         setLoadingMods(false)
       })
       .catch(err => {
@@ -780,12 +782,18 @@ function AppContent({
     }
   }
 
-  const toggleLock = (id: string) => {
+  // Required and banned are one tri-state per part, so each toggle also clears
+  // the other list -- otherwise a part could sit in both and the solve went
+  // infeasible. Shared by the build manifest and the mod gallery; stable
+  // identities because the gallery passes them to memoised cards.
+  const toggleLock = useCallback((id: string) => {
     setIncludedModIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-  }
-  const toggleExclude = (id: string) => {
+    setExcludedModIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev)
+  }, [])
+  const toggleExclude = useCallback((id: string) => {
     setExcludedModIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
-  }
+    setIncludedModIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : prev)
+  }, [])
 
   const copyToClipboard = (content: string) => {
     const successMsg = t('toast.copied')
@@ -849,6 +857,7 @@ function AppContent({
     selectedGunId,
     onGunChange: handleGunChange,
     availableMods,
+    modCompat,
     loadingMods,
     modCategoryOptions,
     includedCategories,
@@ -859,6 +868,8 @@ function AppContent({
     excludedModIds,
     onIncludedModIdsChange: setIncludedModIds,
     onExcludedModIdsChange: setExcludedModIds,
+    onToggleModInclude: toggleLock,
+    onToggleModExclude: toggleExclude,
     categorySearch,
     onCategorySearchChange: setCategorySearch,
     modSearch,
@@ -945,6 +956,9 @@ function AppContent({
             <ExplorePanel
               {...commonPanelProps}
               availableMods={exploreFilterMods}
+              // One weapon's slot graph says nothing about the others, so blocking
+              // is only offered when the list is a single weapon's.
+              modCompat={exploreComparing ? undefined : modCompat}
               loadingMods={exploreComparing ? loadingExploreMods : loadingMods}
               modCategoryOptions={exploreModCategoryOptions}
               selectedGunIds={exploreWeaponIds}

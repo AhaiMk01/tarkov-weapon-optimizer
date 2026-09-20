@@ -76,6 +76,10 @@ export interface ModStats {
   min_level_flea: number;
   capacity: number;
   sighting_range: number;
+  /** Magnification range, derived from `zoomLevels`. Equal min/max means fixed
+   *  power; both undefined for anything that is not a sight. */
+  zoom_min?: number;
+  zoom_max?: number;
   category: string;
   category_id: string;
   /** Plural names from handbookCategories (e.g. ['Suppressors', 'Muzzle devices', ...]) */

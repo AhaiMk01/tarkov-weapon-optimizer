@@ -666,6 +666,7 @@ function buildCategoryPath(bsgCategory: RawItem | undefined): string {
 
 function extractModStats(mod: RawItem): ModStats {
   const props = mod.properties ?? {};
+  const zoom = extractZoomRange(props.zoomLevels);
   const ergo = mod.ergonomicsModifier ?? 0;
   const topRecoil = mod.recoilModifier ?? 0;
   const propsRecoil = props.recoilModifier ?? 0;
@@ -738,6 +739,8 @@ function extractModStats(mod: RawItem): ModStats {
     min_level_flea: mod.minLevelForFlea ?? 0,
     capacity: props.capacity ?? 0,
     sighting_range: props.sightingRange ?? 0,
+    zoom_min: zoom.min,
+    zoom_max: zoom.max,
     category: buildCategoryPath(mod.bsgCategory),
     category_id: mod.bsgCategory?.id ?? '',
     handbook_categories: (mod.handbookCategories ?? []).map((c: { name: string }) => c.name),
@@ -746,6 +749,25 @@ function extractModStats(mod: RawItem): ModStats {
       .map((c: { id?: string }) => c.id)
       .filter((id: string | undefined): id is string => Boolean(id)),
   };
+}
+
+/**
+ * Collapses `zoomLevels` into a single magnification range.
+ *
+ * The raw shape is one array per sight mode, each holding that mode's selectable
+ * powers -- so a fixed 4x is [[4]], a variable scope is [[4,16]], and the ELCAN
+ * SpecterDR's switchable 1x/4x is [[4,1],[1]]. Reticle variants reuse the same
+ * power ([[1,1,1,1]] on the Walther MRS), so taking min/max over everything
+ * collapses those to plain 1x while still reporting 1-4x for the ELCAN.
+ */
+function extractZoomRange(zoomLevels: unknown): { min?: number; max?: number } {
+  if (!Array.isArray(zoomLevels)) return {};
+  const levels = zoomLevels
+    .flat()
+    .map(Number)
+    .filter(n => Number.isFinite(n) && n > 0);
+  if (levels.length === 0) return {};
+  return { min: Math.min(...levels), max: Math.max(...levels) };
 }
 
 export function buildItemLookup(guns: RawItem[], mods: RawItem[]): ItemLookup {
