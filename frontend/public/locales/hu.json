@@ -200,8 +200,9 @@
     "refresh_data": "Adatok frissítésének kényszerítése",
     "refresh_data_tooltip": "Gyorsítótárazott játékadatok törlése és újraletöltése a Tarkov.dev-ről",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Túllengés)",
-    "methodology_title": "Útmutató és módszertan"
+    "methodology_title": "Útmutató és módszertan",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Hiba történt",

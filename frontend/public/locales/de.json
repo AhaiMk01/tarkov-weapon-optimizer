@@ -200,8 +200,9 @@
     "refresh_data": "Daten neu laden",
     "refresh_data_tooltip": "Zwischengespeicherte Spieldaten löschen und von Tarkov.dev neu abrufen",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Überschwung)",
-    "methodology_title": "Leitfaden & Methodik"
+    "methodology_title": "Leitfaden & Methodik",
+    "eed_label_ok": "EED (kein Überschwingen)",
+    "eed_label_over": "EED (Überschwingen)"
   },
   "error": {
     "title": "Ein Fehler ist aufgetreten",

@@ -200,8 +200,9 @@
     "refresh_data": "Vynutit obnovení dat",
     "refresh_data_tooltip": "Vymazat mezipaměť a znovu stáhnout data z Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Překmit)",
-    "methodology_title": "Průvodce a metodika"
+    "methodology_title": "Průvodce a metodika",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Došlo k chybě",

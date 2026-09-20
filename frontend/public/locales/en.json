@@ -200,8 +200,9 @@
     "ban_action_tooltip_remove": "Unban (remove from excluded)",
     "changelog_title": "Changelog",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Overswing)",
-    "methodology_title": "Guide & Methodology"
+    "methodology_title": "Guide & Methodology",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "trader": {
     "prapor": "Prapor",

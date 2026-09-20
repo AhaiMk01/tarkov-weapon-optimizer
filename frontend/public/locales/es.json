@@ -200,8 +200,9 @@
     "refresh_data": "Forzar recarga de datos",
     "refresh_data_tooltip": "Limpiar datos de juego en caché y re-descargar desde Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Sobregiro)",
-    "methodology_title": "Guía y metodología"
+    "methodology_title": "Guía y metodología",
+    "eed_label_ok": "EED (sin sobreoscilación)",
+    "eed_label_over": "EED (sobreoscilación)"
   },
   "error": {
     "title": "Ocurrió un error",

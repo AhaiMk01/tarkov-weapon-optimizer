@@ -200,8 +200,9 @@
     "refresh_data": "Forcer l'actualisation des données",
     "refresh_data_tooltip": "Vider le cache et télécharger à nouveau les données depuis Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Inertie)",
-    "methodology_title": "Guide & Méthodologie"
+    "methodology_title": "Guide & Méthodologie",
+    "eed_label_ok": "EED (pas de dépassement)",
+    "eed_label_over": "EED (dépassement)"
   },
   "error": {
     "title": "Une erreur s'est produite",

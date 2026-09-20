@@ -200,8 +200,9 @@
     "refresh_data": "データの強制更新",
     "refresh_data_tooltip": "キャッシュをクリアし、Tarkov.devからゲームデータを再取得",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "過振り余量 (EED)",
-    "methodology_title": "ガイドとアルゴリズム"
+    "methodology_title": "ガイドとアルゴリズム",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "エラーが発生しました",

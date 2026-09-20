@@ -200,8 +200,9 @@
     "refresh_data": "Wymuś odświeżenie danych",
     "refresh_data_tooltip": "Wyczyść pamięć podręczną danych gry i pobierz ponownie z Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Bezwładność)",
-    "methodology_title": "Przewodnik i Metodologia"
+    "methodology_title": "Przewodnik i Metodologia",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Wystąpił błąd",

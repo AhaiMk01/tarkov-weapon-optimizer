@@ -200,8 +200,9 @@
     "refresh_data": "Vynútiť obnovenie údajov",
     "refresh_data_tooltip": "Vymazať mezipaměť herných údajov a znova ich stiahnuť z Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Prekmit)",
-    "methodology_title": "Sprievodca a metodika"
+    "methodology_title": "Sprievodca a metodika",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Vyskytla sa chyba",

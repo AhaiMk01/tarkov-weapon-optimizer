@@ -200,8 +200,9 @@
     "refresh_data": "Verileri güncelle",
     "refresh_data_tooltip": "Oyun verisi önbelleğini temizle ve Tarkov.dev'den yeniden indir",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (Savrulma)",
-    "methodology_title": "Rehber ve Metodoloji"
+    "methodology_title": "Rehber ve Metodoloji",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "Bir hata oluştu",

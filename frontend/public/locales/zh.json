@@ -200,8 +200,9 @@
     "refresh_data": "强制更新数据",
     "refresh_data_tooltip": "清空缓存并从 Tarkov.dev 重新下载游戏数据",
     "evo_ergo_label": "负重人机",
-    "eed_label": "过摆余量 (EED)",
-    "methodology_title": "算法与机制说明"
+    "methodology_title": "算法与机制说明",
+    "eed_label_ok": "EED（无过摆）",
+    "eed_label_over": "EED（过摆）"
   },
   "trader": {
     "prapor": "Prapor",

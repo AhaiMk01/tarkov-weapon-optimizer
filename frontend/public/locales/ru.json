@@ -200,8 +200,9 @@
     "refresh_data": "Принудительно обновить данные",
     "refresh_data_tooltip": "Очистить кэш и повторно загрузить данные с Tarkov.dev",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "Запас EED",
-    "methodology_title": "Руководство и методология"
+    "methodology_title": "Руководство и методология",
+    "eed_label_ok": "EED (без перехлёста)",
+    "eed_label_over": "EED (перехлёст)"
   },
   "error": {
     "title": "Произошла ошибка",

@@ -200,8 +200,9 @@
     "refresh_data": "데이터 강제 새로고침",
     "refresh_data_tooltip": "캐시된 게임 데이터를 지우고 Tarkov.dev에서 다시 가져오기",
     "evo_ergo_label": "EvoErgo",
-    "eed_label": "EED (조준 여유)",
-    "methodology_title": "가이드 및 방법론"
+    "methodology_title": "가이드 및 방법론",
+    "eed_label_ok": "EED (No overswing)",
+    "eed_label_over": "EED (Overswing)"
   },
   "error": {
     "title": "오류가 발생했습니다",

@@ -30,7 +30,11 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       {eed != null && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
           <Statistic
-            title={t('ui.eed_label')}
+            // EED = -15 * (weight - threshold), so >= 0 means the build stays
+            // under the overswing threshold. A fixed "(Overswing)" label read as
+            // if every build overswung, including the healthy ones. Threshold
+            // matches the value colour below so the two can never disagree.
+            title={eed >= 0 ? t('ui.eed_label_ok') : t('ui.eed_label_over')}
             value={eed > 0 ? `+${eed.toFixed(1)}` : eed.toFixed(1)}
             valueStyle={{ color: eed >= 0 ? token.colorSuccess : token.colorError }}
           />
