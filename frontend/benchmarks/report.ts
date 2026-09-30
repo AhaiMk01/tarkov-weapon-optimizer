@@ -125,32 +125,39 @@ export function summarize(samples: Sample[]): BenchmarkSummary {
     });
   }
 
-  // Compute paired comparisons
-  const baselineByCaseRep = new Map<string, Sample>();
-  const candidateByCaseRep = new Map<string, Sample>();
+  // Compute paired comparisons sequentially per case (preserves pairs across multiple runs)
+  const baselinesByCase = new Map<string, Sample[]>();
+  const candidatesByCase = new Map<string, Sample[]>();
 
   for (const s of nonWarmup) {
-    const key = `${s.caseId}:${s.repetition}`;
-    if (s.variant === 'baseline') baselineByCaseRep.set(key, s);
-    else if (s.variant === 'candidate') candidateByCaseRep.set(key, s);
+    if (s.variant === 'baseline') {
+      if (!baselinesByCase.has(s.caseId)) baselinesByCase.set(s.caseId, []);
+      baselinesByCase.get(s.caseId)!.push(s);
+    } else if (s.variant === 'candidate') {
+      if (!candidatesByCase.has(s.caseId)) candidatesByCase.set(s.caseId, []);
+      candidatesByCase.get(s.caseId)!.push(s);
+    }
   }
 
   const pairs: PairedComparison[] = [];
-  for (const [key, baseSample] of baselineByCaseRep) {
-    const candSample = candidateByCaseRep.get(key);
-    if (!candSample) continue;
+  for (const [caseId, baseList] of baselinesByCase) {
+    const candList = candidatesByCase.get(caseId) || [];
+    const count = Math.min(baseList.length, candList.length);
+    for (let i = 0; i < count; i++) {
+      const baseSample = baseList[i];
+      const candSample = candList[i];
+      const baseCls = classifySample(baseSample);
+      const candCls = classifySample(candSample);
 
-    const baseCls = classifySample(baseSample);
-    const candCls = classifySample(candSample);
-
-    if (baseCls.certified && candCls.certified && baseSample.elapsedMs != null && candSample.elapsedMs != null) {
-      pairs.push({
-        caseId: baseSample.caseId,
-        repetition: baseSample.repetition,
-        baselineMs: baseSample.elapsedMs,
-        candidateMs: candSample.elapsedMs,
-        speedup: candSample.elapsedMs > 0 ? baseSample.elapsedMs / candSample.elapsedMs : 1,
-      });
+      if (baseCls.certified && candCls.certified && baseSample.elapsedMs != null && candSample.elapsedMs != null) {
+        pairs.push({
+          caseId,
+          repetition: baseSample.repetition,
+          baselineMs: baseSample.elapsedMs,
+          candidateMs: candSample.elapsedMs,
+          speedup: candSample.elapsedMs > 0 ? baseSample.elapsedMs / candSample.elapsedMs : 1,
+        });
+      }
     }
   }
 

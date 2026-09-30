@@ -48,3 +48,21 @@ test('paired latency excludes uncompleted partners and warmups', () => {
   assert.deepEqual(s.pairs, [{ caseId: 'case', repetition: 0, baselineMs: 100, candidateMs: 50, speedup: 2 }]);
   assert.equal(s.groups.find(g => g.variant === 'baseline')?.samples, 2);
 });
+test('pairs are preserved across multiple sequential CLI runs without collision', () => {
+  const r1 = [
+    sample({ repetition: 1, elapsedMs: 100 }),
+    sample({ repetition: 1, variant: 'candidate', elapsedMs: 50 }),
+    sample({ repetition: 2, elapsedMs: 100 }),
+    sample({ repetition: 2, variant: 'candidate', elapsedMs: 50 }),
+  ];
+  const r2 = [
+    sample({ repetition: 1, elapsedMs: 120 }),
+    sample({ repetition: 1, variant: 'candidate', elapsedMs: 60 }),
+    sample({ repetition: 2, elapsedMs: 120 }),
+    sample({ repetition: 2, variant: 'candidate', elapsedMs: 60 }),
+    sample({ repetition: 3, elapsedMs: 120 }),
+    sample({ repetition: 3, variant: 'candidate', elapsedMs: 60 }),
+  ];
+  const s = summarize([...r1, ...r2]);
+  assert.equal(s.pairs.length, 5, 'All 5 pairs across the two runs must be preserved');
+});
