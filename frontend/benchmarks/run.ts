@@ -89,19 +89,23 @@ async function main() {
     console.log(`Harness initialized with ${prep.gunsCount} guns, ${prep.modsCount} mods.`);
 
     for (const caseItem of cases) {
-      console.log(`\n=== Case: ${caseItem.id} (${caseItem.description}) ===`);
-
       // 1. Warm-up run
-      process.stdout.write('  [warmup] ... ');
-      const warmupSample = await runner.runCase(caseItem, {
-        variant,
-        repetition: 0,
-        warmup: true,
-        sequence: seq++,
-        deadlineMs: 60000,
-      });
-      samplesFile.write(JSON.stringify(warmupSample) + '\n');
-      console.log(`${warmupSample.outcome} (${warmupSample.elapsedMs != null ? warmupSample.elapsedMs.toFixed(0) : '?'}ms)`);
+      if (isPairedMode) {
+        const baseCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } };
+        const candCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } };
+        process.stdout.write('  [warmup baseline] ... ');
+        const warmBase = await runner.runCase(baseCase, { variant: 'baseline', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000 });
+        samplesFile.write(JSON.stringify(warmBase) + '\n');
+        process.stdout.write(`${warmBase.outcome} (${warmBase.elapsedMs != null ? warmBase.elapsedMs.toFixed(0) : '?'}ms) | [warmup candidate] ... `);
+        const warmCand = await runner.runCase(candCase, { variant: 'candidate', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000 });
+        samplesFile.write(JSON.stringify(warmCand) + '\n');
+        console.log(`${warmCand.outcome} (${warmCand.elapsedMs != null ? warmCand.elapsedMs.toFixed(0) : '?'}ms)`);
+      } else {
+        process.stdout.write('  [warmup] ... ');
+        const warmupSample = await runner.runCase(caseItem, { variant, repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000 });
+        samplesFile.write(JSON.stringify(warmupSample) + '\n');
+        console.log(`${warmupSample.outcome} (${warmupSample.elapsedMs != null ? warmupSample.elapsedMs.toFixed(0) : '?'}ms)`);
+      }
 
       if (isPairedMode) {
         const baseCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } };

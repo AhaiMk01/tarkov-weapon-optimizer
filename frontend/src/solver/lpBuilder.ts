@@ -984,8 +984,8 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   L('  raw_ergo free');
   L('  rec_axis free');
   L('  price_axis free');
-  L(`  ${fmt(interval[0])} <= total_weight <= ${fmt(interval[1])}`);
   if (params.useTrueErgo || params.preventOverswing) {
+    L(`  ${fmt(interval[0])} <= total_weight <= ${fmt(interval[1])}`);
     L('  gear_ergo free');
     L('  0 <= effective_ergo <= 1000');
     L('  ted_axis free');
