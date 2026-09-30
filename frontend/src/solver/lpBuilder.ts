@@ -18,6 +18,7 @@ import type {
 import { getAvailablePrice } from './dataService';
 import { objectiveModel, objectiveScore, weightPenalty } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
+import { computeStructuralBounds } from './structuralBounds';
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -500,10 +501,13 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   const model = objectiveModel(params);
   const weapon_naked_ergo_scaled = weaponStats.naked_ergonomics * ERGO_SCALE;
   const baseWeight = weaponStats.weight || 0;
-  const weightBounds: [number, number] = [
-    Math.max(0, baseWeight + item_weight_g.reduce((sum, w) => sum + Math.min(0, w) / 1000, 0)),
-    baseWeight + item_weight_g.reduce((sum, w) => sum + Math.max(0, w) / 1000, 0),
-  ];
+  const structural = computeStructuralBounds(
+    params.weaponId,
+    params.itemLookup,
+    params.compatibilityMap,
+    { maxWeight: params.maxWeight },
+  );
+  const weightBounds: [number, number] = structural.weightBounds;
   const interval = weightInterval ?? weightBounds;
   const nakedRecoilV = weaponStats.naked_recoil_v;
 
@@ -749,8 +753,8 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   L(`  weight_def: ${formatTerms(weightTerms)} = ${fmt(baseWeight)}`);
   L(`  recoil_def: ${formatTerms(recoilTerms)} = 0`);
   L(`  price_def: ${formatTerms(priceTerms)} = 0`);
-  const rawLo = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.min(0, e), 0);
-  const rawHi = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.max(0, e), 0);
+  const rawLo = Math.min(weapon_naked_ergo_scaled, structural.ergoBounds[0] * ERGO_SCALE);
+  const rawHi = Math.max(1000, structural.ergoBounds[1] * ERGO_SCALE);
   clampRows('capped_ergo', 'raw_ergo', rawLo, rawHi, 1000);
   if (params.useTrueErgo || params.preventOverswing) {
     const factor = Math.max(0, 1 + (params.equipErgoModifier ?? 0));
