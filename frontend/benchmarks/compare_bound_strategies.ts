@@ -1,7 +1,10 @@
-import { fetchAllData, buildItemLookup } from '../src/solver/dataService.ts';
+import * as path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { buildItemLookup } from '../src/solver/dataService.ts';
 import { buildCompatibilityMap } from '../src/solver/compatibilityMap.ts';
 import { buildLP } from '../src/solver/lpBuilder.ts';
 import { computeStructuralBounds } from '../src/solver/structuralBounds.ts';
+import { loadAndVerifySnapshot } from './snapshot.ts';
 import type { CompatibilityMap, ItemLookup } from '../src/solver/types.ts';
 import highsLoader from 'highs';
 
@@ -9,10 +12,12 @@ interface HighsLoader {
   (): Promise<{ solve(lp: string, options?: Record<string, unknown>): { Status: string; ObjectiveValue?: number } }>;
 }
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const highs = await (highsLoader as unknown as HighsLoader)();
-const data = await fetchAllData('en', 'regular');
-const lookup = buildItemLookup(data.guns, data.mods);
-
+const { snapshot, manifest } = loadAndVerifySnapshot(__dirname);
+console.log(`Loaded frozen snapshot (sha256: ${manifest.sha256.slice(0, 16)}...)`);
+const lookup = buildItemLookup(snapshot.guns, snapshot.mods);
+const data = snapshot;
 /**
  * Constructs a mathematically sound continuous LP relaxation of the exact placement model.
  * 1. Independent: built with boundsMode: 'naive' and unconstrained weightInterval [0, 1000]
