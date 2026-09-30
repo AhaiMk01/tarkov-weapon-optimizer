@@ -235,4 +235,6 @@ export interface SolveParams {
   barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
   preciseMode?: boolean;
+  /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
+  boundsMode?: 'structural' | 'naive';
 }

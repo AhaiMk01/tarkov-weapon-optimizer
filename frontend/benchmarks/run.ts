@@ -104,9 +104,11 @@ async function main() {
       console.log(`${warmupSample.outcome} (${warmupSample.elapsedMs != null ? warmupSample.elapsedMs.toFixed(0) : '?'}ms)`);
 
       if (isPairedMode) {
+        const baseCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } };
+        const candCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } };
         for (let rep = 1; rep <= runs; rep++) {
           process.stdout.write(`  [pair ${rep}/${runs}] baseline ... `);
-          const baseSample = await runner.runCase(caseItem, {
+          const baseSample = await runner.runCase(baseCase, {
             variant: 'baseline',
             repetition: rep,
             warmup: false,
@@ -117,7 +119,7 @@ async function main() {
           samplesFile.write(JSON.stringify(baseSample) + '\n');
           process.stdout.write(`${baseSample.outcome} (${baseSample.elapsedMs != null ? baseSample.elapsedMs.toFixed(0) : '?'}ms) | candidate ... `);
 
-          const candSample = await runner.runCase(caseItem, {
+          const candSample = await runner.runCase(candCase, {
             variant: 'candidate',
             repetition: rep,
             warmup: false,

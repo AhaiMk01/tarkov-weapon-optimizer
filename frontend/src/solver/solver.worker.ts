@@ -235,6 +235,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
                 playerLevel: req.player_level,
                 preciseMode: usePrecise,
+                boundsMode: req.bounds_mode,
               });
               idealPointCache.set(cacheKey, idealPoint);
             }
@@ -270,6 +271,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
             playerLevel: req.player_level,
             preciseMode: usePrecise,
+            boundsMode: req.bounds_mode,
           });
 
           result.precision_request = precReq;

@@ -64,8 +64,9 @@ export interface OptimizeRequest {
   player_level?: number;
   /** Boolean values are normalized: true → precise, false → fast. */
   precise_mode?: boolean | SolverPrecisionMode;
+  /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
+  bounds_mode?: 'structural' | 'naive';
 }
-
 export interface ItemDetail {
   id: string;
   name: string;

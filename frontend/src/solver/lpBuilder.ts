@@ -501,13 +501,27 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   const model = objectiveModel(params);
   const weapon_naked_ergo_scaled = weaponStats.naked_ergonomics * ERGO_SCALE;
   const baseWeight = weaponStats.weight || 0;
-  const structural = computeStructuralBounds(
-    params.weaponId,
-    params.itemLookup,
-    params.compatibilityMap,
-    { maxWeight: params.maxWeight },
-  );
-  const weightBounds: [number, number] = structural.weightBounds;
+  let weightBounds: [number, number];
+  let rawLo: number;
+  let rawHi: number;
+  if (params.boundsMode === 'naive') {
+    weightBounds = [
+      Math.max(0, baseWeight + item_weight_g.reduce((sum, w) => sum + Math.min(0, w) / 1000, 0)),
+      baseWeight + item_weight_g.reduce((sum, w) => sum + Math.max(0, w) / 1000, 0),
+    ];
+    rawLo = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.min(0, e), 0);
+    rawHi = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.max(0, e), 0);
+  } else {
+    const structural = computeStructuralBounds(
+      params.weaponId,
+      params.itemLookup,
+      params.compatibilityMap,
+      { maxWeight: params.maxWeight },
+    );
+    weightBounds = structural.weightBounds;
+    rawLo = Math.min(weapon_naked_ergo_scaled, structural.ergoBounds[0] * ERGO_SCALE);
+    rawHi = Math.max(1000, structural.ergoBounds[1] * ERGO_SCALE);
+  }
   const interval = weightInterval ?? weightBounds;
   const nakedRecoilV = weaponStats.naked_recoil_v;
 
@@ -753,8 +767,6 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   L(`  weight_def: ${formatTerms(weightTerms)} = ${fmt(baseWeight)}`);
   L(`  recoil_def: ${formatTerms(recoilTerms)} = 0`);
   L(`  price_def: ${formatTerms(priceTerms)} = 0`);
-  const rawLo = Math.min(weapon_naked_ergo_scaled, structural.ergoBounds[0] * ERGO_SCALE);
-  const rawHi = Math.max(1000, structural.ergoBounds[1] * ERGO_SCALE);
   clampRows('capped_ergo', 'raw_ergo', rawLo, rawHi, 1000);
   if (params.useTrueErgo || params.preventOverswing) {
     const factor = Math.max(0, 1 + (params.equipErgoModifier ?? 0));
