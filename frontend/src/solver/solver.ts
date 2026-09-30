@@ -6,11 +6,18 @@
 import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
 import type { SolveParams, GunLookupEntry, IdealPoint } from './types';
 export type { SolveParams, IdealPoint } from './types';
-import { buildLP, MOA_K, EVO_ERGO_K, eedOf, estimateEvoErgoK } from './lpBuilder';
+import { buildLP, MOA_K } from './lpBuilder';
+import { trueErgoDelta } from './trueErgo';
+import type { ObjectiveAxes } from './trueErgo';
 import { getAvailablePrice } from './dataService';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let highs: any = null;
+interface HighsInstance {
+  solve(problem: string, options?: {
+    mip_rel_gap: number; mip_abs_gap: number; mip_feasibility_tolerance: number;
+    primal_feasibility_tolerance: number; dual_feasibility_tolerance: number; time_limit: number;
+  }): { Status: string; ObjectiveValue: number; Columns: Record<string, { Primal?: number }> };
+}
+let highs: HighsInstance | null = null;
 let highsCorrupted = false;
 
 // Load HiGHS module.  In Node (tests), use the npm package directly.
@@ -45,14 +52,14 @@ async function loadHiGHS() {
         new Function('module', 'exports', 'require', '__dirname', '__filename', jsSource)(
           module, exports, nodeRequire, cwd, 'highs.js'
         );
-        const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<unknown>;
+        const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<HighsInstance>;
         return loader({ wasmBinary });
       }
     } catch {
       // Fallback to stock npm package
     }
 
-    const loader = (await import('highs')).default;
+    const loader = (await import('highs')).default as unknown as () => Promise<HighsInstance>;
     return loader();
   }
 
@@ -71,107 +78,160 @@ async function loadHiGHS() {
   const module = { exports };
   const fn = new Function('module', 'exports', jsSource);
   fn(module, exports);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loader = module.exports as any;
+  const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<HighsInstance>;
 
   return loader({ wasmBinary });
 }
 
+interface ModelResponse extends OptimizeResponse {
+  axes?: ObjectiveAxes;
+  bound?: number;
+}
+
 /**
- * Computes the ideal z* and nadir reference points across 3 endpoint solves
- * (pure ergo, pure recoil, pure price). Used by augmented Tchebycheff scalarization.
+ * Endpoint payoff table in the SAME raw-ergo/TED, recoil, purchase-cost axes as
+ * the final objective. Every endpoint retains every user feasibility constraint.
  */
 export async function computeIdealPoint(params: SolveParams): Promise<IdealPoint> {
-  const baseParams: SolveParams = {
-    ...params,
-    useTchebycheff: false,
-    idealPoint: undefined,
-  };
-
-  const [ergoRes, recoilRes, priceRes] = await Promise.all([
-    solve({ ...baseParams, ergoWeight: 100, recoilWeight: 0, priceWeight: 0 }),
-    solve({ ...baseParams, ergoWeight: 0, recoilWeight: 100, priceWeight: 0 }),
-    solve({ ...baseParams, ergoWeight: 0, recoilWeight: 0, priceWeight: 100 }),
-  ]);
-
-  const evalPt = (r: OptimizeResponse) => {
-    const s = r.final_stats;
-    if (!s) return { fE: 500, fR: 0, fP: 100000 };
-    let fE = Math.min(100, Math.max(0, s.ergonomics)) * 10;
-    if (params.useEvoErgo) {
-      const weapon = params.itemLookup[params.weaponId];
-      const baseErgo = weapon?.type === 'gun' ? weapon.stats.naked_ergonomics : 40;
-      const k = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
-      fE = fE - k * 10 * s.total_weight;
+  const deadline = performance.now() + Math.max(0, params.timeLimitMs ?? 60_000);
+  const base = { ...params, useTchebycheff: false, idealPoint: undefined };
+  const pay: ObjectiveAxes[] = [];
+  for (const weights of [[100, 0, 0], [0, 100, 0], [0, 0, 100]]) {
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) throw new Error('Ideal-point time limit reached');
+    const r = await solveDetailed({ ...base, timeLimitMs: remaining, ergoWeight: weights[0], recoilWeight: weights[1], priceWeight: weights[2] });
+    if (r.status !== 'optimal' || !r.axes) {
+      throw new Error(`Ideal-point endpoint not certified: ${r.reason ?? r.status}`);
     }
-    const fR = r.selected_items.reduce((a, it) => a + Math.round((it.recoil_modifier ?? 0) * 1000), 0);
-    const fP = s.total_price;
-    return { fE, fR, fP };
+    pay.push(r.axes);
+  }
+  return {
+    zE: Math.max(...pay.map(p => p.fE)), nadE: Math.min(...pay.map(p => p.fE)),
+    zR: Math.min(...pay.map(p => p.fR)), nadR: Math.max(...pay.map(p => p.fR)),
+    zP: Math.min(...pay.map(p => p.fP)), nadP: Math.max(...pay.map(p => p.fP)),
   };
-
-  const pay = [evalPt(ergoRes), evalPt(recoilRes), evalPt(priceRes)];
-  const zE = Math.max(...pay.map(p => p.fE));
-  const nadE = Math.min(...pay.map(p => p.fE));
-  const zR = Math.min(...pay.map(p => p.fR));
-  const nadR = Math.max(...pay.map(p => p.fR));
-  const zP = Math.min(...pay.map(p => p.fP));
-  const nadP = Math.max(...pay.map(p => p.fP));
-
-  return { zE, nadE, zR, nadR, zP, nadP };
 }
 
 export async function solve(params: SolveParams): Promise<OptimizeResponse> {
-  const startTime = performance.now();
+  const result = await solveDetailed(params);
+  const { axes: _axes, bound: _bound, ...response } = result;
+  void _axes;
+  void _bound;
+  return response;
+}
 
-    if (params.preventOverswing && (!params.overswingCuts || params.overswingCuts.length === 0)) {
-      const b = Math.max(-0.9, Math.min(0.5, params.equipErgoModifier ?? 0));
-      const cuts: Array<{ slope: number; rhs: number }> = [];
-      let res = await solve({ ...params, preventOverswing: false, overswingCuts: cuts });
-      for (let iter = 0; iter < 4; iter++) {
-        if (res.status !== 'optimal' || !res.final_stats) break;
-        const s = res.final_stats;
-        const eed = eedOf(s.ergonomics, s.total_weight, b);
-        if (eed >= -0.05) break;
-
-        const E_raw = Math.min(100, Math.max(0, s.ergonomics));
-        const E_eff = E_raw * (1 + b);
-        const slopeEff = 2 * 0.0007556 * E_eff + 0.02736;
-        const slopeRaw = slopeEff * (1 + b);
-        const KG = 0.0007556 * E_eff * E_eff + 0.02736 * E_eff + 2.9159;
-        const rhs = KG - slopeEff * E_eff;
-        cuts.push({ slope: slopeRaw, rhs });
-
-        res = await solve({ ...params, preventOverswing: false, overswingCuts: [...cuts] });
-      }
-      return res;
+async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+  const start = performance.now();
+  const deadline = start + Math.max(0, input.timeLimitMs ?? 60_000);
+  let params = { ...input };
+  const nonlinear = !!(params.useTrueErgo || params.preventOverswing);
+  // Certificates describe real slot placements, not the fast model's restrictions.
+  if (nonlinear) params.preciseMode = true;
+  if (params.useTchebycheff && !params.idealPoint) {
+    try {
+      params = { ...params, idealPoint: await computeIdealPoint({ ...params, timeLimitMs: Math.max(0, deadline - performance.now()) }) };
+    } catch (error) {
+      return { status: 'incomplete', reason: String(error), selected_items: [], objective_value: 0, solve_time_ms: performance.now() - start };
     }
+  }
+  if (performance.now() >= deadline) {
+    return { status: 'incomplete', reason: 'Request time limit reached', selected_items: [], objective_value: 0, solve_time_ms: performance.now() - start };
+  }
+  if (!nonlinear) return solveModel(params, undefined, (deadline - performance.now()) / 1000);
 
+  const tolerance = Math.max(1e-7, params.objectiveTolerance ?? 1e-5);
+  const maxNodes = Math.max(0, params.maxSpatialNodes ?? 512);
+  const [lo, hi] = buildLP(params).weightBounds;
+  type Node = { interval: [number, number]; bound: number };
+  const queue: Node[] = lo < 3 && hi > 3
+    ? [{ interval: [lo, 3], bound: Infinity }, { interval: [3, hi], bound: Infinity }]
+    : [{ interval: [lo, hi], bound: Infinity }];
+  let incumbent: ModelResponse | undefined;
+  let nodes = 0;
+  let unresolved = -Infinity;
+  let limitReason = 'Spatial node or time limit reached';
+  // Keep the largest discarded bound too: tolerance pruning must not report gap=0.
+  let closedBound = -Infinity;
+  while (queue.length && nodes < maxNodes && performance.now() < deadline) {
+    queue.sort((a, b) => b.bound - a.bound);
+    const node = queue.shift()!;
+    if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
+      closedBound = Math.max(closedBound, node.bound);
+      continue;
+    }
+    const result = await solveModel(params, node.interval, Math.max(0.001, (deadline - performance.now()) / 1000));
+    nodes++;
+    if (result.status === 'infeasible') continue;
+    if (result.status !== 'optimal' || result.bound == null || !result.final_stats) {
+      unresolved = Math.max(unresolved, node.bound);
+      limitReason = result.reason ?? result.status;
+      break;
+    }
+    const bound = Math.min(node.bound, result.bound);
+    const feasible = !params.preventOverswing || result.final_stats.true_ergo_delta! >= -1e-7;
+    if (feasible && (!incumbent || result.objective_value > incumbent.objective_value)) incumbent = result;
+    if (incumbent && bound <= incumbent.objective_value + tolerance) {
+      closedBound = Math.max(closedBound, bound);
+      continue;
+    }
+    const [a, b] = node.interval;
+    const mid = (a + b) / 2;
+    if (mid <= a || mid >= b || b - a < 1e-10) {
+      unresolved = Math.max(unresolved, bound);
+      limitReason = 'Numerical interval resolution reached before certification';
+      break;
+    }
+    queue.push({ interval: [a, mid], bound }, { interval: [mid, b], bound });
+  }
+  const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
+  if (!incumbent) {
+    const exhausted = !queue.length && unresolved === -Infinity;
+    return {
+      status: exhausted ? 'infeasible' : 'incomplete',
+      reason: exhausted ? 'No valid configuration found' : limitReason,
+      selected_items: [], objective_value: 0, solve_time_ms: performance.now() - start,
+      ideal_point: params.idealPoint,
+    };
+  }
+  const gap = Math.max(0, upper - incumbent.objective_value);
+  const certified = gap <= tolerance;
+  return {
+    ...incumbent,
+    status: certified ? 'optimal' : 'feasible',
+    reason: certified ? undefined : limitReason,
+    solve_time_ms: performance.now() - start,
+    optimization: { lower_bound: incumbent.objective_value, upper_bound: upper, absolute_gap: gap, tolerance, nodes, termination: certified ? 'optimal' : 'limit' },
+  };
+}
+
+async function solveModel(params: SolveParams, interval?: [number, number], timeLimit = 60): Promise<ModelResponse> {
+  const startTime = performance.now();
   try {
     if (!highs || highsCorrupted) {
       highs = await loadHiGHS();
       highsCorrupted = false;
     }
-    if (params.useTchebycheff && !params.idealPoint) {
-      params.idealPoint = await computeIdealPoint(params);
-    }
-
-
-    const lp = buildLP(params);
-    const result = highs.solve(lp.lpString);
-
+    const lp = buildLP(params, interval);
+    const result = highs.solve(lp.lpString, {
+      mip_rel_gap: 0, mip_abs_gap: 1e-9, mip_feasibility_tolerance: 1e-8,
+      primal_feasibility_tolerance: 1e-9, dual_feasibility_tolerance: 1e-9,
+      time_limit: timeLimit,
+    });
     if (result.Status !== 'Optimal') {
       return {
-        status: 'infeasible',
+        status: result.Status === 'Infeasible' ? 'infeasible' : 'incomplete',
         reason: result.Status === 'Infeasible' ? 'No valid configuration found' : result.Status,
-        selected_items: [],
-        selected_preset: undefined,
-        objective_value: 0,
-        solve_time_ms: performance.now() - startTime,
+        selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
       };
     }
-
     // Decode solution: read x_i variables
-    const columns = result.Columns || {};
+    const columns = result.Columns as Record<string, { Primal: number }>;
+    // Never round a fractional relaxation into an alleged feasible build.
+    for (const [name, column] of Object.entries(columns) as Array<[string, { Primal: number }]>) {
+      if (/^(x_|buy_|base_|p_)/.test(name) && Math.abs(column.Primal - Math.round(column.Primal)) > 1e-7) {
+        return { status: 'incomplete', reason: 'Solver returned a nonintegral selection', selected_items: [], objective_value: 0 };
+      }
+    }
     const selectedIds: string[] = [];
     for (let i = 1; i <= lp.nItems; i++) {
       const col = columns[`x_${i}`];
@@ -372,10 +432,22 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       recoil_horizontal: wStats.naked_recoil_h * (1 + totalRecoilMod),
       total_price: totalPrice,
       total_weight: totalWeight,
-      evo_ergo: Math.max(0, Math.min(100, totalErgo)) - EVO_ERGO_K * totalWeight,
-      eed: eedOf(totalErgo, totalWeight, params.equipErgoModifier ?? 0),
+      true_ergo_delta: trueErgoDelta(totalErgo, totalWeight, params.equipErgoModifier ?? 0),
       moa: finalMOA,
     };
+    // Validate hard numerical limits against the actual reconstructed build,
+    // rather than trusting rounded display values or auxiliary LP variables.
+    const eps = 1e-6;
+    const violatesLimit =
+      (params.maxPrice != null && totalPrice > params.maxPrice + eps) ||
+      (params.minErgonomics != null && finalStats.ergonomics < params.minErgonomics - eps) ||
+      (params.maxWeight != null && totalWeight > params.maxWeight + eps) ||
+      (params.maxRecoilV != null && finalStats.recoil_vertical > params.maxRecoilV + eps) ||
+      (params.maxRecoilSum != null && finalStats.recoil_vertical + finalStats.recoil_horizontal > params.maxRecoilSum + eps) ||
+      (params.maxMOA != null && finalMOA > params.maxMOA + eps);
+    if (violatesLimit) {
+      return { status: 'incomplete', reason: 'Reconstructed build did not satisfy a hard numerical limit', selected_items: [], objective_value: 0 };
+    }
 
     // Reconstruct slot-item pairs for EFTForge build export.
     // For multi-slot items (precise mode), read p_{item}_{slot} placement
@@ -424,11 +496,15 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
       }
     }
 
+    const axes = lp.axes(columns, params.useTrueErgo ? finalStats.true_ergo_delta! : finalStats.ergonomics);
     return {
       status: 'optimal',
       selected_items: detailedItems,
       selected_preset: presetDetail,
-      objective_value: result.ObjectiveValue || 0,
+      objective_value: lp.score(axes),
+      axes,
+      // HiGHS has zero relative MIP gap; reserve an absolute numeric margin.
+      bound: result.ObjectiveValue + 1e-7,
       final_stats: finalStats,
       solve_time_ms: performance.now() - startTime,
       slot_pairs: slotPairs,
@@ -442,7 +518,7 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
     // Mark as corrupted so next solve reinitializes WASM
     highsCorrupted = true;
     return {
-      status: 'infeasible',
+      status: 'error',
       reason: msg,
       selected_items: [],
       selected_preset: undefined,
@@ -452,23 +528,3 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
   }
 }
 
-/**
- * EvoErgo-aware solve. Uses the weapon-specific closed-form tangent estimator
- * k(E_base + 25) to solve in a single LP pass (~9x faster than sweeping),
- * matching the true quadratic EED optimum across >95% of builds.
- * An explicit evoErgoK (tests, tuning) overrides the estimate.
- */
-export async function solveEvoErgo(params: SolveParams): Promise<OptimizeResponse> {
-  if (!params.useEvoErgo) {
-    return solve(params);
-  }
-  const weapon = params.itemLookup[params.weaponId];
-  const baseErgo = weapon?.type === 'gun' ? weapon.stats.naked_ergonomics : 40;
-  const k = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
-
-  const res = await solve({ ...params, evoErgoK: k });
-  if (res.status === 'optimal') {
-    res.evo_ergo_k = k;
-  }
-  return res;
-}

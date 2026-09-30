@@ -16,6 +16,8 @@ import type {
   PresetInfo,
 } from './types';
 import { getAvailablePrice } from './dataService';
+import { objectiveModel, objectiveScore, weightPenalty } from './trueErgo';
+import type { ObjectiveAxes } from './trueErgo';
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -43,6 +45,9 @@ export interface LPResult {
   multiSlotItemIndices: Set<number>;
   /** For each item index, the slot indices it can appear in */
   itemToSlotIndices: Map<number, number[]>;
+  weightBounds: [number, number];
+  axes(columns: Record<string, { Primal: number }>, ergo: number): ObjectiveAxes;
+  score(axes: ObjectiveAxes): number;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,78 +57,17 @@ export interface LPResult {
 const ERGO_SCALE = 10;   // Ergo decimal precision (0.5 ergo → 5)
 const SCALE = 1000;       // Recoil modifier precision (-0.05 → -50)
 
-/**
- * EvoErgo display constant: ergo points lost per kg of weight in the reported
- * `evo_ergo` stat (ergo − 15·kg). 15 is the community constant (SpaceMonkey37);
- * it is the slope of EFTForge's EED threshold curve at ~26 ergo.
- */
-export const EVO_ERGO_K = 15;
-
-/**
- * Default objective exchange rate when a single EvoErgo solve is run without an
- * explicit k (e.g. Pareto exploration). 10 ≈ the threshold-curve slope at ~45
- * build ergo — closer to real builds than 15, and empirically it recovers the
- * true-EED-optimal build where 15 over-trades ergo for weight.
- */
-export const EVO_ERGO_OBJ_K = 10;
-
-/**
- * k values swept by solveEvoErgo: tangent slopes of the EED threshold curve at
- * build ergo ≈ 26 / 45 / 70 / 100. EED is convex in ergo, so its maximizer is
- * always attained by maximizing some tangent line ergo − k·kg; sweeping these
- * and scoring each build with the true quadratic (eedOf) is exact up to the
- * grid resolution.
- */
-export const EVO_ERGO_SWEEP_KS = [15, 10, 7.5, 5.6];
-
-/**
- * EFTForge's EvoErgoDelta: distance from the overswing threshold.
- * KG(E) is SpaceMonkey37's reverse-engineered ideal-weight curve; positive EED
- * means under ideal weight (good, no overswing), negative means overswing.
- *
- * @param ergo Raw weapon ergonomics
- * @param weightKg Total weapon weight in kg
- * @param equipErgoModifier Decimal percentage penalty from gear (e.g. -0.15 for -15% armor penalty)
- */
-export function eedOf(ergo: number, weightKg: number, equipErgoModifier = 0): number {
-  const E = Math.min(100, Math.max(0, ergo)) * (1 + equipErgoModifier);
-  const kg = 0.0007556 * E * E + 0.02736 * E + 2.9159;
-  return -15 * (weightKg - kg);
-}
-
-/**
- * Tangent slope of the EED threshold curve at build ergo E, expressed as the
- * ergo-per-kg exchange rate: k(E) = 1/KG'(E). This is the k at which the
- * linear objective ergo − k·kg locally matches true EED — ~15 at 26 ergo,
- * ~7.5 at 70, ~5.6 at 100.
- */
-export function eedTangentK(ergo: number, equipErgoModifier = 0): number {
-  const E = Math.min(100, Math.max(0, ergo)) * (1 + equipErgoModifier);
-  return 1 / ((2 * 0.0007556 * E + 0.02736) * Math.max(0.01, 1 + equipErgoModifier));
-}
-
-/**
- * Estimates the optimal tangent exchange rate k for a weapon based on its
- * naked receiver ergonomics, anticipating a typical +25 ergo gain from attachments.
- */
-export function estimateEvoErgoK(baseErgo: number, equipErgoModifier = 0): number {
-  const estimatedBuildErgo = Math.min(95, Math.max(25, baseErgo + 25));
-  return eedTangentK(estimatedBuildErgo, equipErgoModifier);
-}
 
 /** RUB cost in objective when mod has no buyFor (scaled by price weight). Not counted toward maxPrice. */
 const UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB = 50_000_000;
-function fmt(x: number): string {
-  if (Number.isInteger(x)) return String(x);
-  return x.toFixed(6).replace(/0+$/, '').replace(/\.$/, '');
-}
+const fmt = String;
 
 
 // ---------------------------------------------------------------------------
 // buildLP — pure function: SolveParams → LPResult
 // ---------------------------------------------------------------------------
 
-export function buildLP(params: SolveParams): LPResult {
+export function buildLP(params: SolveParams, weightInterval?: [number, number]): LPResult {
   const {
     weaponId,
     itemLookup,
@@ -136,16 +80,6 @@ export function buildLP(params: SolveParams): LPResult {
   const slotItems = cmap.slot_items;
   const slotOwner = cmap.slot_owner;
 
-  // Use provided weights with tiny tiebreakers so no dimension is completely
-  // ignored.  A zero-weight dimension can produce degenerate solutions where
-  // the solver makes arbitrary choices (e.g. price=0 → needlessly expensive).
-  const TIEBREAK = 0.01;
-  const ewRaw = params.ergoWeight ?? 1;
-  const rwRaw = params.recoilWeight ?? 1;
-  const pwRaw = params.priceWeight ?? 0;
-  const ew = Math.max(ewRaw, TIEBREAK);
-  const rw = Math.max(rwRaw, TIEBREAK);
-  const pw = Math.max(pwRaw, TIEBREAK);
 
   // Exclusion sets from params
   const excludeItemSet = new Set(params.excludeItems ?? []);
@@ -370,9 +304,9 @@ export function buildLP(params: SolveParams): LPResult {
 
     if (entry.type === 'mod') {
       const ms = stats as import('./types').ModStats;
-      item_ergo.push(Math.round(ms.ergonomics * ERGO_SCALE));
-      item_recoil.push(Math.round(ms.recoil_modifier * SCALE));
-      const listedRub = Math.round(itemPrices[iid]?.[0] ?? 0);
+      item_ergo.push(ms.ergonomics * ERGO_SCALE);
+      item_recoil.push(ms.recoil_modifier * SCALE);
+      const listedRub = itemPrices[iid]?.[0] ?? 0;
       if (ms.purchasable) {
         item_price_budget.push(listedRub);
         item_price_objective.push(listedRub);
@@ -382,7 +316,7 @@ export function buildLP(params: SolveParams): LPResult {
         item_price_objective.push(Math.round(Math.max(ref, UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB)));
       }
       item_available.push(itemPrices[iid]?.[2] ? 1 : 0);
-      item_weight_g.push(Math.round((ms.weight ?? 0) * 1000));
+      item_weight_g.push((ms.weight ?? 0) * 1000);
       item_capacity.push(ms.capacity ?? 0);
       item_sighting_range.push(ms.sighting_range ?? 0);
       item_accuracy_mod.push(Math.round((ms.accuracy_modifier ?? 0) * 100));
@@ -563,37 +497,14 @@ export function buildLP(params: SolveParams): LPResult {
     itemToPresetBases.get(iIdx)!.push(bIdx);
   }
 
-  // ========================================================================
-  // 11. Objective weights
-  // ========================================================================
-
-  // Objective weight coefficients.
-  // The original formulation multiplied weights by SCALE (1000) to make
-  // tiebreaker 0.01 into integer 10 — needed for CP-SAT but not for HiGHS.
-  // Dividing all coefficients uniformly by SCALE keeps the same ratios
-  // while capping magnitudes at ~10^8 instead of ~10^11.
-  //
-  // Resulting coefficient magnitudes (for weight=100, max item_recoil≈210):
-  //   ergo:   ew * SCALE * capped_ergo                ≈ 100 * 1000 * 1000  = 10^8
-  //   recoil: rw * SCALE * ERGO_SCALE * item_recoil   ≈ 100 * 10000 * 210  = 2×10^8
-  //   price:  pw * ERGO_SCALE * item_price             ≈ 100 * 10 * 100000  = 10^8
-  const ergo_w = ew;                                   // raw weight (0–100)
-  const rw_obj = rw * SCALE * ERGO_SCALE;              // rw * 10,000
-  const pw_obj = pw * ERGO_SCALE;                      // pw * 10
-
-  // EvoErgo: the ergo axis optimizes ergo − k·kg instead of raw ergo. The
-  // weight penalty attaches to each item's x_i; the naked receiver's weight is
-  // the same for every base, so it shifts the objective by a constant only.
-  // capped_ergo carries ergo×ERGO_SCALE at coefficient ergo_w*SCALE, so one
-  // real ergo point is worth ergo_w*SCALE*ERGO_SCALE objective units and one
-  // gram costs ergo_w*SCALE*ERGO_SCALE*k/1000 = ergo_w*ERGO_SCALE*k.
-  const baseErgo = weaponStats.naked_ergonomics ?? 40;
-  const eeK = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
-  const eeGramCoeff = params.useEvoErgo
-    ? ergo_w * ERGO_SCALE * eeK
-    : 0;
-
-  const weapon_naked_ergo_scaled = Math.round(weaponStats.naked_ergonomics * ERGO_SCALE);
+  const model = objectiveModel(params);
+  const weapon_naked_ergo_scaled = weaponStats.naked_ergonomics * ERGO_SCALE;
+  const baseWeight = weaponStats.weight || 0;
+  const weightBounds: [number, number] = [
+    Math.max(0, baseWeight + item_weight_g.reduce((sum, w) => sum + Math.min(0, w) / 1000, 0)),
+    baseWeight + item_weight_g.reduce((sum, w) => sum + Math.max(0, w) / 1000, 0),
+  ];
+  const interval = weightInterval ?? weightBounds;
   const nakedRecoilV = weaponStats.naked_recoil_v;
 
   // ========================================================================
@@ -614,149 +525,17 @@ export function buildLP(params: SolveParams): LPResult {
   const tchAuxRows: string[] = [];
   const tchFreeBounds: string[] = [];
 
-  if (isTchebycheff && params.idealPoint) {
-    const { zE, nadE, zR, nadR, zP, nadP } = params.idealPoint;
-    const rgE = Math.max(zE - nadE, 1);
-    const rgR = Math.max(nadR - zR, 1);
-    const rgP = Math.max(nadP - zP, 1);
-
-    const ewRaw = Math.max(0, params.ergoWeight ?? 0);
-    const rwRaw = Math.max(0, params.recoilWeight ?? 0);
-    const pwRaw = Math.max(0, params.priceWeight ?? 0);
-    const sumW = ewRaw + rwRaw + pwRaw || 1;
-    const LE = ewRaw / sumW;
-    const LR = rwRaw / sumW;
-    const LP = pwRaw / sumW;
-
-    const OBJ_SCALE = 1000;
-    const RHO = 0.01;
-    const EPS_TIEBREAK = 0.001;
-
-    // Minimizer of t in objective: -OBJ_SCALE * tch_t
-    objTerms.push(`-${OBJ_SCALE} tch_t`);
-
-    const eeK = params.useEvoErgo
-      ? (params.evoErgoK ?? estimateEvoErgoK(weaponStats.naked_ergonomics ?? 40, params.equipErgoModifier ?? 0))
-      : 0;
-    const eeCoeff = 0.01 * eeK;
-
-    // Augmentation terms:
-    // -rho * LE * gE = (OBJ_SCALE * RHO * max(LE, eps) / rgE) * (capped_ergo - eeCoeff * ee_sum)
-    const ergoAugFactor = (OBJ_SCALE * RHO * Math.max(LE, EPS_TIEBREAK)) / rgE;
-    if (ergoAugFactor !== 0) {
-      objTerms.push(`${fmt(ergoAugFactor)} capped_ergo`);
+  const ergoAxis = params.useTrueErgo ? 'ted_axis' : 'capped_ergo';
+  objTerms.push(`${fmt(model.ergo)} ${ergoAxis}`);
+  objTerms.push(`${fmt(model.recoil)} rec_axis`);
+  objTerms.push(`${fmt(model.price)} price_axis`);
+  if (isTchebycheff) {
+    objTerms.push('-1 tch_t');
+    const variables = { fE: ergoAxis, fR: 'rec_axis', fP: 'price_axis' };
+    for (const [i, d] of model.deviations.entries()) {
+      tchAuxRows.push(`  tch_${i}: tch_t ${d.coefficient < 0 ? '+' : '-'} ${fmt(Math.abs(d.coefficient))} ${variables[d.axis]} >= ${fmt(-d.coefficient * d.ideal)}`);
     }
-
-    // -rho * LR * gR = - (OBJ_SCALE * RHO * max(LR, eps) / rgR) * rec_sum
-    const recAugFactor = (OBJ_SCALE * RHO * Math.max(LR, EPS_TIEBREAK)) / rgR;
-
-    // -rho * LP * gP = - (OBJ_SCALE * RHO * max(LP, eps) / rgP) * pri_sum
-    const priAugFactor = (OBJ_SCALE * RHO * Math.max(LP, EPS_TIEBREAK)) / rgP;
-
-    for (let i = 1; i <= n_items; i++) {
-      const recPart = item_recoil[i] !== 0 ? -recAugFactor * item_recoil[i] : 0;
-      const eePart = eeCoeff !== 0 && item_weight_g[i] !== 0 ? -ergoAugFactor * eeCoeff * item_weight_g[i] : 0;
-      const combined = Math.round((recPart + eePart - 0.0001) * 1e6) / 1e6;
-      if (combined !== 0) {
-        objTerms.push(`${fmt(combined)} x_${i}`);
-      }
-    }
-
-    for (let i = 1; i <= n_items; i++) {
-      if (item_price_objective[i] !== 0) {
-        const coef = Math.round((-priAugFactor * item_price_objective[i]) * 1e6) / 1e6;
-        if (coef !== 0) objTerms.push(`${fmt(coef)} buy_${i}`);
-      }
-    }
-    for (let b = 0; b < n_bases; b++) {
-      if (basePrices[b] !== 0) {
-        const coef = Math.round((-priAugFactor * basePrices[b]) * 1e6) / 1e6;
-        if (coef !== 0) objTerms.push(`${fmt(coef)} base_${b + 1}`);
-      }
-    }
-
-    // Direct bounding inequalities (t >= lambda_i * g_i):
-    // 1. tch_e: rgE * tch_t + LE * capped_ergo - (LE * eeCoeff) * ee_sum >= LE * zE
-    if (LE > 0) {
-      const eeTerms: string[] = [];
-      if (eeCoeff !== 0) {
-        for (let i = 1; i <= n_items; i++) {
-          if (item_weight_g[i] !== 0) {
-            const coef = LE * eeCoeff * item_weight_g[i];
-            eeTerms.push(`- ${fmt(coef)} x_${i}`);
-          }
-        }
-      }
-      const eeBody = eeTerms.length > 0 ? ` ${eeTerms.join(' ')}` : '';
-      tchAuxRows.push(`  tch_e: ${fmt(rgE)} tch_t + ${fmt(LE)} capped_ergo${eeBody} >= ${fmt(LE * zE)}`);
-    }
-
-    // 2. tch_r: rgR * tch_t - LR * rec_sum >= -LR * zR
-    if (LR > 0) {
-      const recTerms: string[] = [];
-      for (let i = 1; i <= n_items; i++) {
-        if (item_recoil[i] !== 0) {
-          const coef = LR * item_recoil[i];
-          recTerms.push(coef >= 0 ? `- ${fmt(coef)} x_${i}` : `+ ${fmt(Math.abs(coef))} x_${i}`);
-        }
-      }
-      const recBody = recTerms.length > 0 ? ` ${recTerms.join(' ')}` : '';
-      tchAuxRows.push(`  tch_r: ${fmt(rgR)} tch_t${recBody} >= ${fmt(-LR * zR)}`);
-    }
-
-    // 3. tch_p: rgP * tch_t - LP * pri_sum >= -LP * zP
-    if (LP > 0) {
-      const priTerms: string[] = [];
-      for (let i = 1; i <= n_items; i++) {
-        if (item_price_objective[i] !== 0) {
-          const coef = LP * item_price_objective[i];
-          priTerms.push(coef >= 0 ? `- ${fmt(coef)} buy_${i}` : `+ ${fmt(Math.abs(coef))} buy_${i}`);
-        }
-      }
-      for (let b = 0; b < n_bases; b++) {
-        if (basePrices[b] !== 0) {
-          const coef = LP * basePrices[b];
-          priTerms.push(coef >= 0 ? `- ${fmt(coef)} base_${b + 1}` : `+ ${fmt(Math.abs(coef))} base_${b + 1}`);
-        }
-      }
-      const priBody = priTerms.length > 0 ? ` ${priTerms.join(' ')}` : '';
-      tchAuxRows.push(`  tch_p: ${fmt(rgP)} tch_t${priBody} >= ${fmt(-LP * zP)}`);
-    }
-
-    tchFreeBounds.push('  0 <= tch_t <= 100');
-  } else {
-    // Ergo term: ew * SCALE * capped_ergo
-    const ergoObjCoeff = ergo_w * SCALE;
-    if (ergoObjCoeff !== 0) {
-      objTerms.push(`${ergoObjCoeff} capped_ergo`);
-    }
-
-    // Recoil + parsimony terms per item.  Parsimony (-1 per selected item) is
-    // merged into the recoil coefficient so that each x_i appears only once —
-    // HiGHS's CPLEX LP reader rejects duplicate variables in a constraint row.
-    for (let i = 1; i <= n_items; i++) {
-      const recoilCoeff = -rw_obj * item_recoil[i];
-      const eePenalty = eeGramCoeff * item_weight_g[i];
-      // round to keep LP coefficients free of float noise (e.g. 1781.8899999999999)
-      const combined = Math.round((recoilCoeff - eePenalty - 1) * 1e6) / 1e6; // -1 = parsimony penalty
-      objTerms.push(`${combined} x_${i}`);
-    }
-
-    // Price terms for buy variables: (-pw_obj) * item_price_objective[i] * buy_i
-    for (let i = 1; i <= n_items; i++) {
-      const priceCoeff = -pw_obj * item_price_objective[i];
-      if (priceCoeff !== 0) {
-        objTerms.push(`${priceCoeff} buy_${i}`);
-      }
-    }
-
-    // Price terms for base variables: (-pw_obj) * base_price[b] * base_b
-    for (let b = 0; b < n_bases; b++) {
-      const priceCoeff = -pw_obj * basePrices[b];
-      if (priceCoeff !== 0) {
-        objTerms.push(`${priceCoeff} base_${b + 1}`);
-      }
-    }
+    tchFreeBounds.push(model.deviations.length ? '  tch_t free' : '  tch_t = 0');
   }
 
   // HiGHS WASM has issues parsing long objective lines. Use an auxiliary
@@ -938,16 +717,54 @@ export function buildLP(params: SolveParams): LPResult {
     }
   }
 
-  // --- 9. Ergo cap: capped_ergo <= weapon_naked_ergo_scaled + sum(item_ergo * x_i) ---
-  // capped_ergo - sum(item_ergo[i] * x_i) <= weapon_naked_ergo_scaled
-  {
-    const ergoTerms: string[] = ['capped_ergo'];
-    for (let i = 1; i <= n_items; i++) {
-      if (item_ergo[i] !== 0) {
-        ergoTerms.push(`${-item_ergo[i]} x_${i}`);
-      }
-    }
-    L(`  ergo_cap: ${formatTerms(ergoTerms)} <= ${weapon_naked_ergo_scaled}`);
+  // Exact clamp, including negative raw ergo and the equipment saturation.
+  // Each clamp has three disjoint linear regimes with valid data-derived M.
+  const clampRows = (name: string, source: string, lo: number, hi: number, cap: number) => {
+    const m = Math.max(Math.abs(lo), Math.abs(hi), cap) + cap;
+    binaryVars.push(`${name}_low`, `${name}_mid`, `${name}_high`);
+    L(`  ${name}_regime: ${name}_low + ${name}_mid + ${name}_high = 1`);
+    L(`  ${name}_lo: ${source} + ${fmt(m)} ${name}_low <= ${fmt(m)}`);
+    L(`  ${name}_hi: ${source} - ${fmt(m)} ${name}_high >= ${fmt(cap - m)}`);
+    L(`  ${name}_midlo: ${source} - ${fmt(m)} ${name}_mid >= ${fmt(-m)}`);
+    L(`  ${name}_midhi: ${source} + ${fmt(m)} ${name}_mid <= ${fmt(cap + m)}`);
+    L(`  ${name}_zero: ${name} + ${fmt(cap)} ${name}_low <= ${fmt(cap)}`);
+    L(`  ${name}_full: ${name} - ${fmt(cap)} ${name}_high >= 0`);
+    L(`  ${name}_eqlo: ${name} - ${source} - ${fmt(m)} ${name}_mid >= ${fmt(-m)}`);
+    L(`  ${name}_eqhi: ${name} - ${source} + ${fmt(m)} ${name}_mid <= ${fmt(m)}`);
+  };
+  const rawTerms = ['raw_ergo'];
+  const weightTerms = ['total_weight'];
+  const recoilTerms = ['rec_axis'];
+  const priceTerms = ['price_axis'];
+  for (let i = 1; i <= n_items; i++) {
+    if (item_ergo[i]) rawTerms.push(`${fmt(-item_ergo[i])} x_${i}`);
+    if (item_weight_g[i]) weightTerms.push(`${fmt(-item_weight_g[i] / 1000)} x_${i}`);
+    if (item_recoil[i]) recoilTerms.push(`${fmt(-item_recoil[i])} x_${i}`);
+    if (item_price_objective[i]) priceTerms.push(`${fmt(-item_price_objective[i])} buy_${i}`);
+  }
+  for (let b = 0; b < n_bases; b++) {
+    if (basePrices[b]) priceTerms.push(`${fmt(-basePrices[b])} base_${b + 1}`);
+  }
+  L(`  raw_ergo_def: ${formatTerms(rawTerms)} = ${fmt(weapon_naked_ergo_scaled)}`);
+  L(`  weight_def: ${formatTerms(weightTerms)} = ${fmt(baseWeight)}`);
+  L(`  recoil_def: ${formatTerms(recoilTerms)} = 0`);
+  L(`  price_def: ${formatTerms(priceTerms)} = 0`);
+  const rawLo = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.min(0, e), 0);
+  const rawHi = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.max(0, e), 0);
+  clampRows('capped_ergo', 'raw_ergo', rawLo, rawHi, 1000);
+  if (params.useTrueErgo || params.preventOverswing) {
+    const factor = Math.max(0, 1 + (params.equipErgoModifier ?? 0));
+    L(`  gear_def: gear_ergo - ${fmt(factor)} capped_ergo = 0`);
+    clampRows('effective_ergo', 'gear_ergo', 0, factor * 1000, 1000);
+    // q is concave above 3 kg: its secant lies BELOW the true penalty.
+    // Thus ted_axis is an UPPER relaxation, never an inner restriction.
+    const [lo, hi] = interval;
+    const slope = hi > lo ? (weightPenalty(hi) - weightPenalty(lo)) / (hi - lo) : 0;
+    const intercept = weightPenalty(lo) - slope * lo;
+    // An interval crossing 3 uses q >= 0, also a valid outer relaxation.
+    const crossesThree = lo < 3 && hi > 3;
+    L(`  ted_def: ted_axis - effective_ergo + ${fmt(crossesThree ? 0 : 10 * slope)} total_weight = ${fmt(crossesThree ? 0 : -10 * intercept)}`);
+    if (params.preventOverswing) L('  no_overswing: ted_axis >= 0');
   }
 
   // --- 10. Hard constraints from SolveParams ---
@@ -975,35 +792,14 @@ export function buildLP(params: SolveParams): LPResult {
     L(`  ergo_min: capped_ergo >= ${params.minErgonomics * ERGO_SCALE}`);
   }
 
-  // maxRecoilV: total recoil modifier sum <= round(SCALE * (maxRecoilV / nakedRecoilV - 1))
   if (params.maxRecoilV != null && nakedRecoilV > 0) {
-    const recoilLimit = Math.round(SCALE * (params.maxRecoilV / nakedRecoilV - 1));
-    const recoilTerms: string[] = [];
-    for (let i = 1; i <= n_items; i++) {
-      if (item_recoil[i] !== 0) {
-        recoilTerms.push(`${item_recoil[i]} x_${i}`);
-      }
-    }
-    if (recoilTerms.length > 0) {
-      L(`  recoil_lim: ${formatTerms(recoilTerms)} <= ${recoilLimit}`);
-    }
+    L(`  recoil_lim: rec_axis <= ${fmt(SCALE * (params.maxRecoilV / nakedRecoilV - 1))}`);
   }
 
-  // maxRecoilSum: total recoil modifier sum <= round(SCALE * (maxRecoilSum / (nakedRecoilV + nakedRecoilH) - 1))
   if (params.maxRecoilSum != null) {
-    const nakedRecoilH = weaponStats.naked_recoil_h;
-    const nakedSum = nakedRecoilV + nakedRecoilH;
+    const nakedSum = nakedRecoilV + weaponStats.naked_recoil_h;
     if (nakedSum > 0) {
-      const recoilSumLimit = Math.round(SCALE * (params.maxRecoilSum / nakedSum - 1));
-      const recoilTerms: string[] = [];
-      for (let i = 1; i <= n_items; i++) {
-        if (item_recoil[i] !== 0) {
-          recoilTerms.push(`${item_recoil[i]} x_${i}`);
-        }
-      }
-      if (recoilTerms.length > 0) {
-        L(`  recoil_sum_lim: ${formatTerms(recoilTerms)} <= ${recoilSumLimit}`);
-      }
+      L(`  recoil_sum_lim: rec_axis <= ${fmt(SCALE * (params.maxRecoilSum / nakedSum - 1))}`);
     }
   }
 
@@ -1044,41 +840,8 @@ export function buildLP(params: SolveParams): LPResult {
     }
   }
 
-  // maxWeight
   if (params.maxWeight != null) {
-    const baseWeightG = Math.round(weaponStats.weight * 1000);
-    const maxWeightG = Math.round(params.maxWeight * 1000);
-    const weightBudget = maxWeightG - baseWeightG;
-    const weightTerms: string[] = [];
-    for (let i = 1; i <= n_items; i++) {
-      if (item_weight_g[i] !== 0) {
-        weightTerms.push(`${item_weight_g[i]} x_${i}`);
-      }
-    }
-    if (weightTerms.length > 0) {
-      L(`  weight_lim: ${formatTerms(weightTerms)} <= ${weightBudget}`);
-    }
-  }
-  // overswingCuts: linear tangent cuts to enforce Weight <= Threshold(Ergo) (EED >= 0)
-  if (params.overswingCuts && params.overswingCuts.length > 0) {
-    const baseWeightG = Math.round(weaponStats.weight * 1000);
-    for (let c = 0; c < params.overswingCuts.length; c++) {
-      const { slope, rhs } = params.overswingCuts[c];
-      const weightTerms: string[] = [];
-      for (let i = 1; i <= n_items; i++) {
-        if (item_weight_g[i] !== 0) {
-          weightTerms.push(`${item_weight_g[i]} x_${i}`);
-        }
-      }
-      const ergoCoeff = Math.round(100 * slope * 1e4) / 1e4;
-      const rhsLimit = Math.round((rhs * 1000 - baseWeightG) * 100) / 100;
-      if (ergoCoeff !== 0) {
-        weightTerms.push(`-${ergoCoeff} capped_ergo`);
-      }
-      if (weightTerms.length > 0) {
-        L(`  no_overswing_${c}: ${formatTerms(weightTerms)} <= ${rhsLimit}`);
-      }
-    }
+    L(`  weight_lim: total_weight <= ${fmt(params.maxWeight)}`);
   }
 
 
@@ -1202,6 +965,15 @@ export function buildLP(params: SolveParams): LPResult {
   L('Bounds');
   L('  0 <= capped_ergo <= 1000');
   L('  -inf <= total_obj <= inf');
+  L('  raw_ergo free');
+  L('  rec_axis free');
+  L('  price_axis free');
+  L(`  ${fmt(interval[0])} <= total_weight <= ${fmt(interval[1])}`);
+  if (params.useTrueErgo || params.preventOverswing) {
+    L('  gear_ergo free');
+    L('  0 <= effective_ergo <= 1000');
+    L('  ted_axis free');
+  }
   const nSubVars = Math.ceil(objTerms.length / 50);
   for (let s = 0; s < nSubVars; s++) {
     L(`  -inf <= obj_sub_${s} <= inf`);
@@ -1266,6 +1038,20 @@ export function buildLP(params: SolveParams): LPResult {
     slotOwnerMap: filteredSlotOwner,
     multiSlotItemIndices: multiSlotItems,
     itemToSlotIndices,
+    weightBounds,
+    axes(columns, ergo) {
+      let recoil = 0;
+      let price = 0;
+      for (let i = 1; i <= n_items; i++) {
+        if (columns[`x_${i}`]?.Primal > 0.5) recoil += item_recoil[i];
+        if (columns[`buy_${i}`]?.Primal > 0.5) price += item_price_objective[i];
+      }
+      for (let b = 0; b < n_bases; b++) {
+        if (columns[`base_${b + 1}`]?.Primal > 0.5) price += basePrices[b];
+      }
+      return { fE: ergo * 10, fR: recoil, fP: price };
+    },
+    score(axes) { return objectiveScore(model, axes); },
   };
 }
 

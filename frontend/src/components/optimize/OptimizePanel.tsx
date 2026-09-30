@@ -13,8 +13,8 @@ interface OptimizePanelProps {
   recoilWeight: number
   priceWeight: number
   onWeightChange: (ergo: number, recoil: number, price: number) => void
-  useEvoErgo: boolean
-  onUseEvoErgoChange: (v: boolean) => void
+  useTrueErgo: boolean
+  onUseTrueErgoChange: (v: boolean) => void
   useTchebycheff: boolean
   onUseTchebycheffChange: (v: boolean) => void
   useBudget: boolean
@@ -83,8 +83,8 @@ export function OptimizePanel(props: OptimizePanelProps) {
         recoilWeight={props.recoilWeight}
         priceWeight={props.priceWeight}
         onWeightChange={props.onWeightChange}
-        useEvoErgo={props.useEvoErgo}
-        onUseEvoErgoChange={props.onUseEvoErgoChange}
+        useTrueErgo={props.useTrueErgo}
+        onUseTrueErgoChange={props.onUseTrueErgoChange}
         useTchebycheff={props.useTchebycheff}
         onUseTchebycheffChange={props.onUseTchebycheffChange}
         useBudget={props.useBudget}

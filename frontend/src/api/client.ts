@@ -44,8 +44,8 @@ export interface OptimizeRequest {
   ergo_weight?: number;
   recoil_weight?: number;
   price_weight?: number;
-  /** Ergo weight applies to EvoErgo (ergo − 15·kg) instead of raw ergonomics. */
-  use_evo_ergo?: boolean;
+  /** Optimize gear-adjusted TrueErgo Delta rather than raw ergonomics. */
+  use_true_ergo?: boolean;
   /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
   use_tchebycheff?: boolean;
   /** Unlocked loyalty level per trader `normalizedName`; 0 disables the trader. */
@@ -118,10 +118,8 @@ export interface FinalStats {
   recoil_horizontal: number;
   total_price: number;
   total_weight: number;
-  /** Weight-adjusted ergonomics: min(100, ergo) − 15·total_weight (community metric). */
-  evo_ergo?: number;
-  /** EFTForge EvoErgoDelta (b = 0, empty mags): distance from the overswing threshold. */
-  eed?: number;
+  /** Effective ergonomics minus max(0, 100 - 300 / weightKg). */
+  true_ergo_delta?: number;
   moa: number;
 }
 
@@ -138,8 +136,15 @@ export interface OptimizeResponse {
   precision_resolved?: 'fast' | 'precise';
   /** Slot-item pairs [slotId, itemId][] for EFTForge build export */
   slot_pairs?: [string, string][];
-  /** EvoErgo mode: the objective k whose build won the EED sweep. */
-  evo_ergo_k?: number;
+  /** Certified bounds on the maximizing scalarized objective. */
+  optimization?: {
+    lower_bound: number;
+    upper_bound: number;
+    absolute_gap: number;
+    tolerance: number;
+    nodes: number;
+    termination: 'optimal' | 'limit';
+  };
   /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
   ideal_point?: IdealPoint;
 }

@@ -50,8 +50,7 @@ export function GunsmithResult({ result, viewMode, onViewModeChange, optimizing,
             weight={result.final_stats.total_weight}
             price={result.final_stats.total_price}
             moa={result.final_stats.moa}
-            evoErgo={result.final_stats.evo_ergo}
-            eed={result.final_stats.eed}
+            trueErgoDelta={result.final_stats.true_ergo_delta}
           />
           {result.selected_preset && (
             <UsingPresetCard

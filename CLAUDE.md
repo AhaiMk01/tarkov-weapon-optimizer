@@ -35,9 +35,9 @@ cd frontend && npx tsx test_trader_access.ts                # per-trader loyalty
 cd frontend && npx tsx test_naked_base_availability.ts       # naked receiver honours trader loyalty levels / TRADER_DISABLED
 cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
 cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
-cd frontend && npx tsx test_evoergo.ts                      # EvoErgo k-sweep: solveEvoErgo maximizes true EED (quadratic), EE-off maximizes raw ergo
+cd frontend && npx tsx test_true_ergo.ts                    # TrueErgo: exact TED objective (clamped effective ergo minus weight penalty), interval-bounded search, ideal-point axes, gear modifier
 cd frontend && npx tsx test_tchebycheff.ts                   # Augmented Tchebycheff scalarization: ideal-point, non-convex Pareto builds, budget separation
-cd frontend && npx tsx test_prevent_overswing.ts              # Prevent overswing hard constraint: EED >= 0 cutting planes on heavy/DMR platforms
+cd frontend && npx tsx test_prevent_overswing.ts              # Prevent overswing hard constraint: TED >= 0 via interval bounds (no false infeasibility) on heavy/DMR platforms
 ```
 
 ### PyInstaller Executable
@@ -65,7 +65,8 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts �
 1. `dataService.ts` — Fetches guns/mods from tarkov.dev (JSON API via `jsonApiAdapter.ts`, GraphQL as fallback), builds `ItemLookup`, caches in IndexedDB
 2. `compatibilityMap.ts` — BFS traversal from weapon to discover all reachable mods and slot relationships
 3. `lpBuilder.ts` — Builds a **CPLEX LP format** string (`buildLP`): binary-style decisions as a continuous LP with constraints matching the CP-SAT model (scaled ergo/recoil/price coefficients; auxiliary objective variable for long lines HiGHS parses poorly)
-4. `solver.ts` — Loads **HiGHS** (`highs` npm package / WASM), runs `highs.solve(lpString)`, reads column primals for `x_*`, `base_*`, `buy_*`, assembles `OptimizeResponse` and final stats
+4. `solver.ts` — Loads **HiGHS** (`highs` npm package / WASM), runs `highs.solve(lpString)`, reads column primals for `x_*`, `base_*`, `buy_*`, assembles `OptimizeResponse` and final stats. When TrueErgo or Prevent Overswing is on, `solveDetailed` forces precise (exact placement) MIP and runs a spatial branch-and-bound over total weight W: on each interval the concave weight penalty `q(W)=max(0,100-300/W)` is bounded from below by its secant (valid only inside that interval), so each node yields a valid upper bound on the objective; the decoded build is re-scored with the exact TED and kept as the incumbent. Statuses: `optimal` (gap ≤ tolerance), `feasible` (verified build, limit reached, not proven), `incomplete` (limit reached with no verified build), `infeasible` only when every interval is exhausted. `optimization` carries lower/upper bound, gap, tolerance and node count. One request-wide `timeLimitMs` covers ideal-point endpoints and the search.
+4a. `trueErgo.ts` — Shared exact formulas: `effectiveErgo`, `weightPenalty`, `trueErgoDelta` (TED = clamped effective ergo − weight penalty) and the objective model (weighted or augmented Tchebycheff) used by both the LP coefficients and the final scoring
 5. `solver.worker.ts` — Web Worker wrapper; handles `loadData`, `optimize`, `explore`, `getInfo`, `getWeaponMods`, `getGunsmithTasks`, `getStatus` messages
 6. `paretoExplorer.ts` — Sweeps one objective axis (price / recoil / ergo ignored) to approximate Pareto frontier points; each point is a full `solve()` call
 

@@ -16,7 +16,7 @@ There is no backend. Everything, including the heavy optimization math, runs loc
 
 ### Smart Optimization Modes
 - **Balanced "Sweet Spot" Mode**: Finds well-rounded, balanced builds (great ergonomics, low recoil, reasonable price) without over-investing in diminishing returns.
-- **EvoErgo (Weight-Adjusted Ergonomics)**: Optimizes ergonomics while accounting for weapon weight, maximizing real in-game aiming speed and weapon handling.
+- **TrueErgo (Weight-Adjusted Ergonomics)**: Optimizes the actual TrueErgoDelta (TED), your effective ergonomics minus the weight penalty, so heavy builds are scored by how they really handle. The nonlinear weight term is handled with valid interval bounds, and the result reports its optimality gap, or says plainly when a search limit stopped it short of a proof.
 - **Priority Sliders**: Customize weights to prioritize ergonomics, vertical recoil reduction, or budget to fit your playstyle.
 
 ### Real Combat Constraints & Modding Controls

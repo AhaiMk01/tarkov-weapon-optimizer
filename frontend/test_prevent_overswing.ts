@@ -1,113 +1,43 @@
-/**
- * Verification test suite for the "Prevent Overswing" hard constraint with Equipment Ergonomics Modifier (b).
- *
- * Checks:
- *   1. Heavy weapons with negative EED in unconstrained pure recoil solves
- *      (SVDS, M1A, OP-SKS, AKMSN, RPD) are strictly brought to EED >= 0 when
- *      preventOverswing is true;
- *   2. Equipment percentage penalties (e.g. b = -0.15 or -0.20 for heavy armor)
- *      appropriately reduce effective ergonomics E = Ergo * (1 + b) and lower
- *      the overswing weight threshold, strictly enforcing EED(E_raw, W, b) >= 0;
- *   3. The resulting builds are feasible and optimal;
- *   4. Weapons whose naked chassis physically exceeds the threshold for all
- *      reachable ergo (like the 7.1kg Mk-18) correctly report infeasible;
- *   5. Standard weapons (M4A1, AK-74N) solve optimal with zero disruption.
- *
- * Run: cd frontend && npx tsx test_prevent_overswing.ts
- */
-
-import { fetchAllData, buildItemLookup } from './src/solver/dataService.ts';
-import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
+import assert from 'node:assert/strict';
 import { solve } from './src/solver/solver.ts';
-import { eedOf } from './src/solver/lpBuilder.ts';
-import type { ItemLookup, SolveParams } from './src/solver/types.ts';
-import { DEFAULT_TRADER_LEVELS } from './src/solver/types.ts';
+import { choiceFixture } from './test_solver_fixtures.ts';
 
-let failures = 0;
-
-function check(cond: boolean, msg: string) {
-  if (cond) {
-    console.log(`  PASS: ${msg}`);
-  } else {
-    console.error(`  FAIL: ${msg}`);
-    failures++;
+// Tangents to the old threshold used to remove B after selecting A, possibly
+// reporting infeasible when only A/B were available. B is globally valid.
+for (const includeC of [false, true]) {
+  const choices = [
+    { id: 'A', weight: 8, ergo: 10, recoil: 50 },
+    { id: 'B', weight: 5, ergo: 50, recoil: 60 },
+    ...(includeC ? [{ id: 'C', weight: 4, ergo: 40, recoil: 90 }] : []),
+  ];
+  for (const useTchebycheff of [false, true]) {
+    const result = await solve({ ...choiceFixture(choices), ergoWeight: 0, recoilWeight: 100, preventOverswing: true, useTchebycheff });
+    assert.equal(result.status, 'optimal', result.reason);
+    assert.deepEqual(result.selected_items.map(i => i.id), ['B']);
+    assert.equal(result.final_stats?.true_ergo_delta, 10);
+    assert.ok(result.optimization!.absolute_gap <= result.optimization!.tolerance);
   }
 }
 
-async function testWeapon(lookup: ItemLookup, weaponName: string, expectFeasible = true, b = 0) {
-  let weaponId = '';
-  for (const [id, entry] of Object.entries(lookup)) {
-    if (entry.type === 'gun' && ((entry.data as Record<string, unknown>).name as string ?? '').includes(weaponName)) {
-      weaponId = id;
-      break;
-    }
-  }
-  if (!weaponId) throw new Error(`Weapon not found: ${weaponName}`);
-  const cmap = buildCompatibilityMap(weaponId, lookup);
+// Gear matters even with the TrueErgo objective disabled.
+const gear = choiceFixture([
+  { id: 'heavy', weight: 6, ergo: 60, recoil: 40 },
+  { id: 'light', weight: 3, ergo: 10, recoil: 70 },
+]);
+const penalized = await solve({ ...gear, ergoWeight: 0, recoilWeight: 100, preventOverswing: true, equipErgoModifier: -0.2 });
+assert.equal(penalized.status, 'optimal', penalized.reason);
+assert.equal(penalized.selected_items[0].id, 'light');
 
-  const base: SolveParams = {
-    weaponId,
-    itemLookup: lookup,
-    compatibilityMap: cmap,
-    traderLevels: DEFAULT_TRADER_LEVELS,
-    fleaAvailable: true,
-    ergoWeight: 0,
-    recoilWeight: 100,
-    priceWeight: 0,
-  };
+// There is no 7 kg physical cap: perfect effective ergo permits any finite weight.
+const heavy = await solve({ ...choiceFixture([{ id: 'heavy', weight: 12, ergo: 100 }]), preventOverswing: true });
+assert.equal(heavy.status, 'optimal', heavy.reason);
+assert.equal(heavy.final_stats?.total_weight, 12);
 
-  const bPercent = Math.round(b * 100);
-  console.log(`\n=== Testing ${weaponName} (Equipment Modifier b=${bPercent}%) ===`);
-  const unconstrained = await solve(base);
-  const sUnc = unconstrained.final_stats!;
-  const eedUnc = eedOf(sUnc.ergonomics, sUnc.total_weight, b);
-
-  console.log(`  Unconstrained: Ergo=${sUnc.ergonomics.toFixed(1)}, W=${sUnc.total_weight.toFixed(2)}kg, RecV=${sUnc.recoil_vertical.toFixed(1)}, EED=${eedUnc.toFixed(1)}`);
-
-  const constrained = await solve({ ...base, preventOverswing: true, equipErgoModifier: b });
-
-  if (expectFeasible) {
-    check(constrained.status === 'optimal', `${weaponName} solved optimal with preventOverswing (got ${constrained.status})`);
-    if (constrained.final_stats) {
-      const sCon = constrained.final_stats;
-      const eedCon = eedOf(sCon.ergonomics, sCon.total_weight, b);
-      console.log(`  Prevent Overswing: Ergo=${sCon.ergonomics.toFixed(1)} (eff=${(sCon.ergonomics * (1 + b)).toFixed(1)}), W=${sCon.total_weight.toFixed(2)}kg, RecV=${sCon.recoil_vertical.toFixed(1)}, EED=${eedCon.toFixed(1)}`);
-      check(eedCon >= -0.05, `${weaponName} EED with b=${bPercent}% is non-negative (EED=${eedCon.toFixed(2)} >= 0)`);
-    }
-  } else {
-    check(constrained.status === 'infeasible', `${weaponName} correctly reports infeasible because base receiver > max threshold (got ${constrained.status})`);
-    console.log(`  Prevent Overswing: Infeasible (base chassis intrinsically exceeds threshold)`);
-  }
-}
-
-async function main() {
-  console.log('Fetching game data via JSON API...');
-  const { guns, mods } = await fetchAllData('en', 'regular');
-  const lookup = buildItemLookup(guns, mods);
-
-  // Heavy weapons prone to aim overswing with b=0% (no armor penalty)
-  await testWeapon(lookup, 'SVDS', true, 0.0);
-  await testWeapon(lookup, 'Springfield Armory M1A', true, 0.0);
-  await testWeapon(lookup, 'Molot Arms Simonov OP-SKS', true, 0.0);
-  await testWeapon(lookup, 'Kalashnikov AKMSN', true, 0.0);
-
-  // Test with heavy armor ergonomics penalties (b = -15% and b = -20%)
-  await testWeapon(lookup, 'SVDS', true, -0.15);
-  await testWeapon(lookup, 'Springfield Armory M1A', true, -0.20);
-  await testWeapon(lookup, 'Colt M4A1', true, -0.20);
-
-  // Weapon whose bare metal chassis is physically heavier than threshold at max ergo
-  await testWeapon(lookup, 'SWORD International Mk-18', false, 0.0);
-
-  // Standard benchmark assault rifles
-  await testWeapon(lookup, 'Colt M4A1', true, 0.0);
-  await testWeapon(lookup, 'Kalashnikov AK-74N', true, 0.0);
-
-  console.log(`\n${failures === 0 ? 'ALL PREVENT OVERSWING CHECKS PASSED' : `${failures} CHECK(S) FAILED`}`);
-  process.exit(failures === 0 ? 0 : 1);
-}
-
-main().catch(e => {
-  console.error(e);
-  process.exit(1);
-});
+const boundary = await solve({ ...choiceFixture([{ id: 'boundary', weight: 6, ergo: 50 }]), preventOverswing: true });
+assert.equal(boundary.status, 'optimal', boundary.reason);
+assert.equal(boundary.final_stats?.true_ergo_delta, 0);
+const impossible = await solve({ ...choiceFixture([{ id: 'bad', weight: 6, ergo: 10 }]), preventOverswing: true });
+assert.equal(impossible.status, 'infeasible');
+const interrupted = await solve({ ...gear, preventOverswing: true, maxSpatialNodes: 0 });
+assert.equal(interrupted.status, 'incomplete');
+console.log('Overswing outer-bound, no-false-infeasibility, gear, boundary and heavy-weapon regressions passed');

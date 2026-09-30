@@ -71,28 +71,28 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
             <Paragraph>{t('methodology.ergo_desc')}</Paragraph>
           </Card>
 
-          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.evo_ergo_title')}</Text>}>
-            <Paragraph>{t('methodology.evo_ergo_desc_1')}</Paragraph>
-            <MathBlock math="W_{\text{threshold}}(E) = 0.0007556 \cdot E^2 + 0.02736 \cdot E + 2.9159\text{ kg}" />
-            <Paragraph>{t('methodology.evo_ergo_desc_2')}</Paragraph>
-            <MathBlock math="\text{EED} = -15 \cdot \left(W_{\text{actual}} - W_{\text{threshold}}(E)\right)" />
+          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.true_ergo_title')}</Text>}>
+            <Paragraph>{t('methodology.true_ergo_desc_1')}</Paragraph>
+            <MathBlock math="W(1-E/100) > 3 \quad \Longleftrightarrow \quad \text{Overswing}" />
+            <Paragraph>{t('methodology.true_ergo_desc_2')}</Paragraph>
+            <MathBlock math="\text{TED} = E - \max(0, 100 - 300/W), \quad W > 0" />
             <ul style={{ paddingLeft: 20, marginBottom: 8 }}>
               <li>
-                <Text type="success" strong>{t('methodology.eed_positive')}</Text>
+                <Text type="success" strong>{t('methodology.ted_positive')}</Text>
               </li>
               <li>
-                <Text type="danger" strong>{t('methodology.eed_negative')}</Text>
+                <Text type="danger" strong>{t('methodology.ted_negative')}</Text>
               </li>
             </ul>
             <Paragraph style={{ marginBottom: 0 }}>
-              <Text strong>{t('methodology.evo_ergo_score_label')}</Text>
-              <MathBlock math="\text{EvoErgo} = \min(100, \text{Ergo}) - 15 \cdot W_{\text{kg}}" />
+              <Text strong>{t('methodology.true_ergo_light_label')}</Text>
+              <MathBlock math="W \leq 3\text{ kg} \quad \Longrightarrow \quad \text{TED} = E" />
             </Paragraph>
           </Card>
 
           <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.equip_penalty_title')}</Text>}>
             <Paragraph>{t('methodology.equip_penalty_desc_1')}</Paragraph>
-            <MathBlock math="E_{\text{eff}} = \text{Ergo}_{\text{raw}} \cdot (1 + b) \quad (b \in [-0.40, 0])" />
+            <MathBlock math="E = \operatorname{clamp}\left(\operatorname{clamp}(\text{Ergo}_{\text{raw}},0,100)(1+b),0,100\right)" />
             <Paragraph style={{ marginBottom: 0 }}>{t('methodology.equip_penalty_desc_2')}</Paragraph>
           </Card>
 
@@ -134,8 +134,8 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
             <Paragraph>{t('methodology.explore_desc')}</Paragraph>
           </Card>
 
-          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.overswing_cuts_title')}</Text>}>
-            <Paragraph>{t('methodology.overswing_cuts_desc')}</Paragraph>
+          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.nonlinear_bounds_title')}</Text>}>
+            <Paragraph>{t('methodology.nonlinear_bounds_desc')}</Paragraph>
           </Card>
 
           <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.precision_title')}</Text>}>
@@ -194,14 +194,10 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
         <div style={{ padding: '8px 4px' }}>
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
             <Card size="small" style={cardStyle}>
-              <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_eed_title')}</Text>
-              <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{t('methodology.glossary_eed_desc')}</Paragraph>
+              <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_ted_title')}</Text>
+              <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{t('methodology.glossary_ted_desc')}</Paragraph>
             </Card>
 
-            <Card size="small" style={cardStyle}>
-              <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_evo_title')}</Text>
-              <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{t('methodology.glossary_evo_desc')}</Paragraph>
-            </Card>
 
             <Card size="small" style={cardStyle}>
               <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_moa_title')}</Text>

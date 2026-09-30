@@ -6,7 +6,7 @@ import { ensureDataLoaded } from './dataService.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
-import { solve, solveEvoErgo, computeIdealPoint } from './solver.ts';
+import { solve, computeIdealPoint } from './solver.ts';
 import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
 import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats, IdealPoint } from './types.ts';
@@ -44,7 +44,8 @@ function getIdealCacheKey(lang: string, gameMode: string, req: OptimizeRequest):
     exclude_categories: req.exclude_categories,
     prevent_overswing: req.prevent_overswing,
     equip_ergo_modifier: req.equip_ergo_modifier,
-    use_evo_ergo: req.use_evo_ergo,
+    use_true_ergo: req.use_true_ergo,
+    precise_mode: req.precise_mode,
     trader_levels: req.trader_levels,
     flea_available: req.flea_available,
     barter_available: req.barter_available,
@@ -202,7 +203,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
           const precReq = normalizePrecisionRequest(req.precise_mode);
-          const usePrecise = resolvePreciseFlag(precReq, compatMap);
+          const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
 
           let idealPoint: IdealPoint | undefined;
           if (req.use_tchebycheff) {
@@ -225,7 +226,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 excludeItems: req.exclude_items,
                 includeCategories: req.include_categories,
                 excludeCategories: req.exclude_categories,
-                useEvoErgo: req.use_evo_ergo ?? false,
+                useTrueErgo: req.use_true_ergo ?? false,
                 preventOverswing: req.prevent_overswing ?? false,
                 equipErgoModifier: req.equip_ergo_modifier,
                 traderLevels: req.trader_levels as TraderLevels | undefined,
@@ -239,7 +240,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             }
           }
 
-          const result: OptimizeResponse = await solveEvoErgo({
+          const result: OptimizeResponse = await solve({
             weaponId: req.weapon_id,
             itemLookup: data.itemLookup,
             compatibilityMap: compatMap,
@@ -258,7 +259,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             ergoWeight: req.ergo_weight ?? 1,
             recoilWeight: req.recoil_weight ?? 1,
             priceWeight: req.price_weight ?? 0,
-            useEvoErgo: req.use_evo_ergo ?? false,
+            useTrueErgo: req.use_true_ergo ?? false,
             useTchebycheff: req.use_tchebycheff ?? false,
             preventOverswing: req.prevent_overswing ?? false,
             equipErgoModifier: req.equip_ergo_modifier,
@@ -282,7 +283,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
           const precReq = normalizePrecisionRequest(req.precise_mode);
-          const usePrecise = resolvePreciseFlag(precReq, compatMap);
+          const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
 
           const startTime = performance.now();
           const points: ExplorePoint[] = await explorePareto({
@@ -302,7 +303,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             excludeItems: req.exclude_items,
             includeCategories: req.include_categories,
             excludeCategories: req.exclude_categories,
-            useEvoErgo: req.use_evo_ergo ?? false,
+            useTrueErgo: req.use_true_ergo ?? false,
             steps: req.steps ?? 10,
             preventOverswing: req.prevent_overswing ?? false,
             traderLevels: req.trader_levels as TraderLevels | undefined,

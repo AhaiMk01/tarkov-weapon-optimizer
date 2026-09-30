@@ -2,6 +2,22 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.13.0] — 2026-09-29
+
+### Changed
+- **EvoErgo is now TrueErgo, and it optimises the real number**: The old mode maximised an approximation of weight-adjusted ergonomics. It now maximises TrueErgoDelta (TED) itself: effective ergonomics (clamped to 0-100, after the armour/gear modifier) minus the weight penalty `max(0, 100 - 300/W)`, which is zero at or under 3 kg. The stat card shows TED, and reads "No overswing" at TED >= 0. The setting carries over from the old EvoErgo toggle.
+- **Tchebycheff balances the real objectives**: The ideal and nadir points are computed in the same axes the final solve uses (raw ergonomics or TED, recoil, purchase cost), and each endpoint keeps every constraint you set. If an endpoint cannot be certified the request reports that instead of substituting a default ideal point.
+- **One time limit per request**: The limit now covers the ideal-point endpoints and the search together, and `solve_time_ms` reports the whole call rather than the last sub-solve.
+
+### Fixed
+- **Prevent Overswing could call a feasible weapon infeasible**: The weight limit was enforced with tangent lines to a concave curve, which sit on the wrong side of it and cut off valid builds. Picking one part could remove another that fit. Weight is now handled by splitting it into intervals, each with a secant bound that is valid only inside its interval. A build is accepted only after its exact TED is recomputed from the reconstructed parts.
+- **TrueErgo search could return a worse build as optimal**: Fractional or rounded placements are rejected, and a build that breaks a hard limit after reconstruction is discarded rather than reported.
+- **Honest status when the search stops early**: Results report `optimal` only when the gap between the best build and the proven bound is within tolerance. If a node or time limit stops the search first, a verified build is shown as `feasible` (not proven optimal), and with no verified build the result is `incomplete` rather than `infeasible`. The result banner shows the lower and upper bound, the gap and the tolerance.
+- **Precise placement for nonlinear modes**: TrueErgo and Prevent Overswing always use exact slot placement, since bounds computed on the faster model would not describe a build you can actually assemble.
+
+### Removed
+- The quadratic EED display and the linear "ergo minus 15 kg" claims in the methodology guide.
+
 ## [v2.12.0] — 2026-09-20
 
 ### Added

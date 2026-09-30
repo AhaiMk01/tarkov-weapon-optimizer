@@ -61,6 +61,16 @@ export function OptimizeResult({ result, viewMode, onViewModeChange, optimizing,
                 </Tag>
               )}
               {result.reason && <Text type="secondary" style={{ margin: 0 }}>{result.reason}</Text>}
+              {result.optimization && (
+                <Text type="secondary">
+                  {t('results.optimization_bounds', {
+                    lower: result.optimization.lower_bound.toPrecision(5),
+                    upper: result.optimization.upper_bound.toPrecision(5),
+                    gap: result.optimization.absolute_gap.toPrecision(3),
+                    tolerance: result.optimization.tolerance.toPrecision(3),
+                  })}
+                </Text>
+              )}
             </div>
           </div>
         }
@@ -77,8 +87,7 @@ export function OptimizeResult({ result, viewMode, onViewModeChange, optimizing,
             weight={result.final_stats.total_weight}
             price={result.final_stats.total_price}
             moa={result.final_stats.moa}
-            evoErgo={result.final_stats.evo_ergo}
-            eed={result.final_stats.eed}
+            trueErgoDelta={result.final_stats.true_ergo_delta}
           />
           {result.selected_preset && (
             <UsingPresetCard

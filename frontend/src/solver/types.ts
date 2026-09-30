@@ -214,21 +214,21 @@ export interface SolveParams {
   ergoWeight?: number;
   recoilWeight?: number;
   priceWeight?: number;
-  /** Ergo weight applies to EvoErgo (ergo − k·kg) instead of raw ergonomics. */
-  useEvoErgo?: boolean;
-  /** Explicit ergo-per-kg exchange rate k (bypasses the solveEvoErgo sweep).
-   *  Single-solve default when unset is EVO_ERGO_OBJ_K (10). */
-  evoErgoK?: number;
+  /** Optimize the exact gear-adjusted TrueErgo Delta instead of raw ergonomics. */
+  useTrueErgo?: boolean;
   /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
   useTchebycheff?: boolean;
   /** Precomputed ideal/nadir reference point for Tchebycheff scalarization. */
   idealPoint?: IdealPoint;
-  /** Enforces that weapon weight stays strictly below the aim overswing threshold (EED >= 0). */
+  /** Require W * (1 - effectiveErgo / 100) <= 3. */
   preventOverswing?: boolean;
   /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
   equipErgoModifier?: number | null;
-  /** Internal linear cuts for overswing enforcement. */
-  overswingCuts?: Array<{ slope: number; rhs: number }>;
+  /** Absolute scalarized-objective certification tolerance (default 1e-5). */
+  objectiveTolerance?: number;
+  /** Spatial branch-and-bound limits; reaching either never proves infeasibility. */
+  maxSpatialNodes?: number;
+  timeLimitMs?: number;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
   barterAvailable?: boolean;

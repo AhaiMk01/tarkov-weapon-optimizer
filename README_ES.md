@@ -16,7 +16,7 @@ No hay servidor backend. Todo, incluida la parte más pesada del cálculo, se ej
 
 ### Modos de optimización inteligente
 - **Modo "Punto óptimo" (Sweet Spot)**: Encuentra configuraciones equilibradas (gran ergonomía, bajo retroceso y precio razonable) sin gastar de más en rendimientos decrecientes.
-- **EvoErgo (Ergonomía ajustada al peso)**: Optimiza la ergonomía teniendo en cuenta el peso del arma, maximizando la velocidad real de apuntado (ADS) y el manejo en partida.
+- **TrueErgo (Ergonomía ajustada al peso)**: Optimiza el TrueErgoDelta (TED) real, es decir, la ergonomía efectiva menos la penalización por peso, para valorar las configuraciones pesadas según su manejo real. El término no lineal del peso se trata con cotas de intervalo válidas, y el resultado indica su brecha de optimalidad o avisa claramente cuando un límite de búsqueda impidió demostrarla.
 - **Controles deslizantes de prioridad**: Ajusta los pesos para priorizar ergonomía, reducción de retroceso vertical o presupuesto según tu estilo de juego.
 
 ### Restricciones de combate real y personalización

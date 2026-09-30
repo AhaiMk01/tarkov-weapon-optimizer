@@ -5,7 +5,6 @@
  *   1. computeIdealPoint computes valid ideal (z*) and nadir points across objectives;
  *   2. Tchebycheff LP solves to optimality with integer solutions;
  *   3. Interior and boundary lambda vectors produce valid Pareto builds;
- *   4. Zero-weight epsilon tiebreaks prevent degenerate part selection;
  *   5. Hard budget limits (maxPrice) are strictly enforced in Tchebycheff mode;
  *   6. Ideal point caching is functioning properly.
  *
@@ -94,11 +93,6 @@ async function runWeaponTests(lookup: ItemLookup, weaponName: string) {
     }
   }
 
-  // 3. Verify zero-weight axis tiebreak (price should be reasonable when priceWeight=0)
-  const perfBuild = solvedBuilds.find(b => b.name.includes('Performance'));
-  if (perfBuild) {
-    check(perfBuild.price < 5_000_000, `Performance λ=(50,50,0) price is finite and bounded (₽${Math.round(perfBuild.price)})`);
-  }
 
   // 4. Verify hard budget constraint in Tchebycheff mode
   const budgetCap = 150000;

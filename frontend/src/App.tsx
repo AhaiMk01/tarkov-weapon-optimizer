@@ -241,7 +241,7 @@ function AppContent({
   const [ergoWeight, setErgoWeight] = useState(33)
   const [recoilWeight, setRecoilWeight] = useState(34)
   const [priceWeight, setPriceWeight] = useState(33)
-  const [useEvoErgo, setUseEvoErgo] = useState<boolean>(() => localStorage.getItem('useEvoErgo') === 'true')
+  const [useTrueErgo, setUseTrueErgo] = useState<boolean>(() => (localStorage.getItem('useTrueErgo') ?? localStorage.getItem('useEvoErgo')) === 'true')
   const [useTchebycheff, setUseTchebycheff] = useState<boolean>(() => localStorage.getItem('useTchebycheff') === 'true')
   const [useBudget, setUseBudget] = useState(false)
   const [maxPrice, setMaxPrice] = useState(200000)
@@ -338,7 +338,7 @@ function AppContent({
   useEffect(() => { localStorage.setItem('viewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('solverPrecision', solverPrecision) }, [solverPrecision])
   useEffect(() => { localStorage.setItem('useExactMOAFloor', String(useExactMOAFloor)) }, [useExactMOAFloor])
-  useEffect(() => { localStorage.setItem('useEvoErgo', String(useEvoErgo)) }, [useEvoErgo])
+  useEffect(() => { localStorage.setItem('useTrueErgo', String(useTrueErgo)); localStorage.removeItem('useEvoErgo') }, [useTrueErgo])
   useEffect(() => { localStorage.setItem('useTchebycheff', String(useTchebycheff)) }, [useTchebycheff])
   useEffect(() => { localStorage.setItem('preventOverswing', String(preventOverswing)) }, [preventOverswing])
   useEffect(() => { localStorage.setItem('equipErgoPenalty', String(equipErgoPenalty)) }, [equipErgoPenalty])
@@ -561,14 +561,14 @@ function AppContent({
         ergo_weight: ergoWeight,
         recoil_weight: recoilWeight,
         price_weight: priceWeight,
-        use_evo_ergo: useEvoErgo || undefined,
+        use_true_ergo: useTrueErgo || undefined,
         use_tchebycheff: useTchebycheff || undefined,
         max_price: useBudget ? maxPrice : undefined,
         min_ergonomics: minErgo > 0 ? minErgo : undefined,
         min_mag_capacity: useMinMag ? minMagCapacity : undefined,
         max_moa: useMOA ? maxMOA : undefined,
         prevent_overswing: preventOverswing || undefined,
-        equip_ergo_modifier: preventOverswing ? equipErgoPenalty / 100 : undefined,
+        equip_ergo_modifier: useTrueErgo || preventOverswing ? equipErgoPenalty / 100 : undefined,
         include_items: includedModIds.length > 0 ? includedModIds : undefined,
         exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
         include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
@@ -647,14 +647,14 @@ function AppContent({
     const shared = {
       ignore: exploreTradeoff,
       steps: exploreSteps,
-      use_evo_ergo: useEvoErgo || undefined,
+      use_true_ergo: useTrueErgo || undefined,
       max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
       min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
       max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
       min_mag_capacity: useMinMag ? minMagCapacity : undefined,
       max_moa: useMOA ? maxMOA : undefined,
       prevent_overswing: preventOverswing || undefined,
-      equip_ergo_modifier: preventOverswing ? equipErgoPenalty / 100 : undefined,
+      equip_ergo_modifier: useTrueErgo || preventOverswing ? equipErgoPenalty / 100 : undefined,
       trader_levels: traderLevels,
       player_level: playerLevel,
       flea_available: fleaAvailable,
@@ -899,8 +899,8 @@ function AppContent({
               recoilWeight={recoilWeight}
               priceWeight={priceWeight}
               onWeightChange={(e, r, p) => { setErgoWeight(e); setRecoilWeight(r); setPriceWeight(p) }}
-              useEvoErgo={useEvoErgo}
-              onUseEvoErgoChange={setUseEvoErgo}
+              useTrueErgo={useTrueErgo}
+              onUseTrueErgoChange={setUseTrueErgo}
               useTchebycheff={useTchebycheff}
               onUseTchebycheffChange={setUseTchebycheff}
               useBudget={useBudget}

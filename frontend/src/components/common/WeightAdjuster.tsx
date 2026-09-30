@@ -14,8 +14,8 @@ interface WeightAdjusterProps {
   recoilWeight: number
   priceWeight: number
   onWeightChange: (ergo: number, recoil: number, price: number) => void
-  useEvoErgo: boolean
-  onUseEvoErgoChange: (v: boolean) => void
+  useTrueErgo: boolean
+  onUseTrueErgoChange: (v: boolean) => void
   useTchebycheff: boolean
   onUseTchebycheffChange: (v: boolean) => void
   useBudget: boolean
@@ -48,8 +48,8 @@ export function WeightAdjuster({
   recoilWeight,
   priceWeight,
   onWeightChange,
-  useEvoErgo,
-  onUseEvoErgoChange,
+  useTrueErgo,
+  onUseTrueErgoChange,
   useTchebycheff,
   onUseTchebycheffChange,
   useBudget,
@@ -118,12 +118,12 @@ export function WeightAdjuster({
               </Space>
               <div style={toggleRowStyle}>
                 <Space size={4}>
-                  <Text type="secondary" style={labelStyle}>{t('optimize.evo_ergo')}</Text>
-                  <Tooltip title={t('optimize.evo_ergo_tooltip')}>
+                  <Text type="secondary" style={labelStyle}>{t('optimize.true_ergo')}</Text>
+                  <Tooltip title={t('optimize.true_ergo_tooltip')}>
                     <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
                   </Tooltip>
                 </Space>
-                <Segmented size="small" value={useEvoErgo ? 'on' : 'off'} onChange={(v) => onUseEvoErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                <Segmented size="small" value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
               </div>
               <div style={toggleRowStyle}>
                 <Space size={4}>
@@ -186,7 +186,7 @@ export function WeightAdjuster({
                   </Space>
                   <Segmented size="small" value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                 </div>
-                {preventOverswing && (
+                {(useTrueErgo || preventOverswing) && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '0 4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Space size={4}>
