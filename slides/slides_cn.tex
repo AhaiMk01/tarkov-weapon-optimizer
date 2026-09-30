@@ -559,8 +559,8 @@
     \textbf{几何结论：}直线切平面只能触及外凸极值点，而切比雪夫 L 型角等值线能深入非凸凹陷中，精准定位均衡甜点解。
 \end{frame}
 
-% Section 5: Aiming Physics & EvoErgo Optimization
-\section{真实开镜物理与 EvoErgo 优化}
+% Section 5: Aiming Physics & TrueErgo Optimization
+\section{真实开镜物理与 TrueErgo 优化}
 
 % Slide: In-Game ADS Physics Problem
 \begin{frame}{游戏内开镜机制与过冲甩头 (Overswing)}
@@ -593,89 +593,82 @@
     \end{columns}
 \end{frame}
 
-% Slide: Quadratic EvoErgoDelta (EED)
-\begin{frame}{二次非线性 EvoErgoDelta ($\text{EED}$) 指标}
-    \textbf{社区公式 (SpaceMonkey37 / EFTForge)：}
+% Slide: TrueErgo (TED) -- piecewise weight penalty
+\begin{frame}{TrueErgo：分段式 $\text{TED}$ 指标}
+    \textbf{当前模型 (v2.13)：}人机减去重量惩罚；3\,kg 以内免惩罚，超过后惩罚快速上升。
     \[
-    \text{EED} = \left[ 100 - 0.015 \cdot (100 - \text{人机})^2 \right] - 15 \cdot \text{重量}_{\text{kg}}
+    \text{TED} = E_{\text{eff}} - q(W), \qquad
+    q(W) = \begin{cases} 0 & W \le 3\,\text{kg} \\[2pt] 100 - \dfrac{300}{W} & W > 3\,\text{kg} \end{cases}
+    \]
+    \[
+    E_{\text{eff}} = \operatorname{clamp}_{[0,100]}\!\big(E_{\text{raw}} \cdot (1 + b)\big)
     \]
 
-    \vspace{0.2cm}
+    \vspace{-0.2cm}
     \begin{columns}
         \column{0.5\textwidth}
-        \textbf{$\text{EED}$ 的物理意义：}
         \begin{itemize}
-            \item \textcolor{green!60!black}{\textbf{$\text{EED} \ge 0$（无开镜过冲）}}：重量在人机承载阈值以内，快速开镜指哪打哪。
-            \item \textcolor{red!80!black}{\textbf{$\text{EED} < 0$（存在开镜过冲）}}：转动惯性过大，开镜后产生枪口晃动。
+            \item $\text{TED} \ge 0$ 即无过摆，正是\textbf{防止过摆}约束的含义。
+            \item 3\,kg 以上惩罚函数为\textbf{凹函数}，弦线会\emph{低估} $q$，因此给出 $\text{TED}$ 的有效上界。
+            \item 求解器会给出目标界与间隙；“可行”表示时限用完时间隙尚未闭合。
+            \item 示例 (SVDS)：人机 51.5、重 4.48\,kg $\Rightarrow$ $\text{TED} \approx +18$。
         \end{itemize}
 
         \column{0.5\textwidth}
-        \textbf{线性近似分值 (EvoErgo)：}
-        \[
-        \text{EvoErgo} = \min(100, \text{人机}) - 15 \cdot \text{重量}_{\text{kg}}
-        \]
-        \begin{itemize}
-            \item 结果面板展示的标准社区分值。
-            \item 以 1:15 kg 的交换比直观衡量人机与重量的综合效率。
-        \end{itemize}
+        \begin{center}
+        \begin{tikzpicture}[scale=0.8]
+            \draw[->, thick] (0,0) -- (5.4,0) node[right] {\scriptsize $W$ (kg)};
+            \draw[->, thick] (0,0) -- (0,3.6) node[above] {\scriptsize $q(W)$};
+            \draw[very thick, teal] (0,0) -- (1.875,0) to[out=0, in=250] (2.5,1.25) to[out=70, in=200] (3.75,2.5) to[out=20, in=190] (5,3.125);
+            \draw[dashed, thick, orange] (2.5,1.25) -- (5,3.125) node[midway, below right, font=\tiny, orange] {弦线（上界）};
+            \node[font=\tiny, below] at (1.875,0) {3};
+            \node[font=\tiny, teal, above left] at (3.75,2.5) {$q(W)$};
+        \end{tikzpicture}
+        \end{center}
     \end{columns}
 \end{frame}
 
-% Slide: Linearizing Quadratic EED via Tangent k-Sweep
-\begin{frame}{二次 EED 的线性化求解：切线 $k$-Sweep 算法}
-    \textbf{求解难点：}$\text{EED}$ 包含二次非线性项，但求解器需要线性目标函数以实现毫秒级响应。
-
-    \vspace{0.3cm}
-    \textbf{切线交换率：}边际人机价值随当前人机点数 $E$ 动态变化：
-    \[
-    k(E) = \frac{\partial \text{EED}}{\partial E} = 0.03 \cdot (100 - E) + 15 \quad (\text{切线斜率 } \Delta W / \Delta E)
-    \]
-
-    \vspace{0.2cm}
-    \begin{block}{切线 $k$-Sweep 候选求解算法 (\texttt{solveEvoErgo})}
-        \begin{enumerate}
-            \item 在基准交换率 $k \in \{15.0, 10.0, 7.5, 5.6\}$ 及 $k(E_0)$ 上并行运行线性求解。
-            \item 获得多个满足整数约束的候选配置 $\mathbf{x}^{(1)}, \mathbf{x}^{(2)}, \dots, \mathbf{x}^{(m)}$。
-            \item 对所有候选解计算精确的二次 $\text{EED}(\mathbf{x}^{(j)})$ 指标。
-            \item 在 $< 10\text{ms}$ 内返回使二次 $\text{EED}$ 全局最大的改装方案。
-        \end{enumerate}
-    \end{block}
-\end{frame}
-
 % Slide: Prevent Overswing Hard Constraint
-\begin{frame}{硬性约束：防止开镜过冲 (Prevent Overswing)}
-    \textbf{硬性要求：}确保武器在任何情况下绝不过冲（$\text{EED} \ge 0$）。
+\begin{frame}{硬性约束：防止过摆 ($\text{TED} \ge 0$)}
+    \textbf{硬性要求：}配装必须\textbf{零过摆}，即 $\text{TED} \ge 0$。
     \[
-    \text{重量}_{\text{kg}} \le \text{阈值}(E_{\text{eff}}) = \frac{100 - 0.015 \cdot (100 - E_{\text{eff}})^2}{15}
+    \text{TED} \ge 0 \iff W\left(1 - \frac{E_{\text{eff}}}{100}\right) \le 3 \iff W \le \frac{300}{100 - E_{\text{eff}}}
     \]
 
     \vspace{-0.1cm}
     \begin{columns}
-        \column{0.55\textwidth}
+        \column{0.5\textwidth}
         \begin{center}
-        \begin{tikzpicture}[scale=0.75]
-            \draw[->, thick] (0,0) -- (5.5,0) node[right] {\scriptsize $E_{\text{eff}}$};
-            \draw[->, thick] (0,0) -- (0,4.2) node[above] {\scriptsize $W$ (kg)};
+        \begin{tikzpicture}[scale=0.66]
+            \draw[->, thick] (0,0) -- (5.4,0) node[right] {\scriptsize $E_{\text{eff}}$};
+            \draw[->, thick] (0,0) -- (0,4.1) node[above] {\scriptsize $W$ (kg)};
 
-            \fill[green!15, opacity=0.8] (0.5, 0) -- (0.5, 0.6) to[out=40, in=195] (3.0, 2.3) to[out=15, in=180] (5.0, 3.3) -- (5.0, 0) -- cycle;
-            \draw[very thick, teal] (0.5, 0.6) to[out=40, in=195] (3.0, 2.3) to[out=15, in=180] (5.0, 3.3);
+            \fill[green!15] (0,0) -- (0,0.9) -- plot[domain=0:75, samples=50] ({\x/15}, {90/(100-\x)}) -- (5,0) -- cycle;
+            \draw[very thick, teal] plot[domain=0:75, samples=50] ({\x/15}, {90/(100-\x)});
+            \draw[dashed, gray] (0,0.9) -- (5,0.9);
 
-            \node[font=\tiny, green!50!black, align=center] at (2.8, 1.0) {\textbf{零过冲安全区}\\($\text{EED} \ge 0$)};
-            \node[font=\tiny, red!70!black, align=center] at (1.8, 3.2) {\textbf{过冲晃动区}\\($\text{EED} < 0$)};
+            \node[font=\tiny, left] at (0,0.9) {3};
+            \node[font=\tiny, left] at (0,1.8) {6};
+            \node[font=\tiny, left] at (0,3.6) {12};
+            \node[font=\tiny, below] at (3.333,0) {50};
+            \node[font=\tiny, below] at (5,0) {75};
 
-            \draw[dashed, thick, orange] (1.6, 1.4) -- (4.4, 3.2) node[above, font=\tiny, orange] {切线割平面};
-            \node[fill=blue, circle, inner sep=1.5pt] at (3.0, 2.3) {};
+            \node[font=\tiny, green!50!black, align=center] at (1.6,0.45) {\textbf{零过摆}\\($\text{TED} \ge 0$)};
+            \node[font=\tiny, red!70!black, align=center] at (1.3,3.0) {\textbf{过摆}\\($\text{TED} < 0$)};
+            \node[font=\tiny, teal, above left] at (4.2,2.43) {$W = \frac{300}{100 - E_{\text{eff}}}$};
+
+            \node[fill=blue, circle, inner sep=1.5pt] at (3.433,1.344) {};
+            \node[font=\tiny, blue, right] at (3.5,1.344) {SVDS：51.5，4.48\,kg};
         \end{tikzpicture}
         \end{center}
 
-        \column{0.45\textwidth}
-        \textbf{切线割平面线性化：}
-        \begin{itemize}
-            \item 用一阶切线不等式包络非线性曲线：
-            \[
-            W \le T(E_0) + T'(E_0)(E - E_0)
-            \]
-            \item 凸上界剪枝，无需引入额外 0-1 变量，求解时间 $< 15\text{ms}$。
+        \column{0.5\textwidth}
+        \textbf{求解器如何保证：}
+        \begin{itemize}\footnotesize
+            \item 3\,kg 以内永远不会过摆，因为 $E_{\text{eff}} \ge 0$。
+            \item 惩罚函数 $q(W)$ 在 3\,kg 以上为凹函数，因此在某个重量区间内，其割线是有效的松弛：在 MILP 中加入 $\text{TED} \ge 0$。
+            \item 对总重量做\textbf{空间分支定界}：先在 3\,kg 处切分，再二分区间。只有真实配装满足 $\text{TED} \ge 0$，该节点结果才算数。
+            \item 当节点的界无法超过当前最优解时即被剪枝。默认：512 个节点、60\,s、容差 $10^{-5}$。
         \end{itemize}
     \end{columns}
 \end{frame}
