@@ -3,6 +3,8 @@ import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { ItemDetail } from '../api/client'
 import { priceCell } from './priceCell'
+import { TedTag } from './TedTag'
+import { isShownTedDelta } from '../solver/trueErgo'
 
 const { Text } = Typography
 const { useToken } = theme
@@ -201,7 +203,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       )}
     </div>
   ) : null
-  const hasTags = item.ergonomics !== 0 || item.recoil_modifier !== 0 || !!item.accuracy_modifier || !!item.sighting_range
+  const hasTags = item.ergonomics !== 0 || item.recoil_modifier !== 0 || !!item.accuracy_modifier || !!item.sighting_range || isShownTedDelta(item.ted_delta)
 
   if (compactMode) {
     if (isMobile) {
@@ -215,6 +217,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
                </ItemTooltip>
                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                  {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+                 <TedTag item={item} style={{ margin: 0, fontSize: 11 }} />
                  {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
                </div>
              </div>
@@ -234,6 +237,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
             <Text strong style={{ fontSize: 12, ...truncateStyle, display: 'inline', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
           </ItemTooltip>
           {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+          <TedTag item={item} style={{ margin: 0, fontSize: 11, flexShrink: 0 }} />
           {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
         </div>
         <div style={{ width: 80, textAlign: 'left', flexShrink: 0 }}>
@@ -276,6 +280,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
             {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+            <TedTag item={item} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }} />
             {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
             {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
             {!!item.sighting_range && <Tag color="purple" bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}
@@ -311,6 +316,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         {hasTags && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, overflow: 'hidden' }}>
             {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+            <TedTag item={item} style={tagStyle} />
             {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={tagStyle}>{recoilLabel}: {item.recoil_modifier > 0 ? '+' : ''}{(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
             {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} style={tagStyle}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
             {!!item.sighting_range && <Tag color="purple" style={tagStyle}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}

@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Oyun verisi önbelleğini temizle ve Tarkov.dev'den yeniden indir",
     "methodology_title": "Rehber ve Metodoloji",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "Bu parçanın yapıya kattığı (yeşil) veya götürdüğü (kırmızı) TED: yapının TED'i eksi bu parça olmadan TED.",
+    "overswing_severity": "Aşırı sallanma şiddeti %{{pct}}"
   },
   "error": {
     "title": "Bir hata oluştu",

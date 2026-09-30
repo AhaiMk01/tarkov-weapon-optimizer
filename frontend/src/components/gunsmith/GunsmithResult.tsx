@@ -51,6 +51,7 @@ export function GunsmithResult({ result, viewMode, onViewModeChange, optimizing,
             price={result.final_stats.total_price}
             moa={result.final_stats.moa}
             trueErgoDelta={result.final_stats.true_ergo_delta}
+            overswingPct={result.final_stats.overswing_pct}
           />
           {result.selected_preset && (
             <UsingPresetCard

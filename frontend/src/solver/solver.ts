@@ -7,7 +7,7 @@ import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../
 import type { SolveParams, GunLookupEntry, IdealPoint } from './types';
 export type { SolveParams, IdealPoint } from './types';
 import { buildLP, MOA_K } from './lpBuilder';
-import { trueErgoDelta } from './trueErgo';
+import { trueErgoDelta, overswingPercent, tedContribution } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { getAvailablePrice } from './dataService';
 
@@ -433,8 +433,15 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
       total_price: totalPrice,
       total_weight: totalWeight,
       true_ergo_delta: trueErgoDelta(totalErgo, totalWeight, params.equipErgoModifier ?? 0),
+      overswing_pct: overswingPercent(totalErgo, totalWeight, params.equipErgoModifier ?? 0),
       moa: finalMOA,
     };
+    for (const d of detailedItems) {
+      if (d.weight == null && !d.ergonomics) continue;
+      d.ted_delta = tedContribution(
+        totalErgo, totalWeight, d.ergonomics || 0, d.weight || 0, params.equipErgoModifier ?? 0,
+      );
+    }
     // Validate hard numerical limits against the actual reconstructed build,
     // rather than trusting rounded display values or auxiliary LP variables.
     const eps = 1e-6;

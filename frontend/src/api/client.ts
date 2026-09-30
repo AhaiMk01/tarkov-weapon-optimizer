@@ -87,6 +87,8 @@ export interface ItemDetail {
   handbook_categories?: string[];
   capacity?: number;
   sighting_range?: number;
+  /** TED the build gains from this part: TED(build) - TED(build without it). */
+  ted_delta?: number;
 }
 
 export interface PresetDetail {
@@ -120,6 +122,8 @@ export interface FinalStats {
   total_weight: number;
   /** Effective ergonomics minus max(0, 100 - 300 / weightKg). */
   true_ergo_delta?: number;
+  /** Aim-in kick strength, 0 (none) to 100 (full). Nonzero exactly when TED < 0. */
+  overswing_pct?: number;
   moa: number;
 }
 

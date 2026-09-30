@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Statistic, theme } from 'antd'
+import { Card, Statistic, Typography, theme } from 'antd'
 
 const { useToken } = theme
 
@@ -11,9 +11,11 @@ interface StatsCardsProps {
   price: number
   moa?: number
   trueErgoDelta?: number
+  /** Aim-in kick strength, 0-100. Shown only while the build overswings. */
+  overswingPct?: number
 }
 
-export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, trueErgoDelta }: StatsCardsProps) {
+export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, trueErgoDelta, overswingPct }: StatsCardsProps) {
   const { t } = useTranslation()
   const { token } = useToken()
   return (
@@ -29,6 +31,11 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
             value={trueErgoDelta > 0 ? `+${trueErgoDelta.toFixed(1)}` : trueErgoDelta.toFixed(1)}
             valueStyle={{ color: trueErgoDelta >= 0 ? token.colorSuccess : token.colorError }}
           />
+          {trueErgoDelta < 0 && overswingPct != null && (
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>
+              {t('ui.overswing_severity', { pct: Math.round(overswingPct) })}
+            </Typography.Text>
+          )}
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>

@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Cancella cache e scarica nuovamente i dati da Tarkov.dev",
     "methodology_title": "Guida e Metodologia",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED che questo pezzo aggiunge alla build (verde) o le toglie (rosso): TED della build meno TED senza questo pezzo.",
+    "overswing_severity": "Intensità di oscillazione eccessiva {{pct}}%"
   },
   "error": {
     "title": "Si è verificato un errore",

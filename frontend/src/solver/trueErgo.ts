@@ -12,6 +12,31 @@ export function trueErgoDelta(rawErgo: number, weightKg: number, modifier = 0): 
   return effectiveErgo(rawErgo, modifier) - weightPenalty(weightKg);
 }
 
+/** Aiming-in kick starts once W(1 - E/100) passes 3 kg and is full at 7 kg. */
+export const SWAY_START_KG = 3;
+export const SWAY_FULL_KG = 7;
+
+/** How hard aiming in kicks the weapon, 0-100. It is nonzero exactly when TED < 0. */
+export function overswingPercent(rawErgo: number, weightKg: number, modifier = 0): number {
+  const swing = weightKg * (1 - effectiveErgo(rawErgo, modifier) / 100);
+  const fraction = (swing - SWAY_START_KG) / (SWAY_FULL_KG - SWAY_START_KG);
+  return Math.min(1, Math.max(0, fraction)) * 100;
+}
+
+/** A part's TED change smaller than this would read "+0.0", so it is not shown. */
+export const MIN_SHOWN_TED_DELTA = 0.05;
+export function isShownTedDelta(delta: number | undefined): delta is number {
+  return delta != null && Math.abs(delta) >= MIN_SHOWN_TED_DELTA;
+}
+
+/** TED the build gains from one part: TED(build) - TED(build without it). */
+export function tedContribution(
+  rawErgo: number, weightKg: number, partErgo: number, partWeight: number, modifier = 0,
+): number {
+  return trueErgoDelta(rawErgo, weightKg, modifier)
+    - trueErgoDelta(rawErgo - partErgo, weightKg - partWeight, modifier);
+}
+
 export interface ObjectiveAxes { fE: number; fR: number; fP: number }
 export interface ObjectiveModel {
   ergo: number;

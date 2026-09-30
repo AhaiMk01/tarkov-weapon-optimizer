@@ -2,6 +2,12 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v2.14.0] — 2026-09-29
+
+### Added
+- **Overswing strength**: When a build overswings, the TED card now also says how hard aiming in kicks the weapon, as a percentage. It is 0% at 3 kg of effective weight (weight x (1 - ergonomics / 100)) and 100% at 7 kg, so "Overswing strength 45%" separates a slight overswing from an unusable one. It uses the same gear modifier as TED, and is nonzero exactly when TED is negative.
+- **TED per part**: Each part in the build shows how much TED it adds (green) or costs (red): the build's TED minus its TED without that part. It appears next to the ergonomics tag in every view and as a TED column in the table view, for Optimize, Explore and Gunsmith results. It is arithmetic on the finished build, not a re-solve, so it explains why a heavy high-ergonomics part was or was not worth taking. Deltas under 0.05 are hidden.
+
 ## [v2.13.0] — 2026-09-29
 
 ### Changed

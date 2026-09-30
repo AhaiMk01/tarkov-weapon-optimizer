@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "캐시된 게임 데이터를 지우고 Tarkov.dev에서 다시 가져오기",
     "methodology_title": "가이드 및 방법론",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "이 부품이 빌드에 더하는(초록) 또는 깎는(빨강) TED: 빌드 TED에서 이 부품을 뺀 TED를 뺀 값.",
+    "overswing_severity": "오버스윙 강도 {{pct}}%"
   },
   "error": {
     "title": "오류가 발생했습니다",

@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Очистить кэш и повторно загрузить данные с Tarkov.dev",
     "methodology_title": "Руководство и методология",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED, который эта деталь добавляет сборке (зелёный) или отнимает (красный): TED сборки минус TED без этой детали.",
+    "overswing_severity": "Сила перекачки {{pct}}%"
   },
   "error": {
     "title": "Произошла ошибка",

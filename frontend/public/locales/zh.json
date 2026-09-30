@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "清空缓存并从 Tarkov.dev 重新下载游戏数据",
     "methodology_title": "算法与机制说明",
     "ted_label_ok": "TED（无过摆）",
-    "ted_label_over": "TED（过摆）"
+    "ted_label_over": "TED（过摆）",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "此配件为配装带来（绿）或损失（红）的 TED：整体 TED 减去去掉该配件后的 TED。",
+    "overswing_severity": "过摆强度 {{pct}}%"
   },
   "trader": {
     "prapor": "Prapor",

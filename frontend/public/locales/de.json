@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Zwischengespeicherte Spieldaten löschen und von Tarkov.dev neu abrufen",
     "methodology_title": "Leitfaden & Methodik",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED, das dieses Teil dem Aufbau bringt (grün) oder kostet (rot): TED des Aufbaus minus TED ohne dieses Teil.",
+    "overswing_severity": "Überschwung-Stärke {{pct}} %"
   },
   "error": {
     "title": "Ein Fehler ist aufgetreten",

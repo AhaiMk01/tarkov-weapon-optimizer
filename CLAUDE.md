@@ -38,6 +38,7 @@ cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted so
 cd frontend && npx tsx test_true_ergo.ts                    # TrueErgo: exact TED objective (clamped effective ergo minus weight penalty), interval-bounded search, ideal-point axes, gear modifier
 cd frontend && npx tsx test_tchebycheff.ts                   # Augmented Tchebycheff scalarization: ideal-point, non-convex Pareto builds, budget separation
 cd frontend && npx tsx test_prevent_overswing.ts              # Prevent overswing hard constraint: TED >= 0 via interval bounds (no false infeasibility) on heavy/DMR platforms
+cd frontend && npx tsx test_ted_display.ts                    # Overswing strength (0-100%, nonzero iff TED < 0) and per-part TED delta (TED with vs without the part)
 ```
 
 ### PyInstaller Executable
@@ -193,3 +194,17 @@ Only include web app (v2.0.0+) history in the changelog. Pre-web-app Python vers
 - **Hardcoded colors**: Use antd theme tokens (`token.colorPrimary`, etc.) for dark/light mode compatibility.
 - **Worker state**: The Web Worker caches data per `lang:gameMode` key — changing language/mode triggers a fresh data load.
 - **`backend/` directory is empty/legacy** — actual backend logic is in root-level Python files, not in `backend/app/`.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `AhaiMk01/tarkov-weapon-optimizer`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

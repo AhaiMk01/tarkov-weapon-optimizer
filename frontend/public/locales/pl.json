@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Wyczyść pamięć podręczną danych gry i pobierz ponownie z Tarkov.dev",
     "methodology_title": "Przewodnik i Metodologia",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED, które ta część dodaje do zestawu (zielony) lub odejmuje (czerwony): TED zestawu minus TED bez tej części.",
+    "overswing_severity": "Siła przechyłu {{pct}}%"
   },
   "error": {
     "title": "Wystąpił błąd",

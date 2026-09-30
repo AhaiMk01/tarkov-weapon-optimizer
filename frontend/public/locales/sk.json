@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Vymazať mezipaměť herných údajov a znova ich stiahnuť z Tarkov.dev",
     "methodology_title": "Sprievodca a metodika",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED, ktoré tento diel zostave pridáva (zeleno) alebo uberá (červeno): TED zostavy mínus TED bez tohto dielu.",
+    "overswing_severity": "Sila prehupnutia {{pct}} %"
   },
   "error": {
     "title": "Vyskytla sa chyba",

@@ -204,7 +204,10 @@
     "changelog_title": "Changelog",
     "methodology_title": "Guide & Methodology",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED this part adds to the build (green) or costs it (red): build TED minus TED without this part.",
+    "overswing_severity": "Overswing strength {{pct}}%"
   },
   "trader": {
     "prapor": "Prapor",

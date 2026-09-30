@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "キャッシュをクリアし、Tarkov.devからゲームデータを再取得",
     "methodology_title": "ガイドとアルゴリズム",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "このパーツがビルドに加える（緑）または失わせる（赤）TED：ビルドのTEDからこのパーツを外したTEDを引いた値。",
+    "overswing_severity": "オーバースイング強度 {{pct}}%"
   },
   "error": {
     "title": "エラーが発生しました",

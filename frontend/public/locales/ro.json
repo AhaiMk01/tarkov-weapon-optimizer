@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Șterge datele în cache și descarcă din nou de la Tarkov.dev",
     "methodology_title": "Ghid și metodologie",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED-ul pe care această piesă îl adaugă build-ului (verde) sau îl scade (roșu): TED-ul build-ului minus TED-ul fără această piesă.",
+    "overswing_severity": "Intensitate suprabalans {{pct}}%"
   },
   "error": {
     "title": "A apărut o eroare",

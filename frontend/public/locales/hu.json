@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Gyorsítótárazott játékadatok törlése és újraletöltése a Tarkov.dev-ről",
     "methodology_title": "Útmutató és módszertan",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "Ennyi TED-et ad hozzá (zöld) vagy vesz el (piros) ez az alkatrész: az összeállítás TED-je mínusz a TED nélküle.",
+    "overswing_severity": "Túlhintázás erőssége {{pct}}%"
   },
   "error": {
     "title": "Hiba történt",

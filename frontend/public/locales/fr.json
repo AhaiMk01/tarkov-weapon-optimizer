@@ -204,7 +204,10 @@
     "refresh_data_tooltip": "Vider le cache et télécharger à nouveau les données depuis Tarkov.dev",
     "methodology_title": "Guide & Méthodologie",
     "ted_label_ok": "TED (No overswing)",
-    "ted_label_over": "TED (Overswing)"
+    "ted_label_over": "TED (Overswing)",
+    "ted_part_label": "TED",
+    "ted_part_tooltip": "TED que cette pièce apporte à la build (vert) ou lui coûte (rouge) : TED de la build moins TED sans cette pièce.",
+    "overswing_severity": "Force du survol {{pct}} %"
   },
   "error": {
     "title": "Une erreur s'est produite",

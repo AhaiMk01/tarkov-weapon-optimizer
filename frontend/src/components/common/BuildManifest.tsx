@@ -4,6 +4,7 @@ import { CopyOutlined, ExportOutlined, LockOutlined, UnlockOutlined, StopOutline
 import { compressToEncodedURIComponent } from 'lz-string'
 import { ItemRow, ItemTooltip, TraderIcon } from '../ItemRow'
 import { priceCell } from '../priceCell'
+import { TedTag } from '../TedTag'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 import { useMemo } from 'react'
 
@@ -83,6 +84,13 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
       width: 100,
       align: 'right' as const,
       render: (val: number) => val !== 0 ? <Tag color={val > 0 ? 'blue' : 'red'} style={{ margin: 0 }}>{val > 0 ? '+' : ''}{val}</Tag> : null
+    },
+    {
+      title: t('ui.ted_part_label'),
+      key: 'ted_delta',
+      width: 100,
+      align: 'right' as const,
+      render: (_: unknown, record: ItemDetail) => <TedTag item={record} style={{ margin: 0 }} />
     },
     {
       title: t('ui.vert_recoil'),
