@@ -4,7 +4,7 @@
  */
 
 import type { OptimizeRequest, OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
-import { validateBuild } from './validateBuild';
+import { PREVENT_OVERSWING_VIOLATION, validateBuild } from './validateBuild';
 import type { SolveParams, GunLookupEntry, IdealPoint } from './types';
 export type { SolveParams, IdealPoint } from './types';
 import { buildLP, MOA_K } from './lpBuilder';
@@ -49,6 +49,8 @@ export function certifiedDualBound(status: string, objectiveValue: number | unde
  * decision column is present and integral, exactly one purchase base is
  * selected, and the independent build validator reports no errors.
  * Validation errors are supplied by the caller; this does not re-check the LP.
+ * An expected exact-TED failure blocks the incumbent but does not erase a
+ * proved relaxation bound. That decision belongs to the caller.
  */
 export function incumbentBlockReason(
   columns: Record<string, { Primal?: number } | undefined>,
@@ -69,6 +71,11 @@ export function incumbentBlockReason(
   if (bases !== 1) return `Decoded solution selected ${bases} purchase bases`;
   if (validationErrors.length) return `Independent build validation failed: ${validationErrors.join('; ')}`;
   return undefined;
+}
+
+/** The secant underestimates the weight penalty, so this failure can still leave a valid upper bound. */
+function isExpectedExactTedGap(errors: readonly string[]): boolean {
+  return errors.length > 0 && errors.every(error => error === PREVENT_OVERSWING_VIOLATION);
 }
 
 let highs: HighsInstance | null = null;
@@ -140,6 +147,8 @@ async function loadHiGHS() {
 interface ModelResponse extends OptimizeResponse {
   axes?: ObjectiveAxes;
   bound?: number;
+  /** False when the relaxation is proved but the decoded build is not a lower bound. */
+  incumbentEligible?: boolean;
 }
 
 /**
@@ -168,9 +177,10 @@ export async function computeIdealPoint(params: SolveParams): Promise<IdealPoint
 
 export async function solve(params: SolveParams): Promise<OptimizeResponse> {
   const result = await solveDetailed(params);
-  const { axes: _axes, bound: _bound, ...response } = result;
+  const { axes: _axes, bound: _bound, incumbentEligible: _eligible, ...response } = result;
   void _axes;
   void _bound;
+  void _eligible;
   return response;
 }
 
@@ -223,14 +233,20 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     const result = await solveModel(params, node.interval, remainingSec);
     nodes++;
     if (result.status === 'infeasible') continue;
-    if (result.status !== 'optimal' || result.bound == null || !result.final_stats) {
+    // A limit ObjectiveValue is a primal value, not an upper bound. Decoding and
+    // unexpected validation failures are diagnostics: they stop the tree.
+    if (result.status !== 'optimal' || result.bound == null) {
       unresolved = Math.max(unresolved, node.bound);
       limitReason = result.reason ?? result.status;
       break;
     }
     const bound = Math.min(node.bound, result.bound);
-    const feasible = !params.preventOverswing || result.final_stats.true_ergo_delta! >= -1e-7;
-    if (feasible && (!incumbent || result.objective_value > incumbent.objective_value)) incumbent = result;
+    // Exact TED can fail on a proved secant relaxation. Keep this upper bound
+    // and refine; do not treat the ineligible build as a lower bound.
+    if (result.incumbentEligible !== false && result.final_stats) {
+      const feasible = !params.preventOverswing || result.final_stats.true_ergo_delta! >= -1e-7;
+      if (feasible && (!incumbent || result.objective_value > incumbent.objective_value)) incumbent = result;
+    }
     if (incumbent && bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, bound);
       continue;
@@ -621,16 +637,30 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
     };
     const validationErrors = validateBuild(toOptimizeRequest(params), candidate, params.itemLookup);
     const rejected = incumbentBlockReason(columns, expectedColumns, lp.nBases, validationErrors);
+    const dual = certifiedDualBound(result.Status, result.ObjectiveValue);
     if (rejected) {
+      // The secant is an outer approximation. Exact TED can fail while the
+      // optimal relaxation value remains a valid upper bound for this interval.
+      if (isExpectedExactTedGap(validationErrors) && dual != null) {
+        return {
+          status: 'optimal',
+          bound: dual,
+          incumbentEligible: false,
+          reason: rejected,
+          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+        };
+      }
+      // Placement, purchasing, and decoding failures are diagnostics. They do
+      // not become ordinary nonlinear relaxation error and do not publish a bound.
       return {
         status: 'incomplete',
         reason: rejected,
         selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
       };
     }
-    const dual = certifiedDualBound(result.Status, result.ObjectiveValue);
     return {
       status: dual != null ? 'optimal' : 'feasible',
+      incumbentEligible: true,
       selected_items: detailedItems,
       selected_preset: presetDetail,
       objective_value: lp.score(axes),

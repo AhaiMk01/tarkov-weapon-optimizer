@@ -4,6 +4,9 @@ import type { ItemLookup, OfferInfo, SlotInfo } from './types';
 /** Absolute tolerances: hard constraints and reconstructed display statistics. */
 export const VALIDATION_EPSILON = 1e-6;
 
+/** Exact Prevent Overswing failure. A secant relaxation may still be a valid upper bound. */
+export const PREVENT_OVERSWING_VIOLATION = 'Prevent overswing TED constraint violated';
+
 // Deliberately independent of the LP, its compatibility map and decoded columns.
 export function validateBuild(request: OptimizeRequest, result: OptimizeResponse, lookup: ItemLookup): string[] {
   const errors: string[] = [];
@@ -120,7 +123,7 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
   max('Price', price, request.max_price); max('Weight', weight, request.max_weight); max('Recoil', recoilV, request.max_recoil_v);
   max('Recoil sum', recoilV + recoilH, request.max_recoil_sum); max('MOA', moa, request.max_moa);
   if (request.min_ergonomics != null && ergo < request.min_ergonomics - VALIDATION_EPSILON) fail('Minimum ergonomics not met');
-  if (request.prevent_overswing && ted < -VALIDATION_EPSILON) fail('Prevent overswing TED constraint violated');
+  if (request.prevent_overswing && ted < -VALIDATION_EPSILON) fail(PREVENT_OVERSWING_VIOLATION);
   if (request.min_mag_capacity != null && !mods.some(m => m.entry.stats.capacity >= request.min_mag_capacity!)) fail('Minimum magazine capacity not met');
   if (request.min_sighting_range != null && Math.max(weapon.stats.sighting_range, ...mods.map(m => m.entry.stats.sighting_range)) < request.min_sighting_range) fail('Minimum sighting range not met');
   return errors;
