@@ -39,6 +39,8 @@ cd frontend && npx tsx test_true_ergo.ts                    # TrueErgo: exact TE
 cd frontend && npx tsx test_tchebycheff.ts                   # Augmented Tchebycheff scalarization: ideal-point, non-convex Pareto builds, budget separation
 cd frontend && npx tsx test_prevent_overswing.ts              # Prevent overswing hard constraint: TED >= 0 via interval bounds (no false infeasibility) on heavy/DMR platforms
 cd frontend && npx tsx test_ted_display.ts                    # Overswing strength (0-100%, nonzero iff TED < 0) and per-part TED delta (TED with vs without the part)
+cd frontend && npx tsx test_benchmark_validation.ts           # Independent physical slot placement, rooted graph, conflict, price and TED validation
+cd frontend && npx tsx test_benchmark_oracles.ts              # Deterministic small-graph oracle checks: two-slot A+B, required slot, alternative parents, conflicts, 3kg TED boundary
 ```
 
 ### PyInstaller Executable
