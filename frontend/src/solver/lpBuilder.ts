@@ -722,7 +722,12 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     const itemsInSlot = slotToItemIndices.get(s);
     if (!itemsInSlot || itemsInSlot.length === 0) continue;
 
-    const sumExpr = itemsInSlot.map(i => `x_${i}`).join(' + ');
+    // Count the variable that actually occupies this slot. A multi-slot item's
+    // x_i is 1 when it fills any one of its slots, so using x_i here lets one
+    // item satisfy every required slot it could have been placed in.
+    const sumExpr = itemsInSlot.map(i => (
+      multiSlotItems.has(i) ? `p_${i}_${s}` : `x_${i}`
+    )).join(' + ');
     const owner = slot_owner_arr[s]; // 0=root, else item index
 
     if (owner === 0) {

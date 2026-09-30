@@ -3,7 +3,8 @@
  * Builds LP string via lpBuilder, solves with HiGHS WASM, decodes result.
  */
 
-import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
+import type { OptimizeRequest, OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
+import { validateBuild } from './validateBuild';
 import type { SolveParams, GunLookupEntry, IdealPoint } from './types';
 export type { SolveParams, IdealPoint } from './types';
 import { buildLP, MOA_K } from './lpBuilder';
@@ -17,6 +18,59 @@ interface HighsInstance {
     primal_feasibility_tolerance: number; dual_feasibility_tolerance: number; time_limit: number;
   }): { Status: string; ObjectiveValue: number; Columns: Record<string, { Primal?: number }> };
 }
+
+const DUAL_MARGIN = 1e-7;
+
+/**
+ * The shipped highs.js solve() returns only Status, ObjectiveValue, Columns, and Rows.
+ * It does not expose a MIP dual bound, gap, or warm start.
+ */
+export function classifyMipStatus(status: string): 'optimal' | 'infeasible' | 'limit' | 'other' {
+  if (status === 'Optimal') return 'optimal';
+  if (status === 'Infeasible') return 'infeasible';
+  if (
+    status === 'Time limit reached'
+    || status === 'Iteration limit reached'
+    || status === 'Target for objective reached'
+    || status === 'Bound on objective reached'
+  ) return 'limit';
+  return 'other';
+}
+
+/** Upper bound only after Optimal. A limit ObjectiveValue is the primal incumbent. */
+export function certifiedDualBound(status: string, objectiveValue: number | undefined): number | undefined {
+  if (classifyMipStatus(status) !== 'optimal') return undefined;
+  if (objectiveValue == null || !Number.isFinite(objectiveValue)) return undefined;
+  return objectiveValue + DUAL_MARGIN;
+}
+
+/**
+ * A MIP column vector may update the incumbent only when every expected
+ * decision column is present and integral, exactly one purchase base is
+ * selected, and the independent build validator reports no errors.
+ * Validation errors are supplied by the caller; this does not re-check the LP.
+ */
+export function incumbentBlockReason(
+  columns: Record<string, { Primal?: number } | undefined>,
+  expectedColumns: readonly string[],
+  nBases: number,
+  validationErrors: readonly string[],
+): string | undefined {
+  for (const name of expectedColumns) {
+    const primal = columns[name]?.Primal;
+    if (primal == null || !Number.isFinite(primal)) return `Missing decision column ${name}`;
+    if (Math.abs(primal - Math.round(primal)) > 1e-7) return `Nonintegral decision column ${name}`;
+  }
+  let bases = 0;
+  for (let b = 1; b <= nBases; b++) {
+    const primal = columns[`base_${b}`]?.Primal;
+    if (primal != null && primal > 0.5) bases++;
+  }
+  if (bases !== 1) return `Decoded solution selected ${bases} purchase bases`;
+  if (validationErrors.length) return `Independent build validation failed: ${validationErrors.join('; ')}`;
+  return undefined;
+}
+
 let highs: HighsInstance | null = null;
 let highsCorrupted = false;
 
@@ -152,6 +206,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
   let limitReason = 'Spatial node or time limit reached';
   // Keep the largest discarded bound too: tolerance pruning must not report gap=0.
   let closedBound = -Infinity;
+  const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
+    const [a, b] = interval;
+    const mid = (a + b) / 2;
+    if (mid <= a || mid >= b || b - a < 1e-10) return undefined;
+    return [[a, mid], [mid, b]];
+  };
   while (queue.length && nodes < maxNodes && performance.now() < deadline) {
     queue.sort((a, b) => b.bound - a.bound);
     const node = queue.shift()!;
@@ -159,7 +219,8 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       closedBound = Math.max(closedBound, node.bound);
       continue;
     }
-    const result = await solveModel(params, node.interval, Math.max(0.001, (deadline - performance.now()) / 1000));
+    const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
+    const result = await solveModel(params, node.interval, remainingSec);
     nodes++;
     if (result.status === 'infeasible') continue;
     if (result.status !== 'optimal' || result.bound == null || !result.final_stats) {
@@ -174,14 +235,13 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       closedBound = Math.max(closedBound, bound);
       continue;
     }
-    const [a, b] = node.interval;
-    const mid = (a + b) / 2;
-    if (mid <= a || mid >= b || b - a < 1e-10) {
+    const parts = splitInterval(node.interval);
+    if (!parts) {
       unresolved = Math.max(unresolved, bound);
       limitReason = 'Numerical interval resolution reached before certification';
       break;
     }
-    queue.push({ interval: [a, mid], bound }, { interval: [mid, b], bound });
+    queue.push({ interval: parts[0], bound }, { interval: parts[1], bound });
   }
   const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
   if (!incumbent) {
@@ -204,6 +264,37 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
   };
 }
 
+
+function toOptimizeRequest(params: SolveParams): OptimizeRequest {
+  return {
+    weapon_id: params.weaponId,
+    max_price: params.maxPrice ?? undefined,
+    min_ergonomics: params.minErgonomics ?? undefined,
+    max_recoil_v: params.maxRecoilV ?? undefined,
+    max_recoil_sum: params.maxRecoilSum ?? undefined,
+    min_mag_capacity: params.minMagCapacity ?? undefined,
+    min_sighting_range: params.minSightingRange ?? undefined,
+    max_weight: params.maxWeight ?? undefined,
+    max_moa: params.maxMOA ?? undefined,
+    include_items: params.includeItems ?? undefined,
+    exclude_items: params.excludeItems ?? undefined,
+    include_categories: params.includeCategories ?? undefined,
+    exclude_categories: params.excludeCategories ?? undefined,
+    ergo_weight: params.ergoWeight,
+    recoil_weight: params.recoilWeight,
+    price_weight: params.priceWeight,
+    use_true_ergo: params.useTrueErgo,
+    use_tchebycheff: params.useTchebycheff,
+    prevent_overswing: params.preventOverswing,
+    equip_ergo_modifier: params.equipErgoModifier ?? undefined,
+    trader_levels: params.traderLevels ?? undefined,
+    flea_available: params.fleaAvailable,
+    barter_available: params.barterAvailable,
+    barter_exclude_dogtags: params.barterExcludeDogtags,
+    player_level: params.playerLevel ?? undefined,
+  };
+}
+
 async function solveModel(params: SolveParams, interval?: [number, number], timeLimit = 60): Promise<ModelResponse> {
   const startTime = performance.now();
   try {
@@ -217,24 +308,40 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
       primal_feasibility_tolerance: 1e-9, dual_feasibility_tolerance: 1e-9,
       time_limit: timeLimit,
     });
-    if (result.Status !== 'Optimal') {
+    const stop = classifyMipStatus(result.Status);
+    if (stop === 'infeasible') {
       return {
-        status: result.Status === 'Infeasible' ? 'infeasible' : 'incomplete',
-        reason: result.Status === 'Infeasible' ? 'No valid configuration found' : result.Status,
+        status: 'infeasible',
+        reason: 'No valid configuration found',
         selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
       };
     }
-    // Decode solution: read x_i variables
-    const columns = result.Columns as Record<string, { Primal: number }>;
-    // Never round a fractional relaxation into an alleged feasible build.
-    for (const [name, column] of Object.entries(columns) as Array<[string, { Primal: number }]>) {
-      if (/^(x_|buy_|base_|p_)/.test(name) && Math.abs(column.Primal - Math.round(column.Primal)) > 1e-7) {
-        return { status: 'incomplete', reason: 'Solver returned a nonintegral selection', selected_items: [], objective_value: 0 };
-      }
+    if (stop !== 'optimal') {
+      return {
+        status: 'incomplete',
+        reason: result.Status,
+        selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+      };
     }
+    const columns = result.Columns as Record<string, { Primal?: number }>;
+    const expectedColumns: string[] = [];
+    for (let i = 1; i <= lp.nItems; i++) expectedColumns.push(`x_${i}`, `buy_${i}`);
+    for (let b = 1; b <= lp.nBases; b++) expectedColumns.push(`base_${b}`);
+    for (const item of lp.multiSlotItemIndices) {
+      for (const slot of lp.itemToSlotIndices.get(item) ?? []) expectedColumns.push(`p_${item}_${slot}`);
+    }
+    const blocked = incumbentBlockReason(columns, expectedColumns, lp.nBases, []);
+    if (blocked) {
+      return {
+        status: 'incomplete',
+        reason: blocked,
+        selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+      };
+    }
+    const solvedColumns = columns as Record<string, { Primal: number }>;
     const selectedIds: string[] = [];
     for (let i = 1; i <= lp.nItems; i++) {
-      const col = columns[`x_${i}`];
+      const col = solvedColumns[`x_${i}`];
       if (col && col.Primal > 0.5) {
         selectedIds.push(lp.indexToItem[i]);
       }
@@ -243,7 +350,7 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
     // Find selected base
     let selectedBaseId: string | null = null;
     for (let b = 0; b < lp.nBases; b++) {
-      const col = columns[`base_${b + 1}`];
+      const col = solvedColumns[`base_${b + 1}`];
       if (col && col.Primal > 0.5) {
         selectedBaseId = lp.baseIds[b];
         break;
@@ -323,9 +430,9 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
     let buyPrice = 0;
     for (let i = 1; i <= lp.nItems; i++) {
       const itemId = lp.indexToItem[i];
-      const xCol = columns[`x_${i}`];
+      const xCol = solvedColumns[`x_${i}`];
       if (!xCol || xCol.Primal < 0.5) continue; // not selected
-      const buyCol = columns[`buy_${i}`];
+      const buyCol = solvedColumns[`buy_${i}`];
       const isBought = buyCol && buyCol.Primal > 0.5;
       const entry = params.itemLookup[itemId];
       if (entry?.type !== 'mod') continue;
@@ -469,7 +576,7 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
       const slotIndices = lp.itemToSlotIndices.get(itemIdx);
       if (!slotIndices) continue;
       for (const slotIdx of slotIndices) {
-        const pVar = columns[`p_${itemIdx}_${slotIdx}`];
+        const pVar = solvedColumns[`p_${itemIdx}_${slotIdx}`];
         if (pVar && pVar.Primal > 0.5) {
           if (!itemSlotPlacement.has(itemId)) itemSlotPlacement.set(itemId, new Set());
           itemSlotPlacement.get(itemId)!.add(lp.indexToSlot[slotIdx]);
@@ -503,15 +610,32 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
       }
     }
 
-    const axes = lp.axes(columns, params.useTrueErgo ? finalStats.true_ergo_delta! : finalStats.ergonomics);
-    return {
+    const axes = lp.axes(solvedColumns, params.useTrueErgo ? finalStats.true_ergo_delta! : finalStats.ergonomics);
+    const candidate: ModelResponse = {
       status: 'optimal',
       selected_items: detailedItems,
       selected_preset: presetDetail,
       objective_value: lp.score(axes),
+      final_stats: finalStats,
+      slot_pairs: slotPairs,
+    };
+    const validationErrors = validateBuild(toOptimizeRequest(params), candidate, params.itemLookup);
+    const rejected = incumbentBlockReason(columns, expectedColumns, lp.nBases, validationErrors);
+    if (rejected) {
+      return {
+        status: 'incomplete',
+        reason: rejected,
+        selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+      };
+    }
+    const dual = certifiedDualBound(result.Status, result.ObjectiveValue);
+    return {
+      status: dual != null ? 'optimal' : 'feasible',
+      selected_items: detailedItems,
+      selected_preset: presetDetail,
+      objective_value: lp.score(axes),
       axes,
-      // HiGHS has zero relative MIP gap; reserve an absolute numeric margin.
-      bound: result.ObjectiveValue + 1e-7,
+      bound: dual,
       final_stats: finalStats,
       solve_time_ms: performance.now() - startTime,
       slot_pairs: slotPairs,

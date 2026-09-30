@@ -236,6 +236,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 playerLevel: req.player_level,
                 preciseMode: usePrecise,
                 boundsMode: req.bounds_mode,
+                timeLimitMs: req.time_limit_ms,
               });
               idealPointCache.set(cacheKey, idealPoint);
             }
@@ -272,6 +273,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             playerLevel: req.player_level,
             preciseMode: usePrecise,
             boundsMode: req.bounds_mode,
+            timeLimitMs: req.time_limit_ms,
           });
 
           result.precision_request = precReq;

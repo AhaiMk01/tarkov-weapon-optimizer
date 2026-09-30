@@ -66,6 +66,8 @@ export interface OptimizeRequest {
   precise_mode?: boolean | SolverPrecisionMode;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   bounds_mode?: 'structural' | 'naive';
+  /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
+  time_limit_ms?: number;
 }
 export interface ItemDetail {
   id: string;

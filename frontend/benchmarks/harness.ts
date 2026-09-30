@@ -91,7 +91,7 @@ const benchmarkHarness = {
       resolve(payload);
     });
 
-    const requestWithDeadline = { ...caseItem.request, timeLimitMs: deadlineMs };
+    const requestWithDeadline = { ...caseItem.request, time_limit_ms: deadlineMs };
     worker.postMessage({
       type: caseItem.kind,
       id,
