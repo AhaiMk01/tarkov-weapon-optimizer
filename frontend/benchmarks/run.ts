@@ -37,6 +37,7 @@ async function main() {
   const outDir = path.resolve(__dirname, String(flags['output'] || 'results'));
   fs.mkdirSync(outDir, { recursive: true });
 
+  const variant: 'baseline' | 'candidate' = (flags['candidate'] || flags['variant'] === 'candidate') ? 'candidate' : 'baseline';
   const runs = Number(flags['runs']) || 5;
   const targetCase = flags['case'] ? String(flags['case']) : null;
   const url = String(flags['url'] || 'http://localhost:5173/benchmarks/index.html');
@@ -91,7 +92,7 @@ async function main() {
       // 1. Warm-up run
       process.stdout.write('  [warmup] ... ');
       const warmupSample = await runner.runCase(caseItem, {
-        variant: 'baseline',
+        variant,
         repetition: 0,
         warmup: true,
         sequence: seq++,
@@ -104,7 +105,7 @@ async function main() {
       for (let rep = 1; rep <= runs; rep++) {
         process.stdout.write(`  [rep ${rep}/${runs}] ... `);
         const sample = await runner.runCase(caseItem, {
-          variant: 'baseline',
+          variant,
           repetition: rep,
           warmup: false,
           sequence: seq++,

@@ -15,7 +15,9 @@ export interface StructuralBounds {
  * Guarantees:
  * - Every feasible build's weight W satisfies minW <= W <= maxW.
  * - Every feasible build's ergonomics E satisfies minE <= E <= maxE.
- * - Safely bounds subtrees without assuming negative ergonomics clamp to 0.
+ * - Handles optional negative-weight attachments without underestimating.
+ * - Prevents cycle-truncated path memoization from poisoning lookups on other branches.
+ * - Correctly incorporates gun naked_ergonomics at root.
  */
 export function computeStructuralBounds(
   weaponId: string,
@@ -28,138 +30,195 @@ export function computeStructuralBounds(
     return { weightBounds: [0, 100], ergoBounds: [0, 100] };
   }
 
-  // Helper to get slot definitions on an item
   function getSlots(item: ItemLookup[string]): SlotInfo[] {
     if (item.type === 'gun') return item.slots || [];
     return (item as ModLookupEntry).slots || [];
   }
 
+  function getItemWeight(item: ItemLookup[string]): number {
+    return (item.type === 'gun' ? item.stats.weight : ('weight' in item.stats ? item.stats.weight : 0)) || 0;
+  }
+
+  function getItemErgo(item: ItemLookup[string]): number {
+    return (item.type === 'gun' ? item.stats.naked_ergonomics : ('ergonomics' in item.stats ? item.stats.ergonomics : 0)) || 0;
+  }
+
+  // Global memo tables only store results whose subtrees are provably acyclic
   const maxWeightMemo = new Map<string, number>();
   const minWeightMemo = new Map<string, number>();
   const maxErgoMemo = new Map<string, number>();
   const minErgoMemo = new Map<string, number>();
 
-  function getMaxWeight(itemId: string, visited: Set<string>): number {
-    if (maxWeightMemo.has(itemId)) return maxWeightMemo.get(itemId)!;
-    if (visited.has(itemId)) return 0;
-    visited.add(itemId);
+  interface SubtreeResult {
+    val: number;
+    hasCycle: boolean;
+  }
+
+  function getMaxWeight(itemId: string, visited: Set<string>): SubtreeResult {
+    if (visited.has(itemId)) {
+      return { val: 0, hasCycle: true };
+    }
+    if (maxWeightMemo.has(itemId)) {
+      return { val: maxWeightMemo.get(itemId)!, hasCycle: false };
+    }
 
     const item = lookup[itemId];
-    if (!item) return 0;
-    const w = ('weight' in item.stats ? item.stats.weight : 0) || 0;
+    if (!item) return { val: 0, hasCycle: false };
 
+    visited.add(itemId);
+    let subtreeHasCycle = false;
     let childW = 0;
+
     for (const slot of getSlots(item)) {
       const allowed = cmap.slot_items[slot.id] || [];
       let maxChild = 0;
       for (const cid of allowed) {
         if (cmap.reachable_items[cid]) {
-          const cw = getMaxWeight(cid, new Set(visited));
-          if (cw > maxChild) maxChild = cw;
+          const res = getMaxWeight(cid, visited);
+          if (res.hasCycle) subtreeHasCycle = true;
+          if (res.val > maxChild) maxChild = res.val;
         }
       }
       childW += maxChild;
     }
-    const total = w + childW;
-    maxWeightMemo.set(itemId, total);
-    return total;
+
+    visited.delete(itemId);
+    const total = getItemWeight(item) + childW;
+
+    if (!subtreeHasCycle) {
+      maxWeightMemo.set(itemId, total);
+    }
+    return { val: total, hasCycle: subtreeHasCycle };
   }
 
-  function getMinWeight(itemId: string, visited: Set<string>): number {
-    if (minWeightMemo.has(itemId)) return minWeightMemo.get(itemId)!;
-    if (visited.has(itemId)) return 0;
-    visited.add(itemId);
+  function getMinWeight(itemId: string, visited: Set<string>): SubtreeResult {
+    if (visited.has(itemId)) {
+      return { val: 0, hasCycle: true };
+    }
+    if (minWeightMemo.has(itemId)) {
+      return { val: minWeightMemo.get(itemId)!, hasCycle: false };
+    }
 
     const item = lookup[itemId];
-    if (!item) return 0;
-    const w = ('weight' in item.stats ? item.stats.weight : 0) || 0;
+    if (!item) return { val: 0, hasCycle: false };
 
+    visited.add(itemId);
+    let subtreeHasCycle = false;
     let childW = 0;
+
     for (const slot of getSlots(item)) {
-      if (!slot.required) continue;
       const allowed = cmap.slot_items[slot.id] || [];
       let minChild = Infinity;
       for (const cid of allowed) {
         if (cmap.reachable_items[cid]) {
-          const cw = getMinWeight(cid, new Set(visited));
-          if (cw < minChild) minChild = cw;
+          const res = getMinWeight(cid, visited);
+          if (res.hasCycle) subtreeHasCycle = true;
+          if (res.val < minChild) minChild = res.val;
         }
       }
-      if (minChild !== Infinity) childW += minChild;
+
+      if (slot.required) {
+        if (minChild !== Infinity) childW += minChild;
+      } else {
+        // Optional slot: can leave empty (0) or install an attachment with negative weight
+        if (minChild !== Infinity && minChild < 0) {
+          childW += minChild;
+        }
+      }
     }
-    const total = w + childW;
-    minWeightMemo.set(itemId, total);
-    return total;
+
+    visited.delete(itemId);
+    const total = getItemWeight(item) + childW;
+
+    if (!subtreeHasCycle) {
+      minWeightMemo.set(itemId, total);
+    }
+    return { val: total, hasCycle: subtreeHasCycle };
   }
 
-  function getMaxErgo(itemId: string, visited: Set<string>): number {
-    if (maxErgoMemo.has(itemId)) return maxErgoMemo.get(itemId)!;
-    if (visited.has(itemId)) return 0;
-    visited.add(itemId);
+  function getMaxErgo(itemId: string, visited: Set<string>): SubtreeResult {
+    if (visited.has(itemId)) {
+      return { val: 0, hasCycle: true };
+    }
+    if (maxErgoMemo.has(itemId)) {
+      return { val: maxErgoMemo.get(itemId)!, hasCycle: false };
+    }
 
     const item = lookup[itemId];
-    if (!item) return 0;
-    const e = ('ergonomics' in item.stats ? item.stats.ergonomics : 0) || 0;
+    if (!item) return { val: 0, hasCycle: false };
 
+    visited.add(itemId);
+    let subtreeHasCycle = false;
     let childE = 0;
+
     for (const slot of getSlots(item)) {
       const allowed = cmap.slot_items[slot.id] || [];
       let maxChild = 0;
       for (const cid of allowed) {
         if (cmap.reachable_items[cid]) {
-          const ce = getMaxErgo(cid, new Set(visited));
-          if (ce > maxChild) maxChild = ce;
+          const res = getMaxErgo(cid, visited);
+          if (res.hasCycle) subtreeHasCycle = true;
+          if (res.val > maxChild) maxChild = res.val;
         }
       }
-      // An optional slot can be left empty (adds 0), so maxChild is at least 0
       if (maxChild > 0) childE += maxChild;
     }
-    const total = e + childE;
-    maxErgoMemo.set(itemId, total);
-    return total;
+
+    visited.delete(itemId);
+    const total = getItemErgo(item) + childE;
+
+    if (!subtreeHasCycle) {
+      maxErgoMemo.set(itemId, total);
+    }
+    return { val: total, hasCycle: subtreeHasCycle };
   }
 
-  function getMinErgo(itemId: string, visited: Set<string>): number {
-    if (minErgoMemo.has(itemId)) return minErgoMemo.get(itemId)!;
-    if (visited.has(itemId)) return 0;
-    visited.add(itemId);
+  function getMinErgo(itemId: string, visited: Set<string>): SubtreeResult {
+    if (visited.has(itemId)) {
+      return { val: 0, hasCycle: true };
+    }
+    if (minErgoMemo.has(itemId)) {
+      return { val: minErgoMemo.get(itemId)!, hasCycle: false };
+    }
 
     const item = lookup[itemId];
-    if (!item) return 0;
-    const e = ('ergonomics' in item.stats ? item.stats.ergonomics : 0) || 0;
+    if (!item) return { val: 0, hasCycle: false };
 
+    visited.add(itemId);
+    let subtreeHasCycle = false;
     let childE = 0;
+
     for (const slot of getSlots(item)) {
       const allowed = cmap.slot_items[slot.id] || [];
-      let minChild = 0;
+      let minChild = Infinity;
       for (const cid of allowed) {
         if (cmap.reachable_items[cid]) {
-          const ce = getMinErgo(cid, new Set(visited));
-          if (ce < minChild) minChild = ce;
+          const res = getMinErgo(cid, visited);
+          if (res.hasCycle) subtreeHasCycle = true;
+          if (res.val < minChild) minChild = res.val;
         }
       }
-      // If the slot is required, you must choose a mod even if its ergo is negative or positive
+
       if (slot.required) {
-        let reqMin = Infinity;
-        for (const cid of allowed) {
-          if (cmap.reachable_items[cid]) {
-            const ce = getMinErgo(cid, new Set(visited));
-            if (ce < reqMin) reqMin = ce;
-          }
-        }
-        if (reqMin !== Infinity) childE += reqMin;
+        if (minChild !== Infinity) childE += minChild;
       } else {
-        // Optional slot: could install an attachment with negative ergo
-        if (minChild < 0) childE += minChild;
+        if (minChild !== Infinity && minChild < 0) {
+          childE += minChild;
+        }
       }
     }
-    const total = e + childE;
-    minErgoMemo.set(itemId, total);
-    return total;
+
+    visited.delete(itemId);
+    const total = getItemErgo(item) + childE;
+
+    if (!subtreeHasCycle) {
+      minErgoMemo.set(itemId, total);
+    }
+    return { val: total, hasCycle: subtreeHasCycle };
   }
 
-  const rawMinW = Math.max(0, getMinWeight(weaponId, new Set()));
-  let rawMaxW = Math.max(rawMinW, getMaxWeight(weaponId, new Set()));
+  const rawMinW = getMinWeight(weaponId, new Set()).val;
+  let rawMaxW = Math.max(rawMinW, getMaxWeight(weaponId, new Set()).val);
 
   // Account for preset base weights if any presets exist
   const baseW = weapon.stats.weight || 0;
@@ -179,8 +238,8 @@ export function computeStructuralBounds(
     rawMaxW = Math.max(rawMinW, Math.min(rawMaxW, options.maxWeight));
   }
 
-  const rawMinE = getMinErgo(weaponId, new Set());
-  const rawMaxE = Math.max(rawMinE, getMaxErgo(weaponId, new Set()));
+  const rawMinE = getMinErgo(weaponId, new Set()).val;
+  const rawMaxE = Math.max(rawMinE, getMaxErgo(weaponId, new Set()).val);
 
   return {
     weightBounds: [rawMinW, rawMaxW],
