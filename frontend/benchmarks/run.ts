@@ -37,8 +37,10 @@ async function main() {
   const outDir = path.resolve(__dirname, String(flags['output'] || 'results'));
   fs.mkdirSync(outDir, { recursive: true });
 
+  const isPairedMode = Boolean(flags['pairs']);
+  const pairCount = typeof flags['pairs'] === 'number' ? Number(flags['pairs']) : (typeof flags['pairs'] === 'string' ? Number(flags['pairs']) : 5);
   const variant: 'baseline' | 'candidate' = (flags['candidate'] || flags['variant'] === 'candidate') ? 'candidate' : 'baseline';
-  const runs = Number(flags['runs']) || 5;
+  const runs = isPairedMode ? pairCount : (Number(flags['runs']) || 5);
   const targetCase = flags['case'] ? String(flags['case']) : null;
   const url = String(flags['url'] || 'http://localhost:5173/benchmarks/index.html');
   const browserPath = flags['browser'] ? String(flags['browser']) : findBrowserExecutable();
@@ -101,19 +103,45 @@ async function main() {
       samplesFile.write(JSON.stringify(warmupSample) + '\n');
       console.log(`${warmupSample.outcome} (${warmupSample.elapsedMs != null ? warmupSample.elapsedMs.toFixed(0) : '?'}ms)`);
 
-      // 2. Measured repetitions
-      for (let rep = 1; rep <= runs; rep++) {
-        process.stdout.write(`  [rep ${rep}/${runs}] ... `);
-        const sample = await runner.runCase(caseItem, {
-          variant,
-          repetition: rep,
-          warmup: false,
-          sequence: seq++,
-          deadlineMs: 60000,
-        });
-        allSamples.push(sample);
-        samplesFile.write(JSON.stringify(sample) + '\n');
-        console.log(`${sample.outcome} (${sample.elapsedMs != null ? sample.elapsedMs.toFixed(0) : '?'}ms)`);
+      if (isPairedMode) {
+        for (let rep = 1; rep <= runs; rep++) {
+          process.stdout.write(`  [pair ${rep}/${runs}] baseline ... `);
+          const baseSample = await runner.runCase(caseItem, {
+            variant: 'baseline',
+            repetition: rep,
+            warmup: false,
+            sequence: seq++,
+            deadlineMs: 60000,
+          });
+          allSamples.push(baseSample);
+          samplesFile.write(JSON.stringify(baseSample) + '\n');
+          process.stdout.write(`${baseSample.outcome} (${baseSample.elapsedMs != null ? baseSample.elapsedMs.toFixed(0) : '?'}ms) | candidate ... `);
+
+          const candSample = await runner.runCase(caseItem, {
+            variant: 'candidate',
+            repetition: rep,
+            warmup: false,
+            sequence: seq++,
+            deadlineMs: 60000,
+          });
+          allSamples.push(candSample);
+          samplesFile.write(JSON.stringify(candSample) + '\n');
+          console.log(`${candSample.outcome} (${candSample.elapsedMs != null ? candSample.elapsedMs.toFixed(0) : '?'}ms)`);
+        }
+      } else {
+        for (let rep = 1; rep <= runs; rep++) {
+          process.stdout.write(`  [rep ${rep}/${runs}] ... `);
+          const sample = await runner.runCase(caseItem, {
+            variant,
+            repetition: rep,
+            warmup: false,
+            sequence: seq++,
+            deadlineMs: 60000,
+          });
+          allSamples.push(sample);
+          samplesFile.write(JSON.stringify(sample) + '\n');
+          console.log(`${sample.outcome} (${sample.elapsedMs != null ? sample.elapsedMs.toFixed(0) : '?'}ms)`);
+        }
       }
     }
   } finally {
