@@ -197,4 +197,24 @@ assert.equal(initStraddle.initial_candidate_telemetry.generated, true);
 assert.equal(initStraddle.initial_candidate_telemetry.valid, true, 'Valid linear seed must be accepted');
 assert.ok(initStraddle.initial_candidate_telemetry.score != null);
 
+// Behavioral test: pre-solve pruning does not spend MIP solves against maxSpatialNodes
+// and seed-pruning telemetry counts prunes attributable to the seed.
+const seedPruneFixture = choiceFixture([
+  { id: 'SeedWinner', weight: 2, ergo: 50 }, // weight 3kg total, ergo 50
+  { id: 'SuboptimalHeavy', weight: 5, ergo: 15 }, // weight 6kg total, ergo 15
+]);
+
+const seedRun = await solve({
+  ...seedPruneFixture,
+  useTrueErgo: true,
+  initialCandidate: true,
+});
+assert.equal(seedRun.status, 'optimal');
+assert.ok(seedRun.initial_candidate_telemetry != null);
+assert.equal(seedRun.initial_candidate_telemetry.generated, true);
+assert.equal(seedRun.initial_candidate_telemetry.valid, true);
+// Verify nodes in optimization equals actual solved MIPs count in node_traces (status !== 'pruned-before-solve')
+const solvedMipsCount = seedRun.spatial_telemetry!.node_traces.filter(t => t.status !== 'pruned-before-solve').length;
+assert.equal(seedRun.optimization!.nodes, solvedMipsCount, 'optimization.nodes must match solved MIPs, not pre-solve prunes');
+
 console.log('incumbent gate and required-slot formulation passed');

@@ -313,6 +313,8 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
   const nodeTraces: import('../api/client').SpatialNodeTrace[] = [];
   let prunedCount = 0;
   let splitCount = 0;
+  let traceSeq = 0;
+  let seedModel: ModelResponse | undefined;
 
   if (params.initialCandidate && performance.now() < deadline) {
     const initStart = performance.now();
@@ -350,6 +352,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
           candModel.objective_value = lpModel.score(axes);
           candModel.axes = axes;
           incumbent = candModel;
+          seedModel = candModel;
           initTelemetry.valid = true;
           initTelemetry.score = candModel.objective_value;
         }
@@ -371,16 +374,27 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     const node = queue.shift()!;
     const nodeStart = performance.now();
     const boundIn = node.bound;
-    const nodeIdx = ++nodes;
+    const traceIdx = ++traceSeq;
+
+    // A node is pruned by the initial candidate if the incumbent is still the seed
+    // (or was not improved by a later solve) and the node's bound <= seedScore + tolerance.
+    const isPrunedBySeed = Boolean(
+      params.initialCandidate &&
+      initTelemetry.valid &&
+      seedModel &&
+      incumbent &&
+      incumbent.objective_value <= seedModel.objective_value &&
+      node.bound <= seedModel.objective_value + tolerance
+    );
 
     if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, node.bound);
       prunedCount++;
-      if (params.initialCandidate && initTelemetry.valid && nodes === 0) {
+      if (isPrunedBySeed) {
         initTelemetry.pruned_nodes_count++;
       }
       nodeTraces.push({
-        node_index: nodeIdx,
+        node_index: traceIdx,
         interval: node.interval,
         bound_in: boundIn,
         status: 'pruned-before-solve',
@@ -389,11 +403,13 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
         pruned: true,
         elapsed_ms: Math.round(performance.now() - nodeStart),
       });
+      // Pre-solve pruning does not spend a MIP solve; nodes budget is preserved.
       continue;
     }
     const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
     const prevIncumbentVal = incumbent?.objective_value;
     const result = await solveModel(params, node.interval, remainingSec);
+    nodes++; // Legacy semantics: counts actual MIP solves against maxSpatialNodes
     const nodeElapsed = Math.round(performance.now() - nodeStart);
     const step = applySpatialNodeResult({
       nodeBound: node.bound,
@@ -408,7 +424,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
 
     if (step.action === 'prune-infeasible') {
       nodeTraces.push({
-        node_index: nodeIdx,
+        node_index: traceIdx,
         interval: node.interval,
         bound_in: boundIn,
         status: 'infeasible',
@@ -422,7 +438,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       unresolved = Math.max(unresolved, step.bound);
       limitReason = step.reason ?? result.status;
       nodeTraces.push({
-        node_index: nodeIdx,
+        node_index: traceIdx,
         interval: node.interval,
         bound_in: boundIn,
         status: result.status,
@@ -439,7 +455,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       closedBound = Math.max(closedBound, bound);
       prunedCount++;
       nodeTraces.push({
-        node_index: nodeIdx,
+        node_index: traceIdx,
         interval: node.interval,
         bound_in: boundIn,
         status: result.status,
@@ -456,7 +472,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       unresolved = Math.max(unresolved, bound);
       limitReason = 'Numerical interval resolution reached before certification';
       nodeTraces.push({
-        node_index: nodeIdx,
+        node_index: traceIdx,
         interval: node.interval,
         bound_in: boundIn,
         status: 'numerical-resolution-exhausted',
@@ -470,7 +486,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     }
     splitCount++;
     nodeTraces.push({
-      node_index: nodeIdx,
+      node_index: traceIdx,
       interval: node.interval,
       bound_in: boundIn,
       status: result.status,
