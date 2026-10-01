@@ -178,4 +178,23 @@ assert.ok(heavyFirst.spatial_telemetry.node_traces.length >= 2);
 // First popped root node is heavier interval [3, hi]
 assert.ok(heavyFirst.spatial_telemetry.node_traces[0].interval[0] >= 3, 'heavier-first must process [3, hi] first');
 
+// Initial candidate capabilities and telemetry
+assert.equal(SOLVER_CAPABILITIES.initialCandidate, true);
+
+// On overswing, linear fast solve picks 'Relaxed' (TED -5 < 0), which must be rejected by preventOverswing
+const initOverswing = await solve({ ...overswing, preventOverswing: true, initialCandidate: true });
+assert.equal(initOverswing.status, 'optimal');
+assert.ok(initOverswing.initial_candidate_telemetry != null);
+assert.equal(initOverswing.initial_candidate_telemetry.generated, true);
+assert.equal(initOverswing.initial_candidate_telemetry.valid, false, 'Invalid linear seed (TED -5) must not be adopted');
+assert.deepEqual(initOverswing.selected_items.map(i => i.id), ['Valid']);
+
+// On straddle, linear fast solve produces a valid seed with non-negative TED
+const initStraddle = await solve({ ...straddle, useTrueErgo: true, initialCandidate: true });
+assert.equal(initStraddle.status, 'optimal');
+assert.ok(initStraddle.initial_candidate_telemetry != null);
+assert.equal(initStraddle.initial_candidate_telemetry.generated, true);
+assert.equal(initStraddle.initial_candidate_telemetry.valid, true, 'Valid linear seed must be accepted');
+assert.ok(initStraddle.initial_candidate_telemetry.score != null);
+
 console.log('incumbent gate and required-slot formulation passed');

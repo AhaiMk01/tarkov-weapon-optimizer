@@ -224,6 +224,10 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
         } else if (s.variant === 'candidate') {
           mech = s.outcome === 'timeout' ? 'timeout (no response)' : 'inactive (no telemetry)';
         }
+        if (resp?.initial_candidate_telemetry) {
+          const it = resp.initial_candidate_telemetry;
+          mech += ` | seed: ${it.valid ? 'valid' : 'invalid'}, score=${it.score != null ? it.score.toFixed(2) : 'N/A'}, ${it.elapsed_ms}ms, pruned=${it.pruned_nodes_count}`;
+        }
         if (resp?.spatial_telemetry) {
           const st = resp.spatial_telemetry;
           const traces = st.node_traces;

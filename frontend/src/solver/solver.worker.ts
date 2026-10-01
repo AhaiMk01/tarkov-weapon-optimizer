@@ -338,6 +338,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             timeLimitMs: remainingForSolve,
             retainLimitIncumbent: req.retain_limit_incumbent,
             branchOrdering: req.branch_ordering,
+            initialCandidate: req.initial_candidate,
           });
 
           result.solve_time_ms = performance.now() - optimizeStart;
@@ -528,6 +529,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
               capabilities: {
                 retain_limit_incumbent: true,
                 branch_ordering: true,
+                initial_candidate: true,
               },
             },
           });

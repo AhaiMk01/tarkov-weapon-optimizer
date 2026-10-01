@@ -245,4 +245,6 @@ export interface SolveParams {
   retainLimitIncumbent?: boolean;
   /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
   branchOrdering?: 'lighter-first' | 'heavier-first';
+  /** Generate a fast linear candidate build and seed incumbent before spatial search. */
+  initialCandidate?: boolean;
 }

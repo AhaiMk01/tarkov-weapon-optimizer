@@ -80,6 +80,7 @@ export function incumbentBlockReason(
 export const SOLVER_CAPABILITIES = {
   retainLimitIncumbent: true,
   branchOrdering: true,
+  initialCandidate: true,
 } as const;
 
 export type LimitIncumbentDecision =
@@ -303,9 +304,61 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     adopted_count: 0,
     improved_lower_bound: false,
   };
+  const initTelemetry: import('../api/client').InitialCandidateTelemetry = {
+    generated: false,
+    valid: false,
+    elapsed_ms: 0,
+    pruned_nodes_count: 0,
+  };
   const nodeTraces: import('../api/client').SpatialNodeTrace[] = [];
   let prunedCount = 0;
   let splitCount = 0;
+
+  if (params.initialCandidate && performance.now() < deadline) {
+    const initStart = performance.now();
+    initTelemetry.generated = true;
+    try {
+      const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
+      const seedParams: SolveParams = {
+        ...params,
+        preciseMode: false,
+        useTrueErgo: false,
+        preventOverswing: false,
+        useTchebycheff: false,
+        initialCandidate: false,
+      };
+      const candModel = await solveModel(seedParams, undefined, remainingSec);
+      if (candModel.status === 'optimal' && candModel.final_stats) {
+        const valErrors = validateBuild(toOptimizeRequest(params), candModel, params.itemLookup);
+        const tedOk = !params.preventOverswing || (candModel.final_stats.true_ergo_delta ?? -1) >= -1e-7;
+        if (valErrors.length === 0 && tedOk) {
+          const lpModel = buildLP(params);
+          const cols: Record<string, { Primal: number }> = {};
+          for (let i = 1; i <= lpModel.nItems; i++) {
+            const item = lpModel.indexToItem[i];
+            const isSel = candModel.selected_items.some(d => d.id === item);
+            cols[`x_${i}`] = { Primal: isSel ? 1 : 0 };
+            const d = candModel.selected_items.find(x => x.id === item);
+            cols[`buy_${i}`] = { Primal: (d && d.price > 0) ? 1 : 0 };
+          }
+          for (let b = 1; b <= lpModel.nBases; b++) {
+            const baseId = lpModel.baseIds[b - 1];
+            cols[`base_${b}`] = { Primal: (candModel.selected_preset?.id === baseId || (baseId === 'naked' && candModel.selected_preset?.id === params.weaponId)) ? 1 : 0 };
+          }
+          const ergoOrTed = params.useTrueErgo ? candModel.final_stats.true_ergo_delta! : candModel.final_stats.ergonomics;
+          const axes = lpModel.axes(cols, ergoOrTed);
+          candModel.objective_value = lpModel.score(axes);
+          candModel.axes = axes;
+          incumbent = candModel;
+          initTelemetry.valid = true;
+          initTelemetry.score = candModel.objective_value;
+        }
+      }
+    } catch {
+      // Seed failure does not stop search
+    }
+    initTelemetry.elapsed_ms = Math.round(performance.now() - initStart);
+  }
 
   const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
     const [a, b] = interval;
@@ -323,6 +376,9 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, node.bound);
       prunedCount++;
+      if (params.initialCandidate && initTelemetry.valid && nodes === 0) {
+        initTelemetry.pruned_nodes_count++;
+      }
       nodeTraces.push({
         node_index: nodeIdx,
         interval: node.interval,
@@ -451,6 +507,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       pruned_nodes_count: prunedCount,
       split_nodes_count: splitCount,
     },
+    initial_candidate_telemetry: params.initialCandidate ? initTelemetry : undefined,
   };
 }
 
@@ -484,6 +541,7 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
     player_level: params.playerLevel ?? undefined,
     branch_ordering: params.branchOrdering ?? undefined,
     retain_limit_incumbent: params.retainLimitIncumbent ?? undefined,
+    initial_candidate: params.initialCandidate ?? undefined,
   };
 }
 

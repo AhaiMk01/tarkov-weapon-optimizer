@@ -75,6 +75,8 @@ export interface OptimizeRequest {
   retain_limit_incumbent?: boolean;
   /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
   branch_ordering?: 'lighter-first' | 'heavier-first';
+  /** Generate a fast linear candidate build and seed incumbent before spatial search. */
+  initial_candidate?: boolean;
 }
 export interface ItemDetail {
   id: string;
@@ -137,6 +139,14 @@ export interface FinalStats {
   moa: number;
 }
 
+export interface InitialCandidateTelemetry {
+  generated: boolean;
+  valid: boolean;
+  score?: number;
+  elapsed_ms: number;
+  pruned_nodes_count: number;
+}
+
 export interface SpatialNodeTrace {
   node_index: number;
   interval: [number, number];
@@ -195,6 +205,8 @@ export interface OptimizeResponse {
   retention_telemetry?: RetentionTelemetry;
   /** Node-by-node spatial search trace and pruning telemetry. */
   spatial_telemetry?: SpatialSearchTelemetry;
+  /** Telemetry on initial candidate generation, validation, and outer-search pruning. */
+  initial_candidate_telemetry?: InitialCandidateTelemetry;
 }
 
 export type GameMode = 'regular' | 'pve';

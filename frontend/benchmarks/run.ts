@@ -37,11 +37,12 @@ async function main() {
   const outDir = path.resolve(__dirname, String(flags['output'] || 'results'));
   fs.mkdirSync(outDir, { recursive: true });
 
-  const experiment = String(flags['experiment'] || (flags['branch-ordering-pairs'] ? 'branch-ordering' : (flags['retention-pairs'] ? 'retention' : (flags['pairs'] ? 'bounds' : 'single'))));
+  const experiment = String(flags['experiment'] || (flags['initial-candidate-pairs'] ? 'initial-candidate' : (flags['branch-ordering-pairs'] ? 'branch-ordering' : (flags['retention-pairs'] ? 'retention' : (flags['pairs'] ? 'bounds' : 'single')))));
   const isRetention = experiment === 'retention';
   const isBranchOrdering = experiment === 'branch-ordering';
-  const isExperiment = isRetention || isBranchOrdering;
-  const pairsFlag = flags['branch-ordering-pairs'] || flags['retention-pairs'] || flags['pairs'];
+  const isInitialCandidate = experiment === 'initial-candidate';
+  const isExperiment = isRetention || isBranchOrdering || isInitialCandidate;
+  const pairsFlag = flags['initial-candidate-pairs'] || flags['branch-ordering-pairs'] || flags['retention-pairs'] || flags['pairs'];
   const isPairedMode = Boolean(pairsFlag) || isExperiment;
   const pairCount = typeof pairsFlag === 'number' ? Number(pairsFlag) : (typeof pairsFlag === 'string' ? Number(pairsFlag) : 5);
   const variant: 'baseline' | 'candidate' = (flags['candidate'] || flags['variant'] === 'candidate') ? 'candidate' : 'baseline';
@@ -50,12 +51,16 @@ async function main() {
   const endpointCacheMode = String(flags['endpoint-cache'] || 'warm') as 'warm' | 'cold';
   const cohort = String(flags['cohort'] || (isExperiment && pairCount >= 5 ? 'formal' : 'pilot')) as 'pilot' | 'formal';
   const baselineRevision = 'ed7099e';
-  const candidateRevision = isBranchOrdering
-    ? 'branch-ordering-candidate.patch'
-    : (isRetention ? 'retention-candidate.patch' : undefined);
-  const candidatePatch = isBranchOrdering
-    ? 'frontend/benchmarks/experiments/branch-ordering-candidate.patch'
-    : (isRetention ? 'frontend/benchmarks/experiments/retention-candidate.patch' : undefined);
+  const candidateRevision = isInitialCandidate
+    ? 'initial-candidate.patch'
+    : (isBranchOrdering
+      ? 'branch-ordering-candidate.patch'
+      : (isRetention ? 'retention-candidate.patch' : undefined));
+  const candidatePatch = isInitialCandidate
+    ? 'frontend/benchmarks/experiments/initial-candidate.patch'
+    : (isBranchOrdering
+      ? 'frontend/benchmarks/experiments/branch-ordering-candidate.patch'
+      : (isRetention ? 'frontend/benchmarks/experiments/retention-candidate.patch' : undefined));
   const url = String(flags['url'] || 'http://localhost:5173/benchmarks/index.html');
   const browserPath = flags['browser'] ? String(flags['browser']) : findBrowserExecutable();
 
@@ -122,6 +127,16 @@ async function main() {
         );
       }
       console.log('Verified active worker supports branch_ordering capability.');
+    } else if (isInitialCandidate) {
+      const statusPayload = await runner.getStatus();
+      const hasCapability = Boolean((statusPayload as any)?.capabilities?.initial_candidate);
+      if (!hasCapability) {
+        throw new Error(
+          'Initial candidate experiment requested, but active worker does not report initial_candidate capability. ' +
+          'Refusing to run identical-policy comparison. Please ensure solver has candidate implementation.'
+        );
+      }
+      console.log('Verified active worker supports initial_candidate capability.');
     }
 
     for (const caseItem of cases) {
@@ -129,16 +144,21 @@ async function main() {
       const epCache = isSweet ? endpointCacheMode : 'not-applicable';
 
       if (isPairedMode) {
-        const baseCase = isBranchOrdering
-          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'lighter-first' as const } }
-          : (isRetention
-            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: false } }
-            : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } });
-        const candCase = isBranchOrdering
-          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'heavier-first' as const } }
-          : (isRetention
-            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: true } }
-            : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } });
+        const baseCase = isInitialCandidate
+          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, initial_candidate: false } }
+          : (isBranchOrdering
+            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'lighter-first' as const } }
+            : (isRetention
+              ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: false } }
+              : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } }));
+
+        const candCase = isInitialCandidate
+          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, initial_candidate: true } }
+          : (isBranchOrdering
+            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'heavier-first' as const } }
+            : (isRetention
+              ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: true } }
+              : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } }));
 
         // In experiment mode (retention or branch-ordering), warmups are excluded: five alternating pairs only.
         if (!isExperiment) {
