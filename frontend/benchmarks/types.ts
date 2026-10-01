@@ -46,4 +46,7 @@ export interface Sample {
   memory: { scope: 'page-js-heap-excludes-worker-wasm'; before: number | null; after: number | null };
   experiment?: string;
   endpointCache?: string;
+  baselineRevision?: string;
+  candidateRevision?: string;
+  candidatePatch?: string;
 }

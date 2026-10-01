@@ -123,6 +123,15 @@ const benchmarkHarness = {
     worker.postMessage({ type: 'clearCache', id });
     await promise;
   },
+
+  async getStatus(): Promise<any> {
+    if (!worker) return null;
+    const id = msgSeq++;
+    const { promise, resolve } = Promise.withResolvers<unknown>();
+    pending.set(id, resolve);
+    worker.postMessage({ type: 'getStatus', id, payload: { lang: 'en', gameMode: 'regular' } });
+    return promise;
+  },
 };
 
 interface WindowWithBenchmark extends Window {

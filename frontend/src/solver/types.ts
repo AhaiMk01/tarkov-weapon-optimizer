@@ -237,4 +237,10 @@ export interface SolveParams {
   preciseMode?: boolean;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   boundsMode?: 'structural' | 'naive';
+  /**
+   * When a MIP hits a limit, a validated integral build may become a lower bound.
+   * The limit objective is never an upper bound. Default keeps the legacy stop
+   * with no limit incumbent. Each node still receives the remaining deadline.
+   */
+  retainLimitIncumbent?: boolean;
 }

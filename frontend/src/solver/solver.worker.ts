@@ -336,6 +336,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             preciseMode: usePrecise,
             boundsMode: req.bounds_mode,
             timeLimitMs: remainingForSolve,
+            retainLimitIncumbent: req.retain_limit_incumbent,
           });
 
           result.solve_time_ms = performance.now() - optimizeStart;
@@ -516,9 +517,18 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
         }
 
         case 'getStatus': {
-          // Ensure data is loaded, return current timestamp
+          // Ensure data is loaded, return current timestamp and solver capabilities
           await getOrLoadData(lang, gameMode);
-          self.postMessage({ type: 'result', id, payload: { timestamp: Date.now() } });
+          self.postMessage({
+            type: 'result',
+            id,
+            payload: {
+              timestamp: Date.now(),
+              capabilities: {
+                retain_limit_incumbent: true,
+              },
+            },
+          });
           break;
         }
 

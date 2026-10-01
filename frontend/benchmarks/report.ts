@@ -198,8 +198,8 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
     const nonWarmup = rawSamples.filter(s => !s.warmup);
     if (nonWarmup.length > 0) {
       lines.push('## Detailed Sample Outcomes');
-      lines.push('| Case ID | Rep | Variant | Outcome | Status | Termination | Validated | Gap | Bound Range | Elapsed (ms) |');
-      lines.push('|---|---:|---|---|---|---|:---:|---:|---:|---:|');
+      lines.push('| Case ID | Rep | Variant | Outcome | Status | Termination | Validated | Gap | Bound Range | Elapsed (ms) | Retention Mechanism |');
+      lines.push('|---|---:|---|---|---|---|:---:|---:|---:|---:|---|');
       for (const s of nonWarmup) {
         const resp = s.response as (OptimizeResponse | undefined);
         const opt = resp?.optimization;
@@ -211,7 +211,20 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
         const hi = opt?.upper_bound != null ? opt.upper_bound.toFixed(2) : 'inf';
         const bounds = opt ? `[${lo}, ${hi}]` : 'N/A';
         const elapsed = s.elapsedMs != null ? s.elapsedMs.toFixed(1) : (s.outcome === 'timeout' ? `>=${s.deadlineMs}` : 'N/A');
-        lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} |`);
+        let mech = 'N/A';
+        if (s.variant === 'baseline') {
+          mech = 'baseline (disabled)';
+        } else if (resp?.retention_telemetry) {
+          const tel = resp.retention_telemetry;
+          if (tel.improved_lower_bound) mech = `active (improved bound, ${tel.adopted_count}/${tel.timeout_count})`;
+          else if (tel.adopted_count > 0) mech = `active (adopted, ${tel.adopted_count}/${tel.timeout_count})`;
+          else if (tel.eligible_count > 0) mech = `inactive (eligible but lower, 0/${tel.timeout_count})`;
+          else if (tel.timeout_count > 0) mech = `inactive (ineligible timeout, 0/${tel.timeout_count})`;
+          else mech = 'inactive (0 timeouts)';
+        } else if (s.variant === 'candidate') {
+          mech = s.outcome === 'timeout' ? 'timeout (no response)' : 'inactive (no telemetry)';
+        }
+        lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} | ${mech} |`);
       }
       lines.push('');
     }

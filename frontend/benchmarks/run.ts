@@ -47,6 +47,9 @@ async function main() {
   const runs = isPairedMode ? pairCount : (Number(flags['runs']) || 5);
   const targetCase = flags['case'] ? String(flags['case']) : null;
   const endpointCacheMode = String(flags['endpoint-cache'] || 'warm') as 'warm' | 'cold';
+  const baselineRevision = 'ebb4a2c';
+  const candidateRevision = 'retention-candidate.patch';
+  const candidatePatch = 'frontend/benchmarks/experiments/retention-candidate.patch';
   const url = String(flags['url'] || 'http://localhost:5173/benchmarks/index.html');
   const browserPath = flags['browser'] ? String(flags['browser']) : findBrowserExecutable();
 
@@ -93,6 +96,17 @@ async function main() {
     console.log('Browser harness ready. Preparing IndexedDB and worker...');
     const prep = await runner.prepare(snapshot);
     console.log(`Harness initialized with ${prep.gunsCount} guns, ${prep.modsCount} mods.`);
+    if (isRetention) {
+      const statusPayload = await runner.getStatus();
+      const hasCapability = Boolean((statusPayload as any)?.capabilities?.retain_limit_incumbent);
+      if (!hasCapability) {
+        throw new Error(
+          'Retention experiment requested, but active worker does not report retain_limit_incumbent capability. ' +
+          'Refusing to run identical-policy comparison. Please ensure solver has candidate implementation.'
+        );
+      }
+      console.log('Verified active worker supports retain_limit_incumbent capability.');
+    }
 
     for (const caseItem of cases) {
       const isSweet = Boolean((caseItem.request as any)?.use_tchebycheff);
@@ -115,11 +129,34 @@ async function main() {
           const warmCand = await runner.runCase(candCase, { variant: 'candidate', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000, experiment, endpointCache: epCache });
           samplesFile.write(JSON.stringify(warmCand) + '\n');
           console.log(`${warmCand.outcome} (${warmCand.elapsedMs != null ? warmCand.elapsedMs.toFixed(0) : '?'}ms)`);
-        } else if (isSweet && endpointCacheMode === 'warm') {
+        }
+
+        let endpointCacheStatus = epCache;
+        if (isPairedMode && isSweet && endpointCacheMode === 'warm') {
           // Pre-warm the endpoint cache once under controlled conditions so endpoints do not confound pairs
           process.stdout.write('  [pre-warming endpoint cache] ... ');
-          const prewarmSample = await runner.runCase(baseCase, { variant: 'baseline', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000, experiment, endpointCache: 'prewarm' });
-          console.log(`warmed (${prewarmSample.elapsedMs != null ? prewarmSample.elapsedMs.toFixed(0) : '?'}ms)`);
+          const prewarmSample = await runner.runCase(baseCase, {
+            variant: 'baseline',
+            repetition: 0,
+            warmup: true,
+            sequence: seq++,
+            deadlineMs: 60000,
+            experiment,
+            endpointCache: 'prewarm',
+            baselineRevision,
+            candidateRevision: isRetention ? candidateRevision : undefined,
+            candidatePatch: isRetention ? candidatePatch : undefined,
+          });
+          const prewarmSuccess = prewarmSample.outcome === 'response'
+            && prewarmSample.response?.status === 'optimal'
+            && (prewarmSample.response as any)?.ideal_point != null;
+          if (prewarmSuccess) {
+            console.log(`warmed (${prewarmSample.elapsedMs != null ? prewarmSample.elapsedMs.toFixed(0) : '?'}ms)`);
+            endpointCacheStatus = 'warm';
+          } else {
+            console.log(`FAILED prewarm (${prewarmSample.outcome}, ${(prewarmSample.response as any)?.reason ?? prewarmSample.response?.status ?? 'no ideal point'}). Marking cache as failed-prewarm-cold.`);
+            endpointCacheStatus = 'failed-prewarm-cold';
+          }
         }
 
         for (let rep = 1; rep <= runs; rep++) {
@@ -134,7 +171,10 @@ async function main() {
             sequence: seq++,
             deadlineMs: 60000,
             experiment,
-            endpointCache: epCache,
+            endpointCache: endpointCacheStatus,
+            baselineRevision,
+            candidateRevision: isRetention ? candidateRevision : undefined,
+            candidatePatch: isRetention ? candidatePatch : undefined,
           });
           allSamples.push(baseSample);
           samplesFile.write(JSON.stringify(baseSample) + '\n');
@@ -150,7 +190,10 @@ async function main() {
             sequence: seq++,
             deadlineMs: 60000,
             experiment,
-            endpointCache: epCache,
+            endpointCache: endpointCacheStatus,
+            baselineRevision,
+            candidateRevision: isRetention ? candidateRevision : undefined,
+            candidatePatch: isRetention ? candidatePatch : undefined,
           });
           allSamples.push(candSample);
           samplesFile.write(JSON.stringify(candSample) + '\n');
@@ -196,8 +239,15 @@ async function main() {
     tasksCount: manifest.tasksCount,
   };
 
-  const summary = summarize(allSamples);
-  const reportMd = formatMarkdownReport(summary, meta, allSamples);
+  const samplesFromDisk: Sample[] = fs.existsSync(samplesPath)
+    ? fs.readFileSync(samplesPath, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l))
+    : [];
+  const allRetentionSamples = isRetention
+    ? samplesFromDisk.filter(s => s.experiment === 'retention')
+    : allSamples;
+  const targetSamples = allRetentionSamples.length > 0 ? allRetentionSamples : allSamples;
+  const summary = summarize(targetSamples);
+  const reportMd = formatMarkdownReport(summary, meta, targetSamples);
   fs.writeFileSync(reportPath, reportMd, 'utf8');
 
   console.log('\n' + reportMd);

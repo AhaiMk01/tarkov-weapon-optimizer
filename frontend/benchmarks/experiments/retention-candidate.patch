@@ -1,0 +1,494 @@
+diff --git a/frontend/src/api/client.ts b/frontend/src/api/client.ts
+index 487f7f2..b64dbf5 100644
+--- a/frontend/src/api/client.ts
++++ b/frontend/src/api/client.ts
+@@ -68,6 +68,11 @@ export interface OptimizeRequest {
+   bounds_mode?: 'structural' | 'naive';
+   /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
+   time_limit_ms?: number;
++  /**
++   * Keep a validated time-limit build as a lower bound only.
++   * Omitted means the legacy search, which does not adopt that build.
++   */
++  retain_limit_incumbent?: boolean;
+ }
+ export interface ItemDetail {
+   id: string;
+@@ -130,6 +135,17 @@ export interface FinalStats {
+   moa: number;
+ }
+ 
++export interface RetentionTelemetry {
++  /** How many MIP solves in the spatial tree stopped at a limit rather than optimality. */
++  timeout_count: number;
++  /** How many limit solutions had all expected columns integral and passed validateBuild. */
++  eligible_count: number;
++  /** How many limit solutions were adopted as the incumbent. */
++  adopted_count: number;
++  /** True if any adopted limit solution increased incumbent.objective_value. */
++  improved_lower_bound: boolean;
++}
++
+ export interface OptimizeResponse {
+   status: string;
+   selected_items: ItemDetail[];
+@@ -154,6 +170,8 @@ export interface OptimizeResponse {
+   };
+   /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
+   ideal_point?: IdealPoint;
++  /** Telemetry on whether incumbent retention operated during spatial search. */
++  retention_telemetry?: RetentionTelemetry;
+ }
+ 
+ export type GameMode = 'regular' | 'pve';
+diff --git a/frontend/src/solver/dataService.ts b/frontend/src/solver/dataService.ts
+index ac54fc8..7bde387 100644
+--- a/frontend/src/solver/dataService.ts
++++ b/frontend/src/solver/dataService.ts
+@@ -906,3 +906,12 @@ export async function ensureDataLoaded(lang: string, gameMode: string): Promise<
+ export function getLoadedState(lang: string, gameMode: string): LoadedState | undefined {
+   return stateCache.get(`${lang}:${gameMode}`);
+ }
++
++export function seedDataCache(lang: string, gameMode: string, guns: RawItem[], mods: RawItem[]): LoadedState {
++  lang = normalizeLang(lang);
++  const key = `${lang}:${gameMode}`;
++  const itemLookup = buildItemLookup(guns, mods);
++  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now() };
++  stateCache.set(key, state);
++  return state;
++}
+diff --git a/frontend/src/solver/solver.ts b/frontend/src/solver/solver.ts
+index efa195f..3d9f8cd 100644
+--- a/frontend/src/solver/solver.ts
++++ b/frontend/src/solver/solver.ts
+@@ -73,6 +73,39 @@ export function incumbentBlockReason(
+   return undefined;
+ }
+ 
++/**
++ * Solver features supported by this build.
++ * Benchmark runners check this to avoid running candidate flags against legacy code.
++ */
++export const SOLVER_CAPABILITIES = {
++  retainLimitIncumbent: true,
++} as const;
++
++export type LimitIncumbentDecision =
++  | { kind: 'absent' }
++  | { kind: 'diagnostic'; reason: string }
++  | { kind: 'lower-bound' };
++
++/**
++ * A time-limit column vector may become a lower bound only.
++ * It never supplies an upper bound. An empty limit solution is not a diagnostic.
++ */
++export function limitIncumbentDecision(
++  columns: Record<string, { Primal?: number } | undefined>,
++  expectedColumns: readonly string[],
++  nBases: number,
++  validationErrors: readonly string[],
++): LimitIncumbentDecision {
++  const anyFinite = expectedColumns.some(name => {
++    const primal = columns[name]?.Primal;
++    return primal != null && Number.isFinite(primal);
++  });
++  if (!anyFinite) return { kind: 'absent' };
++  const reason = incumbentBlockReason(columns, expectedColumns, nBases, validationErrors);
++  if (reason) return { kind: 'diagnostic', reason };
++  return { kind: 'lower-bound' };
++}
++
+ /** The secant underestimates the weight penalty, so this failure can still leave a valid upper bound. */
+ function isExpectedExactTedGap(errors: readonly string[]): boolean {
+   return errors.length > 0 && errors.every(error => error === PREVENT_OVERSWING_VIOLATION);
+@@ -151,6 +184,49 @@ interface ModelResponse extends OptimizeResponse {
+   incumbentEligible?: boolean;
+ }
+ 
++export function applySpatialNodeResult(args: {
++  nodeBound: number;
++  result: ModelResponse;
++  incumbent: ModelResponse | undefined;
++  retainLimitIncumbent: boolean;
++  preventOverswing: boolean;
++  telemetry: import('../api/client').RetentionTelemetry;
++}): { incumbent: ModelResponse | undefined; action: 'prune-infeasible' | 'branch' | 'stop'; bound: number; reason?: string } {
++  const { nodeBound, result, retainLimitIncumbent, preventOverswing, telemetry } = args;
++  let incumbent = args.incumbent;
++  if (result.status === 'infeasible') return { incumbent, action: 'prune-infeasible', bound: nodeBound };
++  const proved = result.status === 'optimal' && result.bound != null;
++  const isLimit = result.status === 'feasible' && result.bound == null;
++  if (isLimit) {
++    telemetry.timeout_count++;
++    if (result.incumbentEligible !== false && result.final_stats != null) {
++      telemetry.eligible_count++;
++    }
++  }
++  const retained = retainLimitIncumbent
++    && isLimit
++    && result.incumbentEligible !== false
++    && result.final_stats != null;
++
++  if ((proved && result.incumbentEligible !== false && result.final_stats) || retained) {
++    const ok = !preventOverswing || (result.final_stats?.true_ergo_delta ?? -1) >= -1e-7;
++    if (ok) {
++      if (!incumbent || result.objective_value > incumbent.objective_value) {
++        if (retained) {
++          telemetry.adopted_count++;
++          telemetry.improved_lower_bound = true;
++        }
++        incumbent = result;
++      }
++    }
++  }
++  if (!proved) {
++    // The incoming relaxation bound is the only upper bound. A limit objective is not one.
++    return { incumbent, action: 'stop', bound: nodeBound, reason: result.reason ?? result.status };
++  }
++  return { incumbent, action: 'branch', bound: Math.min(nodeBound, result.bound!) };
++}
++
+ /**
+  * Endpoint payoff table in the SAME raw-ergo/TED, recoil, purchase-cost axes as
+  * the final objective. Every endpoint retains every user feasibility constraint.
+@@ -216,6 +292,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+   let limitReason = 'Spatial node or time limit reached';
+   // Keep the largest discarded bound too: tolerance pruning must not report gap=0.
+   let closedBound = -Infinity;
++  const telemetry: import('../api/client').RetentionTelemetry = {
++    timeout_count: 0,
++    eligible_count: 0,
++    adopted_count: 0,
++    improved_lower_bound: false,
++  };
+   const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
+     const [a, b] = interval;
+     const mid = (a + b) / 2;
+@@ -232,21 +314,22 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+     const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
+     const result = await solveModel(params, node.interval, remainingSec);
+     nodes++;
+-    if (result.status === 'infeasible') continue;
+-    // A limit ObjectiveValue is a primal value, not an upper bound. Decoding and
+-    // unexpected validation failures are diagnostics: they stop the tree.
+-    if (result.status !== 'optimal' || result.bound == null) {
+-      unresolved = Math.max(unresolved, node.bound);
+-      limitReason = result.reason ?? result.status;
++    const step = applySpatialNodeResult({
++      nodeBound: node.bound,
++      result,
++      incumbent,
++      retainLimitIncumbent: params.retainLimitIncumbent === true,
++      preventOverswing: params.preventOverswing === true,
++      telemetry,
++    });
++    incumbent = step.incumbent;
++    if (step.action === 'prune-infeasible') continue;
++    if (step.action === 'stop') {
++      unresolved = Math.max(unresolved, step.bound);
++      limitReason = step.reason ?? result.status;
+       break;
+     }
+-    const bound = Math.min(node.bound, result.bound);
+-    // Exact TED can fail on a proved secant relaxation. Keep this upper bound
+-    // and refine; do not treat the ineligible build as a lower bound.
+-    if (result.incumbentEligible !== false && result.final_stats) {
+-      const feasible = !params.preventOverswing || result.final_stats.true_ergo_delta! >= -1e-7;
+-      if (feasible && (!incumbent || result.objective_value > incumbent.objective_value)) incumbent = result;
+-    }
++    const bound = step.bound;
+     if (incumbent && bound <= incumbent.objective_value + tolerance) {
+       closedBound = Math.max(closedBound, bound);
+       continue;
+@@ -277,6 +360,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+     reason: certified ? undefined : limitReason,
+     solve_time_ms: performance.now() - start,
+     optimization: { lower_bound: incumbent.objective_value, upper_bound: upper, absolute_gap: gap, tolerance, nodes, termination: certified ? 'optimal' : 'limit' },
++    retention_telemetry: params.retainLimitIncumbent ? telemetry : undefined,
+   };
+ }
+ 
+@@ -332,7 +416,8 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
+         selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+       };
+     }
+-    if (stop !== 'optimal') {
++    const retainableLimit = stop === 'limit' && params.retainLimitIncumbent === true;
++    if (stop !== 'optimal' && !retainableLimit) {
+       return {
+         status: 'incomplete',
+         reason: result.Status,
+@@ -346,13 +431,24 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
+     for (const item of lp.multiSlotItemIndices) {
+       for (const slot of lp.itemToSlotIndices.get(item) ?? []) expectedColumns.push(`p_${item}_${slot}`);
+     }
+-    const blocked = incumbentBlockReason(columns, expectedColumns, lp.nBases, []);
+-    if (blocked) {
+-      return {
+-        status: 'incomplete',
+-        reason: blocked,
+-        selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+-      };
++    if (retainableLimit) {
++      const preliminary = limitIncumbentDecision(columns, expectedColumns, lp.nBases, []);
++      if (preliminary.kind !== 'lower-bound') {
++        return {
++          status: 'incomplete',
++          reason: preliminary.kind === 'diagnostic' ? preliminary.reason : result.Status,
++          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
++        };
++      }
++    } else {
++      const blocked = incumbentBlockReason(columns, expectedColumns, lp.nBases, []);
++      if (blocked) {
++        return {
++          status: 'incomplete',
++          reason: blocked,
++          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
++        };
++      }
+     }
+     const solvedColumns = columns as Record<string, { Primal: number }>;
+     const selectedIds: string[] = [];
+@@ -638,6 +734,29 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
+     const validationErrors = validateBuild(toOptimizeRequest(params), candidate, params.itemLookup);
+     const rejected = incumbentBlockReason(columns, expectedColumns, lp.nBases, validationErrors);
+     const dual = certifiedDualBound(result.Status, result.ObjectiveValue);
++    if (retainableLimit) {
++      const decision = limitIncumbentDecision(columns, expectedColumns, lp.nBases, validationErrors);
++      if (decision.kind !== 'lower-bound') {
++        return {
++          status: 'incomplete',
++          reason: decision.kind === 'diagnostic' ? decision.reason : result.Status,
++          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
++        };
++      }
++      return {
++        status: 'feasible',
++        incumbentEligible: true,
++        reason: result.Status,
++        selected_items: detailedItems,
++        selected_preset: presetDetail,
++        objective_value: lp.score(axes),
++        axes,
++        final_stats: finalStats,
++        solve_time_ms: performance.now() - startTime,
++        slot_pairs: slotPairs,
++        ideal_point: params.idealPoint,
++      };
++    }
+     if (rejected) {
+       // The secant is an outer approximation. Exact TED can fail while the
+       // optimal relaxation value remains a valid upper bound for this interval.
+diff --git a/frontend/src/solver/solver.worker.ts b/frontend/src/solver/solver.worker.ts
+index 9583ffd..51d2e4b 100644
+--- a/frontend/src/solver/solver.worker.ts
++++ b/frontend/src/solver/solver.worker.ts
+@@ -79,7 +79,7 @@ function getCompatMap(data: LoadedData, weaponId: string): CompatibilityMap {
+ }
+ 
+ interface WorkerMessage {
+-  type: 'loadData' | 'optimize' | 'explore' | 'getInfo' | 'getWeaponMods' | 'getGunsmithTasks' | 'getStatus' | 'computeMOAFloor';
++  type: 'loadData' | 'optimize' | 'explore' | 'getInfo' | 'getWeaponMods' | 'getGunsmithTasks' | 'getStatus' | 'computeMOAFloor' | 'clearCache';
+   id: number;
+   payload: {
+     lang?: string;
+@@ -96,11 +96,17 @@ let dispatchChain: Promise<void> = Promise.resolve();
+ 
+ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+   const { type, id, payload } = eventData;
+-  const lang = payload.lang ?? 'en';
+-  const gameMode = payload.gameMode ?? 'regular';
++  const lang = payload?.lang ?? 'en';
++  const gameMode = payload?.gameMode ?? 'regular';
+ 
+   try {
+     switch (type) {
++        case 'clearCache': {
++          idealPointCache.clear();
++          self.postMessage({ type: 'result', id, payload: { cleared: true } });
++          break;
++        }
++
+         case 'loadData': {
+           await getOrLoadData(lang, gameMode);
+           self.postMessage({ type: 'dataLoaded', id, payload: null });
+@@ -205,43 +211,99 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+           const precReq = normalizePrecisionRequest(req.precise_mode);
+           const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
+ 
++          const optimizeStart = performance.now();
++          const totalLimitMs = Math.max(0, req.time_limit_ms ?? 60_000);
++          const deadline = optimizeStart + totalLimitMs;
++
+           let idealPoint: IdealPoint | undefined;
+           if (req.use_tchebycheff) {
+             const cacheKey = getIdealCacheKey(lang, gameMode, req);
+             idealPoint = idealPointCache.get(cacheKey);
+             if (!idealPoint) {
+-              idealPoint = await computeIdealPoint({
+-                weaponId: req.weapon_id,
+-                itemLookup: data.itemLookup,
+-                compatibilityMap: compatMap,
+-                maxPrice: req.max_price,
+-                minErgonomics: req.min_ergonomics,
+-                maxRecoilV: req.max_recoil_v,
+-                maxRecoilSum: req.max_recoil_sum,
+-                minMagCapacity: req.min_mag_capacity,
+-                minSightingRange: req.min_sighting_range,
+-                maxWeight: req.max_weight,
+-                maxMOA: req.max_moa,
+-                includeItems: req.include_items,
+-                excludeItems: req.exclude_items,
+-                includeCategories: req.include_categories,
+-                excludeCategories: req.exclude_categories,
+-                useTrueErgo: req.use_true_ergo ?? false,
+-                preventOverswing: req.prevent_overswing ?? false,
+-                equipErgoModifier: req.equip_ergo_modifier,
+-                traderLevels: req.trader_levels as TraderLevels | undefined,
+-                fleaAvailable: req.flea_available ?? true,
+-                barterAvailable: req.barter_available ?? false,
+-                barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
+-                playerLevel: req.player_level,
+-                preciseMode: usePrecise,
+-                boundsMode: req.bounds_mode,
+-                timeLimitMs: req.time_limit_ms,
+-              });
+-              idealPointCache.set(cacheKey, idealPoint);
++              const remainingForEndpoints = Math.max(0, deadline - performance.now());
++              if (remainingForEndpoints <= 0) {
++                self.postMessage({
++                  type: 'result',
++                  id,
++                  payload: {
++                    status: 'incomplete',
++                    reason: 'Request time limit reached before endpoint computation',
++                    selected_items: [],
++                    objective_value: 0,
++                    solve_time_ms: performance.now() - optimizeStart,
++                    precision_request: precReq,
++                    precision_resolved: usePrecise ? 'precise' : 'fast',
++                  },
++                });
++                break;
++              }
++              try {
++                idealPoint = await computeIdealPoint({
++                  weaponId: req.weapon_id,
++                  itemLookup: data.itemLookup,
++                  compatibilityMap: compatMap,
++                  maxPrice: req.max_price,
++                  minErgonomics: req.min_ergonomics,
++                  maxRecoilV: req.max_recoil_v,
++                  maxRecoilSum: req.max_recoil_sum,
++                  minMagCapacity: req.min_mag_capacity,
++                  minSightingRange: req.min_sighting_range,
++                  maxWeight: req.max_weight,
++                  maxMOA: req.max_moa,
++                  includeItems: req.include_items,
++                  excludeItems: req.exclude_items,
++                  includeCategories: req.include_categories,
++                  excludeCategories: req.exclude_categories,
++                  useTrueErgo: req.use_true_ergo ?? false,
++                  preventOverswing: req.prevent_overswing ?? false,
++                  equipErgoModifier: req.equip_ergo_modifier,
++                  traderLevels: req.trader_levels as TraderLevels | undefined,
++                  fleaAvailable: req.flea_available ?? true,
++                  barterAvailable: req.barter_available ?? false,
++                  barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
++                  playerLevel: req.player_level,
++                  preciseMode: usePrecise,
++                  boundsMode: req.bounds_mode,
++                  timeLimitMs: remainingForEndpoints,
++                });
++                idealPointCache.set(cacheKey, idealPoint);
++              } catch (err) {
++                self.postMessage({
++                  type: 'result',
++                  id,
++                  payload: {
++                    status: 'incomplete',
++                    reason: err instanceof Error ? err.message : String(err),
++                    selected_items: [],
++                    objective_value: 0,
++                    solve_time_ms: performance.now() - optimizeStart,
++                    precision_request: precReq,
++                    precision_resolved: usePrecise ? 'precise' : 'fast',
++                  },
++                });
++                break;
++              }
+             }
+           }
+ 
++          const remainingForSolve = Math.max(0, deadline - performance.now());
++          if (remainingForSolve <= 0) {
++            self.postMessage({
++              type: 'result',
++              id,
++              payload: {
++                status: 'incomplete',
++                reason: 'Request time limit reached before search',
++                selected_items: [],
++                objective_value: 0,
++                solve_time_ms: performance.now() - optimizeStart,
++                precision_request: precReq,
++                precision_resolved: usePrecise ? 'precise' : 'fast',
++              },
++            });
++            break;
++          }
++
+           const result: OptimizeResponse = await solve({
+             weaponId: req.weapon_id,
+             itemLookup: data.itemLookup,
+@@ -273,9 +335,11 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+             playerLevel: req.player_level,
+             preciseMode: usePrecise,
+             boundsMode: req.bounds_mode,
+-            timeLimitMs: req.time_limit_ms,
++            timeLimitMs: remainingForSolve,
++            retainLimitIncumbent: req.retain_limit_incumbent,
+           });
+ 
++          result.solve_time_ms = performance.now() - optimizeStart;
+           result.precision_request = precReq;
+           result.precision_resolved = usePrecise ? 'precise' : 'fast';
+           self.postMessage({ type: 'result', id, payload: result });
+@@ -453,9 +517,18 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+         }
+ 
+         case 'getStatus': {
+-          // Ensure data is loaded, return current timestamp
++          // Ensure data is loaded, return current timestamp and solver capabilities
+           await getOrLoadData(lang, gameMode);
+-          self.postMessage({ type: 'result', id, payload: { timestamp: Date.now() } });
++          self.postMessage({
++            type: 'result',
++            id,
++            payload: {
++              timestamp: Date.now(),
++              capabilities: {
++                retain_limit_incumbent: true,
++              },
++            },
++          });
+           break;
+         }
+ 
+diff --git a/frontend/src/solver/types.ts b/frontend/src/solver/types.ts
+index b991372..dea6ad5 100644
+--- a/frontend/src/solver/types.ts
++++ b/frontend/src/solver/types.ts
+@@ -237,4 +237,10 @@ export interface SolveParams {
+   preciseMode?: boolean;
+   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
+   boundsMode?: 'structural' | 'naive';
++  /**
++   * When a MIP hits a limit, a validated integral build may become a lower bound.
++   * The limit objective is never an upper bound. Default keeps the legacy stop
++   * with no limit incumbent. Each node still receives the remaining deadline.
++   */
++  retainLimitIncumbent?: boolean;
+ }

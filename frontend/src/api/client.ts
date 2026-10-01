@@ -68,6 +68,11 @@ export interface OptimizeRequest {
   bounds_mode?: 'structural' | 'naive';
   /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
   time_limit_ms?: number;
+  /**
+   * Keep a validated time-limit build as a lower bound only.
+   * Omitted means the legacy search, which does not adopt that build.
+   */
+  retain_limit_incumbent?: boolean;
 }
 export interface ItemDetail {
   id: string;
@@ -130,6 +135,17 @@ export interface FinalStats {
   moa: number;
 }
 
+export interface RetentionTelemetry {
+  /** How many MIP solves in the spatial tree stopped at a limit rather than optimality. */
+  timeout_count: number;
+  /** How many limit solutions had all expected columns integral and passed validateBuild. */
+  eligible_count: number;
+  /** How many limit solutions were adopted as the incumbent. */
+  adopted_count: number;
+  /** True if any adopted limit solution increased incumbent.objective_value. */
+  improved_lower_bound: boolean;
+}
+
 export interface OptimizeResponse {
   status: string;
   selected_items: ItemDetail[];
@@ -154,6 +170,8 @@ export interface OptimizeResponse {
   };
   /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
   ideal_point?: IdealPoint;
+  /** Telemetry on whether incumbent retention operated during spatial search. */
+  retention_telemetry?: RetentionTelemetry;
 }
 
 export type GameMode = 'regular' | 'pve';

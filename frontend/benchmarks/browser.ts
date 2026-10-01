@@ -46,6 +46,7 @@ interface BenchmarkWindow {
     prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number }>;
     run(caseItem: BenchmarkCase, deadlineMs: number): Promise<BrowserResult>;
     clearCache(): Promise<void>;
+    getStatus(): Promise<any>;
   };
 }
 
@@ -86,6 +87,11 @@ export class BenchmarkBrowserRunner {
     await this.page.evaluate(() => (window as unknown as BenchmarkWindow).benchmark.clearCache());
   }
 
+  async getStatus(): Promise<any> {
+    if (!this.page) throw new Error('Browser runner not started');
+    return this.page.evaluate(() => (window as unknown as BenchmarkWindow).benchmark.getStatus());
+  }
+
   async runCase(
     caseItem: BenchmarkCase,
     opts: {
@@ -96,6 +102,9 @@ export class BenchmarkBrowserRunner {
       deadlineMs?: number;
       experiment?: string;
       endpointCache?: string;
+      baselineRevision?: string;
+      candidateRevision?: string;
+      candidatePatch?: string;
     },
   ): Promise<Sample> {
     if (!this.page) throw new Error('Browser runner not started');
@@ -150,6 +159,9 @@ export class BenchmarkBrowserRunner {
       memory: { scope: 'page-js-heap-excludes-worker-wasm', before: null, after: null },
       experiment: opts.experiment,
       endpointCache: opts.endpointCache,
+      baselineRevision: opts.baselineRevision,
+      candidateRevision: opts.candidateRevision,
+      candidatePatch: opts.candidatePatch,
     };
   }
 
