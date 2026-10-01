@@ -20,24 +20,39 @@ export function canonicalizeArray(arr?: readonly string[] | null): string[] | un
 }
 
 /**
- * Normalizes trader loyalty levels map: lowercases names, sorts keys alphabetically.
+ * Canonicalizes trader levels map once at request entry:
+ * - Trims whitespace and lowercases all vendor names.
+ * - Resolves duplicate aliases deterministically: last-entry-wins in natural iteration order.
+ * - Sorts keys alphabetically for stable serialization.
+ *
+ * This normalized map MUST be used consistently across:
+ * - Cache key generation (computeIdealPointCacheKey)
+ * - Solver pricing (dataService.ts:getAvailablePrice)
+ * - Independent build validation (validateBuild.ts)
  */
 export function canonicalizeTraderLevels(levels?: TraderLevels | null): Record<string, number> | undefined {
   if (!levels) return undefined;
-  const entries = Object.entries(levels)
-    .map(([k, v]) => [k.trim().toLowerCase(), Number(v)] as const)
-    .sort(([a], [b]) => a.localeCompare(b));
-  if (entries.length === 0) return undefined;
+  // Natural iteration order: last-entry-wins for conflicting aliases (e.g. {"mechanic": 0, "Mechanic": 4} -> 4)
+  const merged = new Map<string, number>();
+  for (const [k, v] of Object.entries(levels)) {
+    const key = k.trim().toLowerCase();
+    if (key.length > 0) {
+      merged.set(key, Number(v));
+    }
+  }
+  if (merged.size === 0) return undefined;
+  // Sort alphabetically for deterministic serialization and lookup
+  const sortedKeys = Array.from(merged.keys()).sort();
   const out: Record<string, number> = {};
-  for (const [k, v] of entries) {
-    out[k] = v;
+  for (const k of sortedKeys) {
+    out[k] = merged.get(k)!;
   }
   return out;
 }
 
 /**
  * Computes canonical key for Tier 1 Structural Bounds reuse.
- * Invariant to all preferences, prices, and constraints except weaponId and maxWeight.
+ * Invariant to all preferences, prices, and constraints except weaponId and data snapshot.
  */
 export function computeStructuralBoundsCacheKey(
   lang: string,
@@ -86,7 +101,7 @@ export function computeIdealPointCacheKey(
     use_true_ergo: Boolean(req.use_true_ergo),
     precise_mode: req.precise_mode ?? undefined,
     bounds_mode: req.bounds_mode ?? 'structural',
-    // Market domain
+    // Market domain (strictly canonicalized)
     trader_levels: canonicalizeTraderLevels(req.trader_levels),
     flea_available: req.flea_available ?? true,
     barter_available: req.barter_available ?? false,

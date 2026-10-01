@@ -512,25 +512,30 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     rawLo = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.min(0, e), 0);
     rawHi = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.max(0, e), 0);
   } else {
-    // If structuralBounds was supplied, verify context matches current weapon
+    // Require unclipped physical bounds and matching preparation context for reuse.
+    // Recompute when provenance is absent or legacy-shaped; never trust a clipped fallback.
     const supplied = params.structuralBounds;
-    const isContextValid = supplied && (!supplied.context || supplied.context.weaponId === params.weaponId);
-    const structural = isContextValid ? supplied : computeStructuralBounds(
+    const isProven = supplied &&
+      supplied.context &&
+      typeof supplied.context === 'object' &&
+      supplied.context.weaponId === params.weaponId &&
+      Array.isArray(supplied.physicalWeightBounds) &&
+      supplied.physicalWeightBounds.length === 2 &&
+      Number.isFinite(supplied.physicalWeightBounds[0]) &&
+      Number.isFinite(supplied.physicalWeightBounds[1]);
+
+    const structural = isProven ? supplied : computeStructuralBounds(
       params.weaponId,
       params.itemLookup,
       params.compatibilityMap,
       { maxWeight: params.maxWeight },
     );
-    // Apply request maxWeight dynamically to unclipped physical bounds if present
-    if (structural.physicalWeightBounds) {
-      const [physMin, physMax] = structural.physicalWeightBounds;
-      const effectiveMax = params.maxWeight != null && params.maxWeight > 0
-        ? Math.max(physMin, Math.min(physMax, params.maxWeight))
-        : physMax;
-      weightBounds = [physMin, effectiveMax];
-    } else {
-      weightBounds = structural.weightBounds;
-    }
+    // Apply request maxWeight dynamically to verified unclipped physical bounds
+    const [physMin, physMax] = structural.physicalWeightBounds;
+    const effectiveMax = params.maxWeight != null && params.maxWeight > 0
+      ? Math.max(physMin, Math.min(physMax, params.maxWeight))
+      : physMax;
+    weightBounds = [physMin, effectiveMax];
     rawLo = Math.min(weapon_naked_ergo_scaled, structural.ergoBounds[0] * ERGO_SCALE);
     rawHi = Math.max(1000, structural.ergoBounds[1] * ERGO_SCALE);
   }

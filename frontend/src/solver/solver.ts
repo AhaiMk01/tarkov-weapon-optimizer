@@ -11,6 +11,7 @@ import { buildLP, MOA_K } from './lpBuilder';
 import { trueErgoDelta, overswingPercent, tedContribution } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { getAvailablePrice } from './dataService';
+import { canonicalizeTraderLevels } from './reuseKey';
 
 interface HighsInstance {
   solve(problem: string, options?: {
@@ -198,6 +199,7 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
   const start = performance.now();
   const deadline = start + Math.max(0, input.timeLimitMs ?? 60_000);
   let params = { ...input };
+  if (params.traderLevels) params.traderLevels = canonicalizeTraderLevels(params.traderLevels) as any;
   const nonlinear = !!(params.useTrueErgo || params.preventOverswing);
   // Certificates describe real slot placements, not the fast model's restrictions.
   if (nonlinear) params.preciseMode = true;
@@ -313,7 +315,7 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
     use_tchebycheff: params.useTchebycheff,
     prevent_overswing: params.preventOverswing,
     equip_ergo_modifier: params.equipErgoModifier ?? undefined,
-    trader_levels: params.traderLevels ?? undefined,
+    trader_levels: params.traderLevels ? (canonicalizeTraderLevels(params.traderLevels) as any) : undefined,
     flea_available: params.fleaAvailable,
     barter_available: params.barterAvailable,
     barter_exclude_dogtags: params.barterExcludeDogtags,

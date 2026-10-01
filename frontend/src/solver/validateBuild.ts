@@ -1,5 +1,6 @@
 import type { OptimizeRequest, OptimizeResponse } from '../api/client';
 import type { ItemLookup, OfferInfo, SlotInfo } from './types';
+import { canonicalizeTraderLevels } from './reuseKey';
 
 /** Absolute tolerances: hard constraints and reconstructed display statistics. */
 export const VALIDATION_EPSILON = 1e-6;
@@ -64,6 +65,8 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
   for (const group of request.include_categories ?? []) if (!mods.some(m => group.includes(m.entry.stats.category_id))) fail(`Missing required category group ${group.join('|')}`);
 
   type Priced = { offers: OfferInfo[]; price: number; price_source: string; purchasable?: boolean; min_level_flea?: number };
+  // Canonicalize trader levels once upfront for validation: identical mapping as solver and cache key
+  const normalizedValidationTraders = canonicalizeTraderLevels(request.trader_levels);
   const offer = (stats: Priced): { price: number; source: string } | undefined => {
     if (stats.purchasable === false) return undefined;
     const fleaAllowed = request.flea_available !== false && (request.player_level == null || request.player_level >= (stats.min_level_flea ?? 0));
@@ -72,17 +75,9 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
       if (o.source.startsWith('barter:') && !request.barter_available) return false;
       if (request.barter_exclude_dogtags && o.requires_dogtag) return false;
       if (o.source === 'fleaMarket') return fleaAllowed;
-      let reqLevel: number | undefined;
-      if (request.trader_levels) {
-        const vnorm = o.vendor_normalized.toLowerCase();
-        reqLevel = request.trader_levels[vnorm];
-        if (reqLevel === undefined) {
-          for (const [k, v] of Object.entries(request.trader_levels)) {
-            if (k.toLowerCase() === vnorm) { reqLevel = v; break; }
-          }
-        }
-      }
-      return o.trader_level == null || o.trader_level <= (reqLevel ?? 4);
+      const vnorm = o.vendor_normalized.toLowerCase();
+      const traderLevel = normalizedValidationTraders ? (normalizedValidationTraders[vnorm] ?? 4) : 4;
+      return o.trader_level == null || o.trader_level <= traderLevel;
     });
     return allowed.reduce<OfferInfo | undefined>((best, o) => !best || o.price < best.price ? o : best, undefined);
   };

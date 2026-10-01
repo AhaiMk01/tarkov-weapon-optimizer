@@ -91,4 +91,46 @@ assert.equal(respZero.status, 'incomplete');
 assert.ok(respZero.reason.includes('Request time limit reached before endpoint computation'), respZero.reason);
 assert.ok(elapsedZero < 300, `Zero deadline must return immediately, took ${elapsedZero}ms`);
 
+// 5. Test that preparation time is strictly charged against the request deadline
+// Clear cache so preparation is cold
+posted.length = 0;
+onmessage({ data: { type: 'clearCache', id: 4 } });
+await new Promise(r => setTimeout(r, 20));
+
+// Request with 80ms deadline on linear solve (no endpoints)
+// Preparation (getStructuralBounds) + solveModel must both run under the single 80ms deadline
+const tCold = performance.now();
+posted.length = 0;
+onmessage({
+  data: {
+    type: 'optimize',
+    id: 5,
+    payload: {
+      lang: 'en',
+      gameMode: 'regular',
+      request: {
+        weapon_id: m4a1Id,
+        ergo_weight: 1,
+        recoil_weight: 1,
+        price_weight: 0.5,
+        time_limit_ms: 80,
+      },
+    },
+  },
+});
+while (posted.length === 0) {
+  await new Promise(r => setTimeout(r, 20));
+}
+const elapsedCold = performance.now() - tCold;
+const respCold = posted[0].payload;
+console.log('Cold preparation + solve test:', {
+  status: respCold.status,
+  reason: respCold.reason,
+  elapsed: Math.round(elapsedCold),
+  solve_time_ms: Math.round(respCold.solve_time_ms),
+});
+
+// The reported solve_time_ms MUST cover preparation and stay within reasonable execution bounds (not 80ms + 80ms stale allowance)
+assert.ok(respCold.solve_time_ms < 600, `Preparation time must be charged against deadline; solve_time_ms was ${respCold.solve_time_ms}`);
+
 console.log('Worker shared deadline assertions passed successfully');

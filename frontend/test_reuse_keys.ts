@@ -16,11 +16,23 @@ assert.deepEqual(canonicalizeArray(['b', 'a', 'b', 'c']), ['a', 'b', 'c']);
 assert.equal(canonicalizeArray(undefined), undefined);
 assert.equal(canonicalizeArray([]), undefined);
 
-// 2. Trader levels canonicalization (normalization + lowercasing + omitting defaults)
+// 2. Trader levels canonicalization (normalization + lowercasing + whitespace trimming + deterministic alias precedence)
 const tl1 = { prapor: 4, SKIER: 3, mechanic: 2, peacekeeper: 4 };
 const tl2 = { skier: 3, PRAPOR: 4, Peacekeeper: 4, mechanic: 2 };
 assert.deepEqual(canonicalizeTraderLevels(tl1), canonicalizeTraderLevels(tl2));
 assert.deepEqual(canonicalizeTraderLevels(undefined), undefined);
+
+// Whitespace trimming in trader levels
+const tlSpace = { " Mechanic ": 0 };
+const tlClean = { mechanic: 0 };
+assert.deepEqual(canonicalizeTraderLevels(tlSpace as any), canonicalizeTraderLevels(tlClean));
+
+// Deterministic duplicate-alias precedence (last entry in iteration wins)
+const tlConflict = { mechanic: 0, Mechanic: 4 };
+assert.deepEqual(canonicalizeTraderLevels(tlConflict as any), { mechanic: 4 });
+
+const tlConflictRev = { Mechanic: 4, mechanic: 0 };
+assert.deepEqual(canonicalizeTraderLevels(tlConflictRev as any), { mechanic: 0 });
 
 // 3. Sweet Spot endpoint cache key:
 // MUST be invariant to preference weights (ergo_weight, recoil_weight, price_weight)

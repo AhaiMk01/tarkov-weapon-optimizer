@@ -37,12 +37,13 @@ async function main() {
   const outDir = path.resolve(__dirname, String(flags['output'] || 'results'));
   fs.mkdirSync(outDir, { recursive: true });
 
-  const experiment = String(flags['experiment'] || (flags['initial-candidate-pairs'] ? 'initial-candidate' : (flags['branch-ordering-pairs'] ? 'branch-ordering' : (flags['retention-pairs'] ? 'retention' : (flags['pairs'] ? 'bounds' : 'single')))));
+  const experiment = String(flags['experiment'] || (flags['reuse-pairs'] ? 'reuse' : (flags['initial-candidate-pairs'] ? 'initial-candidate' : (flags['branch-ordering-pairs'] ? 'branch-ordering' : (flags['retention-pairs'] ? 'retention' : (flags['pairs'] ? 'bounds' : 'single'))))));
   const isRetention = experiment === 'retention';
   const isBranchOrdering = experiment === 'branch-ordering';
   const isInitialCandidate = experiment === 'initial-candidate';
-  const isExperiment = isRetention || isBranchOrdering || isInitialCandidate;
-  const pairsFlag = flags['initial-candidate-pairs'] || flags['branch-ordering-pairs'] || flags['retention-pairs'] || flags['pairs'];
+  const isReuse = experiment === 'reuse';
+  const isExperiment = isRetention || isBranchOrdering || isInitialCandidate || isReuse;
+  const pairsFlag = flags['reuse-pairs'] || flags['initial-candidate-pairs'] || flags['branch-ordering-pairs'] || flags['retention-pairs'] || flags['pairs'];
   const isPairedMode = Boolean(pairsFlag) || isExperiment;
   const pairCount = typeof pairsFlag === 'number' ? Number(pairsFlag) : (typeof pairsFlag === 'string' ? Number(pairsFlag) : 5);
   const variant: 'baseline' | 'candidate' = (flags['candidate'] || flags['variant'] === 'candidate') ? 'candidate' : 'baseline';
@@ -50,12 +51,14 @@ async function main() {
   const targetCase = flags['case'] ? String(flags['case']) : null;
   const endpointCacheMode = String(flags['endpoint-cache'] || 'warm') as 'warm' | 'cold';
   const cohort = String(flags['cohort'] || (isExperiment && pairCount >= 5 ? 'formal' : 'pilot')) as 'pilot' | 'formal';
-  const baselineRevision = 'ed7099e';
-  const candidateRevision = isInitialCandidate
-    ? 'initial-candidate.patch'
-    : (isBranchOrdering
-      ? 'branch-ordering-candidate.patch'
-      : (isRetention ? 'retention-candidate.patch' : undefined));
+  const baselineRevision = isReuse ? '52b2ae9' : 'ed7099e';
+  const candidateRevision = isReuse
+    ? 'c96a182'
+    : (isInitialCandidate
+      ? 'initial-candidate.patch'
+      : (isBranchOrdering
+        ? 'branch-ordering-candidate.patch'
+        : (isRetention ? 'retention-candidate.patch' : undefined)));
   const candidatePatch = isInitialCandidate
     ? 'frontend/benchmarks/experiments/initial-candidate.patch'
     : (isBranchOrdering
@@ -77,7 +80,9 @@ async function main() {
   const { snapshot, manifest } = snapshotData;
   console.log(`Verified snapshot sha256: ${manifest.sha256}`);
 
-  const defaultExperimentCases = ['dense-overswing', 'dense-ted', 'dense-ted-sweet'];
+  const defaultExperimentCases = isReuse
+    ? ['dense-explore', 'sparse-explore', 'dense-restricted']
+    : ['dense-overswing', 'dense-ted', 'dense-ted-sweet'];
   const allCases = makeCases(snapshot);
   const cases = targetCase
     ? (allCases.some(c => c.id === targetCase) ? allCases.filter(c => c.id === targetCase) : allCases.filter(c => c.id.includes(targetCase)))
@@ -144,21 +149,25 @@ async function main() {
       const epCache = isSweet ? endpointCacheMode : 'not-applicable';
 
       if (isPairedMode) {
-        const baseCase = isInitialCandidate
-          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, initial_candidate: false } }
-          : (isBranchOrdering
-            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'lighter-first' as const } }
-            : (isRetention
-              ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: false } }
-              : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } }));
+        const baseCase = isReuse
+          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } }
+          : (isInitialCandidate
+            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, initial_candidate: false } }
+            : (isBranchOrdering
+              ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'lighter-first' as const } }
+              : (isRetention
+                ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: false } }
+                : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } })));
 
-        const candCase = isInitialCandidate
-          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, initial_candidate: true } }
-          : (isBranchOrdering
-            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'heavier-first' as const } }
-            : (isRetention
-              ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: true } }
-              : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } }));
+        const candCase = isReuse
+          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } }
+          : (isInitialCandidate
+            ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, initial_candidate: true } }
+            : (isBranchOrdering
+              ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, branch_ordering: 'heavier-first' as const } }
+              : (isRetention
+                ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: true } }
+                : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } })));
 
         // In experiment mode (retention or branch-ordering), warmups are excluded: five alternating pairs only.
         if (!isExperiment) {
@@ -207,7 +216,9 @@ async function main() {
           const firstVariant = baselineFirst ? 'baseline' : 'candidate';
           const secondVariant = baselineFirst ? 'candidate' : 'baseline';
 
-          if (isExperiment && isSweet && endpointCacheMode === 'cold') {
+          if (isReuse && firstVariant === 'baseline') {
+            await runner.clearCache();
+          } else if (isExperiment && isSweet && endpointCacheMode === 'cold') {
             await runner.clearCache();
           }
           process.stdout.write(`  [pair ${rep}/${runs}] ${firstVariant} ... `);
@@ -219,7 +230,7 @@ async function main() {
             deadlineMs: 60000,
             experiment,
             cohort,
-            endpointCache: endpointCacheStatus,
+            endpointCache: isReuse ? (firstVariant === 'baseline' ? 'cold' : 'warm') : endpointCacheStatus,
             baselineRevision,
             candidateRevision: isExperiment ? candidateRevision : undefined,
             candidatePatch: isExperiment ? candidatePatch : undefined,
@@ -228,7 +239,9 @@ async function main() {
           samplesFile.write(JSON.stringify(firstSample) + '\n');
           process.stdout.write(`${firstSample.outcome} (${firstSample.elapsedMs != null ? firstSample.elapsedMs.toFixed(0) : '?'}ms) | ${secondVariant} ... `);
 
-          if (isExperiment && isSweet && endpointCacheMode === 'cold') {
+          if (isReuse && secondVariant === 'baseline') {
+            await runner.clearCache();
+          } else if (isExperiment && isSweet && endpointCacheMode === 'cold') {
             await runner.clearCache();
           }
           const secondSample = await runner.runCase(secondCase, {
@@ -239,7 +252,7 @@ async function main() {
             deadlineMs: 60000,
             experiment,
             cohort,
-            endpointCache: endpointCacheStatus,
+            endpointCache: isReuse ? (secondVariant === 'baseline' ? 'cold' : 'warm') : endpointCacheStatus,
             baselineRevision,
             candidateRevision: isExperiment ? candidateRevision : undefined,
             candidatePatch: isExperiment ? candidatePatch : undefined,

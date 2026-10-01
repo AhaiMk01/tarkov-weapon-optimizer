@@ -82,4 +82,46 @@ const frontier = await explorePareto({
 });
 assert.ok(frontier.length > 0);
 
+// 6. User-exercised boundary probe:
+// Physical bounds [2, 8], prepared under a 3 kg cap.
+// New uncapped request requiring the 8 kg build.
+const fixture8kg = choiceFixture([
+  { id: 'LightPart', weight: 2.0, ergo: 10 },
+  { id: 'HeavyPart8kg', weight: 8.0, ergo: 50 }, // optimum
+]);
+
+// Prepare bounds under 3 kg cap -> weightBounds are [2, 3]
+const capped3kg = computeStructuralBounds(
+  fixture8kg.weaponId,
+  fixture8kg.itemLookup,
+  fixture8kg.compatibilityMap,
+  { maxWeight: 3.0 },
+);
+assert.deepEqual(capped3kg.weightBounds, [2, 3]);
+assert.deepEqual(capped3kg.physicalWeightBounds, [2, 8]);
+
+// With complete preparation object: cap removed certifies 8 kg build
+const resComplete = await solve({
+  ...fixture8kg,
+  maxWeight: null,
+  structuralBounds: capped3kg,
+});
+assert.equal(resComplete.status, 'optimal', 'Complete preparation object must certify 8 kg build when cap is removed');
+assert.equal(resComplete.final_stats?.total_weight, 8);
+assert.deepEqual(resComplete.selected_items.map(i => i.id), ['HeavyPart8kg']);
+
+// With legacy-shaped unproven object (missing physicalWeightBounds and context):
+// lpBuilder must NOT trust the clipped fallback [2, 3]; it must recompute fresh bounds and certify!
+const legacyShapedBounds = {
+  weightBounds: capped3kg.weightBounds, // [2, 3]
+  ergoBounds: capped3kg.ergoBounds,
+} as any;
+const resLegacyShaped = await solve({
+  ...fixture8kg,
+  maxWeight: null,
+  structuralBounds: legacyShapedBounds,
+});
+assert.equal(resLegacyShaped.status, 'optimal', 'Unproven legacy-shaped bounds must be discarded and recomputed, never trusted as clipped fallback');
+assert.equal(resLegacyShaped.final_stats?.total_weight, 8);
+
 console.log('Tier 1 Structural Bounds reuse & lifetime provenance test passed!');

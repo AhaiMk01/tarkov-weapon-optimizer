@@ -9,12 +9,12 @@ export interface StructuralBounds {
   weightBounds: [number, number];
   /** Ergonomics bounds [min, max]. */
   ergoBounds: [number, number];
-  /** Unclipped physical weight bounds [min, max] of the weapon DAG (independent of request caps). */
-  physicalWeightBounds?: [number, number];
-  /** Preparation context: weaponId and options used to compute this bound. */
-  context?: {
+  /** Required unclipped physical weight bounds [min, max] of the weapon DAG (independent of request caps). */
+  physicalWeightBounds: [number, number];
+  /** Required preparation context for provenance verification. */
+  context: {
     weaponId: string;
-    maxWeight?: number | null;
+    maxWeight: number | null;
   };
 }
 
@@ -36,7 +36,12 @@ export function computeStructuralBounds(
 ): StructuralBounds {
   const weapon = lookup[weaponId];
   if (!weapon || weapon.type !== 'gun') {
-    return { weightBounds: [0, 100], ergoBounds: [0, 100] };
+    return {
+      weightBounds: [0, 100],
+      ergoBounds: [0, 100],
+      physicalWeightBounds: [0, 100],
+      context: { weaponId, maxWeight: options.maxWeight ?? null },
+    };
   }
 
   function getSlots(item: ItemLookup[string]): SlotInfo[] {

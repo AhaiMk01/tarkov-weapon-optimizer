@@ -7,7 +7,7 @@ import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
 import { solve, computeIdealPoint, SOLVER_CAPABILITIES } from './solver.ts';
-import { computeIdealPointCacheKey, computeStructuralBoundsCacheKey } from './reuseKey.ts';
+import { computeIdealPointCacheKey, computeStructuralBoundsCacheKey, canonicalizeTraderLevels } from './reuseKey.ts';
 import { computeStructuralBounds, type StructuralBounds } from './structuralBounds.ts';
 import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
@@ -200,6 +200,9 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
 
         case 'optimize': {
           const req = payload.request as OptimizeRequest;
+          if (req.trader_levels) {
+            req.trader_levels = canonicalizeTraderLevels(req.trader_levels) as any;
+          }
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
           const precReq = normalizePrecisionRequest(req.precise_mode);
@@ -208,6 +211,11 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const optimizeStart = performance.now();
           const totalLimitMs = Math.max(0, req.time_limit_ms ?? 60_000);
           const deadline = optimizeStart + totalLimitMs;
+
+          // Finish preparation upfront so preparation time is strictly charged against the request deadline
+          const precomputedBounds = req.bounds_mode !== 'naive'
+            ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
+            : undefined;
 
           let idealPoint: IdealPoint | undefined;
           if (req.use_tchebycheff) {
@@ -232,14 +240,11 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 break;
               }
               try {
-                const epBounds = req.bounds_mode !== 'naive'
-                  ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
-                  : undefined;
                 idealPoint = await computeIdealPoint({
                   weaponId: req.weapon_id,
                   itemLookup: data.itemLookup,
                   compatibilityMap: compatMap,
-                  structuralBounds: epBounds,
+                  structuralBounds: precomputedBounds,
                   maxPrice: req.max_price,
                   minErgonomics: req.min_ergonomics,
                   maxRecoilV: req.max_recoil_v,
@@ -302,10 +307,6 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             break;
           }
 
-          const precomputedBounds = req.bounds_mode !== 'naive'
-            ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
-            : undefined;
-
           const result: OptimizeResponse = await solve({
             weaponId: req.weapon_id,
             itemLookup: data.itemLookup,
@@ -350,6 +351,9 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
 
         case 'explore': {
           const req = payload.request as ExploreRequest;
+          if (req.trader_levels) {
+            req.trader_levels = canonicalizeTraderLevels(req.trader_levels) as any;
+          }
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
           const precReq = normalizePrecisionRequest(req.precise_mode);

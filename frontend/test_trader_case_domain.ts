@@ -85,4 +85,45 @@ assert.equal(
   'Cache keys must match when solver domains match'
 );
 
+// 4. Whitespace counterexample from review:
+// {" Mechanic ": 0} versus {"mechanic": 0}
+// In both direct getAvailablePrice, solve(), validation, and cache keys:
+// Whitespace MUST be trimmed consistently upfront so domains never diverge.
+const [pTrimmed, , aTrimmed] = getAvailablePrice(mechanicStats, { " Mechanic ": 0 } as any, false, null, false, false);
+assert.equal(aTrimmed, false, '{" Mechanic ": 0} must disable Mechanic in pricing');
+assert.equal(pTrimmed, 0);
+
+const resSpace = await solve({
+  ...fixture,
+  fleaAvailable: false,
+  traderLevels: { " Mechanic ": 0 } as any,
+});
+assert.notEqual(resSpace.status, 'optimal', '{" Mechanic ": 0} must disable Mechanic in solve');
+assert.equal(resSpace.status, resDisabledLower.status);
+assert.equal(resSpace.reason, resDisabledLower.reason);
+
+assert.equal(
+  computeIdealPointCacheKey('en', 'regular', { weapon_id: 'gun', trader_levels: { " Mechanic ": 0 } as any }),
+  computeIdealPointCacheKey('en', 'regular', { weapon_id: 'gun', trader_levels: { "mechanic": 0 } as any }),
+  'Whitespace cache key must equal trimmed cache key'
+);
+
+// 5. Conflicting aliases counterexample from review:
+// {"mechanic": 0, "Mechanic": 4} versus {"mechanic": 4}
+// Deterministic duplicate-alias precedence (last entry in object iteration wins)
+const resConflict = await solve({
+  ...fixture,
+  fleaAvailable: false,
+  traderLevels: { "mechanic": 0, "Mechanic": 1 } as any, // Mechanic: 1 wins -> unlocked
+});
+assert.equal(resConflict.status, 'optimal', 'Deterministic last-entry-wins: Mechanic: 1 must unlock Mechanic');
+
+const resConflictOff = await solve({
+  ...fixture,
+  fleaAvailable: false,
+  traderLevels: { "Mechanic": 1, "mechanic": 0 } as any, // mechanic: 0 wins -> disabled
+});
+assert.notEqual(resConflictOff.status, 'optimal', 'Deterministic last-entry-wins: mechanic: 0 must disable Mechanic');
+assert.equal(resConflictOff.status, resDisabledLower.status);
+
 console.log('Trader case-sensitivity domain equivalence tests passed!');
