@@ -47,6 +47,7 @@ async function main() {
   const runs = isPairedMode ? pairCount : (Number(flags['runs']) || 5);
   const targetCase = flags['case'] ? String(flags['case']) : null;
   const endpointCacheMode = String(flags['endpoint-cache'] || 'warm') as 'warm' | 'cold';
+  const cohort = String(flags['cohort'] || (isRetention && pairCount >= 5 ? 'formal' : 'pilot')) as 'pilot' | 'formal';
   const baselineRevision = 'ebb4a2c';
   const candidateRevision = 'retention-candidate.patch';
   const candidatePatch = 'frontend/benchmarks/experiments/retention-candidate.patch';
@@ -142,19 +143,19 @@ async function main() {
             sequence: seq++,
             deadlineMs: 60000,
             experiment,
+            cohort,
             endpointCache: 'prewarm',
             baselineRevision,
             candidateRevision: isRetention ? candidateRevision : undefined,
             candidatePatch: isRetention ? candidatePatch : undefined,
           });
           const prewarmSuccess = prewarmSample.outcome === 'response'
-            && prewarmSample.response?.status === 'optimal'
             && (prewarmSample.response as any)?.ideal_point != null;
           if (prewarmSuccess) {
-            console.log(`warmed (${prewarmSample.elapsedMs != null ? prewarmSample.elapsedMs.toFixed(0) : '?'}ms)`);
+            console.log(`warmed endpoints (${prewarmSample.elapsedMs != null ? prewarmSample.elapsedMs.toFixed(0) : '?'}ms)`);
             endpointCacheStatus = 'warm';
           } else {
-            console.log(`FAILED prewarm (${prewarmSample.outcome}, ${(prewarmSample.response as any)?.reason ?? prewarmSample.response?.status ?? 'no ideal point'}). Marking cache as failed-prewarm-cold.`);
+            console.log(`FAILED prewarm (endpoints uncertified: ${(prewarmSample.response as any)?.reason ?? prewarmSample.response?.status ?? 'no ideal point'}). Marking cache as failed-prewarm-cold.`);
             endpointCacheStatus = 'failed-prewarm-cold';
           }
         }
@@ -171,6 +172,7 @@ async function main() {
             sequence: seq++,
             deadlineMs: 60000,
             experiment,
+            cohort,
             endpointCache: endpointCacheStatus,
             baselineRevision,
             candidateRevision: isRetention ? candidateRevision : undefined,
@@ -190,6 +192,7 @@ async function main() {
             sequence: seq++,
             deadlineMs: 60000,
             experiment,
+            cohort,
             endpointCache: endpointCacheStatus,
             baselineRevision,
             candidateRevision: isRetention ? candidateRevision : undefined,
@@ -214,6 +217,7 @@ async function main() {
             sequence: seq++,
             deadlineMs: 60000,
             experiment,
+            cohort,
           });
           allSamples.push(sample);
           samplesFile.write(JSON.stringify(sample) + '\n');
@@ -228,6 +232,7 @@ async function main() {
 
   const meta: Record<string, unknown> = {
     experiment,
+    cohort: isRetention ? cohort : undefined,
     endpointCache: isRetention ? endpointCacheMode : undefined,
     date: new Date().toISOString(),
     os: `${os.type()} ${os.release()} ${os.arch()}`,
@@ -243,7 +248,7 @@ async function main() {
     ? fs.readFileSync(samplesPath, 'utf8').trim().split('\n').filter(Boolean).map(l => JSON.parse(l))
     : [];
   const allRetentionSamples = isRetention
-    ? samplesFromDisk.filter(s => s.experiment === 'retention')
+    ? samplesFromDisk.filter(s => s.experiment === 'retention' && s.cohort === 'formal')
     : allSamples;
   const targetSamples = allRetentionSamples.length > 0 ? allRetentionSamples : allSamples;
   const summary = summarize(targetSamples);

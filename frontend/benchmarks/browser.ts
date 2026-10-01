@@ -101,6 +101,7 @@ export class BenchmarkBrowserRunner {
       sequence: number;
       deadlineMs?: number;
       experiment?: string;
+      cohort?: 'pilot' | 'formal';
       endpointCache?: string;
       baselineRevision?: string;
       candidateRevision?: string;
@@ -158,6 +159,7 @@ export class BenchmarkBrowserRunner {
       pageErrors,
       memory: { scope: 'page-js-heap-excludes-worker-wasm', before: null, after: null },
       experiment: opts.experiment,
+      cohort: opts.cohort,
       endpointCache: opts.endpointCache,
       baselineRevision: opts.baselineRevision,
       candidateRevision: opts.candidateRevision,

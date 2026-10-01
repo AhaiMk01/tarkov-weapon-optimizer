@@ -41,23 +41,6 @@ index 487f7f2..b64dbf5 100644
  }
  
  export type GameMode = 'regular' | 'pve';
-diff --git a/frontend/src/solver/dataService.ts b/frontend/src/solver/dataService.ts
-index ac54fc8..7bde387 100644
---- a/frontend/src/solver/dataService.ts
-+++ b/frontend/src/solver/dataService.ts
-@@ -906,3 +906,12 @@ export async function ensureDataLoaded(lang: string, gameMode: string): Promise<
- export function getLoadedState(lang: string, gameMode: string): LoadedState | undefined {
-   return stateCache.get(`${lang}:${gameMode}`);
- }
-+
-+export function seedDataCache(lang: string, gameMode: string, guns: RawItem[], mods: RawItem[]): LoadedState {
-+  lang = normalizeLang(lang);
-+  const key = `${lang}:${gameMode}`;
-+  const itemLookup = buildItemLookup(guns, mods);
-+  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now() };
-+  stateCache.set(key, state);
-+  return state;
-+}
 diff --git a/frontend/src/solver/solver.ts b/frontend/src/solver/solver.ts
 index efa195f..3d9f8cd 100644
 --- a/frontend/src/solver/solver.ts
@@ -282,181 +265,18 @@ index efa195f..3d9f8cd 100644
        // The secant is an outer approximation. Exact TED can fail while the
        // optimal relaxation value remains a valid upper bound for this interval.
 diff --git a/frontend/src/solver/solver.worker.ts b/frontend/src/solver/solver.worker.ts
-index 9583ffd..51d2e4b 100644
+index a853663..51d2e4b 100644
 --- a/frontend/src/solver/solver.worker.ts
 +++ b/frontend/src/solver/solver.worker.ts
-@@ -79,7 +79,7 @@ function getCompatMap(data: LoadedData, weaponId: string): CompatibilityMap {
- }
- 
- interface WorkerMessage {
--  type: 'loadData' | 'optimize' | 'explore' | 'getInfo' | 'getWeaponMods' | 'getGunsmithTasks' | 'getStatus' | 'computeMOAFloor';
-+  type: 'loadData' | 'optimize' | 'explore' | 'getInfo' | 'getWeaponMods' | 'getGunsmithTasks' | 'getStatus' | 'computeMOAFloor' | 'clearCache';
-   id: number;
-   payload: {
-     lang?: string;
-@@ -96,11 +96,17 @@ let dispatchChain: Promise<void> = Promise.resolve();
- 
- async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
-   const { type, id, payload } = eventData;
--  const lang = payload.lang ?? 'en';
--  const gameMode = payload.gameMode ?? 'regular';
-+  const lang = payload?.lang ?? 'en';
-+  const gameMode = payload?.gameMode ?? 'regular';
- 
-   try {
-     switch (type) {
-+        case 'clearCache': {
-+          idealPointCache.clear();
-+          self.postMessage({ type: 'result', id, payload: { cleared: true } });
-+          break;
-+        }
-+
-         case 'loadData': {
-           await getOrLoadData(lang, gameMode);
-           self.postMessage({ type: 'dataLoaded', id, payload: null });
-@@ -205,43 +211,99 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
-           const precReq = normalizePrecisionRequest(req.precise_mode);
-           const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
- 
-+          const optimizeStart = performance.now();
-+          const totalLimitMs = Math.max(0, req.time_limit_ms ?? 60_000);
-+          const deadline = optimizeStart + totalLimitMs;
-+
-           let idealPoint: IdealPoint | undefined;
-           if (req.use_tchebycheff) {
-             const cacheKey = getIdealCacheKey(lang, gameMode, req);
-             idealPoint = idealPointCache.get(cacheKey);
-             if (!idealPoint) {
--              idealPoint = await computeIdealPoint({
--                weaponId: req.weapon_id,
--                itemLookup: data.itemLookup,
--                compatibilityMap: compatMap,
--                maxPrice: req.max_price,
--                minErgonomics: req.min_ergonomics,
--                maxRecoilV: req.max_recoil_v,
--                maxRecoilSum: req.max_recoil_sum,
--                minMagCapacity: req.min_mag_capacity,
--                minSightingRange: req.min_sighting_range,
--                maxWeight: req.max_weight,
--                maxMOA: req.max_moa,
--                includeItems: req.include_items,
--                excludeItems: req.exclude_items,
--                includeCategories: req.include_categories,
--                excludeCategories: req.exclude_categories,
--                useTrueErgo: req.use_true_ergo ?? false,
--                preventOverswing: req.prevent_overswing ?? false,
--                equipErgoModifier: req.equip_ergo_modifier,
--                traderLevels: req.trader_levels as TraderLevels | undefined,
--                fleaAvailable: req.flea_available ?? true,
--                barterAvailable: req.barter_available ?? false,
--                barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
--                playerLevel: req.player_level,
--                preciseMode: usePrecise,
--                boundsMode: req.bounds_mode,
--                timeLimitMs: req.time_limit_ms,
--              });
--              idealPointCache.set(cacheKey, idealPoint);
-+              const remainingForEndpoints = Math.max(0, deadline - performance.now());
-+              if (remainingForEndpoints <= 0) {
-+                self.postMessage({
-+                  type: 'result',
-+                  id,
-+                  payload: {
-+                    status: 'incomplete',
-+                    reason: 'Request time limit reached before endpoint computation',
-+                    selected_items: [],
-+                    objective_value: 0,
-+                    solve_time_ms: performance.now() - optimizeStart,
-+                    precision_request: precReq,
-+                    precision_resolved: usePrecise ? 'precise' : 'fast',
-+                  },
-+                });
-+                break;
-+              }
-+              try {
-+                idealPoint = await computeIdealPoint({
-+                  weaponId: req.weapon_id,
-+                  itemLookup: data.itemLookup,
-+                  compatibilityMap: compatMap,
-+                  maxPrice: req.max_price,
-+                  minErgonomics: req.min_ergonomics,
-+                  maxRecoilV: req.max_recoil_v,
-+                  maxRecoilSum: req.max_recoil_sum,
-+                  minMagCapacity: req.min_mag_capacity,
-+                  minSightingRange: req.min_sighting_range,
-+                  maxWeight: req.max_weight,
-+                  maxMOA: req.max_moa,
-+                  includeItems: req.include_items,
-+                  excludeItems: req.exclude_items,
-+                  includeCategories: req.include_categories,
-+                  excludeCategories: req.exclude_categories,
-+                  useTrueErgo: req.use_true_ergo ?? false,
-+                  preventOverswing: req.prevent_overswing ?? false,
-+                  equipErgoModifier: req.equip_ergo_modifier,
-+                  traderLevels: req.trader_levels as TraderLevels | undefined,
-+                  fleaAvailable: req.flea_available ?? true,
-+                  barterAvailable: req.barter_available ?? false,
-+                  barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
-+                  playerLevel: req.player_level,
-+                  preciseMode: usePrecise,
-+                  boundsMode: req.bounds_mode,
-+                  timeLimitMs: remainingForEndpoints,
-+                });
-+                idealPointCache.set(cacheKey, idealPoint);
-+              } catch (err) {
-+                self.postMessage({
-+                  type: 'result',
-+                  id,
-+                  payload: {
-+                    status: 'incomplete',
-+                    reason: err instanceof Error ? err.message : String(err),
-+                    selected_items: [],
-+                    objective_value: 0,
-+                    solve_time_ms: performance.now() - optimizeStart,
-+                    precision_request: precReq,
-+                    precision_resolved: usePrecise ? 'precise' : 'fast',
-+                  },
-+                });
-+                break;
-+              }
-             }
-           }
- 
-+          const remainingForSolve = Math.max(0, deadline - performance.now());
-+          if (remainingForSolve <= 0) {
-+            self.postMessage({
-+              type: 'result',
-+              id,
-+              payload: {
-+                status: 'incomplete',
-+                reason: 'Request time limit reached before search',
-+                selected_items: [],
-+                objective_value: 0,
-+                solve_time_ms: performance.now() - optimizeStart,
-+                precision_request: precReq,
-+                precision_resolved: usePrecise ? 'precise' : 'fast',
-+              },
-+            });
-+            break;
-+          }
-+
-           const result: OptimizeResponse = await solve({
-             weaponId: req.weapon_id,
-             itemLookup: data.itemLookup,
-@@ -273,9 +335,11 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
-             playerLevel: req.player_level,
+@@ -336,6 +336,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
              preciseMode: usePrecise,
              boundsMode: req.bounds_mode,
--            timeLimitMs: req.time_limit_ms,
-+            timeLimitMs: remainingForSolve,
+             timeLimitMs: remainingForSolve,
 +            retainLimitIncumbent: req.retain_limit_incumbent,
            });
  
-+          result.solve_time_ms = performance.now() - optimizeStart;
-           result.precision_request = precReq;
-           result.precision_resolved = usePrecise ? 'precise' : 'fast';
-           self.postMessage({ type: 'result', id, payload: result });
-@@ -453,9 +517,18 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+           result.solve_time_ms = performance.now() - optimizeStart;
+@@ -516,9 +517,18 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
          }
  
          case 'getStatus': {

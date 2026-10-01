@@ -45,6 +45,7 @@ export interface Sample {
   pageErrors: string[];
   memory: { scope: 'page-js-heap-excludes-worker-wasm'; before: number | null; after: number | null };
   experiment?: string;
+  cohort?: 'pilot' | 'formal';
   endpointCache?: string;
   baselineRevision?: string;
   candidateRevision?: string;
