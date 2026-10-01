@@ -225,8 +225,10 @@ assert.ok(preSolvePrunes.length >= 1, `Must reach pre-solve pruning; got ${preSo
 assert.equal(pruneSmokeRun.optimization!.nodes, actualSolvedMips.length, 'optimization.nodes must count only solved MIPs, not pre-solve prunes');
 assert.equal(traces.length, actualSolvedMips.length + preSolvePrunes.length);
 
-// Dedicated seed-pruning attribution coverage:
-// Verify that initial_candidate_telemetry.pruned_nodes_count only tracks prunes attributable to the seed.
+// Dedicated seed telemetry coverage:
+// Asserts seed generation, validity, score, and that pre-solve pruned_nodes_count is 0.
+// (Root nodes begin with bound: Infinity and cannot be pruned pre-solve;
+// any solved node with bound <= seed score is pruned post-solve and never enqueued).
 const seedPruneFixture = choiceFixture([
   { id: 'SeedWinner', weight: 2, ergo: 50 },
   { id: 'SuboptimalHeavy', weight: 5, ergo: 15 },
@@ -241,5 +243,7 @@ assert.equal(seedRun.status, 'optimal');
 assert.ok(seedRun.initial_candidate_telemetry != null);
 assert.equal(seedRun.initial_candidate_telemetry.generated, true);
 assert.equal(seedRun.initial_candidate_telemetry.valid, true);
+assert.ok(seedRun.initial_candidate_telemetry.score != null);
+assert.equal(seedRun.initial_candidate_telemetry.pruned_nodes_count, 0, 'Seed cannot prune root nodes pre-solve; post-solve pruning handles bounds <= seed score');
 
 console.log('incumbent gate and required-slot formulation passed');
