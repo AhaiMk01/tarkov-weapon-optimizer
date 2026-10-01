@@ -164,7 +164,7 @@ export function summarize(samples: Sample[]): BenchmarkSummary {
   return { groups, pairs };
 }
 
-export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<string, unknown>): string {
+export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<string, unknown>, rawSamples?: Sample[]): string {
   const lines: string[] = [];
   lines.push('# Benchmark Summary Report');
   lines.push('');
@@ -192,6 +192,29 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
       lines.push(`| ${p.caseId} | ${p.repetition} | ${p.baselineMs.toFixed(1)} | ${p.candidateMs.toFixed(1)} | ${p.speedup.toFixed(2)}x |`);
     }
     lines.push('');
+  }
+
+  if (rawSamples && rawSamples.length > 0) {
+    const nonWarmup = rawSamples.filter(s => !s.warmup);
+    if (nonWarmup.length > 0) {
+      lines.push('## Detailed Sample Outcomes');
+      lines.push('| Case ID | Rep | Variant | Outcome | Status | Termination | Validated | Gap | Bound Range | Elapsed (ms) |');
+      lines.push('|---|---:|---|---|---|---|:---:|---:|---:|---:|');
+      for (const s of nonWarmup) {
+        const resp = s.response as (OptimizeResponse | undefined);
+        const opt = resp?.optimization;
+        const status = resp?.status ?? (s.outcome === 'timeout' ? 'timeout' : 'N/A');
+        const term = opt?.termination ?? 'N/A';
+        const val = s.validation?.checked ? (s.validation.errors.length === 0 ? 'yes' : `errors(${s.validation.errors.length})`) : 'no';
+        const gap = opt?.absolute_gap != null ? opt.absolute_gap.toExponential(2) : (opt ? 'inf' : 'N/A');
+        const lo = opt?.lower_bound != null ? opt.lower_bound.toFixed(2) : '?';
+        const hi = opt?.upper_bound != null ? opt.upper_bound.toFixed(2) : 'inf';
+        const bounds = opt ? `[${lo}, ${hi}]` : 'N/A';
+        const elapsed = s.elapsedMs != null ? s.elapsedMs.toFixed(1) : (s.outcome === 'timeout' ? `>=${s.deadlineMs}` : 'N/A');
+        lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} |`);
+      }
+      lines.push('');
+    }
   }
 
   return lines.join('\n');

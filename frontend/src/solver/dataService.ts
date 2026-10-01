@@ -906,3 +906,12 @@ export async function ensureDataLoaded(lang: string, gameMode: string): Promise<
 export function getLoadedState(lang: string, gameMode: string): LoadedState | undefined {
   return stateCache.get(`${lang}:${gameMode}`);
 }
+
+export function seedDataCache(lang: string, gameMode: string, guns: RawItem[], mods: RawItem[]): LoadedState {
+  lang = normalizeLang(lang);
+  const key = `${lang}:${gameMode}`;
+  const itemLookup = buildItemLookup(guns, mods);
+  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now() };
+  stateCache.set(key, state);
+  return state;
+}

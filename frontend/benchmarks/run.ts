@@ -37,11 +37,16 @@ async function main() {
   const outDir = path.resolve(__dirname, String(flags['output'] || 'results'));
   fs.mkdirSync(outDir, { recursive: true });
 
-  const isPairedMode = Boolean(flags['pairs']);
-  const pairCount = typeof flags['pairs'] === 'number' ? Number(flags['pairs']) : (typeof flags['pairs'] === 'string' ? Number(flags['pairs']) : 5);
+  const experiment = String(flags['experiment'] || (flags['retention-pairs'] ? 'retention' : (flags['pairs'] ? 'bounds' : 'single')));
+  const isRetention = experiment === 'retention';
+  const retentionPairsFlag = flags['retention-pairs'];
+  const isPairedMode = Boolean(flags['pairs']) || Boolean(retentionPairsFlag) || isRetention;
+  const pairSource = retentionPairsFlag || flags['pairs'];
+  const pairCount = typeof pairSource === 'number' ? Number(pairSource) : (typeof pairSource === 'string' ? Number(pairSource) : 5);
   const variant: 'baseline' | 'candidate' = (flags['candidate'] || flags['variant'] === 'candidate') ? 'candidate' : 'baseline';
   const runs = isPairedMode ? pairCount : (Number(flags['runs']) || 5);
   const targetCase = flags['case'] ? String(flags['case']) : null;
+  const endpointCacheMode = String(flags['endpoint-cache'] || 'warm') as 'warm' | 'cold';
   const url = String(flags['url'] || 'http://localhost:5173/benchmarks/index.html');
   const browserPath = flags['browser'] ? String(flags['browser']) : findBrowserExecutable();
 
@@ -58,10 +63,11 @@ async function main() {
   const { snapshot, manifest } = snapshotData;
   console.log(`Verified snapshot sha256: ${manifest.sha256}`);
 
+  const defaultRetentionCases = ['dense-overswing', 'dense-ted', 'dense-ted-sweet'];
   const allCases = makeCases(snapshot);
   const cases = targetCase
-    ? allCases.filter(c => c.id === targetCase || c.id.includes(targetCase))
-    : allCases;
+    ? (allCases.some(c => c.id === targetCase) ? allCases.filter(c => c.id === targetCase) : allCases.filter(c => c.id.includes(targetCase)))
+    : (isRetention ? allCases.filter(c => defaultRetentionCases.includes(c.id)) : allCases);
 
   if (cases.length === 0) {
     throw new Error(`No cases matched filter "${targetCase}". Available: ${allCases.map(c => c.id).join(', ')}`);
@@ -89,28 +95,37 @@ async function main() {
     console.log(`Harness initialized with ${prep.gunsCount} guns, ${prep.modsCount} mods.`);
 
     for (const caseItem of cases) {
-      // 1. Warm-up run
-      if (isPairedMode) {
-        const baseCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } };
-        const candCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } };
-        process.stdout.write('  [warmup baseline] ... ');
-        const warmBase = await runner.runCase(baseCase, { variant: 'baseline', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000 });
-        samplesFile.write(JSON.stringify(warmBase) + '\n');
-        process.stdout.write(`${warmBase.outcome} (${warmBase.elapsedMs != null ? warmBase.elapsedMs.toFixed(0) : '?'}ms) | [warmup candidate] ... `);
-        const warmCand = await runner.runCase(candCase, { variant: 'candidate', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000 });
-        samplesFile.write(JSON.stringify(warmCand) + '\n');
-        console.log(`${warmCand.outcome} (${warmCand.elapsedMs != null ? warmCand.elapsedMs.toFixed(0) : '?'}ms)`);
-      } else {
-        process.stdout.write('  [warmup] ... ');
-        const warmupSample = await runner.runCase(caseItem, { variant, repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000 });
-        samplesFile.write(JSON.stringify(warmupSample) + '\n');
-        console.log(`${warmupSample.outcome} (${warmupSample.elapsedMs != null ? warmupSample.elapsedMs.toFixed(0) : '?'}ms)`);
-      }
+      const isSweet = Boolean((caseItem.request as any)?.use_tchebycheff);
+      const epCache = isSweet ? endpointCacheMode : 'not-applicable';
 
       if (isPairedMode) {
-        const baseCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } };
-        const candCase = { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } };
+        const baseCase = isRetention
+          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: false } }
+          : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'naive' as const } };
+        const candCase = isRetention
+          ? { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const, precise_mode: 'precise' as const, retain_limit_incumbent: true } }
+          : { ...caseItem, request: { ...caseItem.request, bounds_mode: 'structural' as const } };
+
+        // In retention mode, warmups are excluded: five alternating pairs only.
+        if (!isRetention) {
+          process.stdout.write('  [warmup baseline] ... ');
+          const warmBase = await runner.runCase(baseCase, { variant: 'baseline', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000, experiment, endpointCache: epCache });
+          samplesFile.write(JSON.stringify(warmBase) + '\n');
+          process.stdout.write(`${warmBase.outcome} (${warmBase.elapsedMs != null ? warmBase.elapsedMs.toFixed(0) : '?'}ms) | [warmup candidate] ... `);
+          const warmCand = await runner.runCase(candCase, { variant: 'candidate', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000, experiment, endpointCache: epCache });
+          samplesFile.write(JSON.stringify(warmCand) + '\n');
+          console.log(`${warmCand.outcome} (${warmCand.elapsedMs != null ? warmCand.elapsedMs.toFixed(0) : '?'}ms)`);
+        } else if (isSweet && endpointCacheMode === 'warm') {
+          // Pre-warm the endpoint cache once under controlled conditions so endpoints do not confound pairs
+          process.stdout.write('  [pre-warming endpoint cache] ... ');
+          const prewarmSample = await runner.runCase(baseCase, { variant: 'baseline', repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000, experiment, endpointCache: 'prewarm' });
+          console.log(`warmed (${prewarmSample.elapsedMs != null ? prewarmSample.elapsedMs.toFixed(0) : '?'}ms)`);
+        }
+
         for (let rep = 1; rep <= runs; rep++) {
+          if (isRetention && isSweet && endpointCacheMode === 'cold') {
+            await runner.clearCache();
+          }
           process.stdout.write(`  [pair ${rep}/${runs}] baseline ... `);
           const baseSample = await runner.runCase(baseCase, {
             variant: 'baseline',
@@ -118,23 +133,35 @@ async function main() {
             warmup: false,
             sequence: seq++,
             deadlineMs: 60000,
+            experiment,
+            endpointCache: epCache,
           });
           allSamples.push(baseSample);
           samplesFile.write(JSON.stringify(baseSample) + '\n');
           process.stdout.write(`${baseSample.outcome} (${baseSample.elapsedMs != null ? baseSample.elapsedMs.toFixed(0) : '?'}ms) | candidate ... `);
 
+          if (isRetention && isSweet && endpointCacheMode === 'cold') {
+            await runner.clearCache();
+          }
           const candSample = await runner.runCase(candCase, {
             variant: 'candidate',
             repetition: rep,
             warmup: false,
             sequence: seq++,
             deadlineMs: 60000,
+            experiment,
+            endpointCache: epCache,
           });
           allSamples.push(candSample);
           samplesFile.write(JSON.stringify(candSample) + '\n');
           console.log(`${candSample.outcome} (${candSample.elapsedMs != null ? candSample.elapsedMs.toFixed(0) : '?'}ms)`);
         }
       } else {
+        process.stdout.write('  [warmup] ... ');
+        const warmupSample = await runner.runCase(caseItem, { variant, repetition: 0, warmup: true, sequence: seq++, deadlineMs: 60000, experiment });
+        samplesFile.write(JSON.stringify(warmupSample) + '\n');
+        console.log(`${warmupSample.outcome} (${warmupSample.elapsedMs != null ? warmupSample.elapsedMs.toFixed(0) : '?'}ms)`);
+
         for (let rep = 1; rep <= runs; rep++) {
           process.stdout.write(`  [rep ${rep}/${runs}] ... `);
           const sample = await runner.runCase(caseItem, {
@@ -143,6 +170,7 @@ async function main() {
             warmup: false,
             sequence: seq++,
             deadlineMs: 60000,
+            experiment,
           });
           allSamples.push(sample);
           samplesFile.write(JSON.stringify(sample) + '\n');
@@ -155,7 +183,9 @@ async function main() {
     await runner.close();
   }
 
-  const meta = {
+  const meta: Record<string, unknown> = {
+    experiment,
+    endpointCache: isRetention ? endpointCacheMode : undefined,
     date: new Date().toISOString(),
     os: `${os.type()} ${os.release()} ${os.arch()}`,
     cpus: os.cpus()[0]?.model ?? 'unknown',
@@ -167,7 +197,7 @@ async function main() {
   };
 
   const summary = summarize(allSamples);
-  const reportMd = formatMarkdownReport(summary, meta);
+  const reportMd = formatMarkdownReport(summary, meta, allSamples);
   fs.writeFileSync(reportPath, reportMd, 'utf8');
 
   console.log('\n' + reportMd);

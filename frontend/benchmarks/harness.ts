@@ -81,10 +81,11 @@ const benchmarkHarness = {
     const t0 = performance.now();
 
     const { promise, resolve, reject } = Promise.withResolvers<unknown>();
+    // Grace period for worker response postMessage and serialization
     const timer = setTimeout(() => {
       pending.delete(id);
       reject(new Error(`Timeout after ${deadlineMs}ms`));
-    }, deadlineMs);
+    }, deadlineMs + 5000);
 
     pending.set(id, (payload: unknown) => {
       clearTimeout(timer);
@@ -112,6 +113,15 @@ const benchmarkHarness = {
 
   async resetWorker(): Promise<void> {
     initWorker();
+  },
+
+  async clearCache(): Promise<void> {
+    if (!worker) return;
+    const id = msgSeq++;
+    const { promise, resolve } = Promise.withResolvers<unknown>();
+    pending.set(id, resolve);
+    worker.postMessage({ type: 'clearCache', id });
+    await promise;
   },
 };
 
