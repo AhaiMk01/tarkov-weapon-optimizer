@@ -5,8 +5,17 @@ export interface StructuralBoundsOptions {
 }
 
 export interface StructuralBounds {
+  /** Effective weight bounds [min, max] (possibly clipped by options.maxWeight). */
   weightBounds: [number, number];
+  /** Ergonomics bounds [min, max]. */
   ergoBounds: [number, number];
+  /** Unclipped physical weight bounds [min, max] of the weapon DAG (independent of request caps). */
+  physicalWeightBounds?: [number, number];
+  /** Preparation context: weaponId and options used to compute this bound. */
+  context?: {
+    weaponId: string;
+    maxWeight?: number | null;
+  };
 }
 
 /**
@@ -234,6 +243,9 @@ export function computeStructuralBounds(
     }
   }
 
+  const physMinW = rawMinW;
+  const physMaxW = rawMaxW;
+
   if (options.maxWeight != null && options.maxWeight > 0) {
     rawMaxW = Math.max(rawMinW, Math.min(rawMaxW, options.maxWeight));
   }
@@ -244,5 +256,10 @@ export function computeStructuralBounds(
   return {
     weightBounds: [rawMinW, rawMaxW],
     ergoBounds: [rawMinE, rawMaxE],
+    physicalWeightBounds: [physMinW, physMaxW],
+    context: {
+      weaponId,
+      maxWeight: options.maxWeight ?? null,
+    },
   };
 }

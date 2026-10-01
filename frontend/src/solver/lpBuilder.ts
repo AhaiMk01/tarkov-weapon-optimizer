@@ -512,13 +512,25 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     rawLo = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.min(0, e), 0);
     rawHi = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.max(0, e), 0);
   } else {
-    const structural = params.structuralBounds ?? computeStructuralBounds(
+    // If structuralBounds was supplied, verify context matches current weapon
+    const supplied = params.structuralBounds;
+    const isContextValid = supplied && (!supplied.context || supplied.context.weaponId === params.weaponId);
+    const structural = isContextValid ? supplied : computeStructuralBounds(
       params.weaponId,
       params.itemLookup,
       params.compatibilityMap,
       { maxWeight: params.maxWeight },
     );
-    weightBounds = structural.weightBounds;
+    // Apply request maxWeight dynamically to unclipped physical bounds if present
+    if (structural.physicalWeightBounds) {
+      const [physMin, physMax] = structural.physicalWeightBounds;
+      const effectiveMax = params.maxWeight != null && params.maxWeight > 0
+        ? Math.max(physMin, Math.min(physMax, params.maxWeight))
+        : physMax;
+      weightBounds = [physMin, effectiveMax];
+    } else {
+      weightBounds = structural.weightBounds;
+    }
     rawLo = Math.min(weapon_naked_ergo_scaled, structural.ergoBounds[0] * ERGO_SCALE);
     rawHi = Math.max(1000, structural.ergoBounds[1] * ERGO_SCALE);
   }

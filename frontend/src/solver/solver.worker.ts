@@ -32,12 +32,13 @@ function getIdealCacheKey(lang: string, gameMode: string, req: OptimizeRequest):
   return computeIdealPointCacheKey(lang, gameMode, req);
 }
 
-function getStructuralBounds(data: LoadedData, lang: string, gameMode: string, weaponId: string, maxWeight?: number | null): StructuralBounds {
-  const key = computeStructuralBoundsCacheKey(lang, gameMode, weaponId, maxWeight);
+function getStructuralBounds(data: LoadedData, lang: string, gameMode: string, weaponId: string): StructuralBounds {
+  // Cache key is weapon-invariant: caches unclipped physical bounds in data session
+  const key = computeStructuralBoundsCacheKey(lang, gameMode, weaponId, null);
   let cached = data.structuralBoundsCache.get(key);
   if (!cached) {
     const compatMap = getCompatMap(data, weaponId);
-    cached = computeStructuralBounds(weaponId, data.itemLookup, compatMap, { maxWeight });
+    cached = computeStructuralBounds(weaponId, data.itemLookup, compatMap, { maxWeight: null });
     data.structuralBoundsCache.set(key, cached);
   }
   return cached;
@@ -232,7 +233,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
               }
               try {
                 const epBounds = req.bounds_mode !== 'naive'
-                  ? getStructuralBounds(data, lang, gameMode, req.weapon_id, req.max_weight)
+                  ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
                   : undefined;
                 idealPoint = await computeIdealPoint({
                   weaponId: req.weapon_id,
@@ -302,7 +303,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           }
 
           const precomputedBounds = req.bounds_mode !== 'naive'
-            ? getStructuralBounds(data, lang, gameMode, req.weapon_id, req.max_weight)
+            ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
             : undefined;
 
           const result: OptimizeResponse = await solve({
@@ -356,7 +357,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
 
           const startTime = performance.now();
           const expBounds = req.bounds_mode !== 'naive'
-            ? getStructuralBounds(data, lang, gameMode, req.weapon_id, req.max_weight)
+            ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
             : undefined;
 
           const points: ExplorePoint[] = await explorePareto({
@@ -364,6 +365,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             itemLookup: data.itemLookup,
             compatibilityMap: compatMap,
             structuralBounds: expBounds,
+            boundsMode: req.bounds_mode,
             ignore: req.ignore,
             maxPrice: req.max_price,
             minErgonomics: req.min_ergonomics,

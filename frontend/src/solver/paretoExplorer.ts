@@ -63,6 +63,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     barterExcludeDogtags: p.barterExcludeDogtags ?? false,
     playerLevel: p.playerLevel,
     preciseMode: p.preciseMode,
+    boundsMode: p.boundsMode,
     structuralBounds: p.structuralBounds,
   };
 }

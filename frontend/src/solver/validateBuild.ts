@@ -72,7 +72,17 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
       if (o.source.startsWith('barter:') && !request.barter_available) return false;
       if (request.barter_exclude_dogtags && o.requires_dogtag) return false;
       if (o.source === 'fleaMarket') return fleaAllowed;
-      return o.trader_level == null || o.trader_level <= (request.trader_levels?.[o.vendor_normalized.toLowerCase()] ?? 4);
+      let reqLevel: number | undefined;
+      if (request.trader_levels) {
+        const vnorm = o.vendor_normalized.toLowerCase();
+        reqLevel = request.trader_levels[vnorm];
+        if (reqLevel === undefined) {
+          for (const [k, v] of Object.entries(request.trader_levels)) {
+            if (k.toLowerCase() === vnorm) { reqLevel = v; break; }
+          }
+        }
+      }
+      return o.trader_level == null || o.trader_level <= (reqLevel ?? 4);
     });
     return allowed.reduce<OfferInfo | undefined>((best, o) => !best || o.price < best.price ? o : best, undefined);
   };

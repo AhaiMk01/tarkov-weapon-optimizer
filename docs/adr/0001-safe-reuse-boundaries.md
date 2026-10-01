@@ -1,7 +1,7 @@
 # ADR 0001: Safe Reuse Boundaries across Optimization, Explore, and Sweet Spot Solves
 
 ## Status
-Accepted / In-Progress (Refs #25)
+Proposed / Pending Human Approval (Refs #25)
 
 ## Context
 Tarkov Weapon Mod Optimizer solves mixed-integer linear and spatial nonlinear constraint problems via HiGHS WASM in browser Web Workers. Several user-facing workflows perform multiple closely related solves:
@@ -18,17 +18,17 @@ Without strict mathematical reuse boundaries, optimization risks:
 
 We define four explicit tiers of reuse with mathematical validity rules:
 
-### Tier 1: Invariant Graph & Structural Preparation (Safe within same weapon & lookup)
-- **What is reusable**: `CompatibilityMap` (BFS traversal of reachable attachments) and `computeStructuralBounds` (DAG dynamic programming for min/max weight and ergonomics).
-- **Invalidation inputs**:
-  - `data_fingerprint`: Language, game mode, data snapshot/cache version.
-  - `weapon_id`: Weapon identity.
-  - `max_weight`: Structural bounds constraint input (when specified).
-- **Scope**: Reusable across *all* weights, prices, trader access, flea settings, barter settings, and objective modes for the same weapon.
-- **Safety guarantee**: Reachable item topology and physical slot graphs depend purely on weapon data.
+### Tier 1: Invariant Graph & Structural Preparation (Safe within same weapon context)
+- **What is reusable**: `CompatibilityMap` (BFS traversal of reachable attachments) and unclipped physical `StructuralBounds` (DAG dynamic programming for min/max weight and ergonomics).
+- **Physical bound separation**: `computeStructuralBounds` caches the unclipped physical weight range $[W_{\min}^{\text{phys}}, W_{\max}^{\text{phys}}]$. Any request-scoped `max_weight` limit is applied dynamically during LP generation:
+  $$W_{\max} = \min(W_{\max}^{\text{phys}}, \text{max\_weight})$$
+  This guarantees that a cached bound prepared under a restrictive cap never causes false infeasibility when that cap is later removed or relaxed on the same weapon.
+- **Preparation context**: Cached bounds carry `{ weaponId }` context. If the requested weapon does not match the preparation context, bounds are recomputed from scratch.
+- **Lifetime**: Pinned to the worker's loaded data session. Data updates terminate and re-instantiate the Web Worker.
 
 ### Tier 2: Certified Sweet Spot Endpoints (Safe across preference weight changes only)
 - **What is reusable**: The 3 extreme payoff vectors $(z^*, \text{nad})$ across ergonomics/TED, recoil, and purchase cost.
+- **Consistent domain normalization**: Trader loyalty level keys are canonicalized (trimmed and lowercased) across both cache-key construction and solver execution (`dataService.ts:getAvailablePrice`). This ensures `{ Mechanic: 0 }` and `{ mechanic: 0 }` describe identical mathematical domains in both solving and caching.
 - **Invalidation inputs**:
   - `data_fingerprint`: Language, game mode.
   - `weapon_id`: Weapon identity.
@@ -39,16 +39,20 @@ We define four explicit tiers of reuse with mathematical validity rules:
   - `ergo_weight`, `recoil_weight`, `price_weight` (scalarization weights $w_E, w_R, w_P$).
 - **Certification requirement**: Endpoints MUST be proven optimal (`status === 'optimal'` with certified dual bounds). Endpoints that hit a limit (`status === 'feasible'`) or fail certification MUST NEVER be cached.
 
-### Tier 3: Explore Solution & Warm Start Boundaries
-- **What is reusable**: Evaluated physical build solutions as candidate warm starts or bounding anchors.
-- **Strict Prohibition**: A certified optimal solution for step $k$ (`minErgonomics >= E_k`) MUST NEVER be reported as certified optimal for step $k+1$ (`minErgonomics >= E_{k+1}`).
-- **Allowed reuse**: A previously found valid build that satisfies the new constraint can be evaluated instantly as a verified *feasible point* without solving, or used to prune non-improving points.
-- **Backend constraint**: HiGHS WASM integration currently lacks `Highs_setSolution` or hot-restart exports; persistent C++ model states across changing constraint rows are not exported. Model text generation is request-scoped.
+### Tier 3: Explore Solution & Warm Start Boundaries (Deferred)
+- **Conditional optimality rule**: With an unchanged objective function, if a build $x^*$ was proven globally optimal over a feasible domain $D$, and $x^*$ remains feasible under a restricted domain $D' \subseteq D$ ($x^* \in D'$), then $x^*$ is mathematically guaranteed to be optimal for $D'$. This derives a valid proof from subset optimality without resolving.
+- **Non-transferability**: If the objective changes, or if the domain expands ($D \subset D'$), or if the previous optimum is infeasible ($x^* \notin D'$), a certificate cannot be transferred.
+- **Status**: Deferred. HiGHS WASM integration currently lacks `Highs_setSolution` or hot-restart exports; persistent C++ model states across changing constraint rows are not exported. Candidate point evaluation is evaluated for feasibility only, not certificate copying.
 
-### Tier 4: Repeated Solve Invalidation Key
-- A canonical, deterministic hash of all constraint, market, physical, and numerical parameters is computed. If and only if the hash matches an un-invalidated entry in the worker's session cache, the proven result may be delivered immediately.
+### Tier 4: Repeated Solve Invalidation Key (Deferred)
+- A canonical, deterministic hash of all constraint, market, physical, and numerical parameters is computed via `computeExactSolveCacheKey`.
+- **Status**: Deferred. Full-response caching is not enabled in production. When implemented, certified optimal results and limit/feasible results require separate eligibility rules: a cached limit response must never be returned if a subsequent request allows a larger time budget.
 
-## Consequences
-- Sweet Spot weight tweaks become near-instant (~0ms for endpoints) when only weights change, while strictly invalidating whenever any constraint, trader level, or part lock changes.
-- Explore sweeps reuse base compatibility and structural bounds across all curve points, avoiding 10-15 redundant DAG traversals.
-- No false optimality certificates can ever be transferred across different mathematical problems.
+## Summary of Invalidation Boundaries
+
+| Tier | Reusable Artifact | Invalidation Domain | Allowed Invariant Domain | Certification Safety Guarantee |
+|---|---|---|---|---|
+| **Tier 1** | `CompatibilityMap`, unclipped `StructuralBounds` | Data snapshot/lang/mode, `weapon_id` | All preference weights, prices, trader levels, flea/barter, locks/bans, `max_weight`, objective modes | Physical graph topology is weapon-invariant. Request limits applied dynamically to unclipped bounds. |
+| **Tier 2** | Sweet Spot Endpoints $(z^*, \text{nad})$ | Data snapshot, `weapon_id`, feasibility domain, market domain, physical domain | Preference weights ($w_E, w_R, w_P$) | Endpoints depend strictly on extreme single-objective optima. Normalization prevents case collisions. |
+| **Tier 3** | Explore Solution Reuse | Deferred | Deferred | Subset optimality rule defined; implementation deferred. |
+| **Tier 4** | Full Response Caching | Deferred | Deferred | Canonical key defined; full-response caching deferred. |

@@ -847,8 +847,18 @@ export function getAvailablePrice(
       if (!fleaAvailable) continue;
       if (playerLevel !== null && minLevelFlea > playerLevel) continue;
     } else {
-      const traderLevel = traderLevels[vendor] ?? 4;
-      if (requiredLevel !== null && requiredLevel > traderLevel) continue;
+      // Lookup level case-insensitively so { Mechanic: 0 } and { mechanic: 0 } behave identically
+      let traderLevel = traderLevels[vendor];
+      if (traderLevel === undefined) {
+        for (const [k, v] of Object.entries(traderLevels)) {
+          if (k.toLowerCase() === vendor) {
+            traderLevel = v;
+            break;
+          }
+        }
+      }
+      const effectiveLevel = traderLevel ?? 4;
+      if (requiredLevel !== null && requiredLevel > effectiveLevel) continue;
     }
 
     if (bestPrice === null || price < bestPrice) {
