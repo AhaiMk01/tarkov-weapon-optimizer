@@ -82,11 +82,12 @@ async function main() {
   console.log(`Verified snapshot sha256: ${manifest.sha256}`);
 
   const defaultExperimentCases = isReuse
-    ? ['sparse-sweet-seq-1', 'sparse-sweet-seq-2', 'sparse-explore', 'dense-explore', 'dense-restricted']
+    ? ['sparse-sweet-seq-1', 'sparse-sweet-seq-2', 'sparse-explore', 'dense-restricted']
     : ['dense-overswing', 'dense-ted', 'dense-ted-sweet'];
   const allCases = makeCases(snapshot);
-  const cases = targetCase
-    ? (allCases.some(c => c.id === targetCase) ? allCases.filter(c => c.id === targetCase) : allCases.filter(c => c.id.includes(targetCase)))
+  const targetCaseList = targetCase ? targetCase.split(',').map(s => s.trim()).filter(Boolean) : [];
+  const cases = targetCaseList.length > 0
+    ? allCases.filter(c => targetCaseList.some(tc => c.id === tc || c.id.includes(tc)))
     : (isExperiment ? allCases.filter(c => defaultExperimentCases.includes(c.id)) : allCases);
 
   if (cases.length === 0) {
