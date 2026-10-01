@@ -6,7 +6,7 @@ import { ensureDataLoaded } from './dataService.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
-import { solve, computeIdealPoint } from './solver.ts';
+import { solve, computeIdealPoint, SOLVER_CAPABILITIES } from './solver.ts';
 import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
 import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats, IdealPoint } from './types.ts';
@@ -336,9 +336,6 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             preciseMode: usePrecise,
             boundsMode: req.bounds_mode,
             timeLimitMs: remainingForSolve,
-            retainLimitIncumbent: req.retain_limit_incumbent,
-            branchOrdering: req.branch_ordering,
-            initialCandidate: req.initial_candidate,
           });
 
           result.solve_time_ms = performance.now() - optimizeStart;
@@ -526,11 +523,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             id,
             payload: {
               timestamp: Date.now(),
-              capabilities: {
-                retain_limit_incumbent: true,
-                branch_ordering: true,
-                initial_candidate: true,
-              },
+              capabilities: SOLVER_CAPABILITIES,
             },
           });
           break;

@@ -2,6 +2,15 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [Unreleased]
+
+### Fixed
+- **Shared deadline across Sweet Spot endpoints and solve**: `computeIdealPoint` and the main `solve()` now strictly share one total deadline, resolving a budget reset where uncached Sweet Spot requests took 2× the requested deadline.
+- **Required-slot placement counting**: Required-slot rows in `buildLP` now count `p_{item}_{slot}` placement variables for multi-slot items instead of `x_{item}`, preventing an item that could fill multiple slots from satisfying every required slot it might occupy.
+- **Incumbent candidate eligibility gate**: Candidate builds must have complete integral decision columns, exactly one purchase base, and clean independent build validation before becoming incumbents.
+- **Relaxation bound preservation under Prevent Overswing**: Solved relaxation upper bounds are preserved even when the decoded build fails exact Prevent Overswing, refining the interval instead of discarding the proved upper bound.
+- **Spatial node accounting**: `optimization.nodes` strictly counts actual MIP solves against the spatial node budget; pre-solve pruning does not consume budget.
+
 ## [v2.14.0] — 2026-09-29
 
 ### Added

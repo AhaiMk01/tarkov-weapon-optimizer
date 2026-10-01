@@ -78,35 +78,10 @@ export function incumbentBlockReason(
  * Benchmark runners check this to avoid running candidate flags against legacy code.
  */
 export const SOLVER_CAPABILITIES = {
-  retainLimitIncumbent: true,
-  branchOrdering: true,
-  initialCandidate: true,
+  retainLimitIncumbent: false,
+  branchOrdering: false,
+  initialCandidate: false,
 } as const;
-
-export type LimitIncumbentDecision =
-  | { kind: 'absent' }
-  | { kind: 'diagnostic'; reason: string }
-  | { kind: 'lower-bound' };
-
-/**
- * A time-limit column vector may become a lower bound only.
- * It never supplies an upper bound. An empty limit solution is not a diagnostic.
- */
-export function limitIncumbentDecision(
-  columns: Record<string, { Primal?: number } | undefined>,
-  expectedColumns: readonly string[],
-  nBases: number,
-  validationErrors: readonly string[],
-): LimitIncumbentDecision {
-  const anyFinite = expectedColumns.some(name => {
-    const primal = columns[name]?.Primal;
-    return primal != null && Number.isFinite(primal);
-  });
-  if (!anyFinite) return { kind: 'absent' };
-  const reason = incumbentBlockReason(columns, expectedColumns, nBases, validationErrors);
-  if (reason) return { kind: 'diagnostic', reason };
-  return { kind: 'lower-bound' };
-}
 
 /** The secant underestimates the weight penalty, so this failure can still leave a valid upper bound. */
 function isExpectedExactTedGap(errors: readonly string[]): boolean {
@@ -186,49 +161,6 @@ interface ModelResponse extends OptimizeResponse {
   incumbentEligible?: boolean;
 }
 
-export function applySpatialNodeResult(args: {
-  nodeBound: number;
-  result: ModelResponse;
-  incumbent: ModelResponse | undefined;
-  retainLimitIncumbent: boolean;
-  preventOverswing: boolean;
-  telemetry: import('../api/client').RetentionTelemetry;
-}): { incumbent: ModelResponse | undefined; action: 'prune-infeasible' | 'branch' | 'stop'; bound: number; reason?: string } {
-  const { nodeBound, result, retainLimitIncumbent, preventOverswing, telemetry } = args;
-  let incumbent = args.incumbent;
-  if (result.status === 'infeasible') return { incumbent, action: 'prune-infeasible', bound: nodeBound };
-  const proved = result.status === 'optimal' && result.bound != null;
-  const isLimit = result.status === 'feasible' && result.bound == null;
-  if (isLimit) {
-    telemetry.timeout_count++;
-    if (result.incumbentEligible !== false && result.final_stats != null) {
-      telemetry.eligible_count++;
-    }
-  }
-  const retained = retainLimitIncumbent
-    && isLimit
-    && result.incumbentEligible !== false
-    && result.final_stats != null;
-
-  if ((proved && result.incumbentEligible !== false && result.final_stats) || retained) {
-    const ok = !preventOverswing || (result.final_stats?.true_ergo_delta ?? -1) >= -1e-7;
-    if (ok) {
-      if (!incumbent || result.objective_value > incumbent.objective_value) {
-        if (retained) {
-          telemetry.adopted_count++;
-          telemetry.improved_lower_bound = true;
-        }
-        incumbent = result;
-      }
-    }
-  }
-  if (!proved) {
-    // The incoming relaxation bound is the only upper bound. A limit objective is not one.
-    return { incumbent, action: 'stop', bound: nodeBound, reason: result.reason ?? result.status };
-  }
-  return { incumbent, action: 'branch', bound: Math.min(nodeBound, result.bound!) };
-}
-
 /**
  * Endpoint payoff table in the SAME raw-ergo/TED, recoil, purchase-cost axes as
  * the final objective. Every endpoint retains every user feasibility constraint.
@@ -283,14 +215,10 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
 
   const tolerance = Math.max(1e-7, params.objectiveTolerance ?? 1e-5);
   const maxNodes = Math.max(0, params.maxSpatialNodes ?? 512);
-  const branchOrdering = params.branchOrdering ?? 'lighter-first';
-  const isHeavierFirst = branchOrdering === 'heavier-first';
   const [lo, hi] = buildLP(params).weightBounds;
   type Node = { interval: [number, number]; bound: number };
   const queue: Node[] = lo < 3 && hi > 3
-    ? (isHeavierFirst
-        ? [{ interval: [3, hi], bound: Infinity }, { interval: [lo, 3], bound: Infinity }]
-        : [{ interval: [lo, 3], bound: Infinity }, { interval: [3, hi], bound: Infinity }])
+    ? [{ interval: [lo, 3], bound: Infinity }, { interval: [3, hi], bound: Infinity }]
     : [{ interval: [lo, hi], bound: Infinity }];
   let incumbent: ModelResponse | undefined;
   let nodes = 0;
@@ -298,204 +226,47 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
   let limitReason = 'Spatial node or time limit reached';
   // Keep the largest discarded bound too: tolerance pruning must not report gap=0.
   let closedBound = -Infinity;
-  const telemetry: import('../api/client').RetentionTelemetry = {
-    timeout_count: 0,
-    eligible_count: 0,
-    adopted_count: 0,
-    improved_lower_bound: false,
-  };
-  const initTelemetry: import('../api/client').InitialCandidateTelemetry = {
-    generated: false,
-    valid: false,
-    elapsed_ms: 0,
-    pruned_nodes_count: 0,
-  };
-  const nodeTraces: import('../api/client').SpatialNodeTrace[] = [];
-  let prunedCount = 0;
-  let splitCount = 0;
-  let traceSeq = 0;
-  let seedModel: ModelResponse | undefined;
-
-  if (params.initialCandidate && performance.now() < deadline) {
-    const initStart = performance.now();
-    initTelemetry.generated = true;
-    try {
-      const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
-      const seedParams: SolveParams = {
-        ...params,
-        preciseMode: false,
-        useTrueErgo: false,
-        preventOverswing: false,
-        useTchebycheff: false,
-        initialCandidate: false,
-      };
-      const candModel = await solveModel(seedParams, undefined, remainingSec);
-      if (candModel.status === 'optimal' && candModel.final_stats) {
-        const valErrors = validateBuild(toOptimizeRequest(params), candModel, params.itemLookup);
-        const tedOk = !params.preventOverswing || (candModel.final_stats.true_ergo_delta ?? -1) >= -1e-7;
-        if (valErrors.length === 0 && tedOk) {
-          const lpModel = buildLP(params);
-          const cols: Record<string, { Primal: number }> = {};
-          for (let i = 1; i <= lpModel.nItems; i++) {
-            const item = lpModel.indexToItem[i];
-            const isSel = candModel.selected_items.some(d => d.id === item);
-            cols[`x_${i}`] = { Primal: isSel ? 1 : 0 };
-            const d = candModel.selected_items.find(x => x.id === item);
-            cols[`buy_${i}`] = { Primal: (d && d.price > 0) ? 1 : 0 };
-          }
-          for (let b = 1; b <= lpModel.nBases; b++) {
-            const baseId = lpModel.baseIds[b - 1];
-            cols[`base_${b}`] = { Primal: (candModel.selected_preset?.id === baseId || (baseId === 'naked' && candModel.selected_preset?.id === params.weaponId)) ? 1 : 0 };
-          }
-          const ergoOrTed = params.useTrueErgo ? candModel.final_stats.true_ergo_delta! : candModel.final_stats.ergonomics;
-          const axes = lpModel.axes(cols, ergoOrTed);
-          candModel.objective_value = lpModel.score(axes);
-          candModel.axes = axes;
-          incumbent = candModel;
-          seedModel = candModel;
-          initTelemetry.valid = true;
-          initTelemetry.score = candModel.objective_value;
-        }
-      }
-    } catch {
-      // Seed failure does not stop search
-    }
-    initTelemetry.elapsed_ms = Math.round(performance.now() - initStart);
-  }
-
   const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
     const [a, b] = interval;
     const mid = (a + b) / 2;
     if (mid <= a || mid >= b || b - a < 1e-10) return undefined;
-    return isHeavierFirst ? [[mid, b], [a, mid]] : [[a, mid], [mid, b]];
+    return [[a, mid], [mid, b]];
   };
   while (queue.length && nodes < maxNodes && performance.now() < deadline) {
     queue.sort((a, b) => b.bound - a.bound);
     const node = queue.shift()!;
-    const nodeStart = performance.now();
-    const boundIn = node.bound;
-    const traceIdx = ++traceSeq;
-
-    // A node is pruned by the initial candidate if the incumbent is still the seed
-    // (or was not improved by a later solve) and the node's bound <= seedScore + tolerance.
-    const isPrunedBySeed = Boolean(
-      params.initialCandidate &&
-      initTelemetry.valid &&
-      seedModel &&
-      incumbent &&
-      incumbent.objective_value <= seedModel.objective_value &&
-      node.bound <= seedModel.objective_value + tolerance
-    );
-
     if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, node.bound);
-      prunedCount++;
-      if (isPrunedBySeed) {
-        initTelemetry.pruned_nodes_count++;
-      }
-      nodeTraces.push({
-        node_index: traceIdx,
-        interval: node.interval,
-        bound_in: boundIn,
-        status: 'pruned-before-solve',
-        bound_out: node.bound,
-        incumbent_improved: false,
-        pruned: true,
-        elapsed_ms: Math.round(performance.now() - nodeStart),
-      });
-      // Pre-solve pruning does not spend a MIP solve; nodes budget is preserved.
       continue;
     }
     const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
-    const prevIncumbentVal = incumbent?.objective_value;
     const result = await solveModel(params, node.interval, remainingSec);
-    nodes++; // Legacy semantics: counts actual MIP solves against maxSpatialNodes
-    const nodeElapsed = Math.round(performance.now() - nodeStart);
-    const step = applySpatialNodeResult({
-      nodeBound: node.bound,
-      result,
-      incumbent,
-      retainLimitIncumbent: params.retainLimitIncumbent === true,
-      preventOverswing: params.preventOverswing === true,
-      telemetry,
-    });
-    incumbent = step.incumbent;
-    const incumbentImproved = Boolean(incumbent && (prevIncumbentVal == null || incumbent.objective_value > prevIncumbentVal));
-
-    if (step.action === 'prune-infeasible') {
-      nodeTraces.push({
-        node_index: traceIdx,
-        interval: node.interval,
-        bound_in: boundIn,
-        status: 'infeasible',
-        incumbent_improved: false,
-        pruned: true,
-        elapsed_ms: nodeElapsed,
-      });
-      continue;
-    }
-    if (step.action === 'stop') {
-      unresolved = Math.max(unresolved, step.bound);
-      limitReason = step.reason ?? result.status;
-      nodeTraces.push({
-        node_index: traceIdx,
-        interval: node.interval,
-        bound_in: boundIn,
-        status: result.status,
-        bound_out: step.bound,
-        objective_value: result.objective_value,
-        incumbent_improved: incumbentImproved,
-        pruned: false,
-        elapsed_ms: nodeElapsed,
-      });
+    nodes++;
+    if (result.status === 'infeasible') continue;
+    // A limit ObjectiveValue is a primal value, not an upper bound. Decoding and
+    // unexpected validation failures are diagnostics: they stop the tree.
+    if (result.status !== 'optimal' || result.bound == null) {
+      unresolved = Math.max(unresolved, node.bound);
+      limitReason = result.reason ?? result.status;
       break;
     }
-    const bound = step.bound;
+    const bound = Math.min(node.bound, result.bound);
+    // Exact TED can fail on a proved secant relaxation. Keep this upper bound
+    // and refine; do not treat the ineligible build as a lower bound.
+    if (result.incumbentEligible !== false && result.final_stats) {
+      const feasible = !params.preventOverswing || result.final_stats.true_ergo_delta! >= -1e-7;
+      if (feasible && (!incumbent || result.objective_value > incumbent.objective_value)) incumbent = result;
+    }
     if (incumbent && bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, bound);
-      prunedCount++;
-      nodeTraces.push({
-        node_index: traceIdx,
-        interval: node.interval,
-        bound_in: boundIn,
-        status: result.status,
-        bound_out: bound,
-        objective_value: result.objective_value,
-        incumbent_improved: incumbentImproved,
-        pruned: true,
-        elapsed_ms: nodeElapsed,
-      });
       continue;
     }
     const parts = splitInterval(node.interval);
     if (!parts) {
       unresolved = Math.max(unresolved, bound);
       limitReason = 'Numerical interval resolution reached before certification';
-      nodeTraces.push({
-        node_index: traceIdx,
-        interval: node.interval,
-        bound_in: boundIn,
-        status: 'numerical-resolution-exhausted',
-        bound_out: bound,
-        objective_value: result.objective_value,
-        incumbent_improved: incumbentImproved,
-        pruned: false,
-        elapsed_ms: nodeElapsed,
-      });
       break;
     }
-    splitCount++;
-    nodeTraces.push({
-      node_index: traceIdx,
-      interval: node.interval,
-      bound_in: boundIn,
-      status: result.status,
-      bound_out: bound,
-      objective_value: result.objective_value,
-      incumbent_improved: incumbentImproved,
-      pruned: false,
-      elapsed_ms: nodeElapsed,
-    });
     queue.push({ interval: parts[0], bound }, { interval: parts[1], bound });
   }
   const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
@@ -516,14 +287,6 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     reason: certified ? undefined : limitReason,
     solve_time_ms: performance.now() - start,
     optimization: { lower_bound: incumbent.objective_value, upper_bound: upper, absolute_gap: gap, tolerance, nodes, termination: certified ? 'optimal' : 'limit' },
-    retention_telemetry: params.retainLimitIncumbent ? telemetry : undefined,
-    spatial_telemetry: {
-      branch_ordering: branchOrdering,
-      node_traces: nodeTraces,
-      pruned_nodes_count: prunedCount,
-      split_nodes_count: splitCount,
-    },
-    initial_candidate_telemetry: params.initialCandidate ? initTelemetry : undefined,
   };
 }
 
@@ -555,9 +318,6 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
     barter_available: params.barterAvailable,
     barter_exclude_dogtags: params.barterExcludeDogtags,
     player_level: params.playerLevel ?? undefined,
-    branch_ordering: params.branchOrdering ?? undefined,
-    retain_limit_incumbent: params.retainLimitIncumbent ?? undefined,
-    initial_candidate: params.initialCandidate ?? undefined,
   };
 }
 
@@ -582,8 +342,7 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
         selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
       };
     }
-    const retainableLimit = stop === 'limit' && params.retainLimitIncumbent === true;
-    if (stop !== 'optimal' && !retainableLimit) {
+    if (stop !== 'optimal') {
       return {
         status: 'incomplete',
         reason: result.Status,
@@ -597,24 +356,13 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
     for (const item of lp.multiSlotItemIndices) {
       for (const slot of lp.itemToSlotIndices.get(item) ?? []) expectedColumns.push(`p_${item}_${slot}`);
     }
-    if (retainableLimit) {
-      const preliminary = limitIncumbentDecision(columns, expectedColumns, lp.nBases, []);
-      if (preliminary.kind !== 'lower-bound') {
-        return {
-          status: 'incomplete',
-          reason: preliminary.kind === 'diagnostic' ? preliminary.reason : result.Status,
-          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
-        };
-      }
-    } else {
-      const blocked = incumbentBlockReason(columns, expectedColumns, lp.nBases, []);
-      if (blocked) {
-        return {
-          status: 'incomplete',
-          reason: blocked,
-          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
-        };
-      }
+    const blocked = incumbentBlockReason(columns, expectedColumns, lp.nBases, []);
+    if (blocked) {
+      return {
+        status: 'incomplete',
+        reason: blocked,
+        selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
+      };
     }
     const solvedColumns = columns as Record<string, { Primal: number }>;
     const selectedIds: string[] = [];
@@ -900,29 +648,6 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
     const validationErrors = validateBuild(toOptimizeRequest(params), candidate, params.itemLookup);
     const rejected = incumbentBlockReason(columns, expectedColumns, lp.nBases, validationErrors);
     const dual = certifiedDualBound(result.Status, result.ObjectiveValue);
-    if (retainableLimit) {
-      const decision = limitIncumbentDecision(columns, expectedColumns, lp.nBases, validationErrors);
-      if (decision.kind !== 'lower-bound') {
-        return {
-          status: 'incomplete',
-          reason: decision.kind === 'diagnostic' ? decision.reason : result.Status,
-          selected_items: [], objective_value: 0, solve_time_ms: performance.now() - startTime,
-        };
-      }
-      return {
-        status: 'feasible',
-        incumbentEligible: true,
-        reason: result.Status,
-        selected_items: detailedItems,
-        selected_preset: presetDetail,
-        objective_value: lp.score(axes),
-        axes,
-        final_stats: finalStats,
-        solve_time_ms: performance.now() - startTime,
-        slot_pairs: slotPairs,
-        ideal_point: params.idealPoint,
-      };
-    }
     if (rejected) {
       // The secant is an outer approximation. Exact TED can fail while the
       // optimal relaxation value remains a valid upper bound for this interval.

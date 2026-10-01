@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { applySpatialNodeResult, certifiedDualBound, incumbentBlockReason, limitIncumbentDecision, solve, SOLVER_CAPABILITIES } from './src/solver/solver.ts';
+import { certifiedDualBound, incumbentBlockReason, solve, SOLVER_CAPABILITIES } from './src/solver/solver.ts';
 import { buildLP } from './src/solver/lpBuilder.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { choiceFixture } from './test_solver_fixtures.ts';
@@ -92,68 +92,10 @@ assert.equal(timed.status, 'incomplete');
 assert.equal(timed.optimization, undefined);
 assert.equal(timed.selected_items.length, 0);
 
-// Retention capability and decision gate
-assert.equal(SOLVER_CAPABILITIES.retainLimitIncumbent, true);
-
-const clean = { x_1: { Primal: 1 }, buy_1: { Primal: 1 }, base_1: { Primal: 1 } };
-assert.equal(limitIncumbentDecision({}, ['x_1', 'base_1'], 1, []).kind, 'absent');
-assert.equal(limitIncumbentDecision({ x_1: { Primal: 0.4 }, base_1: { Primal: 1 } }, ['x_1', 'base_1'], 1, []).kind, 'diagnostic');
-assert.equal(limitIncumbentDecision(clean, ['x_1', 'buy_1', 'base_1'], 1, ['Required slot is empty: right']).kind, 'diagnostic');
-assert.equal(limitIncumbentDecision(clean, ['x_1', 'buy_1', 'base_1'], 1, []).kind, 'lower-bound');
-
-const limitBuild = {
-  status: 'feasible' as const,
-  incumbentEligible: true,
-  objective_value: 3000,
-  reason: 'Time limit reached',
-  selected_items: [],
-  final_stats: { ergonomics: 30, recoil_vertical: 100, recoil_horizontal: 100, total_price: 1100, total_weight: 3, true_ergo_delta: 30, overswing_pct: 0, moa: 0 },
-};
-
-// Test telemetry tracking in applySpatialNodeResult
-const tel1 = { timeout_count: 0, eligible_count: 0, adopted_count: 0, improved_lower_bound: false };
-const kept = applySpatialNodeResult({
-  nodeBound: 4500, result: limitBuild, incumbent: undefined, retainLimitIncumbent: true, preventOverswing: true, telemetry: tel1,
-});
-assert.equal(kept.action, 'stop');
-assert.equal(kept.bound, 4500, 'a limit objective must not become the node upper bound');
-assert.equal(kept.incumbent?.objective_value, 3000);
-assert.equal(tel1.timeout_count, 1);
-assert.equal(tel1.eligible_count, 1);
-assert.equal(tel1.adopted_count, 1);
-assert.equal(tel1.improved_lower_bound, true);
-
-// Disabled retention does not adopt and does not improve bound
-const tel2 = { timeout_count: 0, eligible_count: 0, adopted_count: 0, improved_lower_bound: false };
-const ignored = applySpatialNodeResult({
-  nodeBound: 4500, result: limitBuild, incumbent: undefined, retainLimitIncumbent: false, preventOverswing: true, telemetry: tel2,
-});
-assert.equal(ignored.action, 'stop');
-assert.equal(ignored.incumbent, undefined);
-assert.equal(tel2.timeout_count, 1);
-assert.equal(tel2.eligible_count, 1);
-assert.equal(tel2.adopted_count, 0);
-assert.equal(tel2.improved_lower_bound, false);
-
-// Ineligible limit result (e.g. negative TED under preventOverswing)
-const tel3 = { timeout_count: 0, eligible_count: 0, adopted_count: 0, improved_lower_bound: false };
-const negative = applySpatialNodeResult({
-  nodeBound: 4500,
-  result: { ...limitBuild, final_stats: { ...limitBuild.final_stats, true_ergo_delta: -5 } },
-  incumbent: undefined, retainLimitIncumbent: true, preventOverswing: true, telemetry: tel3,
-});
-assert.equal(negative.action, 'stop');
-assert.equal(negative.incumbent, undefined);
-assert.equal(tel3.timeout_count, 1);
-assert.equal(tel3.eligible_count, 1);
-assert.equal(tel3.adopted_count, 0);
-
-// solve() returns retention_telemetry when retainLimitIncumbent is true
-const telSolve = await solve({ ...overswing, preventOverswing: true, retainLimitIncumbent: true });
-assert.equal(telSolve.status, 'optimal');
-assert.ok(telSolve.retention_telemetry != null);
-assert.equal(telSolve.retention_telemetry.timeout_count, 0);
-assert.equal(telSolve.retention_telemetry.improved_lower_bound, false);
+// Production capabilities: experimental search policies are disabled by default
+assert.equal(SOLVER_CAPABILITIES.retainLimitIncumbent, false);
+assert.equal(SOLVER_CAPABILITIES.branchOrdering, false);
+assert.equal(SOLVER_CAPABILITIES.initialCandidate, false);
 
 // Branch ordering capabilities and telemetry (when present in candidate build)
 if ((SOLVER_CAPABILITIES as any).branchOrdering) {

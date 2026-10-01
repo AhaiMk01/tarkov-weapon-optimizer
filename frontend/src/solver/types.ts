@@ -237,14 +237,4 @@ export interface SolveParams {
   preciseMode?: boolean;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   boundsMode?: 'structural' | 'naive';
-  /**
-   * When a MIP hits a limit, a validated integral build may become a lower bound.
-   * The limit objective is never an upper bound. Default keeps the legacy stop
-   * with no limit incumbent. Each node still receives the remaining deadline.
-   */
-  retainLimitIncumbent?: boolean;
-  /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
-  branchOrdering?: 'lighter-first' | 'heavier-first';
-  /** Generate a fast linear candidate build and seed incumbent before spatial search. */
-  initialCandidate?: boolean;
 }

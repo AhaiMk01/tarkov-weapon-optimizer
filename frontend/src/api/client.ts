@@ -68,15 +68,6 @@ export interface OptimizeRequest {
   bounds_mode?: 'structural' | 'naive';
   /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
   time_limit_ms?: number;
-  /**
-   * Keep a validated time-limit build as a lower bound only.
-   * Omitted means the legacy search, which does not adopt that build.
-   */
-  retain_limit_incumbent?: boolean;
-  /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
-  branch_ordering?: 'lighter-first' | 'heavier-first';
-  /** Generate a fast linear candidate build and seed incumbent before spatial search. */
-  initial_candidate?: boolean;
 }
 export interface ItemDetail {
   id: string;
@@ -139,44 +130,6 @@ export interface FinalStats {
   moa: number;
 }
 
-export interface InitialCandidateTelemetry {
-  generated: boolean;
-  valid: boolean;
-  score?: number;
-  elapsed_ms: number;
-  pruned_nodes_count: number;
-}
-
-export interface SpatialNodeTrace {
-  node_index: number;
-  interval: [number, number];
-  bound_in: number;
-  status: string;
-  bound_out?: number;
-  objective_value?: number;
-  incumbent_improved: boolean;
-  pruned: boolean;
-  elapsed_ms: number;
-}
-
-export interface SpatialSearchTelemetry {
-  branch_ordering: 'lighter-first' | 'heavier-first';
-  node_traces: SpatialNodeTrace[];
-  pruned_nodes_count: number;
-  split_nodes_count: number;
-}
-
-export interface RetentionTelemetry {
-  /** How many MIP solves in the spatial tree stopped at a limit rather than optimality. */
-  timeout_count: number;
-  /** How many limit solutions had all expected columns integral and passed validateBuild. */
-  eligible_count: number;
-  /** How many limit solutions were adopted as the incumbent. */
-  adopted_count: number;
-  /** True if any adopted limit solution increased incumbent.objective_value. */
-  improved_lower_bound: boolean;
-}
-
 export interface OptimizeResponse {
   status: string;
   selected_items: ItemDetail[];
@@ -201,12 +154,6 @@ export interface OptimizeResponse {
   };
   /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
   ideal_point?: IdealPoint;
-  /** Telemetry on whether incumbent retention operated during spatial search. */
-  retention_telemetry?: RetentionTelemetry;
-  /** Node-by-node spatial search trace and pruning telemetry. */
-  spatial_telemetry?: SpatialSearchTelemetry;
-  /** Telemetry on initial candidate generation, validation, and outer-search pruning. */
-  initial_candidate_telemetry?: InitialCandidateTelemetry;
 }
 
 export type GameMode = 'regular' | 'pve';
