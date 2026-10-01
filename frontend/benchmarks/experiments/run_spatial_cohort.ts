@@ -38,16 +38,16 @@ export interface CohortSample {
   mechanismTelemetry: any;
 }
 
-async function runCandidateCohort(candidate: 'adaptive-envelope' | 'node-option-tuning') {
+async function runCandidateCohort(candidate: 'adaptive-envelope' | 'node-option-tuning', targetCaseId?: string) {
   console.log(`\n================================================================`);
-  console.log(`Starting 5-pair formal cohort for: ${candidate}`);
+  console.log(`Starting formal cohort for: ${candidate}${targetCaseId ? ` (case: ${targetCaseId})` : ''}`);
   console.log(`================================================================`);
 
   const { snapshot } = loadAndVerifySnapshot(path.resolve(__dirname, '..'));
   const resultsDir = path.resolve(__dirname, '../results');
   if (!fs.existsSync(resultsDir)) fs.mkdirSync(resultsDir, { recursive: true });
   const outputFile = path.join(resultsDir, `spatial_cohort_${candidate}.jsonl`);
-  const logStream = fs.createWriteStream(outputFile, { flags: 'w', encoding: 'utf8' });
+  const logStream = fs.createWriteStream(outputFile, { flags: targetCaseId ? 'a' : 'w', encoding: 'utf8' });
 
   const port = candidate === 'adaptive-envelope' ? 5195 : 5196;
   const server = await createServer({
@@ -73,7 +73,7 @@ async function runCandidateCohort(candidate: 'adaptive-envelope' | 'node-option-
     await page.evaluate((snap: any) => (window as any).smokeHarness.seed(snap), snapshot);
 
     const m4a1Id = '5447a9cd4bdc2dbd208b4567';
-    const cases = [
+    let cases = [
       {
         id: 'dense-ted',
         request: {
@@ -93,6 +93,7 @@ async function runCandidateCohort(candidate: 'adaptive-envelope' | 'node-option-
         },
       },
     ];
+    if (targetCaseId) cases = cases.filter(c => c.id === targetCaseId);
 
     let sequence = 0;
 
@@ -208,12 +209,13 @@ async function runCandidateCohort(candidate: 'adaptive-envelope' | 'node-option-
 }
 
 async function main() {
-  const target = process.argv[2];
+  const target = process.argv[2] as 'adaptive-envelope' | 'node-option-tuning';
+  const targetCase = process.argv[3];
   if (target === 'adaptive-envelope' || target === 'node-option-tuning') {
-    await runCandidateCohort(target);
+    await runCandidateCohort(target, targetCase);
   } else {
-    await runCandidateCohort('adaptive-envelope');
-    await runCandidateCohort('node-option-tuning');
+    await runCandidateCohort('adaptive-envelope', targetCase);
+    await runCandidateCohort('node-option-tuning', targetCase);
   }
 }
 
