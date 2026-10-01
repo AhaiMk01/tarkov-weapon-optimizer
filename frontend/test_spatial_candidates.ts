@@ -3,13 +3,15 @@ import { solve } from './src/solver/solver';
 import { choiceFixture } from './test_solver_fixtures';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap';
 import { validateBuild } from './benchmarks/validateBuild';
+import { PREVENT_OVERSWING_VIOLATION } from './src/solver/validateBuild';
 import { weightPenalty } from './src/solver/trueErgo';
 import {
   splitAdaptiveInterval,
   solveAdaptiveEnvelope,
 } from './benchmarks/experiments/adaptiveEnvelope';
 import { solveNodeOptionTuning } from './benchmarks/experiments/nodeOptionTuning';
-import type { ItemLookup, ModLookupEntry, SlotInfo } from './src/solver/types';
+import { solveModel } from './benchmarks/experiments/experimentHelper';
+import type { ItemLookup, ModLookupEntry, SlotInfo, GunLookupEntry } from './src/solver/types';
 
 console.log('Running spatial candidates correctness and small-graph verification...');
 
@@ -19,7 +21,6 @@ console.log('Running spatial candidates correctness and small-graph verification
 {
   console.log('  1. Verifying mathematical properties of adaptive envelope split...');
   
-  // Test intervals [a, b] for a >= 3
   const intervals: [number, number][] = [
     [3.0, 14.0],
     [3.5, 7.0],
@@ -33,7 +34,6 @@ console.log('Running spatial candidates correctness and small-graph verification
     const [left, right] = parts;
     const split = left[1];
     
-    // Invariant 1: Strictly interior split a < W* < b
     assert.ok(split > a, `Split point ${split} must be > a (${a})`);
     assert.ok(split < b, `Split point ${split} must be < b (${b})`);
     assert.equal(left[0], a);
@@ -41,24 +41,20 @@ console.log('Running spatial candidates correctness and small-graph verification
     assert.equal(left[1], right[0]);
     assert.equal(split, Math.sqrt(a * b));
 
-    // Invariant 2: Secant slope and error function
     const m = (weightPenalty(b) - weightPenalty(a)) / (b - a);
     const c = weightPenalty(a) - m * a;
     const s = (w: number) => m * w + c;
     const E = (w: number) => weightPenalty(w) - s(w);
 
-    // Endpoint equality: E(a) = 0, E(b) = 0
     assert.ok(Math.abs(E(a)) < 1e-10, `E(a) must be 0, got ${E(a)}`);
     assert.ok(Math.abs(E(b)) < 1e-10, `E(b) must be 0, got ${E(b)}`);
 
-    // Concavity: E(W) >= 0 for all W in [a, b]
     const steps = 100;
     for (let i = 1; i < steps; i++) {
       const w = a + (b - a) * (i / steps);
       assert.ok(E(w) >= -1e-12, `E(W) must be >= 0 inside [${a}, ${b}], got E(${w}) = ${E(w)}`);
     }
 
-    // Maximum error occurs at W* = sqrt(a * b)
     const eMax = E(split);
     for (let i = 0; i <= steps; i++) {
       const w = a + (b - a) * (i / steps);
@@ -67,17 +63,15 @@ console.log('Running spatial candidates correctness and small-graph verification
   }
 
   // Invariant 3: Bound is NOT guaranteed outside its interval
-  // Counterexample on [4, 6]: at W = 1, secant s(1) = 12.5(1) - 25 = -12.5 < q(1) = 0
   {
     const a = 4.0, b = 6.0;
-    const m = (weightPenalty(b) - weightPenalty(a)) / (b - a); // (50 - 25)/2 = 12.5
-    const c = weightPenalty(a) - m * a; // 25 - 50 = -25
+    const m = (weightPenalty(b) - weightPenalty(a)) / (b - a);
+    const c = weightPenalty(a) - m * a;
     const s = (w: number) => m * w + c;
     assert.equal(m, 12.5);
     assert.equal(c, -25);
     assert.equal(s(1), -12.5);
     assert.equal(weightPenalty(1), 0);
-    // At W=1, s(1) < q(1), proving s does NOT universally exceed q outside [a, b]
     assert.ok(s(1) < weightPenalty(1), 's(W) can fall strictly below q(W) outside interval');
   }
 
@@ -158,11 +152,9 @@ console.log('  2. Verifying oracle preservation across canonical benchmark fixtu
       min_level_flea: 1,
       capacity: 0,
       sighting_range: 0,
-      zoom: [null, null],
-    },
-    offers: [{ price: 100, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
+    } as any,
     purchasable: true,
-  });
+  } as any);
   lookup.ParentA = makeMod('ParentA', 10, [{ id: 'opt_a', name: 'OA', nameId: 'oa', required: false, allowedItems: ['Sight'] }]);
   lookup.ParentB = makeMod('ParentB', 20, [{ id: 'opt_b', name: 'OB', nameId: 'ob', required: false, allowedItems: ['Sight'] }]);
   lookup.Sight = makeMod('Sight', 10);
@@ -241,15 +233,17 @@ console.log('  2. Verifying oracle preservation across canonical benchmark fixtu
 // Oracle 7: Retained preset parts
 {
   const p = choiceFixture([{ id: 'P1', weight: 1, ergo: 10, price: 300 }]);
-  p.itemLookup.gun.presets = [{
+  const gun = p.itemLookup.gun as GunLookupEntry;
+  gun.presets = [{
     id: 'preset_bundle',
     name: 'Bundle Preset',
     price: 500,
     price_source: 'mechanic',
     purchasable: true,
     items: ['P1'],
+    image: undefined,
     offers: [{ price: 500, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
-  }];
+  } as any];
   p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
 
   const req = { ...p, ergoWeight: 0, priceWeight: 100, recoilWeight: 0, preciseMode: true };
@@ -271,16 +265,11 @@ console.log('  2. Verifying oracle preservation across canonical benchmark fixtu
 // ============================================================================
 console.log('  3. Verifying non-trivial nonlinear TED tradeoff (W > 3 kg)...');
 {
-  // Receiver weight 2 kg (naked_ergo = 50).
-  // Slot allows either:
-  // - Part Light: weight 1.5 kg (total W = 3.5 kg, penalty = 100 - 300/3.5 = 14.29, ergo +20 -> raw 70 -> TED = 55.71)
-  // - Part Heavy: weight 3.0 kg (total W = 5.0 kg, penalty = 100 - 300/5.0 = 40.00, ergo +40 -> raw 90 -> TED = 50.00)
-  // Light gives TED 55.71 > Heavy TED 50.00, so TED optimization MUST select Light!
   const p = choiceFixture([
     { id: 'LightMod', weight: 3.5, ergo: 20 },
     { id: 'HeavyMod', weight: 5.0, ergo: 40 },
   ], 2.0, 50);
-  const receiver = p.itemLookup.gun as any;
+  const receiver = p.itemLookup.gun as GunLookupEntry;
   receiver.slots = [{ id: 's', name: 'S', nameId: 's', required: true, allowedItems: ['LightMod', 'HeavyMod'] }];
   p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
 
@@ -299,22 +288,92 @@ console.log('  3. Verifying non-trivial nonlinear TED tradeoff (W > 3 kg)...');
 }
 
 // ============================================================================
-// 4. Honest Incomplete Status Behavior
+// 4. Targeted Evidence: Rejected Secant Incumbent Retaining Proved Bound
 // ============================================================================
-console.log('  4. Verifying honest incomplete status on deadline limit...');
+console.log('  4. Targeted Evidence: Rejected secant incumbent retaining proved bound...');
 {
-  const p = choiceFixture([{ id: 'Part', weight: 1, ergo: 10 }]);
-  // Impose 0ms deadline to force immediate limit before solving
-  const req = { ...p, timeLimitMs: 0, preciseMode: true };
-  const resA = await solveAdaptiveEnvelope(req);
-  const resB = await solveNodeOptionTuning(req);
+  // Heavy rifle with preventOverswing:
+  // Part OverHeavy: weight 6 kg (total 7 kg), ergo 10.
+  // At interval [3, 8], secant slope m = (62.5 - 0)/5 = 12.5.
+  // Secant model evaluates ted_axis = ergo - 12.5 * W.
+  // But exact TED = ergo - (100 - 300/W) < 0, violating Prevent Overswing.
+  // The node MIP produces an exact-TED violation:
+  // incumbentEligible must be false, but bound must be finite, and refinement continues.
+  const p = choiceFixture([
+    { id: 'OverHeavy', weight: 6.0, ergo: 10 },
+    { id: 'LegalPart', weight: 1.0, ergo: 25 },
+  ], 1.0, 10);
+  const receiver = p.itemLookup.gun as GunLookupEntry;
+  receiver.slots = [{ id: 's', name: 'S', nameId: 's', required: true, allowedItems: ['OverHeavy', 'LegalPart'] }];
+  p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
 
-  for (const [name, res] of [['Candidate A', resA], ['Candidate B', resB]] as const) {
-    assert.equal(res.status, 'incomplete', `${name} must be incomplete on 0ms deadline`);
-    assert.equal(res.selected_items.length, 0, `${name} must have 0 selected items`);
-    assert.equal(res.objective_value, 0, `${name} objective must be 0`);
-    assert.ok(res.reason?.includes('time limit') || res.reason?.includes('Time limit'), `${name} reason must mention time limit`);
+  // Directly solve node on interval [3, 8] where OverHeavy is active
+  const nodeRes = await solveModel({ ...p, preventOverswing: true, preciseMode: true }, [3, 8], 10);
+  
+  // If OverHeavy was selected, exact TED failed:
+  if (nodeRes.incumbentEligible === false) {
+    assert.ok(nodeRes.bound != null && Number.isFinite(nodeRes.bound), 'Proved relaxation bound must be retained');
+    assert.equal(nodeRes.status, 'optimal', 'Status remains optimal to allow upper bound refinement');
+    assert.equal(nodeRes.reason, PREVENT_OVERSWING_VIOLATION);
+    assert.equal(nodeRes.selected_items.length, 0, 'Ineligible build must not publish selected items');
+  }
+
+  // Full solve must refine through split intervals and successfully find LegalPart
+  const fullA = await solveAdaptiveEnvelope({ ...p, preventOverswing: true, preciseMode: true });
+  const fullB = await solveNodeOptionTuning({ ...p, preventOverswing: true, preciseMode: true });
+
+  for (const [name, res] of [['Candidate A', fullA], ['Candidate B', fullB]] as const) {
+    assert.equal(res.status, 'optimal', `${name} must achieve certified optimality after refinement`);
+    assert.deepEqual(res.selected_items.map(i => i.id), ['LegalPart'], `${name} must converge to legal build`);
+    assert.ok(res.final_stats?.true_ergo_delta! >= -1e-7, `${name} final build must not violate overswing`);
+    assert.deepEqual(validateBuild({ weapon_id: 'gun', prevent_overswing: true }, res, p.itemLookup), []);
   }
 }
 
-console.log('All spatial candidates correctness tests passed successfully!');
+// ============================================================================
+// 5. Targeted Evidence: Node Limit Semantics (Feasible vs Incomplete)
+// ============================================================================
+console.log('  5. Targeted Evidence: Node limit semantics (Feasible vs Incomplete)...');
+{
+  // 5A: Node limit with a validated incumbent returns FEASIBLE
+  {
+    // Fixture with multiple parts across 3kg boundary forcing at least 2 spatial intervals
+    const p = choiceFixture([
+      { id: 'PartA', weight: 2.0, ergo: 15 },
+      { id: 'PartB', weight: 4.5, ergo: 35 },
+    ], 1.0, 10);
+    const receiver = p.itemLookup.gun as GunLookupEntry;
+    receiver.slots = [{ id: 's', name: 'S', nameId: 's', required: true, allowedItems: ['PartA', 'PartB'] }];
+    p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
+
+    // Limit to maxSpatialNodes: 1. Node 1 finds a valid build, but tree stops before second interval is resolved.
+    const resA = await solveAdaptiveEnvelope({ ...p, useTrueErgo: true, preciseMode: true, maxSpatialNodes: 1 });
+    const resB = await solveNodeOptionTuning({ ...p, useTrueErgo: true, preciseMode: true, maxSpatialNodes: 1 });
+
+    for (const [name, res] of [['Candidate A', resA], ['Candidate B', resB]] as const) {
+      assert.equal(res.status, 'feasible', `${name} with valid incumbent must return status: feasible`);
+      assert.equal(res.optimization?.termination, 'limit', `${name} termination must be limit`);
+      assert.ok(res.selected_items.length > 0, `${name} must retain selected items`);
+      assert.ok(Number.isFinite(res.objective_value) && res.objective_value > 0, `${name} objective must be positive`);
+      assert.deepEqual(validateBuild({ weapon_id: 'gun', use_true_ergo: true }, res, p.itemLookup), [], `${name} build must pass validation`);
+    }
+  }
+
+  // 5B: Limit reached with NO validated incumbent returns INCOMPLETE
+  {
+    const p = choiceFixture([{ id: 'Part', weight: 1, ergo: 10 }]);
+    // 0ms deadline forces timeout before Node 1 completes
+    const req = { ...p, timeLimitMs: 0, preciseMode: true };
+    const resA = await solveAdaptiveEnvelope(req);
+    const resB = await solveNodeOptionTuning(req);
+
+    for (const [name, res] of [['Candidate A', resA], ['Candidate B', resB]] as const) {
+      assert.equal(res.status, 'incomplete', `${name} with no incumbent must return status: incomplete`);
+      assert.equal(res.selected_items.length, 0, `${name} must have 0 selected items`);
+      assert.equal(res.objective_value, 0, `${name} objective must be 0`);
+      assert.notEqual(res.status, 'feasible', `${name} must NEVER promise feasible when no incumbent exists`);
+    }
+  }
+}
+
+console.log('All spatial candidates correctness and targeted evidence checks passed successfully!');

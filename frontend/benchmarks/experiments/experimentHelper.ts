@@ -1,30 +1,89 @@
 import type {
-  SolveParams,
-  ModelResponse,
+  OptimizeRequest,
   OptimizeResponse,
   ItemDetail,
   FinalStats,
   PresetDetail,
+} from '../../src/api/client';
+import type {
+  SolveParams,
+  GunLookupEntry,
   TraderLevels,
 } from '../../src/solver/types';
+import type { ObjectiveAxes } from '../../src/solver/trueErgo';
+import { PREVENT_OVERSWING_VIOLATION, validateBuild } from '../../src/solver/validateBuild';
+
+export interface ModelResponse extends OptimizeResponse {
+  axes?: ObjectiveAxes;
+  bound?: number;
+  incumbentEligible?: boolean;
+}
+
+function isExpectedExactTedGap(errors: readonly string[]): boolean {
+  return errors.length > 0 && errors.every(error => error === PREVENT_OVERSWING_VIOLATION);
+}
 import { buildLP, MOA_K } from '../../src/solver/lpBuilder';
 import {
   classifyMipStatus,
   certifiedDualBound,
   incumbentBlockReason,
 } from '../../src/solver/solver';
-import { validateBuild } from '../../src/solver/validateBuild';
 import { trueErgoDelta, overswingPercent, tedContribution } from '../../src/solver/trueErgo';
 import { getAvailablePrice } from '../../src/solver/dataService';
 import { canonicalizeTraderLevels } from '../../src/solver/reuseKey';
 
 let highs: any = null;
 async function loadHiGHS(): Promise<any> {
-  if (!highs) {
-    const loader = (await import('highs')).default as any;
-    highs = await loader();
+  const g = globalThis as unknown as {
+    WorkerGlobalScope?: unknown;
+    window?: unknown;
+    process?: { cwd: () => string };
+  };
+  if (typeof g.WorkerGlobalScope === 'undefined' && typeof g.window === 'undefined') {
+    try {
+      const cwd = g.process?.cwd?.() || '.';
+      // @ts-expect-error — dynamic node import for test environments
+      const fs = await import('fs');
+      // @ts-expect-error — dynamic node import for test environments
+      const path = await import('path');
+      const wasmPath = path.resolve(cwd, 'public/highs.wasm');
+      const jsPath = path.resolve(cwd, 'public/highs.js');
+      if (fs.existsSync(wasmPath) && fs.existsSync(jsPath)) {
+        const wasmBinary = new Uint8Array(fs.readFileSync(wasmPath));
+        const jsSource = fs.readFileSync(jsPath, 'utf8');
+        const exports = {} as Record<string, unknown>;
+        const module = { exports };
+        // @ts-expect-error — dynamic node import for test environments
+        const { createRequire } = await import('module');
+        const nodeRequire = createRequire(import.meta.url);
+        new Function('module', 'exports', 'require', '__dirname', '__filename', jsSource)(
+          module, exports, nodeRequire, cwd, 'highs.js'
+        );
+        const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<any>;
+        return loader({ wasmBinary });
+      }
+    } catch {
+      // Fallback
+    }
+    const loader = (await import('highs')).default as unknown as () => Promise<any>;
+    return loader();
   }
-  return highs;
+
+  // Browser: fetch both WASM binary and highs.js source from public/
+  const base = '/';
+  const [wasmResp, jsResp] = await Promise.all([
+    fetch(base + 'highs.wasm'),
+    fetch(base + 'highs.js'),
+  ]);
+  const wasmBinary = new Uint8Array(await wasmResp.arrayBuffer());
+  const jsSource = await jsResp.text();
+
+  const exports = {} as Record<string, unknown>;
+  const module = { exports };
+  const fn = new Function('module', 'exports', jsSource);
+  fn(module, exports);
+  const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<any>;
+  return loader({ wasmBinary });
 }
 
 function toOptimizeRequest(params: SolveParams): OptimizeRequest {

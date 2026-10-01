@@ -1,7 +1,8 @@
-import type { SolveParams, OptimizeResponse, ModelResponse } from '../../src/solver/types';
+import type { OptimizeResponse } from '../../src/api/client';
+import type { SolveParams } from '../../src/solver/types';
+import { solveModel, type ModelResponse } from './experimentHelper';
 import { buildLP } from '../../src/solver/lpBuilder';
 import { canonicalizeTraderLevels } from '../../src/solver/reuseKey';
-import { solveModel } from './experimentHelper';
 
 /**
  * Prototype A for Issue #27: Adaptive Spatial Envelope.
