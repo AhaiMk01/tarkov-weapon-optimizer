@@ -14,11 +14,14 @@ import type {
   ModLookupEntry,
   ModStats,
   PresetInfo,
+  TraderLevels,
 } from './types';
+import { DEFAULT_TRADER_LEVELS } from './types';
 import { getAvailablePrice } from './dataService';
 import { objectiveModel, objectiveScore, weightPenalty } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { computeStructuralBounds } from './structuralBounds';
+import { canonicalizeTraderLevels } from './reuseKey';
 
 // ---------------------------------------------------------------------------
 // Public interface
@@ -82,6 +85,9 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   const slotOwner = cmap.slot_owner;
 
 
+  // Normalize trader levels map once at LP build entry (avoids allocations in hot pricing loops)
+  const traderLevels = (canonicalizeTraderLevels(params.traderLevels) ?? DEFAULT_TRADER_LEVELS) as TraderLevels;
+
   // Exclusion sets from params
   const excludeItemSet = new Set(params.excludeItems ?? []);
   const excludeCatSet = new Set(params.excludeCategories ?? []);
@@ -99,7 +105,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   for (const preset of presets) {
     const [pPrice, , pAvail] = getAvailablePrice(
       preset,
-      params.traderLevels ?? undefined,
+      traderLevels,
       params.fleaAvailable ?? true,
       params.playerLevel ?? null,
       params.barterAvailable ?? false,
@@ -146,7 +152,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     } else {
       [price, source, canBuyAtSettings] = getAvailablePrice(
         stats,
-        params.traderLevels ?? undefined,
+        traderLevels,
         params.fleaAvailable ?? true,
         params.playerLevel ?? null,
         params.barterAvailable ?? false,
@@ -223,7 +229,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   // decide anything here; they are passed for signature parity.
   const [nakedAvailPrice, , nakedAvailable] = getAvailablePrice(
     weaponStats,
-    params.traderLevels ?? undefined,
+    traderLevels,
     params.fleaAvailable ?? true,
     params.playerLevel ?? null,
     params.barterAvailable ?? false,

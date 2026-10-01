@@ -5,6 +5,8 @@ export interface SampleClassification {
   certified: boolean;
   certificateModel: 'precise' | 'fast' | 'unknown';
   validatedBuild: boolean;
+  completedCurve?: boolean;
+  curvePointsCount?: number;
   solverStatus?: string;
   gap?: number;
 }
@@ -14,12 +16,18 @@ export function classifySample(sample: Sample): SampleClassification {
     return { certified: false, certificateModel: 'unknown', validatedBuild: false };
   }
 
-  // Explore requests currently return points array without top-level certified bounds
+  // Explore requests return points array without top-level single-build certified bounds
   if (sample.request.kind === 'explore' || !('selected_items' in sample.response)) {
+    const isExplore = sample.request.kind === 'explore' && 'points' in sample.response;
+    const pointsCount = isExplore ? ((sample.response as any).points?.length ?? 0) : 0;
+    const completedCurve = isExplore && pointsCount > 0;
+    const validatedBuild = !!sample.validation?.checked && sample.validation.errors.length === 0;
     return {
       certified: false,
       certificateModel: 'unknown',
-      validatedBuild: false,
+      validatedBuild,
+      completedCurve,
+      curvePointsCount: pointsCount,
       solverStatus: 'status' in sample.response ? String((sample.response as Record<string, unknown>).status) : undefined,
     };
   }
@@ -60,8 +68,12 @@ export interface SummaryGroup {
   samples: number;
   certified: number;
   completionRate: number;
+  completedCurves: number;
+  curveCompletionRate: number;
   certifiedLatenciesMs: number[];
+  curveLatenciesMs: number[];
   medianLatencyMs: number | null;
+  medianCurveLatencyMs: number | null;
 }
 
 export interface PairedComparison {
@@ -72,9 +84,21 @@ export interface PairedComparison {
   speedup: number;
 }
 
+export interface PairedCurveComparison {
+  caseId: string;
+  repetition: number;
+  baselineMs: number;
+  candidateMs: number;
+  basePoints: number;
+  candPoints: number;
+  speedup: number;
+  allPointsValidated: boolean;
+}
+
 export interface BenchmarkSummary {
   groups: SummaryGroup[];
   pairs: PairedComparison[];
+  curvePairs: PairedCurveComparison[];
 }
 
 export function summarize(samples: Sample[]): BenchmarkSummary {
@@ -95,13 +119,19 @@ export function summarize(samples: Sample[]): BenchmarkSummary {
   for (const entry of groupMap.values()) {
     const totalCount = entry.samples.length;
     const certifiedLatenciesMs: number[] = [];
+    const curveLatenciesMs: number[] = [];
     let certifiedCount = 0;
+    let completedCurvesCount = 0;
 
     for (const s of entry.samples) {
       const cls = classifySample(s);
       if (cls.certified && s.elapsedMs != null) {
         certifiedCount++;
         certifiedLatenciesMs.push(s.elapsedMs);
+      }
+      if (cls.completedCurve && s.elapsedMs != null) {
+        completedCurvesCount++;
+        curveLatenciesMs.push(s.elapsedMs);
       }
     }
 
@@ -114,14 +144,27 @@ export function summarize(samples: Sample[]): BenchmarkSummary {
         : (certifiedLatenciesMs[mid - 1] + certifiedLatenciesMs[mid]) / 2;
     }
 
+    curveLatenciesMs.sort((a, b) => a - b);
+    let medianCurveLatencyMs: number | null = null;
+    if (curveLatenciesMs.length > 0) {
+      const mid = Math.floor(curveLatenciesMs.length / 2);
+      medianCurveLatencyMs = curveLatenciesMs.length % 2 === 1
+        ? curveLatenciesMs[mid]
+        : (curveLatenciesMs[mid - 1] + curveLatenciesMs[mid]) / 2;
+    }
+
     groups.push({
       variant: entry.variant,
       caseId: entry.caseId,
       samples: totalCount,
       certified: certifiedCount,
       completionRate: totalCount > 0 ? certifiedCount / totalCount : 0,
+      completedCurves: completedCurvesCount,
+      curveCompletionRate: totalCount > 0 ? completedCurvesCount / totalCount : 0,
       certifiedLatenciesMs,
+      curveLatenciesMs,
       medianLatencyMs,
+      medianCurveLatencyMs,
     });
   }
 
@@ -140,6 +183,7 @@ export function summarize(samples: Sample[]): BenchmarkSummary {
   }
 
   const pairs: PairedComparison[] = [];
+  const curvePairs: PairedCurveComparison[] = [];
   for (const [caseId, baseList] of baselinesByCase) {
     const candList = candidatesByCase.get(caseId) || [];
     const count = Math.min(baseList.length, candList.length);
@@ -158,10 +202,23 @@ export function summarize(samples: Sample[]): BenchmarkSummary {
           speedup: candSample.elapsedMs > 0 ? baseSample.elapsedMs / candSample.elapsedMs : 1,
         });
       }
+
+      if (baseCls.completedCurve && candCls.completedCurve && baseSample.elapsedMs != null && candSample.elapsedMs != null) {
+        curvePairs.push({
+          caseId,
+          repetition: baseSample.repetition,
+          baselineMs: baseSample.elapsedMs,
+          candidateMs: candSample.elapsedMs,
+          basePoints: baseCls.curvePointsCount ?? 0,
+          candPoints: candCls.curvePointsCount ?? 0,
+          speedup: candSample.elapsedMs > 0 ? baseSample.elapsedMs / candSample.elapsedMs : 1,
+          allPointsValidated: Boolean(baseCls.validatedBuild && candCls.validatedBuild),
+        });
+      }
     }
   }
 
-  return { groups, pairs };
+  return { groups, pairs, curvePairs };
 }
 
 export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<string, unknown>, rawSamples?: Sample[]): string {
@@ -185,7 +242,7 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
   lines.push('');
 
   if (summary.pairs.length > 0) {
-    lines.push('## Paired Completed Comparisons');
+    lines.push('## Paired Completed Optimization Comparisons');
     lines.push('| Case ID | Repetition | Baseline (ms) | Candidate (ms) | Speedup |');
     lines.push('|---|---:|---:|---:|---:|');
     for (const p of summary.pairs) {
@@ -194,12 +251,22 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
     lines.push('');
   }
 
+  if (summary.curvePairs && summary.curvePairs.length > 0) {
+    lines.push('## Paired Completed Explore Curve Comparisons');
+    lines.push('| Case ID | Repetition | Baseline (ms) | Candidate (ms) | Base Points | Cand Points | Speedup | Points Validated |');
+    lines.push('|---|---:|---:|---:|---:|---:|---:|:---:|');
+    for (const cp of summary.curvePairs) {
+      lines.push(`| ${cp.caseId} | ${cp.repetition} | ${cp.baselineMs.toFixed(1)} | ${cp.candidateMs.toFixed(1)} | ${cp.basePoints} | ${cp.candPoints} | ${cp.speedup.toFixed(2)}x | ${cp.allPointsValidated ? 'yes' : 'errors'} |`);
+    }
+    lines.push('');
+  }
+
   if (rawSamples && rawSamples.length > 0) {
     const nonWarmup = rawSamples.filter(s => !s.warmup);
     if (nonWarmup.length > 0) {
       lines.push('## Detailed Sample Outcomes');
-      lines.push('| Case ID | Rep | Variant | Outcome | Status | Termination | Validated | Gap | Bound Range | Elapsed (ms) | Retention Mechanism |');
-      lines.push('|---|---:|---|---|---|---|:---:|---:|---:|---:|---|');
+      lines.push('| Case ID | Rep | Variant | Outcome | Status | Termination | Validated | Gap | Bound Range | Elapsed (ms) | Memory (Heap MB) | Telemetry & Details |');
+      lines.push('|---|---:|---|---|---|---|:---:|---:|---:|---:|:---:|---|');
       for (const s of nonWarmup) {
         const resp = s.response as (OptimizeResponse | undefined);
         const opt = resp?.optimization;
@@ -235,7 +302,10 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
           const rootInt = traces.length > 0 ? `[${traces[0].interval.map(x => x.toFixed(2)).join(',')}]` : '[]';
           mech += ` | ${order}, root=${rootInt}, nodes=${traces.length}, pruned=${st.pruned_nodes_count}`;
         }
-        lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} | ${mech} |`);
+        const memBefore = s.memory?.before != null ? (s.memory.before / 1024 / 1024).toFixed(1) : '?';
+        const memAfter = s.memory?.after != null ? (s.memory.after / 1024 / 1024).toFixed(1) : '?';
+        const memStr = `${memBefore} -> ${memAfter}`;
+        lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} | ${memStr} | ${mech} |`);
       }
       lines.push('');
     }

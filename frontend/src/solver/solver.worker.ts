@@ -529,13 +529,14 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
         }
 
         case 'getStatus': {
-          // Ensure data is loaded, return current timestamp and solver capabilities
+          // Ensure data is loaded, return current timestamp, build revision, and solver capabilities
           await getOrLoadData(lang, gameMode);
           self.postMessage({
             type: 'result',
             id,
             payload: {
               timestamp: Date.now(),
+              revision: '1c9669f',
               capabilities: SOLVER_CAPABILITIES,
             },
           });

@@ -1,7 +1,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import puppeteer from 'puppeteer-core';
-import type { Browser, Page } from 'puppeteer-core';
+import type { Browser, Page, CDPSession } from 'puppeteer-core';
 import type { BenchmarkCase, BrowserResult, Sample, Snapshot } from './types.ts';
 
 export function findBrowserExecutable(): string {
@@ -43,10 +43,10 @@ export interface BrowserRunnerOptions {
 
 interface BenchmarkWindow {
   benchmark: {
-    prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number }>;
-    run(caseItem: BenchmarkCase, deadlineMs: number): Promise<BrowserResult>;
+    prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number; coldLoadMs: number }>;
+    run(caseItem: BenchmarkCase, deadlineMs: number, variant?: 'baseline' | 'candidate'): Promise<BrowserResult>;
     clearCache(): Promise<void>;
-    getStatus(): Promise<any>;
+    getStatus(variant?: 'baseline' | 'candidate'): Promise<any>;
   };
 }
 
@@ -56,6 +56,8 @@ export class BenchmarkBrowserRunner {
   private headless: boolean;
   private browser: Browser | null = null;
   private page: Page | null = null;
+  private cdpClient: CDPSession | null = null;
+  public coldLoadMs: number | null = null;
 
   constructor(opts: BrowserRunnerOptions = {}) {
     this.url = opts.url || 'http://localhost:5173/benchmarks/index.html';
@@ -74,12 +76,14 @@ export class BenchmarkBrowserRunner {
     await this.page.waitForFunction('typeof window.benchmark !== "undefined"', { timeout: 10000 });
   }
 
-  async prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number }> {
+  async prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number; coldLoadMs: number }> {
     if (!this.page) throw new Error('Browser runner not started');
-    return this.page.evaluate(
+    const res = await this.page.evaluate(
       (snap: Snapshot) => (window as unknown as BenchmarkWindow).benchmark.prepare(snap),
       snapshot,
     );
+    this.coldLoadMs = res.coldLoadMs;
+    return res;
   }
 
   async clearCache(): Promise<void> {
@@ -87,9 +91,9 @@ export class BenchmarkBrowserRunner {
     await this.page.evaluate(() => (window as unknown as BenchmarkWindow).benchmark.clearCache());
   }
 
-  async getStatus(): Promise<any> {
+  async getStatus(variant: 'baseline' | 'candidate' = 'candidate'): Promise<any> {
     if (!this.page) throw new Error('Browser runner not started');
-    return this.page.evaluate(() => (window as unknown as BenchmarkWindow).benchmark.getStatus());
+    return this.page.evaluate((v: 'baseline' | 'candidate') => (window as unknown as BenchmarkWindow).benchmark.getStatus(v), variant);
   }
 
   async runCase(
@@ -122,11 +126,26 @@ export class BenchmarkBrowserRunner {
     let result: BrowserResult | null = null;
     let error: string | undefined;
 
+    if (!this.cdpClient && this.page) {
+      this.cdpClient = await this.page.createCDPSession();
+      await this.cdpClient.send('Performance.enable');
+    }
+
+    let beforeHeap: number | null = null;
+    if (this.cdpClient) {
+      try {
+        const m = await this.cdpClient.send('Performance.getMetrics');
+        const h = m.metrics.find(x => x.name === 'JSHeapUsedSize');
+        if (h) beforeHeap = h.value;
+      } catch {}
+    }
+
     try {
       result = await this.page.evaluate(
-        (c: BenchmarkCase, d: number) => (window as unknown as BenchmarkWindow).benchmark.run(c, d),
+        (c: BenchmarkCase, d: number, v: 'baseline' | 'candidate') => (window as unknown as BenchmarkWindow).benchmark.run(c, d, v),
         caseItem,
         deadlineMs,
+        opts.variant,
       );
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);
@@ -140,6 +159,15 @@ export class BenchmarkBrowserRunner {
       this.page.off('pageerror', onPageError);
     }
 
+    let afterHeap: number | null = null;
+    if (this.cdpClient) {
+      try {
+        const m = await this.cdpClient.send('Performance.getMetrics');
+        const h = m.metrics.find(x => x.name === 'JSHeapUsedSize');
+        if (h) afterHeap = h.value;
+      } catch {}
+    }
+
     return {
       schemaVersion: 1,
       sequence: opts.sequence,
@@ -149,7 +177,7 @@ export class BenchmarkBrowserRunner {
       warmup: opts.warmup,
       request: caseItem,
       startedAt,
-      coldLoadMs: null,
+      coldLoadMs: this.coldLoadMs,
       elapsedMs: result ? result.elapsedMs : null,
       deadlineMs,
       outcome,
@@ -157,7 +185,7 @@ export class BenchmarkBrowserRunner {
       validation: result ? result.validation : undefined,
       error,
       pageErrors,
-      memory: { scope: 'page-js-heap-excludes-worker-wasm', before: null, after: null },
+      memory: { scope: 'page-js-heap-excludes-worker-wasm', before: beforeHeap, after: afterHeap },
       experiment: opts.experiment,
       cohort: opts.cohort,
       endpointCache: opts.endpointCache,

@@ -50,6 +50,7 @@ async function main() {
   const runs = isPairedMode ? pairCount : (Number(flags['runs']) || 5);
   const targetCase = flags['case'] ? String(flags['case']) : null;
   const endpointCacheMode = String(flags['endpoint-cache'] || 'warm') as 'warm' | 'cold';
+  const cacheState = String(flags['cache-state'] || 'cold') as 'cold' | 'warm';
   const cohort = String(flags['cohort'] || (isExperiment && pairCount >= 5 ? 'formal' : 'pilot')) as 'pilot' | 'formal';
   const baselineRevision = isReuse ? '52b2ae9' : 'ed7099e';
   const candidateRevision = isReuse
@@ -81,7 +82,7 @@ async function main() {
   console.log(`Verified snapshot sha256: ${manifest.sha256}`);
 
   const defaultExperimentCases = isReuse
-    ? ['dense-explore', 'sparse-explore', 'dense-restricted']
+    ? ['sparse-sweet-seq-1', 'sparse-sweet-seq-2', 'sparse-explore', 'dense-explore', 'dense-restricted']
     : ['dense-overswing', 'dense-ted', 'dense-ted-sweet'];
   const allCases = makeCases(snapshot);
   const cases = targetCase
@@ -142,6 +143,18 @@ async function main() {
         );
       }
       console.log('Verified active worker supports initial_candidate capability.');
+    } else if (isReuse) {
+      const baseStat = await runner.getStatus('baseline');
+      const candStat = await runner.getStatus('candidate');
+      const baseRev = baseStat?.revision;
+      const candRev = candStat?.revision;
+      if (baseRev !== '52b2ae9') {
+        throw new Error(`Reuse experiment requested, but baseline worker reports revision "${baseRev}" (expected "52b2ae9").`);
+      }
+      if (!candRev || candRev === '52b2ae9') {
+        throw new Error(`Reuse experiment requested, but candidate worker reports revision "${candRev}" (expected candidate build).`);
+      }
+      console.log(`Verified independent builds: baseline=${baseRev}, candidate=${candRev}`);
     }
 
     for (const caseItem of cases) {
@@ -216,7 +229,7 @@ async function main() {
           const firstVariant = baselineFirst ? 'baseline' : 'candidate';
           const secondVariant = baselineFirst ? 'candidate' : 'baseline';
 
-          if (isReuse && firstVariant === 'baseline') {
+          if (isReuse && cacheState === 'cold') {
             await runner.clearCache();
           } else if (isExperiment && isSweet && endpointCacheMode === 'cold') {
             await runner.clearCache();
@@ -230,7 +243,7 @@ async function main() {
             deadlineMs: 60000,
             experiment,
             cohort,
-            endpointCache: isReuse ? (firstVariant === 'baseline' ? 'cold' : 'warm') : endpointCacheStatus,
+            endpointCache: isReuse ? cacheState : endpointCacheStatus,
             baselineRevision,
             candidateRevision: isExperiment ? candidateRevision : undefined,
             candidatePatch: isExperiment ? candidatePatch : undefined,
@@ -239,7 +252,7 @@ async function main() {
           samplesFile.write(JSON.stringify(firstSample) + '\n');
           process.stdout.write(`${firstSample.outcome} (${firstSample.elapsedMs != null ? firstSample.elapsedMs.toFixed(0) : '?'}ms) | ${secondVariant} ... `);
 
-          if (isReuse && secondVariant === 'baseline') {
+          if (isReuse && cacheState === 'cold') {
             await runner.clearCache();
           } else if (isExperiment && isSweet && endpointCacheMode === 'cold') {
             await runner.clearCache();
@@ -252,7 +265,7 @@ async function main() {
             deadlineMs: 60000,
             experiment,
             cohort,
-            endpointCache: isReuse ? (secondVariant === 'baseline' ? 'cold' : 'warm') : endpointCacheStatus,
+            endpointCache: isReuse ? cacheState : endpointCacheStatus,
             baselineRevision,
             candidateRevision: isExperiment ? candidateRevision : undefined,
             candidatePatch: isExperiment ? candidatePatch : undefined,

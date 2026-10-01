@@ -38,13 +38,19 @@ function seedIndexedDB(data: { guns: Record<string, unknown>[]; mods: Record<str
 }
 
 let worker: Worker | null = null;
+let currentVariant: 'baseline' | 'candidate' | null = null;
 let itemLookup: ItemLookup | null = null;
 let msgSeq = 1;
 const pending = new Map<number, (res: unknown) => void>();
 
-function initWorker(): void {
+async function ensureWorkerVariant(variant: 'baseline' | 'candidate' = 'candidate'): Promise<void> {
+  if (worker && currentVariant === variant) return;
   if (worker) worker.terminate();
-  worker = new Worker(new URL('../src/solver/solver.worker.ts', import.meta.url), { type: 'module' });
+  currentVariant = variant;
+  const workerUrl = variant === 'baseline'
+    ? new URL('./baseline/solver.worker.ts', import.meta.url)
+    : new URL('../src/solver/solver.worker.ts', import.meta.url);
+  worker = new Worker(workerUrl, { type: 'module' });
   worker.onmessage = (e: MessageEvent) => {
     const { id, payload } = e.data;
     const resolver = pending.get(id);
@@ -53,28 +59,30 @@ function initWorker(): void {
       resolver(payload);
     }
   };
+  // Ensure data loaded in new worker variant
+  const id = msgSeq++;
+  const { promise, resolve } = Promise.withResolvers<unknown>();
+  pending.set(id, resolve);
+  worker.postMessage({ type: 'loadData', id, payload: { lang: 'en', gameMode: 'regular' } });
+  await promise;
 }
 
 const benchmarkHarness = {
-  async prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number }> {
+  async prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number; coldLoadMs: number }> {
+    const t0 = performance.now();
     itemLookup = buildItemLookup(snapshot.guns, snapshot.mods);
     await seedIndexedDB({ guns: snapshot.guns, mods: snapshot.mods });
-    initWorker();
-
-    // Call loadData in worker
-    const id = msgSeq++;
-    const { promise, resolve } = Promise.withResolvers<unknown>();
-    pending.set(id, resolve);
-    worker!.postMessage({ type: 'loadData', id, payload: { lang: 'en', gameMode: 'regular' } });
-    await promise;
+    await ensureWorkerVariant('candidate');
 
     const statusEl = document.getElementById('status');
     if (statusEl) statusEl.textContent = 'Ready';
+    const coldLoadMs = Math.round(performance.now() - t0);
 
-    return { gunsCount: snapshot.guns.length, modsCount: snapshot.mods.length };
+    return { gunsCount: snapshot.guns.length, modsCount: snapshot.mods.length, coldLoadMs };
   },
 
-  async run(caseItem: BenchmarkCase, deadlineMs: number = 60000): Promise<BrowserResult> {
+  async run(caseItem: BenchmarkCase, deadlineMs: number = 60000, variant: 'baseline' | 'candidate' = 'candidate'): Promise<BrowserResult> {
+    await ensureWorkerVariant(variant);
     if (!worker || !itemLookup) throw new Error('Benchmark harness not prepared');
 
     const id = msgSeq++;
@@ -104,15 +112,34 @@ const benchmarkHarness = {
 
     let validation = { checked: false, errors: [] as string[] };
     if (caseItem.kind === 'optimize' && 'selected_items' in response) {
-      const errors = validateBuild(caseItem.request, response, itemLookup);
+      const errors = validateBuild(caseItem.request as any, response as any, itemLookup);
+      validation = { checked: true, errors };
+    } else if (caseItem.kind === 'explore' && 'points' in response) {
+      // Validate every point in the Explore curve independently
+      const errors: string[] = [];
+      const expPoints = (response as ExploreResponse).points ?? [];
+      for (let pIdx = 0; pIdx < expPoints.length; pIdx++) {
+        const pt = expPoints[pIdx];
+        const pointErrors = validateBuild(
+          { ...caseItem.request as any, min_ergonomics: pt.ergo },
+          pt as unknown as OptimizeResponse,
+          itemLookup
+        );
+        for (const err of pointErrors) {
+          errors.push(`Point ${pIdx} (E=${pt.ergo}, R=${pt.recoil_v}): ${err}`);
+        }
+      }
       validation = { checked: true, errors };
     }
 
     return { elapsedMs, response, validation };
   },
 
-  async resetWorker(): Promise<void> {
-    initWorker();
+  async resetWorker(variant: 'baseline' | 'candidate' = 'candidate'): Promise<void> {
+    if (worker) worker.terminate();
+    worker = null;
+    currentVariant = null;
+    await ensureWorkerVariant(variant);
   },
 
   async clearCache(): Promise<void> {
@@ -124,7 +151,8 @@ const benchmarkHarness = {
     await promise;
   },
 
-  async getStatus(): Promise<any> {
+  async getStatus(variant: 'baseline' | 'candidate' = 'candidate'): Promise<any> {
+    await ensureWorkerVariant(variant);
     if (!worker) return null;
     const id = msgSeq++;
     const { promise, resolve } = Promise.withResolvers<unknown>();

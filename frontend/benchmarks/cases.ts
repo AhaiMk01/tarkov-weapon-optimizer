@@ -47,6 +47,16 @@ export function makeCases(snapshot: Snapshot): BenchmarkCase[] {
       ...base(gun.id), precise_mode: 'precise', max_price: Math.floor(prices[0]), max_weight: Math.max(0.1, Math.round((preset.stats.weight + 1) * 100) / 100),
       use_true_ergo: true, prevent_overswing: true,
     });
+    // Sweet Spot repeated preference weight adjustment sequence (Refs #25)
+    // Feasibility domain is unchanged; only preference weights change across seq-1 and seq-2
+    add(`${label}-sweet-seq-1`, `${gun.name}; Sweet Spot initial solve (ergo priority, w=[100, 0, 0])`, {
+      ...base(gun.id), precise_mode: 'precise', use_true_ergo: true, use_tchebycheff: true,
+      ergo_weight: 100, recoil_weight: 0, price_weight: 0,
+    });
+    add(`${label}-sweet-seq-2`, `${gun.name}; Sweet Spot weight adjustment (recoil priority, w=[0, 100, 0], same constraints)`, {
+      ...base(gun.id), precise_mode: 'precise', use_true_ergo: true, use_tchebycheff: true,
+      ergo_weight: 0, recoil_weight: 100, price_weight: 0,
+    });
     cases.push({ id: `${label}-explore`, description: `${gun.name}; full 10-step curve; public API omits point certificates`, kind: 'explore',
       request: { ...base(gun.id), precise_mode: 'precise', ignore: 'price', steps: 10 } });
   }

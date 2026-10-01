@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { solve } from './src/solver/solver.ts';
 import { choiceFixture } from './test_solver_fixtures.ts';
-import { computeIdealPointCacheKey } from './src/solver/reuseKey.ts';
+import { computeIdealPointCacheKey, canonicalizeTraderLevels } from './src/solver/reuseKey.ts';
 import { getAvailablePrice } from './src/solver/dataService.ts';
 import type { ModStats } from './src/solver/types.ts';
 
@@ -29,8 +29,8 @@ const mechanicStats: ModStats = {
   ],
 };
 
-const [priceLower, , purchasableLower] = getAvailablePrice(mechanicStats, { mechanic: 0 }, false, null, false, false);
-const [priceUpper, , purchasableUpper] = getAvailablePrice(mechanicStats, { Mechanic: 0 }, false, null, false, false);
+const [priceLower, , purchasableLower] = getAvailablePrice(mechanicStats, canonicalizeTraderLevels({ mechanic: 0 }) as any, false, null, false, false);
+const [priceUpper, , purchasableUpper] = getAvailablePrice(mechanicStats, canonicalizeTraderLevels({ Mechanic: 0 }) as any, false, null, false, false);
 assert.equal(purchasableLower, false, 'mechanic: 0 must disable Mechanic');
 assert.equal(purchasableUpper, false, 'Mechanic: 0 must also disable Mechanic (case-insensitive)');
 assert.equal(priceLower, 0);
@@ -89,7 +89,7 @@ assert.equal(
 // {" Mechanic ": 0} versus {"mechanic": 0}
 // In both direct getAvailablePrice, solve(), validation, and cache keys:
 // Whitespace MUST be trimmed consistently upfront so domains never diverge.
-const [pTrimmed, , aTrimmed] = getAvailablePrice(mechanicStats, { " Mechanic ": 0 } as any, false, null, false, false);
+const [pTrimmed, , aTrimmed] = getAvailablePrice(mechanicStats, canonicalizeTraderLevels({ " Mechanic ": 0 }) as any, false, null, false, false);
 assert.equal(aTrimmed, false, '{" Mechanic ": 0} must disable Mechanic in pricing');
 assert.equal(pTrimmed, 0);
 

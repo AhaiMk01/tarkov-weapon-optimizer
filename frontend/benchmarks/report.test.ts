@@ -66,3 +66,24 @@ test('pairs are preserved across multiple sequential CLI runs without collision'
   const s = summarize([...r1, ...r2]);
   assert.equal(s.pairs.length, 5, 'All 5 pairs across the two runs must be preserved');
 });
+
+test('Explore completed curves are paired and speedup calculated', () => {
+  const baseCurve = sample({
+    request: { id: 'dense-explore', kind: 'explore', description: '', request: { weapon_id: 'gun', ignore: 'price', steps: 2 } },
+    response: { points: [{ ergo: 10, recoil_v: 100 }, { ergo: 20, recoil_v: 80 }] } as any,
+    elapsedMs: 200,
+    validation: { checked: true, errors: [] },
+  });
+  const candCurve = sample({
+    variant: 'candidate',
+    request: { id: 'dense-explore', kind: 'explore', description: '', request: { weapon_id: 'gun', ignore: 'price', steps: 2 } },
+    response: { points: [{ ergo: 10, recoil_v: 100 }, { ergo: 20, recoil_v: 80 }] } as any,
+    elapsedMs: 100,
+    validation: { checked: true, errors: [] },
+  });
+  const s = summarize([baseCurve, candCurve]);
+  assert.equal(s.curvePairs.length, 1);
+  assert.equal(s.curvePairs[0].speedup, 2);
+  assert.equal(s.curvePairs[0].basePoints, 2);
+  assert.equal(s.curvePairs[0].allPointsValidated, true);
+});

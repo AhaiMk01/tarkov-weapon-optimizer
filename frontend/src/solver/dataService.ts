@@ -9,7 +9,6 @@ import type {
 } from './types.ts';
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
-import { canonicalizeTraderLevels } from './reuseKey.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
 const CACHE_VERSION = 15;
@@ -819,8 +818,6 @@ export function getAvailablePrice(
 
   const minLevelFlea = stats.min_level_flea ?? 0;
   const offers = stats.offers;
-  // Normalize trader levels map once upfront: deterministic duplicate resolution, trimmed lowercase keys
-  const normalizedTraders = canonicalizeTraderLevels(traderLevels) ?? DEFAULT_TRADER_LEVELS;
 
   if (!offers || !offers.length) {
     const defaultPrice = stats.price ?? 0;
@@ -850,8 +847,8 @@ export function getAvailablePrice(
       if (!fleaAvailable) continue;
       if (playerLevel !== null && minLevelFlea > playerLevel) continue;
     } else {
-      // Direct lookup in canonical map: no per-offer fallback scan needed
-      const traderLevel = normalizedTraders[vendor] ?? 4;
+      // Fast O(1) lookup on normalized map; zero allocations in hot pricing loop
+      const traderLevel = traderLevels[vendor] ?? 4;
       if (requiredLevel !== null && requiredLevel > traderLevel) continue;
     }
 
