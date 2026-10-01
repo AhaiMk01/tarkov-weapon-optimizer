@@ -1,8 +1,25 @@
 import type { OptimizeResponse } from '../../src/api/client';
 import type { SolveParams } from '../../src/solver/types';
-import { solveModel, type ModelResponse } from './experimentHelper';
 import { buildLP } from '../../src/solver/lpBuilder';
 import { canonicalizeTraderLevels } from '../../src/solver/reuseKey';
+import { solveModel, type ModelResponse } from './experimentHelper';
+
+export interface SpatialTelemetry {
+  candidate: 'adaptive-envelope';
+  nodes: number;
+  geometric_splits: number;
+  linear_splits: number;
+  proved_bounds_retained: number;
+  lower_bound: number;
+  upper_bound: number | null;
+  absolute_gap: number | null;
+  normalized_gap: number | null;
+  termination: string;
+}
+
+export interface AdaptiveSolveResult extends OptimizeResponse {
+  mechanism_telemetry?: SpatialTelemetry;
+}
 
 /**
  * Prototype A for Issue #27: Adaptive Spatial Envelope.
@@ -14,13 +31,13 @@ import { canonicalizeTraderLevels } from '../../src/solver/reuseKey';
  */
 export function splitAdaptiveInterval(
   interval: [number, number]
-): [[number, number], [number, number]] | undefined {
+): { parts: [[number, number], [number, number]] | undefined; isGeometric: boolean } {
   const [a, b] = interval;
-  if (b - a < 1e-10) return undefined;
+  if (b - a < 1e-10) return { parts: undefined, isGeometric: false };
 
   // 1. Breakpoint split: non-differentiable at 3.0 kg
   if (a < 3.0 && b > 3.0) {
-    return [[a, 3.0], [3.0, b]];
+    return { parts: [[a, 3.0], [3.0, b]], isGeometric: false };
   }
 
   // 2. Concave region W >= 3.0: split at maximum secant error point W* = sqrt(a * b)
@@ -28,19 +45,19 @@ export function splitAdaptiveInterval(
     const split = Math.sqrt(a * b);
     if (split <= a + 1e-10 || split >= b - 1e-10) {
       const mid = (a + b) / 2;
-      if (mid <= a || mid >= b || b - a < 1e-10) return undefined;
-      return [[a, mid], [mid, b]];
+      if (mid <= a || mid >= b || b - a < 1e-10) return { parts: undefined, isGeometric: false };
+      return { parts: [[a, mid], [mid, b]], isGeometric: false };
     }
-    return [[a, split], [split, b]];
+    return { parts: [[a, split], [split, b]], isGeometric: true };
   }
 
   // 3. Flat region W <= 3.0: q(W) = 0 identically, arithmetic midpoint is exact
   const mid = (a + b) / 2;
-  if (mid <= a || mid >= b) return undefined;
-  return [[a, mid], [mid, b]];
+  if (mid <= a || mid >= b) return { parts: undefined, isGeometric: false };
+  return { parts: [[a, mid], [mid, b]], isGeometric: false };
 }
 
-export async function solveAdaptiveEnvelope(input: SolveParams): Promise<OptimizeResponse> {
+export async function solveAdaptiveEnvelope(input: SolveParams): Promise<AdaptiveSolveResult> {
   const start = performance.now();
   const deadline = start + Math.max(0, input.timeLimitMs ?? 60_000);
   let params = { ...input };
@@ -79,6 +96,10 @@ export async function solveAdaptiveEnvelope(input: SolveParams): Promise<Optimiz
   let limitReason = 'Spatial node or time limit reached';
   let closedBound = -Infinity;
 
+  let geometricSplits = 0;
+  let linearSplits = 0;
+  let provedBoundsRetained = 0;
+
   while (queue.length && nodes < maxNodes && performance.now() < deadline) {
     queue.sort((a, b) => b.bound - a.bound);
     const node = queue.shift()!;
@@ -106,6 +127,8 @@ export async function solveAdaptiveEnvelope(input: SolveParams): Promise<Optimiz
       if (feasible && (!incumbent || result.objective_value > incumbent.objective_value)) {
         incumbent = result;
       }
+    } else {
+      provedBoundsRetained++;
     }
 
     if (incumbent && bound <= incumbent.objective_value + tolerance) {
@@ -113,16 +136,24 @@ export async function solveAdaptiveEnvelope(input: SolveParams): Promise<Optimiz
       continue;
     }
 
-    const parts = splitAdaptiveInterval(node.interval);
+    const { parts, isGeometric } = splitAdaptiveInterval(node.interval);
     if (!parts) {
       unresolved = Math.max(unresolved, bound);
       limitReason = 'Numerical interval resolution reached before certification';
       break;
     }
+    if (isGeometric) geometricSplits++;
+    else linearSplits++;
+
     queue.push({ interval: parts[0], bound }, { interval: parts[1], bound });
   }
 
   const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
+  const hasUpper = Number.isFinite(upper) && upper > -Infinity;
+  const lowerVal = incumbent?.objective_value ?? 0;
+  const absGap = hasUpper ? Math.max(0, upper - lowerVal) : null;
+  const normGap = (hasUpper && absGap != null) ? absGap / Math.max(1, Math.abs(lowerVal)) : null;
+
   if (!incumbent) {
     const exhausted = !queue.length && unresolved === -Infinity;
     return {
@@ -131,11 +162,22 @@ export async function solveAdaptiveEnvelope(input: SolveParams): Promise<Optimiz
       selected_items: [],
       objective_value: 0,
       solve_time_ms: performance.now() - start,
+      mechanism_telemetry: {
+        candidate: 'adaptive-envelope',
+        nodes,
+        geometric_splits: geometricSplits,
+        linear_splits: linearSplits,
+        proved_bounds_retained: provedBoundsRetained,
+        lower_bound: 0,
+        upper_bound: hasUpper ? upper : null,
+        absolute_gap: absGap,
+        normalized_gap: normGap,
+        termination: 'limit',
+      },
     };
   }
 
-  const gap = Math.max(0, upper - incumbent.objective_value);
-  const certified = gap <= tolerance;
+  const certified = absGap != null && absGap <= tolerance;
   const { axes: _a, bound: _b, incumbentEligible: _e, ...response } = incumbent;
   return {
     ...response,
@@ -143,11 +185,23 @@ export async function solveAdaptiveEnvelope(input: SolveParams): Promise<Optimiz
     reason: certified ? undefined : limitReason,
     solve_time_ms: performance.now() - start,
     optimization: {
-      lower_bound: incumbent.objective_value,
+      lower_bound: lowerVal,
       upper_bound: upper,
-      absolute_gap: gap,
+      absolute_gap: absGap ?? Infinity,
       tolerance,
       nodes,
+      termination: certified ? 'optimal' : 'limit',
+    },
+    mechanism_telemetry: {
+      candidate: 'adaptive-envelope',
+      nodes,
+      geometric_splits: geometricSplits,
+      linear_splits: linearSplits,
+      proved_bounds_retained: provedBoundsRetained,
+      lower_bound: lowerVal,
+      upper_bound: hasUpper ? upper : null,
+      absolute_gap: absGap,
+      normalized_gap: normGap,
       termination: certified ? 'optimal' : 'limit',
     },
   };
