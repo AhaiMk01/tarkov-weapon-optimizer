@@ -47,7 +47,7 @@ index b64dbf5..d35e804 100644
  
  export type GameMode = 'regular' | 'pve';
 diff --git a/frontend/src/solver/solver.ts b/frontend/src/solver/solver.ts
-index 3d9f8cd..77936e8 100644
+index 3d9f8cd..96980b1 100644
 --- a/frontend/src/solver/solver.ts
 +++ b/frontend/src/solver/solver.ts
 @@ -79,6 +79,7 @@ export function incumbentBlockReason(
@@ -74,13 +74,14 @@ index 3d9f8cd..77936e8 100644
      : [{ interval: [lo, hi], bound: Infinity }];
    let incumbent: ModelResponse | undefined;
    let nodes = 0;
-@@ -298,22 +303,42 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+@@ -298,22 +303,44 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
      adopted_count: 0,
      improved_lower_bound: false,
    };
 +  const nodeTraces: import('../api/client').SpatialNodeTrace[] = [];
 +  let prunedCount = 0;
 +  let splitCount = 0;
++  let traceSeq = 0;
 +
    const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
      const [a, b] = interval;
@@ -94,13 +95,13 @@ index 3d9f8cd..77936e8 100644
      const node = queue.shift()!;
 +    const nodeStart = performance.now();
 +    const boundIn = node.bound;
-+    const nodeIdx = ++nodes;
++    const traceIdx = ++traceSeq;
 +
      if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
        closedBound = Math.max(closedBound, node.bound);
 +      prunedCount++;
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: 'pruned-before-solve',
@@ -114,12 +115,12 @@ index 3d9f8cd..77936e8 100644
      const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
 +    const prevIncumbentVal = incumbent?.objective_value;
      const result = await solveModel(params, node.interval, remainingSec);
--    nodes++;
+     nodes++;
 +    const nodeElapsed = Math.round(performance.now() - nodeStart);
      const step = applySpatialNodeResult({
        nodeBound: node.bound,
        result,
-@@ -323,23 +348,82 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+@@ -323,23 +350,82 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
        telemetry,
      });
      incumbent = step.incumbent;
@@ -128,7 +129,7 @@ index 3d9f8cd..77936e8 100644
 +
 +    if (step.action === 'prune-infeasible') {
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: 'infeasible',
@@ -142,7 +143,7 @@ index 3d9f8cd..77936e8 100644
        unresolved = Math.max(unresolved, step.bound);
        limitReason = step.reason ?? result.status;
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: result.status,
@@ -159,7 +160,7 @@ index 3d9f8cd..77936e8 100644
        closedBound = Math.max(closedBound, bound);
 +      prunedCount++;
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: result.status,
@@ -176,7 +177,7 @@ index 3d9f8cd..77936e8 100644
        unresolved = Math.max(unresolved, bound);
        limitReason = 'Numerical interval resolution reached before certification';
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: 'numerical-resolution-exhausted',
@@ -190,7 +191,7 @@ index 3d9f8cd..77936e8 100644
      }
 +    splitCount++;
 +    nodeTraces.push({
-+      node_index: nodeIdx,
++      node_index: traceIdx,
 +      interval: node.interval,
 +      bound_in: boundIn,
 +      status: result.status,
@@ -203,7 +204,7 @@ index 3d9f8cd..77936e8 100644
      queue.push({ interval: parts[0], bound }, { interval: parts[1], bound });
    }
    const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
-@@ -361,6 +445,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+@@ -361,6 +447,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
      solve_time_ms: performance.now() - start,
      optimization: { lower_bound: incumbent.objective_value, upper_bound: upper, absolute_gap: gap, tolerance, nodes, termination: certified ? 'optimal' : 'limit' },
      retention_telemetry: params.retainLimitIncumbent ? telemetry : undefined,
@@ -213,15 +214,6 @@ index 3d9f8cd..77936e8 100644
 +      pruned_nodes_count: prunedCount,
 +      split_nodes_count: splitCount,
 +    },
-   };
- }
- 
-@@ -392,6 +482,8 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
-     barter_available: params.barterAvailable,
-     barter_exclude_dogtags: params.barterExcludeDogtags,
-     player_level: params.playerLevel ?? undefined,
-+    branch_ordering: params.branchOrdering ?? undefined,
-+    retain_limit_incumbent: params.retainLimitIncumbent ?? undefined,
    };
  }
  
