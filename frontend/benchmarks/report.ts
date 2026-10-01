@@ -224,6 +224,13 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
         } else if (s.variant === 'candidate') {
           mech = s.outcome === 'timeout' ? 'timeout (no response)' : 'inactive (no telemetry)';
         }
+        if (resp?.spatial_telemetry) {
+          const st = resp.spatial_telemetry;
+          const traces = st.node_traces;
+          const order = st.branch_ordering;
+          const rootInt = traces.length > 0 ? `[${traces[0].interval.map(x => x.toFixed(2)).join(',')}]` : '[]';
+          mech += ` | ${order}, root=${rootInt}, nodes=${traces.length}, pruned=${st.pruned_nodes_count}`;
+        }
         lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} | ${mech} |`);
       }
       lines.push('');

@@ -243,4 +243,6 @@ export interface SolveParams {
    * with no limit incumbent. Each node still receives the remaining deadline.
    */
   retainLimitIncumbent?: boolean;
+  /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
+  branchOrdering?: 'lighter-first' | 'heavier-first';
 }

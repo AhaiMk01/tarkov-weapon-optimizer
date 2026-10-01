@@ -155,4 +155,27 @@ assert.ok(telSolve.retention_telemetry != null);
 assert.equal(telSolve.retention_telemetry.timeout_count, 0);
 assert.equal(telSolve.retention_telemetry.improved_lower_bound, false);
 
+// Branch ordering capabilities and telemetry
+assert.equal(SOLVER_CAPABILITIES.branchOrdering, true);
+
+// Fixture straddling 3 kg: receiver 1 kg, choices 1 kg (total 2 kg) and 3 kg (total 4 kg)
+const straddle = choiceFixture([
+  { id: 'LightPart', weight: 2, ergo: 20 },
+  { id: 'HeavyPart', weight: 4, ergo: 40 },
+]);
+
+const lightFirst = await solve({ ...straddle, useTrueErgo: true, branchOrdering: 'lighter-first' });
+assert.equal(lightFirst.status, 'optimal');
+assert.equal(lightFirst.spatial_telemetry?.branch_ordering, 'lighter-first');
+assert.ok(lightFirst.spatial_telemetry.node_traces.length >= 2);
+// First popped root node is lighter interval [lo, 3]
+assert.ok(lightFirst.spatial_telemetry.node_traces[0].interval[1] <= 3, 'lighter-first must process [lo, 3] first');
+
+const heavyFirst = await solve({ ...straddle, useTrueErgo: true, branchOrdering: 'heavier-first' });
+assert.equal(heavyFirst.status, 'optimal');
+assert.equal(heavyFirst.spatial_telemetry?.branch_ordering, 'heavier-first');
+assert.ok(heavyFirst.spatial_telemetry.node_traces.length >= 2);
+// First popped root node is heavier interval [3, hi]
+assert.ok(heavyFirst.spatial_telemetry.node_traces[0].interval[0] >= 3, 'heavier-first must process [3, hi] first');
+
 console.log('incumbent gate and required-slot formulation passed');

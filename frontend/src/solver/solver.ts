@@ -79,6 +79,7 @@ export function incumbentBlockReason(
  */
 export const SOLVER_CAPABILITIES = {
   retainLimitIncumbent: true,
+  branchOrdering: true,
 } as const;
 
 export type LimitIncumbentDecision =
@@ -281,10 +282,14 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
 
   const tolerance = Math.max(1e-7, params.objectiveTolerance ?? 1e-5);
   const maxNodes = Math.max(0, params.maxSpatialNodes ?? 512);
+  const branchOrdering = params.branchOrdering ?? 'lighter-first';
+  const isHeavierFirst = branchOrdering === 'heavier-first';
   const [lo, hi] = buildLP(params).weightBounds;
   type Node = { interval: [number, number]; bound: number };
   const queue: Node[] = lo < 3 && hi > 3
-    ? [{ interval: [lo, 3], bound: Infinity }, { interval: [3, hi], bound: Infinity }]
+    ? (isHeavierFirst
+        ? [{ interval: [3, hi], bound: Infinity }, { interval: [lo, 3], bound: Infinity }]
+        : [{ interval: [lo, 3], bound: Infinity }, { interval: [3, hi], bound: Infinity }])
     : [{ interval: [lo, hi], bound: Infinity }];
   let incumbent: ModelResponse | undefined;
   let nodes = 0;
@@ -298,22 +303,42 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     adopted_count: 0,
     improved_lower_bound: false,
   };
+  const nodeTraces: import('../api/client').SpatialNodeTrace[] = [];
+  let prunedCount = 0;
+  let splitCount = 0;
+
   const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
     const [a, b] = interval;
     const mid = (a + b) / 2;
     if (mid <= a || mid >= b || b - a < 1e-10) return undefined;
-    return [[a, mid], [mid, b]];
+    return isHeavierFirst ? [[mid, b], [a, mid]] : [[a, mid], [mid, b]];
   };
   while (queue.length && nodes < maxNodes && performance.now() < deadline) {
     queue.sort((a, b) => b.bound - a.bound);
     const node = queue.shift()!;
+    const nodeStart = performance.now();
+    const boundIn = node.bound;
+    const nodeIdx = ++nodes;
+
     if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, node.bound);
+      prunedCount++;
+      nodeTraces.push({
+        node_index: nodeIdx,
+        interval: node.interval,
+        bound_in: boundIn,
+        status: 'pruned-before-solve',
+        bound_out: node.bound,
+        incumbent_improved: false,
+        pruned: true,
+        elapsed_ms: Math.round(performance.now() - nodeStart),
+      });
       continue;
     }
     const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
+    const prevIncumbentVal = incumbent?.objective_value;
     const result = await solveModel(params, node.interval, remainingSec);
-    nodes++;
+    const nodeElapsed = Math.round(performance.now() - nodeStart);
     const step = applySpatialNodeResult({
       nodeBound: node.bound,
       result,
@@ -323,23 +348,82 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
       telemetry,
     });
     incumbent = step.incumbent;
-    if (step.action === 'prune-infeasible') continue;
+    const incumbentImproved = Boolean(incumbent && (prevIncumbentVal == null || incumbent.objective_value > prevIncumbentVal));
+
+    if (step.action === 'prune-infeasible') {
+      nodeTraces.push({
+        node_index: nodeIdx,
+        interval: node.interval,
+        bound_in: boundIn,
+        status: 'infeasible',
+        incumbent_improved: false,
+        pruned: true,
+        elapsed_ms: nodeElapsed,
+      });
+      continue;
+    }
     if (step.action === 'stop') {
       unresolved = Math.max(unresolved, step.bound);
       limitReason = step.reason ?? result.status;
+      nodeTraces.push({
+        node_index: nodeIdx,
+        interval: node.interval,
+        bound_in: boundIn,
+        status: result.status,
+        bound_out: step.bound,
+        objective_value: result.objective_value,
+        incumbent_improved: incumbentImproved,
+        pruned: false,
+        elapsed_ms: nodeElapsed,
+      });
       break;
     }
     const bound = step.bound;
     if (incumbent && bound <= incumbent.objective_value + tolerance) {
       closedBound = Math.max(closedBound, bound);
+      prunedCount++;
+      nodeTraces.push({
+        node_index: nodeIdx,
+        interval: node.interval,
+        bound_in: boundIn,
+        status: result.status,
+        bound_out: bound,
+        objective_value: result.objective_value,
+        incumbent_improved: incumbentImproved,
+        pruned: true,
+        elapsed_ms: nodeElapsed,
+      });
       continue;
     }
     const parts = splitInterval(node.interval);
     if (!parts) {
       unresolved = Math.max(unresolved, bound);
       limitReason = 'Numerical interval resolution reached before certification';
+      nodeTraces.push({
+        node_index: nodeIdx,
+        interval: node.interval,
+        bound_in: boundIn,
+        status: 'numerical-resolution-exhausted',
+        bound_out: bound,
+        objective_value: result.objective_value,
+        incumbent_improved: incumbentImproved,
+        pruned: false,
+        elapsed_ms: nodeElapsed,
+      });
       break;
     }
+    splitCount++;
+    nodeTraces.push({
+      node_index: nodeIdx,
+      interval: node.interval,
+      bound_in: boundIn,
+      status: result.status,
+      bound_out: bound,
+      objective_value: result.objective_value,
+      incumbent_improved: incumbentImproved,
+      pruned: false,
+      elapsed_ms: nodeElapsed,
+    });
     queue.push({ interval: parts[0], bound }, { interval: parts[1], bound });
   }
   const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
@@ -361,6 +445,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
     solve_time_ms: performance.now() - start,
     optimization: { lower_bound: incumbent.objective_value, upper_bound: upper, absolute_gap: gap, tolerance, nodes, termination: certified ? 'optimal' : 'limit' },
     retention_telemetry: params.retainLimitIncumbent ? telemetry : undefined,
+    spatial_telemetry: {
+      branch_ordering: branchOrdering,
+      node_traces: nodeTraces,
+      pruned_nodes_count: prunedCount,
+      split_nodes_count: splitCount,
+    },
   };
 }
 
@@ -392,6 +482,8 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
     barter_available: params.barterAvailable,
     barter_exclude_dogtags: params.barterExcludeDogtags,
     player_level: params.playerLevel ?? undefined,
+    branch_ordering: params.branchOrdering ?? undefined,
+    retain_limit_incumbent: params.retainLimitIncumbent ?? undefined,
   };
 }
 

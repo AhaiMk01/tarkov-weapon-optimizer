@@ -73,6 +73,8 @@ export interface OptimizeRequest {
    * Omitted means the legacy search, which does not adopt that build.
    */
   retain_limit_incumbent?: boolean;
+  /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
+  branch_ordering?: 'lighter-first' | 'heavier-first';
 }
 export interface ItemDetail {
   id: string;
@@ -135,6 +137,25 @@ export interface FinalStats {
   moa: number;
 }
 
+export interface SpatialNodeTrace {
+  node_index: number;
+  interval: [number, number];
+  bound_in: number;
+  status: string;
+  bound_out?: number;
+  objective_value?: number;
+  incumbent_improved: boolean;
+  pruned: boolean;
+  elapsed_ms: number;
+}
+
+export interface SpatialSearchTelemetry {
+  branch_ordering: 'lighter-first' | 'heavier-first';
+  node_traces: SpatialNodeTrace[];
+  pruned_nodes_count: number;
+  split_nodes_count: number;
+}
+
 export interface RetentionTelemetry {
   /** How many MIP solves in the spatial tree stopped at a limit rather than optimality. */
   timeout_count: number;
@@ -172,6 +193,8 @@ export interface OptimizeResponse {
   ideal_point?: IdealPoint;
   /** Telemetry on whether incumbent retention operated during spatial search. */
   retention_telemetry?: RetentionTelemetry;
+  /** Node-by-node spatial search trace and pruning telemetry. */
+  spatial_telemetry?: SpatialSearchTelemetry;
 }
 
 export type GameMode = 'regular' | 'pve';
