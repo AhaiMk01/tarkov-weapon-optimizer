@@ -1,7 +1,18 @@
+diff --git a/frontend/src/solver/types.ts b/frontend/src/solver/types.ts
+--- a/frontend/src/solver/types.ts
++++ b/frontend/src/solver/types.ts
++++ "b/frontend/src/solver/types.tsfrontend\\benchmarks\\experiments\\_tmp_patch\\types.mod"
+@@ -243,4 +243,6 @@ export interface SolveParams {
+    * with no limit incumbent. Each node still receives the remaining deadline.
+    */
+   retainLimitIncumbent?: boolean;
++  /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
++  branchOrdering?: 'lighter-first' | 'heavier-first';
+ }
 diff --git a/frontend/src/api/client.ts b/frontend/src/api/client.ts
-index b64dbf5..d35e804 100644
 --- a/frontend/src/api/client.ts
 +++ b/frontend/src/api/client.ts
++++ "b/frontend/src/api/client.tsfrontend\\benchmarks\\experiments\\_tmp_patch\\client.mod"
 @@ -73,6 +73,8 @@ export interface OptimizeRequest {
     * Omitted means the legacy search, which does not adopt that build.
     */
@@ -46,10 +57,30 @@ index b64dbf5..d35e804 100644
  }
  
  export type GameMode = 'regular' | 'pve';
+diff --git a/frontend/src/solver/solver.worker.ts b/frontend/src/solver/solver.worker.ts
+--- a/frontend/src/solver/solver.worker.ts
++++ b/frontend/src/solver/solver.worker.ts
++++ "b/frontend/src/solver/solver.worker.tsfrontend\\benchmarks\\experiments\\_tmp_patch\\worker.mod"
+@@ -337,6 +337,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+             boundsMode: req.bounds_mode,
+             timeLimitMs: remainingForSolve,
+             retainLimitIncumbent: req.retain_limit_incumbent,
++            branchOrdering: req.branch_ordering,
+           });
+ 
+           result.solve_time_ms = performance.now() - optimizeStart;
+@@ -526,6 +527,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
+               timestamp: Date.now(),
+               capabilities: {
+                 retain_limit_incumbent: true,
++                branch_ordering: true,
+               },
+             },
+           });
 diff --git a/frontend/src/solver/solver.ts b/frontend/src/solver/solver.ts
-index 3d9f8cd..77936e8 100644
 --- a/frontend/src/solver/solver.ts
 +++ b/frontend/src/solver/solver.ts
++++ "b/frontend/src/solver/solver.tsfrontend\\benchmarks\\experiments\\_tmp_patch\\solver.mod"
 @@ -79,6 +79,7 @@ export function incumbentBlockReason(
   */
  export const SOLVER_CAPABILITIES = {
@@ -74,13 +105,14 @@ index 3d9f8cd..77936e8 100644
      : [{ interval: [lo, hi], bound: Infinity }];
    let incumbent: ModelResponse | undefined;
    let nodes = 0;
-@@ -298,22 +303,42 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+@@ -298,22 +303,44 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
      adopted_count: 0,
      improved_lower_bound: false,
    };
 +  const nodeTraces: import('../api/client').SpatialNodeTrace[] = [];
 +  let prunedCount = 0;
 +  let splitCount = 0;
++  let traceSeq = 0;
 +
    const splitInterval = (interval: [number, number]): [[number, number], [number, number]] | undefined => {
      const [a, b] = interval;
@@ -94,13 +126,13 @@ index 3d9f8cd..77936e8 100644
      const node = queue.shift()!;
 +    const nodeStart = performance.now();
 +    const boundIn = node.bound;
-+    const nodeIdx = ++nodes;
++    const traceIdx = ++traceSeq;
 +
      if (incumbent && node.bound <= incumbent.objective_value + tolerance) {
        closedBound = Math.max(closedBound, node.bound);
 +      prunedCount++;
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: 'pruned-before-solve',
@@ -114,12 +146,12 @@ index 3d9f8cd..77936e8 100644
      const remainingSec = Math.max(0.001, (deadline - performance.now()) / 1000);
 +    const prevIncumbentVal = incumbent?.objective_value;
      const result = await solveModel(params, node.interval, remainingSec);
--    nodes++;
+     nodes++;
 +    const nodeElapsed = Math.round(performance.now() - nodeStart);
      const step = applySpatialNodeResult({
        nodeBound: node.bound,
        result,
-@@ -323,23 +348,82 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+@@ -323,23 +350,82 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
        telemetry,
      });
      incumbent = step.incumbent;
@@ -128,7 +160,7 @@ index 3d9f8cd..77936e8 100644
 +
 +    if (step.action === 'prune-infeasible') {
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: 'infeasible',
@@ -142,7 +174,7 @@ index 3d9f8cd..77936e8 100644
        unresolved = Math.max(unresolved, step.bound);
        limitReason = step.reason ?? result.status;
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: result.status,
@@ -159,7 +191,7 @@ index 3d9f8cd..77936e8 100644
        closedBound = Math.max(closedBound, bound);
 +      prunedCount++;
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: result.status,
@@ -176,7 +208,7 @@ index 3d9f8cd..77936e8 100644
        unresolved = Math.max(unresolved, bound);
        limitReason = 'Numerical interval resolution reached before certification';
 +      nodeTraces.push({
-+        node_index: nodeIdx,
++        node_index: traceIdx,
 +        interval: node.interval,
 +        bound_in: boundIn,
 +        status: 'numerical-resolution-exhausted',
@@ -190,7 +222,7 @@ index 3d9f8cd..77936e8 100644
      }
 +    splitCount++;
 +    nodeTraces.push({
-+      node_index: nodeIdx,
++      node_index: traceIdx,
 +      interval: node.interval,
 +      bound_in: boundIn,
 +      status: result.status,
@@ -203,7 +235,7 @@ index 3d9f8cd..77936e8 100644
      queue.push({ interval: parts[0], bound }, { interval: parts[1], bound });
    }
    const upper = Math.max(incumbent?.objective_value ?? -Infinity, closedBound, unresolved, ...queue.map(n => n.bound));
-@@ -361,6 +445,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
+@@ -361,6 +447,12 @@ async function solveDetailed(input: SolveParams): Promise<ModelResponse> {
      solve_time_ms: performance.now() - start,
      optimization: { lower_bound: incumbent.objective_value, upper_bound: upper, absolute_gap: gap, tolerance, nodes, termination: certified ? 'optimal' : 'limit' },
      retention_telemetry: params.retainLimitIncumbent ? telemetry : undefined,
@@ -216,43 +248,3 @@ index 3d9f8cd..77936e8 100644
    };
  }
  
-@@ -392,6 +482,8 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
-     barter_available: params.barterAvailable,
-     barter_exclude_dogtags: params.barterExcludeDogtags,
-     player_level: params.playerLevel ?? undefined,
-+    branch_ordering: params.branchOrdering ?? undefined,
-+    retain_limit_incumbent: params.retainLimitIncumbent ?? undefined,
-   };
- }
- 
-diff --git a/frontend/src/solver/solver.worker.ts b/frontend/src/solver/solver.worker.ts
-index 51d2e4b..edcc1cd 100644
---- a/frontend/src/solver/solver.worker.ts
-+++ b/frontend/src/solver/solver.worker.ts
-@@ -337,6 +337,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
-             boundsMode: req.bounds_mode,
-             timeLimitMs: remainingForSolve,
-             retainLimitIncumbent: req.retain_limit_incumbent,
-+            branchOrdering: req.branch_ordering,
-           });
- 
-           result.solve_time_ms = performance.now() - optimizeStart;
-@@ -526,6 +527,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
-               timestamp: Date.now(),
-               capabilities: {
-                 retain_limit_incumbent: true,
-+                branch_ordering: true,
-               },
-             },
-           });
-diff --git a/frontend/src/solver/types.ts b/frontend/src/solver/types.ts
-index dea6ad5..dd30073 100644
---- a/frontend/src/solver/types.ts
-+++ b/frontend/src/solver/types.ts
-@@ -243,4 +243,6 @@ export interface SolveParams {
-    * with no limit incumbent. Each node still receives the remaining deadline.
-    */
-   retainLimitIncumbent?: boolean;
-+  /** Spatial branch ordering strategy: 'lighter-first' (legacy default) or 'heavier-first'. */
-+  branchOrdering?: 'lighter-first' | 'heavier-first';
- }

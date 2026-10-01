@@ -197,11 +197,39 @@ assert.equal(initStraddle.initial_candidate_telemetry.generated, true);
 assert.equal(initStraddle.initial_candidate_telemetry.valid, true, 'Valid linear seed must be accepted');
 assert.ok(initStraddle.initial_candidate_telemetry.score != null);
 
-// Behavioral test: pre-solve pruning does not spend MIP solves against maxSpatialNodes
-// and seed-pruning telemetry counts prunes attributable to the seed.
+// Strengthened accounting regression: six-choice smoke fixture that reaches actual pre-solve pruning.
+// Asserts:
+// 1. At least one pre-solve prune occurred.
+// 2. Pre-solve pruning did not increment the MIP-solve counter (optimization.nodes).
+// 3. The resulting build and certificate remain valid.
+const sixChoiceSmoke = choiceFixture([
+  { id: 'DeceptiveRoot', weight: 6.0, ergo: 60 },
+  { id: 'MidDeceptive', weight: 4.5, ergo: 40 },
+  { id: 'Hero', weight: 10.0, ergo: 90 },
+  { id: 'Light', weight: 2.0, ergo: 10 },
+  { id: 'Light2', weight: 2.8, ergo: 15 },
+  { id: 'Anchor', weight: 12.0, ergo: 0 },
+]);
+
+const pruneSmokeRun = await solve({ ...sixChoiceSmoke, useTrueErgo: true });
+assert.equal(pruneSmokeRun.status, 'optimal');
+assert.equal(pruneSmokeRun.optimization?.termination, 'optimal');
+assert.ok(pruneSmokeRun.optimization!.absolute_gap <= pruneSmokeRun.optimization!.tolerance);
+assert.deepEqual(validateBuild({ weapon_id: 'gun', use_true_ergo: true }, pruneSmokeRun, sixChoiceSmoke.itemLookup), []);
+
+const traces = pruneSmokeRun.spatial_telemetry!.node_traces;
+const preSolvePrunes = traces.filter(t => t.status === 'pruned-before-solve');
+const actualSolvedMips = traces.filter(t => t.status !== 'pruned-before-solve');
+
+assert.ok(preSolvePrunes.length >= 1, `Must reach pre-solve pruning; got ${preSolvePrunes.length}`);
+assert.equal(pruneSmokeRun.optimization!.nodes, actualSolvedMips.length, 'optimization.nodes must count only solved MIPs, not pre-solve prunes');
+assert.equal(traces.length, actualSolvedMips.length + preSolvePrunes.length);
+
+// Dedicated seed-pruning attribution coverage:
+// Verify that initial_candidate_telemetry.pruned_nodes_count only tracks prunes attributable to the seed.
 const seedPruneFixture = choiceFixture([
-  { id: 'SeedWinner', weight: 2, ergo: 50 }, // weight 3kg total, ergo 50
-  { id: 'SuboptimalHeavy', weight: 5, ergo: 15 }, // weight 6kg total, ergo 15
+  { id: 'SeedWinner', weight: 2, ergo: 50 },
+  { id: 'SuboptimalHeavy', weight: 5, ergo: 15 },
 ]);
 
 const seedRun = await solve({
@@ -213,8 +241,5 @@ assert.equal(seedRun.status, 'optimal');
 assert.ok(seedRun.initial_candidate_telemetry != null);
 assert.equal(seedRun.initial_candidate_telemetry.generated, true);
 assert.equal(seedRun.initial_candidate_telemetry.valid, true);
-// Verify nodes in optimization equals actual solved MIPs count in node_traces (status !== 'pruned-before-solve')
-const solvedMipsCount = seedRun.spatial_telemetry!.node_traces.filter(t => t.status !== 'pruned-before-solve').length;
-assert.equal(seedRun.optimization!.nodes, solvedMipsCount, 'optimization.nodes must match solved MIPs, not pre-solve prunes');
 
 console.log('incumbent gate and required-slot formulation passed');
