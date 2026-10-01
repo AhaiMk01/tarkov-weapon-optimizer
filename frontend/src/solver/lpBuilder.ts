@@ -512,7 +512,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     rawLo = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.min(0, e), 0);
     rawHi = weapon_naked_ergo_scaled + item_ergo.reduce((s, e) => s + Math.max(0, e), 0);
   } else {
-    const structural = computeStructuralBounds(
+    const structural = params.structuralBounds ?? computeStructuralBounds(
       params.weaponId,
       params.itemLookup,
       params.compatibilityMap,

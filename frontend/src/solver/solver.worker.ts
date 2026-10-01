@@ -7,6 +7,8 @@ import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
 import { solve, computeIdealPoint, SOLVER_CAPABILITIES } from './solver.ts';
+import { computeIdealPointCacheKey, computeStructuralBoundsCacheKey } from './reuseKey.ts';
+import { computeStructuralBounds, type StructuralBounds } from './structuralBounds.ts';
 import { MOA_K } from './lpBuilder.ts';
 import { explorePareto } from './paretoExplorer.ts';
 import type { ItemLookup, CompatibilityMap, TraderLevels, ModStats, IdealPoint } from './types.ts';
@@ -20,38 +22,25 @@ interface LoadedData {
   mods: RawItem[];
   itemLookup: ItemLookup;
   compatMaps: Record<string, CompatibilityMap>;
+  structuralBoundsCache: Map<string, StructuralBounds>;
 }
 
 const dataCache = new Map<string, LoadedData>();
 const idealPointCache = new Map<string, IdealPoint>();
 
 function getIdealCacheKey(lang: string, gameMode: string, req: OptimizeRequest): string {
-  return JSON.stringify({
-    lang,
-    gameMode,
-    weapon_id: req.weapon_id,
-    max_price: req.max_price,
-    min_ergonomics: req.min_ergonomics,
-    max_recoil_v: req.max_recoil_v,
-    max_recoil_sum: req.max_recoil_sum,
-    min_mag_capacity: req.min_mag_capacity,
-    min_sighting_range: req.min_sighting_range,
-    max_weight: req.max_weight,
-    max_moa: req.max_moa,
-    include_items: req.include_items,
-    exclude_items: req.exclude_items,
-    include_categories: req.include_categories,
-    exclude_categories: req.exclude_categories,
-    prevent_overswing: req.prevent_overswing,
-    equip_ergo_modifier: req.equip_ergo_modifier,
-    use_true_ergo: req.use_true_ergo,
-    precise_mode: req.precise_mode,
-    trader_levels: req.trader_levels,
-    flea_available: req.flea_available,
-    barter_available: req.barter_available,
-    barter_exclude_dogtags: req.barter_exclude_dogtags,
-    player_level: req.player_level,
-  });
+  return computeIdealPointCacheKey(lang, gameMode, req);
+}
+
+function getStructuralBounds(data: LoadedData, lang: string, gameMode: string, weaponId: string, maxWeight?: number | null): StructuralBounds {
+  const key = computeStructuralBoundsCacheKey(lang, gameMode, weaponId, maxWeight);
+  let cached = data.structuralBoundsCache.get(key);
+  if (!cached) {
+    const compatMap = getCompatMap(data, weaponId);
+    cached = computeStructuralBounds(weaponId, data.itemLookup, compatMap, { maxWeight });
+    data.structuralBoundsCache.set(key, cached);
+  }
+  return cached;
 }
 
 
@@ -66,6 +55,7 @@ async function getOrLoadData(lang: string, gameMode: string): Promise<LoadedData
     mods: state.mods,
     itemLookup: state.itemLookup,
     compatMaps: {},
+    structuralBoundsCache: new Map(),
   };
   dataCache.set(key, loaded);
   return loaded;
@@ -103,6 +93,9 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
     switch (type) {
         case 'clearCache': {
           idealPointCache.clear();
+          for (const d of dataCache.values()) {
+            d.structuralBoundsCache.clear();
+          }
           self.postMessage({ type: 'result', id, payload: { cleared: true } });
           break;
         }
@@ -238,10 +231,14 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 break;
               }
               try {
+                const epBounds = req.bounds_mode !== 'naive'
+                  ? getStructuralBounds(data, lang, gameMode, req.weapon_id, req.max_weight)
+                  : undefined;
                 idealPoint = await computeIdealPoint({
                   weaponId: req.weapon_id,
                   itemLookup: data.itemLookup,
                   compatibilityMap: compatMap,
+                  structuralBounds: epBounds,
                   maxPrice: req.max_price,
                   minErgonomics: req.min_ergonomics,
                   maxRecoilV: req.max_recoil_v,
@@ -304,10 +301,15 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             break;
           }
 
+          const precomputedBounds = req.bounds_mode !== 'naive'
+            ? getStructuralBounds(data, lang, gameMode, req.weapon_id, req.max_weight)
+            : undefined;
+
           const result: OptimizeResponse = await solve({
             weaponId: req.weapon_id,
             itemLookup: data.itemLookup,
             compatibilityMap: compatMap,
+            structuralBounds: precomputedBounds,
             maxPrice: req.max_price,
             minErgonomics: req.min_ergonomics,
             maxRecoilV: req.max_recoil_v,
@@ -353,10 +355,15 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
 
           const startTime = performance.now();
+          const expBounds = req.bounds_mode !== 'naive'
+            ? getStructuralBounds(data, lang, gameMode, req.weapon_id, req.max_weight)
+            : undefined;
+
           const points: ExplorePoint[] = await explorePareto({
             weaponId: req.weapon_id,
             itemLookup: data.itemLookup,
             compatibilityMap: compatMap,
+            structuralBounds: expBounds,
             ignore: req.ignore,
             maxPrice: req.max_price,
             minErgonomics: req.min_ergonomics,

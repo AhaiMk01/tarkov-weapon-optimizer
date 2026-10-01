@@ -1,3 +1,4 @@
+import { computeStructuralBounds } from './structuralBounds.ts';
 /**
  * Pareto frontier exploration.
  * Ported from optimizer.py:explore_pareto()
@@ -35,6 +36,8 @@ export interface ParetoParams {
   barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
   preciseMode?: boolean;
+  boundsMode?: 'structural' | 'naive';
+  structuralBounds?: import('./structuralBounds.ts').StructuralBounds;
 }
 
 function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight' | 'maxRecoilV' | 'minErgonomics' | 'maxPrice'> {
@@ -60,6 +63,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     barterExcludeDogtags: p.barterExcludeDogtags ?? false,
     playerLevel: p.playerLevel,
     preciseMode: p.preciseMode,
+    structuralBounds: p.structuralBounds,
   };
 }
 
@@ -71,6 +75,14 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
   const nakedRecoilV = weapon.stats.naked_recoil_v;
 
   const base = buildBaseParams(params);
+  if (!base.structuralBounds && base.boundsMode !== 'naive') {
+    base.structuralBounds = computeStructuralBounds(
+      params.weaponId,
+      params.itemLookup,
+      params.compatibilityMap,
+      { maxWeight: params.maxWeight },
+    );
+  }
   const frontier: ExplorePoint[] = [];
 
   async function runSolve(weights: { ergoWeight: number; recoilWeight: number; priceWeight: number }, overrides: Partial<SolveParams> = {}): Promise<OptimizeResponse> {

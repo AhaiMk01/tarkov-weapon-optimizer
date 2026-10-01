@@ -1,3 +1,4 @@
+import type { StructuralBounds } from './structuralBounds.ts';
 /**
  * Core types for the weapon optimizer solver.
  * Ported from Python backend (optimizer.py, schemas.py).
@@ -237,4 +238,6 @@ export interface SolveParams {
   preciseMode?: boolean;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   boundsMode?: 'structural' | 'naive';
+  /** Precomputed structural bounds on weight and ergonomics. */
+  structuralBounds?: StructuralBounds;
 }
