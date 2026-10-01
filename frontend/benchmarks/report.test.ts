@@ -43,11 +43,48 @@ test('nonlinear optimal without spatial bounds is not a linear certificate', () 
   });
   assert.equal(classifySample(s).certified, false);
 });
-test('fast linear optimal is not a placement certificate', () => {
-  const s = sample({
+test('precise linear Sweet Spot without spatial metadata is a linear certificate', () => {
+  const linearSweet = sample({
+    request: { id: 'case', kind: 'optimize', description: '', request: { weapon_id: 'gun', precise_mode: 'precise', use_tchebycheff: true } },
+    response: { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'precise' },
+  });
+  assert.equal(classifySample(linearSweet).certified, true);
+  assert.equal(classifySample(linearSweet).certificateModel, 'precise');
+  const unchecked = sample({
+    request: linearSweet.request,
+    response: linearSweet.response,
+    validation: { checked: true, errors: ['conflict'] },
+  });
+  assert.equal(classifySample(unchecked).certified, false);
+  const notOptimal = sample({
+    request: linearSweet.request,
+    response: { status: 'feasible', selected_items: [], objective_value: 5, precision_resolved: 'precise' },
+  });
+  assert.equal(classifySample(notOptimal).certified, false);
+});
+test('fast placement is not a certificate, including Sweet Spot', () => {
+  const linear = sample({
     response: { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'fast' },
   });
-  assert.equal(classifySample(s).certified, false);
+  const sweet = sample({
+    request: { id: 'case', kind: 'optimize', description: '', request: { weapon_id: 'gun', precise_mode: 'fast', use_tchebycheff: true } },
+    response: { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'fast' },
+  });
+  assert.equal(classifySample(linear).certified, false);
+  assert.equal(classifySample(sweet).certified, false);
+});
+test('Sweet Spot with TrueErgo or Prevent Overswing still needs a spatial proof', () => {
+  const withoutProof = { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'precise' as const };
+  const sweetTed = sample({
+    request: { id: 'case', kind: 'optimize', description: '', request: { weapon_id: 'gun', precise_mode: 'precise', use_tchebycheff: true, use_true_ergo: true } },
+    response: withoutProof,
+  });
+  const overswing = sample({
+    request: { id: 'case', kind: 'optimize', description: '', request: { weapon_id: 'gun', precise_mode: 'precise', prevent_overswing: true } },
+    response: withoutProof,
+  });
+  assert.equal(classifySample(sweetTed).certified, false);
+  assert.equal(classifySample(overswing).certified, false);
 });
 test('Explore point statuses cannot establish complete-curve certification', () => {
   const s = sample({ request: { id: 'case', kind: 'explore', description: '', request: { weapon_id: 'gun', ignore: 'price', steps: 1 } }, response: { points: [] } });

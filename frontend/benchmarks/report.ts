@@ -40,11 +40,12 @@ export function classifySample(sample: Sample): SampleClassification {
 
   const opt = optRes.optimization;
   if (!opt || optRes.status !== 'optimal') {
-    // Linear precise MIP: HiGHS Optimal plus an independent build check is the certificate.
-    // Nonlinear search without spatial bounds is not certified by that contract.
+    // Spatial certification is required only for TrueErgo or Prevent Overswing,
+    // matching solveDetailed. Sweet Spot on a linear objective is still one precise MIP:
+    // HiGHS Optimal plus an independent build check is its certificate.
     // Fast mode is not a placement certificate.
     const request = sample.request.request;
-    const nonlinear = Boolean(request.use_true_ergo || request.prevent_overswing || request.use_tchebycheff);
+    const nonlinear = Boolean(request.use_true_ergo || request.prevent_overswing);
     const linearCertified = !nonlinear
       && validatedBuild
       && optRes.status === 'optimal'
