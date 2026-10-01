@@ -154,6 +154,8 @@ export interface OptimizeResponse {
   };
   /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
   ideal_point?: IdealPoint;
+  /** Observed ideal-point cache lookup for this request. Absent when Sweet Spot is off. */
+  endpoint_cache?: 'hit' | 'miss';
 }
 
 export type GameMode = 'regular' | 'pve';

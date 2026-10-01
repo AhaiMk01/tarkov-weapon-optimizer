@@ -111,6 +111,8 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
     if (result.status === 'infeasible' || !result.final_stats) return;
     const stats = result.final_stats;
     const recoilMultiplier = nakedRecoilV > 0 ? stats.recoil_vertical / nakedRecoilV : 1;
+    // Display rounding: 0.1 for ergonomics and recoil, integer for price.
+    // benchmarks/exploreValidation.ts accepts at most half of that step.
     frontier.push({
       ergo: Math.round(stats.ergonomics * 10) / 10,
       recoil_pct: Math.round((recoilMultiplier - 1) * 1000) / 10,

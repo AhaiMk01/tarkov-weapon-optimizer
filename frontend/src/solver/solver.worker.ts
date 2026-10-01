@@ -218,9 +218,11 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             : undefined;
 
           let idealPoint: IdealPoint | undefined;
+          let endpointCache: 'hit' | 'miss' | undefined;
           if (req.use_tchebycheff) {
             const cacheKey = getIdealCacheKey(lang, gameMode, req);
             idealPoint = idealPointCache.get(cacheKey);
+            endpointCache = idealPoint ? 'hit' : 'miss';
             if (!idealPoint) {
               const remainingForEndpoints = Math.max(0, deadline - performance.now());
               if (remainingForEndpoints <= 0) {
@@ -235,6 +237,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                     solve_time_ms: performance.now() - optimizeStart,
                     precision_request: precReq,
                     precision_resolved: usePrecise ? 'precise' : 'fast',
+                    endpoint_cache: endpointCache,
                   },
                 });
                 break;
@@ -282,6 +285,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                     solve_time_ms: performance.now() - optimizeStart,
                     precision_request: precReq,
                     precision_resolved: usePrecise ? 'precise' : 'fast',
+                    endpoint_cache: endpointCache,
                   },
                 });
                 break;
@@ -302,6 +306,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
                 solve_time_ms: performance.now() - optimizeStart,
                 precision_request: precReq,
                 precision_resolved: usePrecise ? 'precise' : 'fast',
+                endpoint_cache: endpointCache,
               },
             });
             break;
@@ -345,6 +350,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           result.solve_time_ms = performance.now() - optimizeStart;
           result.precision_request = precReq;
           result.precision_resolved = usePrecise ? 'precise' : 'fast';
+          if (endpointCache) result.endpoint_cache = endpointCache;
           self.postMessage({ type: 'result', id, payload: result });
           break;
         }
@@ -536,7 +542,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             id,
             payload: {
               timestamp: Date.now(),
-              revision: '1c9669f',
+              revision: 'unpinned-candidate',
               capabilities: SOLVER_CAPABILITIES,
             },
           });

@@ -40,8 +40,17 @@ export function classifySample(sample: Sample): SampleClassification {
 
   const opt = optRes.optimization;
   if (!opt || optRes.status !== 'optimal') {
+    // Linear precise MIP: HiGHS Optimal plus an independent build check is the certificate.
+    // Nonlinear search without spatial bounds is not certified by that contract.
+    // Fast mode is not a placement certificate.
+    const request = sample.request.request;
+    const nonlinear = Boolean(request.use_true_ergo || request.prevent_overswing || request.use_tchebycheff);
+    const linearCertified = !nonlinear
+      && validatedBuild
+      && optRes.status === 'optimal'
+      && optRes.precision_resolved === 'precise';
     return {
-      certified: false,
+      certified: linearCertified,
       certificateModel,
       validatedBuild,
       solverStatus: optRes.status,
@@ -261,6 +270,19 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
     lines.push('');
   }
 
+  const observedEndpoints = (rawSamples ?? []).filter(s => !s.warmup && s.endpointReuse);
+  if (observedEndpoints.length > 0) {
+    lines.push('## Endpoint Cache Observations');
+    lines.push('| Case ID | Rep | Variant | Treatment | Observed |');
+    lines.push('|---|---:|---|---|---|');
+    for (const s of observedEndpoints) {
+      lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.endpointCache ?? 'unlabeled'} | ${s.endpointReuse} |`);
+    }
+    lines.push('');
+    lines.push('Observed `hit` means this request found an ideal point already in that worker. It is not inferred from the treatment label.');
+    lines.push('');
+  }
+
   if (rawSamples && rawSamples.length > 0) {
     const nonWarmup = rawSamples.filter(s => !s.warmup);
     if (nonWarmup.length > 0) {
@@ -304,7 +326,11 @@ export function formatMarkdownReport(summary: BenchmarkSummary, meta?: Record<st
         }
         const memBefore = s.memory?.before != null ? (s.memory.before / 1024 / 1024).toFixed(1) : '?';
         const memAfter = s.memory?.after != null ? (s.memory.after / 1024 / 1024).toFixed(1) : '?';
-        const memStr = `${memBefore} -> ${memAfter}`;
+        const workerBefore = s.memory?.workerJsHeapBefore != null ? (s.memory.workerJsHeapBefore / 1024 / 1024).toFixed(1) : 'unmeasured';
+        const workerAfter = s.memory?.workerJsHeapAfter != null ? (s.memory.workerJsHeapAfter / 1024 / 1024).toFixed(1) : 'unmeasured';
+        const memStr = `page ${memBefore} -> ${memAfter}; worker ${workerBefore} -> ${workerAfter}`;
+        if (resp?.endpoint_cache) mech += ` | endpoint ${resp.endpoint_cache}`;
+        if (!opt && classifySample(s).certified) mech = `linear MIP optimal (precise, validated) | ${mech}`;
         lines.push(`| ${s.caseId} | ${s.repetition} | ${s.variant} | ${s.outcome} | ${status} | ${term} | ${val} | ${gap} | ${bounds} | ${elapsed} | ${memStr} | ${mech} |`);
       }
       lines.push('');

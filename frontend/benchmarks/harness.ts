@@ -1,5 +1,6 @@
 import { buildItemLookup } from '../src/solver/dataService.ts';
 import { validateBuild } from './validateBuild.ts';
+import { validateExploreCurve } from './exploreValidation.ts';
 import type { ItemLookup } from '../src/solver/types.ts';
 import type { BenchmarkCase, BrowserResult, Snapshot } from './types.ts';
 import type { ExploreResponse, OptimizeResponse } from '../src/api/client.ts';
@@ -132,59 +133,11 @@ const benchmarkHarness = {
       const errors = validateBuild(caseItem.request as any, response as any, itemLookup);
       validation = { checked: true, errors };
     } else if (caseItem.kind === 'explore' && 'points' in response) {
-      // Validate every point in the Explore curve independently
-      const errors: string[] = [];
-      const expPoints = (response as ExploreResponse).points ?? [];
-      for (let pIdx = 0; pIdx < expPoints.length; pIdx++) {
-        const pt = expPoints[pIdx];
-        const weaponEntry = itemLookup[caseItem.request.weapon_id];
-        if (weaponEntry?.type !== 'gun') {
-          errors.push(`Point ${pIdx}: Unknown weapon ${caseItem.request.weapon_id}`);
-          continue;
-        }
-        const sum = (fn: (stats: any) => number) => (pt.selected_items || []).reduce((acc: number, m: any) => {
-          const e = itemLookup[m.id];
-          return acc + (e?.type === 'mod' ? fn(e.stats) : 0);
-        }, 0);
-        const rawErgo = weaponEntry.stats.naked_ergonomics + sum(s => s.ergonomics);
-        const ergo = Math.max(0, Math.min(100, rawErgo));
-        const weight = weaponEntry.stats.weight + sum(s => s.weight);
-        const recoilFactor = 1 + sum(s => s.recoil_modifier);
-        const recoilV = weaponEntry.stats.naked_recoil_v * recoilFactor;
-        const recoilH = weaponEntry.stats.naked_recoil_h * recoilFactor;
-        const effective = Math.max(0, Math.min(100, ergo * (1 + (caseItem.request.equip_ergo_modifier ?? 0))));
-        const ted = effective - (weight <= 3 ? 0 : 100 - 300 / weight);
-        const barrels = (pt.selected_items || []).filter((m: any) => (itemLookup[m.id] as any)?.stats?.center_of_impact > 0);
-        const coi = barrels[0] ? (itemLookup[barrels[0].id] as any).stats.center_of_impact : weaponEntry.stats.center_of_impact;
-        const moa = coi * (1 - sum(s => s.accuracy_modifier) / 100) * 34.3;
-        const overswing = Math.max(0, Math.min(1, (weight * (1 - effective / 100) - 3) / 4)) * 100;
-
-        const ptRes: OptimizeResponse = {
-          status: (pt.status as any) || 'optimal',
-          selected_items: pt.selected_items || [],
-          selected_preset: pt.selected_preset,
-          slot_pairs: pt.slot_pairs,
-          objective_value: pt.recoil_v,
-          final_stats: {
-            ergonomics: ergo,
-            recoil_vertical: recoilV,
-            recoil_horizontal: recoilH,
-            total_price: pt.price,
-            total_weight: weight,
-            true_ergo_delta: ted,
-            moa,
-            overswing_pct: overswing,
-          },
-        };
-        const pointErrors = validateBuild(
-          { ...caseItem.request as any, min_ergonomics: Math.floor(ergo) },
-          ptRes,
-          itemLookup
-        );
-        for (const err of pointErrors) {
-          errors.push(`Point ${pIdx} (E=${pt.ergo}, R=${pt.recoil_v}): ${err}`);
-        }
-      }
+      const errors = validateExploreCurve(
+        caseItem.request,
+        (response as ExploreResponse).points ?? [],
+        itemLookup,
+      );
       validation = { checked: true, errors };
     }
 

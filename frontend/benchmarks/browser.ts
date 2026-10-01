@@ -45,7 +45,7 @@ interface BenchmarkWindow {
   benchmark: {
     prepare(snapshot: Snapshot): Promise<{ gunsCount: number; modsCount: number; coldLoadMs: number }>;
     run(caseItem: BenchmarkCase, deadlineMs: number, variant?: 'baseline' | 'candidate'): Promise<BrowserResult>;
-    clearCache(): Promise<void>;
+    clearCache(variant?: 'baseline' | 'candidate'): Promise<void>;
     getStatus(variant?: 'baseline' | 'candidate'): Promise<any>;
   };
 }
@@ -57,7 +57,14 @@ export class BenchmarkBrowserRunner {
   private browser: Browser | null = null;
   private page: Page | null = null;
   private cdpClient: CDPSession | null = null;
+  private runId: string | undefined;
+  private sourceRevision: string | undefined;
   public coldLoadMs: number | null = null;
+
+  setRunIdentity(runId: string, sourceRevision: string): void {
+    this.runId = runId;
+    this.sourceRevision = sourceRevision;
+  }
 
   constructor(opts: BrowserRunnerOptions = {}) {
     this.url = opts.url || 'http://localhost:5173/benchmarks/index.html';
@@ -86,9 +93,35 @@ export class BenchmarkBrowserRunner {
     return res;
   }
 
-  async clearCache(): Promise<void> {
+  async clearCache(variant?: 'baseline' | 'candidate'): Promise<void> {
     if (!this.page) throw new Error('Browser runner not started');
-    await this.page.evaluate(() => (window as unknown as BenchmarkWindow).benchmark.clearCache());
+    await this.page.evaluate(
+      (v?: 'baseline' | 'candidate') => (window as unknown as BenchmarkWindow).benchmark.clearCache(v),
+      variant,
+    );
+  }
+
+  private async workerJsHeap(): Promise<number | null> {
+    if (!this.browser) return null;
+    // Dedicated module workers are target type "other", and the Performance domain
+    // is not available on those sessions. Runtime.getHeapUsage is.
+    const targets = this.browser.targets().filter(target => target.url().includes('solver.worker'));
+    let sum = 0;
+    let attached = 0;
+    for (const target of targets) {
+      try {
+        const session = await target.createCDPSession();
+        const usage = await session.send('Runtime.getHeapUsage') as { usedSize?: number };
+        if (typeof usage.usedSize === 'number' && Number.isFinite(usage.usedSize)) {
+          sum += usage.usedSize;
+          attached++;
+        }
+        await session.detach().catch(() => undefined);
+      } catch {
+        // Leave the gap explicit when a worker session cannot be evaluated.
+      }
+    }
+    return attached > 0 ? sum : null;
   }
 
   async getStatus(variant: 'baseline' | 'candidate' = 'candidate'): Promise<any> {
@@ -110,6 +143,8 @@ export class BenchmarkBrowserRunner {
       baselineRevision?: string;
       candidateRevision?: string;
       candidatePatch?: string;
+      runId?: string;
+      sourceRevision?: string;
     },
   ): Promise<Sample> {
     if (!this.page) throw new Error('Browser runner not started');
@@ -139,6 +174,7 @@ export class BenchmarkBrowserRunner {
         if (h) beforeHeap = h.value;
       } catch {}
     }
+    const workerBefore = await this.workerJsHeap();
 
     try {
       result = await this.page.evaluate(
@@ -167,6 +203,7 @@ export class BenchmarkBrowserRunner {
         if (h) afterHeap = h.value;
       } catch {}
     }
+    const workerAfter = await this.workerJsHeap();
 
     return {
       schemaVersion: 1,
@@ -185,10 +222,21 @@ export class BenchmarkBrowserRunner {
       validation: result ? result.validation : undefined,
       error,
       pageErrors,
-      memory: { scope: 'page-js-heap-excludes-worker-wasm', before: beforeHeap, after: afterHeap },
+      memory: {
+        scope: 'page-js-heap-excludes-worker-wasm',
+        before: beforeHeap,
+        after: afterHeap,
+        workerJsHeapBefore: workerBefore,
+        workerJsHeapAfter: workerAfter,
+      },
       experiment: opts.experiment,
       cohort: opts.cohort,
       endpointCache: opts.endpointCache,
+      endpointReuse: result?.response && 'endpoint_cache' in result.response
+        ? (result.response as { endpoint_cache?: 'hit' | 'miss' }).endpoint_cache
+        : undefined,
+      runId: opts.runId ?? this.runId,
+      sourceRevision: opts.sourceRevision ?? this.sourceRevision,
       baselineRevision: opts.baselineRevision,
       candidateRevision: opts.candidateRevision,
       candidatePatch: opts.candidatePatch,

@@ -43,10 +43,21 @@ export interface Sample {
   validation?: BrowserResult['validation'];
   error?: string;
   pageErrors: string[];
-  memory: { scope: 'page-js-heap-excludes-worker-wasm'; before: number | null; after: number | null };
+  memory: {
+    scope: 'page-js-heap-excludes-worker-wasm';
+    before: number | null;
+    after: number | null;
+    /** Sum of Runtime.getHeapUsage.usedSize on solver worker targets. Not a separate WASM reservation. */
+    workerJsHeapBefore?: number | null;
+    workerJsHeapAfter?: number | null;
+  };
   experiment?: string;
   cohort?: 'pilot' | 'formal';
   endpointCache?: string;
+  /** ideal-point cache lookup observed by the worker. Absent when Sweet Spot is off. */
+  endpointReuse?: 'hit' | 'miss';
+  runId?: string;
+  sourceRevision?: string;
   baselineRevision?: string;
   candidateRevision?: string;
   candidatePatch?: string;

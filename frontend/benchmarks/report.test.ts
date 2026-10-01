@@ -29,6 +29,26 @@ test('certified completion requires independent validation and consistent bounds
 test('printed optimality without a certificate is unknown, not certified', () => {
   assert.equal(classifySample(sample({ response: { status: 'optimal', selected_items: [], objective_value: 5 } })).certified, false);
 });
+test('precise linear optimal with a validated build is a linear certificate', () => {
+  const s = sample({
+    response: { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'precise' },
+  });
+  assert.equal(classifySample(s).certified, true);
+  assert.equal(classifySample(s).certificateModel, 'precise');
+});
+test('nonlinear optimal without spatial bounds is not a linear certificate', () => {
+  const s = sample({
+    request: { id: 'case', kind: 'optimize', description: '', request: { weapon_id: 'gun', precise_mode: 'precise', use_true_ergo: true } },
+    response: { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'precise' },
+  });
+  assert.equal(classifySample(s).certified, false);
+});
+test('fast linear optimal is not a placement certificate', () => {
+  const s = sample({
+    response: { status: 'optimal', selected_items: [], objective_value: 5, precision_resolved: 'fast' },
+  });
+  assert.equal(classifySample(s).certified, false);
+});
 test('Explore point statuses cannot establish complete-curve certification', () => {
   const s = sample({ request: { id: 'case', kind: 'explore', description: '', request: { weapon_id: 'gun', ignore: 'price', steps: 1 } }, response: { points: [] } });
   assert.equal(classifySample(s).certified, false);
