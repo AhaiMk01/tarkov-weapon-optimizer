@@ -1,7 +1,27 @@
 # ADR 0001: Safe Reuse Boundaries across Optimization, Explore, and Sweet Spot Solves
 
 ## Status
-Proposed / Pending Human Approval (Refs #25)
+Accepted (Refs #25). Accepted 2026-10-01.
+
+## Acceptance
+The accepted boundary is the implementation already running. It does not add a reuse tier.
+
+- **Tier 1 stays.** Compatibility and unclipped structural bounds stay pinned to the worker's loaded data session. A request cap is applied when the LP is built, so a bound prepared under a tighter cap is not reused as a tighter cap.
+- **Tier 2 stays.** A Sweet Spot endpoint may be reused only when it was certified optimal and only the preference weights change.
+- **Tier 3 and Tier 4 stay deferred.** A solution or certificate is not transferred to another Explore step, and a full response is not cached.
+- **No incremental candidate speedup was demonstrated.** Run `reuse-2026-10-01T18-10-24-726Z` compared candidate source `373f5e1` with baseline worker `52b2ae9` on snapshot `219443b449f732f3`. Medians were 22.6 ms to 23.3 ms on the first Sweet Spot weight, 0.8 ms to 0.8 ms on the second weight, 959.2 ms to 963.8 ms on `dense-restricted`, and 1.9 ms to 1.8 ms on `sparse-explore`. The drop from about 23 ms to 0.8 ms is the endpoint cache, and the baseline already has it. Those Sweet Spot cases enabled TrueErgo, so they were judged on the spatial contract. Later samples are not relabeled onto `45e1fcc`.
+
+### Certificate contracts
+- **Precise linear MIP.** This includes Sweet Spot when neither TrueErgo nor Prevent Overswing is enabled. The certificate is `status === 'optimal'`, `precision_resolved === 'precise'`, and `validateBuild` reporting no errors. Spatial `optimization` metadata is not required. `45e1fcc` aligns the benchmark classifier with `solveDetailed`. Its regression accepts that precise linear Sweet Spot result, and rejects the same result when validation fails or the status is not `optimal`.
+- **Spatial nonlinear search.** TrueErgo or Prevent Overswing, with or without Sweet Spot, still needs a validated build, a finite `optimization` gap within tolerance, and `termination === 'optimal'`.
+- **Fast mode** is not a placement certificate, including fast Sweet Spot.
+- **Explore** checks that each emitted point is physically feasible against the original request. That is not a single-build optimality certificate.
+
+### Follow-on questions
+These gaps are accepted as outside this decision. They are not a reason to repeat the same runs or to widen the implementation.
+
+- Dense Explore was not measured. One pair did not finish within 60 seconds, and five failing pairs were not collected. What is its certified curve latency for baseline `52b2ae9` and for the current solver?
+- The summed worker V8 heap does not isolate ideal-point cache growth, and it does not measure a HiGHS `WebAssembly.Memory` reservation. How should those two quantities be measured if endpoint retention becomes a memory question?
 
 ## Context
 Tarkov Weapon Mod Optimizer solves mixed-integer linear and spatial nonlinear constraint problems via HiGHS WASM in browser Web Workers. Several user-facing workflows perform multiple closely related solves:
