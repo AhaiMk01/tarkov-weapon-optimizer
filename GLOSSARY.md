@@ -27,13 +27,20 @@ The explicit classification of solver baseline: `exact` (solved on the exact pla
 The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'`. Unresolved outcomes (timeouts, limits, errors) must never advance an infeasible bound.
 
 ### Single Request Deadline Clock
-A unified request-level deadline clock ($	ext{deadline} = 	ext{now} + 	ext{time\_limit\_ms}$) established at worker message receipt and propagated to all sub-operations (preparation, ideal endpoints, spatial nodes, Explore sweeps) to strictly prevent multi-step time runaway.
+A unified request-level deadline clock stamped at client request creation ($\text{deadline\_ms} = \text{created\_at} + \text{time\_limit\_ms}$). Enforces queue-aware expiration before dispatch and propagates remaining time to all sub-operations (preparation, ideal endpoints, spatial nodes, Explore sweeps), paired with event-loop yielding between sub-solves for cooperative cancellation.
+
+### Global Spatial Upper Bound
+The objective upper bound across the entire spatial branch-and-bound search tree, aggregated as $\max(\text{incumbent.objective}, \max_{k \in \text{OpenNodes}} \text{node}_k.\text{upper\_bound})$, yielding $+\infty$ if any open region is unbounded. Never replaced by the bound of a single closed node.
+
+### Outward Ceiling Rounding
+Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable.
 
 ### Curve Status
 The three-state classification of a Pareto frontier sweep response (`ExploreResponse`):
-- `complete`: All $N$ requested points were successfully evaluated and yielded verified builds.
-- `partial`: At least one point yielded a verified build, but others timed out or failed.
-- `invalid`: Zero verified builds were produced within the request deadline.
+- `complete`: All $N$ requested points terminated with certified outcomes (all verified builds, or a proved mix of verified builds and proved-infeasible points).
+- `partial`: Usable sweep where at least one point yielded a verified build, but others timed out, errored, or were cancelled.
+- `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible).
+- `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
 
 ### Containing Preset
 A pre-assembled weapon configuration sold by traders that includes a receiver and pre-attached components with integer counts $q_{b,i} \in \mathbb{Z}_{\ge 0}$. When selected as the base, included components are acquired at zero marginal cost. A containing preset provides free components but never forces a preset purchase when a component can be legally supplied via standalone purchase or owned stash inventory.
