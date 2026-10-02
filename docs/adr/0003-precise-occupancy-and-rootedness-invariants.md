@@ -1,7 +1,7 @@
 # ADR 0003: Precise Occupancy and Rootedness Invariants
 
 ## Status
-Proposed (Refs #32). Canonical Amendment 2026-10-02.
+Accepted (Refs #32). Closed 2026-10-02.
 
 ## Context
 Following the authoritative physical and acquisition domain contract settled in ADR 0002 (#31), unrolling physical slots into an instance tree introduces key formulation requirements:

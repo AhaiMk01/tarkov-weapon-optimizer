@@ -1,7 +1,7 @@
 # ADR 0004: End-to-End Certificate, Status and Deadline Semantics
 
 ## Status
-Proposed (Refs #35). Canonical Resolution v4 2026-10-02.
+Accepted (Refs #35). Closed 2026-10-02.
 
 ## Context
 The solver serves diverse consumers: direct solve, worker messages, Optimize UI, Explore, Gunsmith, MOA-floor search, and automated benchmark classification. Audits and review findings revealed key semantic requirements:
