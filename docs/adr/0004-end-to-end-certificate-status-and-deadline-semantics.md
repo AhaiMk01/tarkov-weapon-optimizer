@@ -1,14 +1,14 @@
 # ADR 0004: End-to-End Certificate, Status and Deadline Semantics
 
 ## Status
-Proposed (Refs #35). Canonical Resolution v2 2026-10-02.
+Proposed (Refs #35). Canonical Resolution v3 2026-10-02.
 
 ## Context
 The solver serves diverse consumers: direct solve, worker messages, Optimize UI, Explore, Gunsmith, MOA-floor search, and automated benchmark classification. Audits and review findings revealed key semantic requirements:
-1. **Source Objective Scaling**: `ERGO_SCALE = 10` and `SCALE = 1000` define $fE$ and $fR$, while `trueErgo.ts` governs weighted and augmented Tchebycheff objective scoring in shared linear objective units.
-2. **Domain Equivalence Prerequisites**: Physical certification requires request-level optimality, exact placement, clean validation, AND preservation of the authoritative domain under Issue #36 equivalence gates.
-3. **Cross-Context Clock Skew & Cancellation**: Web Window and Web Worker have different `performance.timeOrigin` baselines, requiring normalization to monotonic epoch time, out-of-band cancel dispatch, and event-loop yielding.
-4. **MOA Lower Bounds & Instance Witnesses**: Initial lower bound must be certified or remain unproved, witness builds must carry full instance manifests, and outward rounding proofs are delegated to Issue #34.
+1. **Source Objective Scaling & Directional Deviations**: `ERGO_SCALE = 10` and `SCALE = 1000` define $fE$ and $fR$. Augmented Tchebycheff scoring in `trueErgo.ts` subtracts directional deviations $d_E = c_e (z_E - fE)$, $d_R = c_r (fR - z_R)$, $d_P = c_p (fP - z_P)$, providing directional bonuses when exceeding ideal targets rather than absolute penalties.
+2. **Domain Equivalence Prerequisites on Infeasibility & Optimality**: Physical certification of optimality and infeasibility requires request-level optimality, exact placement, clean validation, AND preservation of the authoritative domain under Issue #36 equivalence gates.
+3. **Cross-Context Clock Skew & Pre-Stage Guards**: Web Window and Web Worker have different `performance.timeOrigin` baselines, requiring normalization to monotonic epoch time, out-of-band cancel dispatch, and strict $\text{remaining\_ms} \le 0$ guards before every stage and after cancellation yields.
+4. **MOA Lower Bounds & Instance Witnesses**: Initial lower bound must be certified or remain unproved; bisection must not start with $\text{lo} = \text{null}$; witness builds must carry full instance manifests; and outward rounding proofs are delegated to Issue #34.
 5. **Consumer Invariants**: Gunsmith, benchmark nullable gap handling, and Explore curve terminal states must follow explicit, unambiguous transition rules.
 
 ## Decision
@@ -19,18 +19,20 @@ We establish eight core principles governing status, metadata, deadlines, and co
    - Timestamps are normalized via $\text{epoch\_now} = \text{performance.timeOrigin} + \text{performance.now}()$.
    - Client stamps $\text{client\_epoch\_deadline} = \text{epoch\_now}_{\text{client}} + (\text{time\_limit\_ms} \mathbin{??} 60000)$.
    - Worker checks $\text{remaining\_ms} = \text{client\_epoch\_deadline} - \text{epoch\_now}_{\text{worker}}$ at dispatch; if $\le 0$, immediately returns `incomplete` (`Queue timeout before dispatch`).
-   - Cooperative cancellation: Worker message listener handles cancel messages out-of-band (bypassing `dispatchChain`), and worker yields to the event loop (`setTimeout(resolve, 0)`) between sub-solves.
+   - Strict Expiry Guards: Before starting every sub-operation and after the event-loop yield, if $\text{remaining\_ms} \le 0$, the stage is not launched and the solver halts immediately, preserving any verified incumbent as `feasible` or proof as `optimal`. Only when $\text{remaining\_ms} > 0$ strictly is the native allowance clamped: $\max(0.001, \text{remaining\_ms} / 1000)$.
+   - Out-of-band cancellation: Worker message listener handles cancel messages out-of-band (bypassing `dispatchChain`), and worker yields to the event loop (`setTimeout(resolve, 0)`) between sub-solves.
    - Hard cancellation: Client calls `worker.terminate()`, immediately settles pending promises with `CancellationError`, and recreates the worker. Verified build snapshots published prior to termination survive.
 2. **Objective Function, Scaling & Shared Units**:
    - $fE = \text{ergo} \times 10$, $fR = \text{recoilMod} \times 1000$, $fP = \text{price}$.
    - Weighted score: $\frac{e}{10} fE - r fR - \frac{p}{1000} fP$.
-   - Augmented Tchebycheff score: normalized coordinates against fixed ideal and nadir reference points with augmentation coefficient $0.01$.
+   - Augmented Tchebycheff score: normalized coordinates against fixed ideal and nadir reference points subtracting directional deviations:
+     $$\text{score} = 0.01 \cdot (c_e fE - c_r fR - c_p fP) - \max(0, \max_{a \in \text{ActiveAxes}} d_a)$$
    - Bounds, values, and tolerances are expressed strictly in these shared units.
-3. **Physical Certification Prerequisites & Model Optimality**:
-   - `physical_certificate: 'certified_optimal'` requires:
-     1. Request-level optimality: spatial tree certified (global upper bound $\le$ global lower bound + tolerance).
+3. **Physical Certification Prerequisites & Infeasibility Gates**:
+   - `physical_certificate: 'certified_optimal'` and `'certified_infeasible'` require:
+     1. Request-level optimality/infeasibility: spatial tree certified.
      2. Exact placement (`precision_resolved: 'precise'`).
-     3. Clean validation (`validateBuild` errors = 0).
+     3. Clean validation (`validateBuild` errors = 0 for optimal).
      4. Domain & objective equivalence: conditional on satisfying Issue #36 equivalence gates.
    - Fast mode yields `model_qualification: 'approximate'` and `physical_certificate: 'approximate_optimal'`. Fast infeasibility proves only model infeasibility and cannot prove domain impossibility.
 4. **Unified Proof State & Interruption Transition Matrix**:
@@ -50,7 +52,8 @@ We establish eight core principles governing status, metadata, deadlines, and co
    - Cancelled with $V \ge 1 \to \text{'partial'}$; cancelled with $V=0 \to \text{'invalid'}$.
 7. **MOA Witness Tracking & Outward Rounding Contract**:
    - Initial seed solve preserves any verified build witness as achievable `hi` even if interrupted.
-   - Binary search advances $\text{lo} = \text{mid}$ if and only if sub-solve returns proved `infeasible` on the precise model. Unresolved sub-solves halt search without advancing $\text{lo}$.
+   - If no finite, mathematically justified $\text{lo}$ exists after obtaining witness $\text{hi}$, bisection does not start; returns `status: 'witnessed'`, `floor: hi`, `proved_lower_bound: null`.
+   - When a finite $\text{lo}$ exists, binary search advances $\text{lo} = \text{mid}$ if and only if sub-solve returns proved `infeasible` on the precise model (under Issue #36 equivalence).
    - `proved` requires $\text{hi} - \text{lo} \le 0.02$ AND proved $\text{lo}$; otherwise `witnessed`.
    - UI display requires an outward-safe cap (`display_floor`), with the exact numerical rounding contract and proof delegated to Issue #34.
    - Witness build carries full instance manifest and configuration scope.
@@ -61,5 +64,5 @@ We establish eight core principles governing status, metadata, deadlines, and co
 ## Consequences & Downstream Contracts
 
 - **Issue #34 (Numerical Authority)**: Formulate the exact conservative outward rounding rule/proof for MOA floors.
-- **Issue #36 (Oracles & Validation)**: Establish the domain and objective equivalence proof gates required for physical certification.
+- **Issue #36 (Oracles & Validation)**: Establish the domain and objective equivalence proof gates required for physical certification and physical infeasibility.
 - **Issue #37 (Telemetry & Benchmarks)**: Ensure worker telemetry records epoch timestamps, queue latency, and stage timings.
