@@ -22,7 +22,7 @@ A build export and validation structure (`slot_pairs`) where each connection exp
 
 ### Physical Certificate
 The explicit level of authoritative proof provided by a solve response:
-- `certified_optimal`: Solved on the precise placement model with certified optimality (gap $\le$ tolerance) and clean physical validation.
+- `certified_optimal`: Solved on the precise placement model with certified optimality (gap $\le$ tolerance), clean physical validation, and conditional on the domain/objective equivalence gates established in Issue #36.
 - `approximate_optimal`: Optimal under relaxed binary model assumptions, certified only for the approximate model.
 - `feasible`: A verified physical build exists, but optimality is unproven in either model.
 - `certified_infeasible`: Mathematically or physically impossible within the domain, certified strictly on the precise model.
@@ -35,13 +35,23 @@ The explicit classification of solver baseline: `exact` (solved on the exact pla
 The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'` on the precise model. Unresolved outcomes (timeouts, limits, errors, or Fast-model infeasibility) must never advance an infeasible bound.
 
 ### Single Request Deadline Clock
-A unified request-level deadline clock normalized across browser contexts using global monotonic epoch milliseconds ($\text{epoch} = \text{performance.timeOrigin} + \text{performance.now}()$). Enforces queue-aware expiration before worker dispatch, propagates remaining time to sub-operations, bypasses the dispatch chain for out-of-band cancellation, and yields to the event loop between sub-solves.
+A unified request-level deadline clock normalized across browser contexts using global monotonic epoch milliseconds ($\text{epoch} = \text{performance.timeOrigin} + \text{performance.now}()$, defaulting to 60,000 ms if omitted). Enforces queue-aware expiration before worker dispatch, propagates remaining time to sub-operations, bypasses the dispatch chain for out-of-band cancellation, and yields to the event loop between sub-solves.
+
+### Objective Axes & Shared Scaling
+The linear objective coordinate system defined in `lpBuilder.ts` and `trueErgo.ts`:
+- `ERGO_SCALE = 10` ($fE = \text{ergonomics/TED} \times 10$)
+- `SCALE = 1000` ($fR = \text{summed recoil modifier} \times 1000$)
+- $fP = \text{objective purchase cost in rubles}$
+All objective values, bounds, and tolerances are expressed strictly in these shared units.
 
 ### Global Spatial Upper Bound
 The objective upper bound across the entire spatial branch-and-bound search tree, aggregated as $\max(\text{incumbent.objective}, \max_{k \in \text{OpenNodes}} \text{node}_k.\text{upper\_bound})$, yielding $+\infty$ if any open region is unbounded. Never replaced by the bound of a single closed node.
 
-### MOA Witness & Outward Rounding
-An achievable weapon build verified by physical checks that establishes an upper bound on achievable MOA (`hi`). UI slider consumption requires an outward-safe cap (`display_floor`), with the exact numerical rounding contract and proof delegated to Issue #34.
+### Witness Build
+A complete physical weapon build record backing an achieved MOA value (`hi`), carrying an instance-qualified attachment manifest, occurrence-aware `ItemDetail[]`, and configuration scope for independent verification.
+
+### Outward Ceiling Rounding
+Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable, with numerical proof delegated to Issue #34.
 
 ### Curve Status
 The classification of a Pareto frontier sweep response (`ExploreResponse`):
