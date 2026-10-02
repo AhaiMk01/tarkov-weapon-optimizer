@@ -20,26 +20,34 @@ A physical interference constraint (`conflicting_slot_ids`) where installing an 
 ### Instance Tree Manifest
 A build export and validation structure (`slot_pairs`) where each connection explicitly identifies `{ parentInstanceId, slotId, childInstanceId, itemId }`. Maintains a strict 1-to-1 bijection where each selected `ItemDetail` record carries a unique `instanceId` referenced exactly once as a manifest `childInstanceId`.
 
+### Physical Certificate
+The explicit level of authoritative proof provided by a solve response:
+- `certified_optimal`: Solved on the precise placement model with certified optimality (gap $\le$ tolerance) and clean physical validation.
+- `approximate_optimal`: Optimal under relaxed binary model assumptions, certified only for the approximate model.
+- `feasible`: A verified physical build exists, but optimality is unproven in either model.
+- `certified_infeasible`: Mathematically or physically impossible within the domain, certified strictly on the precise model.
+- `none`: No verified physical build exists.
+
 ### Model Qualification
 The explicit classification of solver baseline: `exact` (solved on the exact placement model with physical instance variables) versus `approximate` (solved on the relaxed binary fast model). Fast mode can report `optimal` only with `model_qualification: 'approximate'`, while mathematical optimality certification requires `exact` and `precision_resolved: 'precise'`.
 
 ### Strict Infeasibility Gating
-The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'`. Unresolved outcomes (timeouts, limits, errors) must never advance an infeasible bound.
+The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'` on the precise model. Unresolved outcomes (timeouts, limits, errors, or Fast-model infeasibility) must never advance an infeasible bound.
 
 ### Single Request Deadline Clock
-A unified request-level deadline clock stamped at client request creation ($\text{deadline\_ms} = \text{created\_at} + \text{time\_limit\_ms}$). Enforces queue-aware expiration before dispatch and propagates remaining time to all sub-operations (preparation, ideal endpoints, spatial nodes, Explore sweeps), paired with event-loop yielding between sub-solves for cooperative cancellation.
+A unified request-level deadline clock normalized across browser contexts using global monotonic epoch milliseconds ($\text{epoch} = \text{performance.timeOrigin} + \text{performance.now}()$). Enforces queue-aware expiration before worker dispatch, propagates remaining time to sub-operations, bypasses the dispatch chain for out-of-band cancellation, and yields to the event loop between sub-solves.
 
 ### Global Spatial Upper Bound
 The objective upper bound across the entire spatial branch-and-bound search tree, aggregated as $\max(\text{incumbent.objective}, \max_{k \in \text{OpenNodes}} \text{node}_k.\text{upper\_bound})$, yielding $+\infty$ if any open region is unbounded. Never replaced by the bound of a single closed node.
 
-### Outward Ceiling Rounding
-Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable.
+### MOA Witness & Outward Rounding
+An achievable weapon build verified by physical checks that establishes an upper bound on achievable MOA (`hi`). UI slider consumption requires an outward-safe cap (`display_floor`), with the exact numerical rounding contract and proof delegated to Issue #34.
 
 ### Curve Status
-The three-state classification of a Pareto frontier sweep response (`ExploreResponse`):
+The classification of a Pareto frontier sweep response (`ExploreResponse`):
 - `complete`: All $N$ requested points terminated with certified outcomes (all verified builds, or a proved mix of verified builds and proved-infeasible points).
 - `partial`: Usable sweep where at least one point yielded a verified build, but others timed out, errored, or were cancelled.
-- `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible).
+- `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible on the precise model).
 - `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
 
 ### Containing Preset
