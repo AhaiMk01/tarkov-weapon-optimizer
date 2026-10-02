@@ -42,7 +42,7 @@ The linear objective coordinate system defined in `lpBuilder.ts` and `trueErgo.t
 - `ERGO_SCALE = 10` ($fE = \text{ergonomics/TED} \times 10$)
 - `SCALE = 1000` ($fR = \text{summed recoil modifier} \times 1000$)
 - $fP = \text{objective purchase cost in rubles}$
-- Augmented Tchebycheff subtracts directional deviations: $d_E = c_e (z_E - fE)$, $d_R = c_r (fR - z_R)$, $d_P = c_p (fP - z_P)$.
+- Augmented Tchebycheff: $\text{score} = 0.01 \cdot (c_e fE - c_r fR - c_p fP) - \text{maxDeviation}$, where $\text{maxDeviation} = \max_{a \in \text{active}} d_a$ (or 0 if empty), without outer zero clamp, preserving directional bonuses and handling all-zero weights without NaN.
 All objective values, bounds, and tolerances are expressed strictly in these shared units.
 
 ### Global Spatial Upper Bound

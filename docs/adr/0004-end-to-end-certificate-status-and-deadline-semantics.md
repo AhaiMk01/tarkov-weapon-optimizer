@@ -1,11 +1,11 @@
 # ADR 0004: End-to-End Certificate, Status and Deadline Semantics
 
 ## Status
-Proposed (Refs #35). Canonical Resolution v3 2026-10-02.
+Proposed (Refs #35). Canonical Resolution v4 2026-10-02.
 
 ## Context
 The solver serves diverse consumers: direct solve, worker messages, Optimize UI, Explore, Gunsmith, MOA-floor search, and automated benchmark classification. Audits and review findings revealed key semantic requirements:
-1. **Source Objective Scaling & Directional Deviations**: `ERGO_SCALE = 10` and `SCALE = 1000` define $fE$ and $fR$. Augmented Tchebycheff scoring in `trueErgo.ts` subtracts directional deviations $d_E = c_e (z_E - fE)$, $d_R = c_r (fR - z_R)$, $d_P = c_p (fP - z_P)$, providing directional bonuses when exceeding ideal targets rather than absolute penalties.
+1. **Source Objective Scaling & Directional Deviations**: `ERGO_SCALE = 10` and `SCALE = 1000` define $fE$ and $fR$. Augmented Tchebycheff scoring in `trueErgo.ts` subtracts directional deviations without an outer zero-clamp, providing directional bonuses when exceeding ideal targets rather than absolute penalties, with `sum = e + r + p || 1` preventing NaN on all-zero weights.
 2. **Domain Equivalence Prerequisites on Infeasibility & Optimality**: Physical certification of optimality and infeasibility requires request-level optimality, exact placement, clean validation, AND preservation of the authoritative domain under Issue #36 equivalence gates.
 3. **Cross-Context Clock Skew & Pre-Stage Guards**: Web Window and Web Worker have different `performance.timeOrigin` baselines, requiring normalization to monotonic epoch time, out-of-band cancel dispatch, and strict $\text{remaining\_ms} \le 0$ guards before every stage and after cancellation yields.
 4. **MOA Lower Bounds & Instance Witnesses**: Initial lower bound must be certified or remain unproved; bisection must not start with $\text{lo} = \text{null}$; witness builds must carry full instance manifests; and outward rounding proofs are delegated to Issue #34.
@@ -25,8 +25,11 @@ We establish eight core principles governing status, metadata, deadlines, and co
 2. **Objective Function, Scaling & Shared Units**:
    - $fE = \text{ergo} \times 10$, $fR = \text{recoilMod} \times 1000$, $fP = \text{price}$.
    - Weighted score: $\frac{e}{10} fE - r fR - \frac{p}{1000} fP$.
-   - Augmented Tchebycheff score: normalized coordinates against fixed ideal and nadir reference points subtracting directional deviations:
-     $$\text{score} = 0.01 \cdot (c_e fE - c_r fR - c_p fP) - \max(0, \max_{a \in \text{ActiveAxes}} d_a)$$
+   - Augmented Tchebycheff score: normalized coordinates against fixed ideal and nadir reference points subtracting directional deviations without outer zero-clamp:
+     $$\text{sum} = (e + r + p) \mathbin{\Vert} 1$$
+     $$c_e = \frac{e}{\text{sum} \cdot \max(z_E - nad_E, 1)}, \quad c_r = \frac{r}{\text{sum} \cdot \max(nad_R - z_R, 1)}, \quad c_p = \frac{p}{\text{sum} \cdot \max(nad_P - z_P, 1)}$$
+     $$\text{maxDeviation} = \begin{cases} \max_{a \in \text{ActiveAxes}} d_a & \text{if } \text{ActiveAxes is non-empty} \\ 0 & \text{if } \text{ActiveAxes is empty} \end{cases}$$
+     $$\text{score} = 0.01 \cdot (c_e fE - c_r fR - c_p fP) - \text{maxDeviation}$$
    - Bounds, values, and tolerances are expressed strictly in these shared units.
 3. **Physical Certification Prerequisites & Infeasibility Gates**:
    - `physical_certificate: 'certified_optimal'` and `'certified_infeasible'` require:
