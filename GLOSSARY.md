@@ -20,6 +20,21 @@ A physical interference constraint (`conflicting_slot_ids`) where installing an 
 ### Instance Tree Manifest
 A build export and validation structure (`slot_pairs`) where each connection explicitly identifies `{ parentInstanceId, slotId, childInstanceId, itemId }`. Maintains a strict 1-to-1 bijection where each selected `ItemDetail` record carries a unique `instanceId` referenced exactly once as a manifest `childInstanceId`.
 
+### Model Qualification
+The explicit classification of solver baseline: `exact` (solved on the exact placement model with physical instance variables) versus `approximate` (solved on the relaxed binary fast model). Fast mode can report `optimal` only with `model_qualification: 'approximate'`, while mathematical optimality certification requires `exact` and `precision_resolved: 'precise'`.
+
+### Strict Infeasibility Gating
+The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'`. Unresolved outcomes (timeouts, limits, errors) must never advance an infeasible bound.
+
+### Single Request Deadline Clock
+A unified request-level deadline clock ($	ext{deadline} = 	ext{now} + 	ext{time\_limit\_ms}$) established at worker message receipt and propagated to all sub-operations (preparation, ideal endpoints, spatial nodes, Explore sweeps) to strictly prevent multi-step time runaway.
+
+### Curve Status
+The three-state classification of a Pareto frontier sweep response (`ExploreResponse`):
+- `complete`: All $N$ requested points were successfully evaluated and yielded verified builds.
+- `partial`: At least one point yielded a verified build, but others timed out or failed.
+- `invalid`: Zero verified builds were produced within the request deadline.
+
 ### Containing Preset
 A pre-assembled weapon configuration sold by traders that includes a receiver and pre-attached components with integer counts $q_{b,i} \in \mathbb{Z}_{\ge 0}$. When selected as the base, included components are acquired at zero marginal cost. A containing preset provides free components but never forces a preset purchase when a component can be legally supplied via standalone purchase or owned stash inventory.
 
