@@ -61,6 +61,20 @@ The classification of a Pareto frontier sweep response (`ExploreResponse`):
 - `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible on the precise model under Issue #36 equivalence).
 - `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
 
+### Time-to-Trusted-Certificate
+The total elapsed wall-clock latency from public request creation until an independent physical build check validates with zero errors (`validateBuild` errors = 0) and physical optimality is certified (`physical_certificate === 'certified_optimal'`). Distinct from raw solver exit time; evaluates to `null` if uncertified.
+
+### 5-Element Cache State Vector
+A structured vector explicitly declaring the caching state of benchmark runs:
+`[worker: fresh | reused, data: cold | warm, wasm: cold | warm, prep: cold | warm, endpoint: cold | hit | miss]`
+Replaces ambiguous boolean "warm" flags to ensure comparable execution arms.
+
+### Alternating Paired Protocol
+A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical deadlines, and runner watchdogs terminate and recreate workers immediately upon timeout to prevent background execution leakage.
+
+### Emitted vs. Native Metric Provenance
+The explicit distinction between dimensions directly countable from the emitted CPLEX model (`rows`, `columns`, `nonzeros`, `integer_variables`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`) which are labeled `UNAVAILABLE` in the shipped WASM wrapper.
+
 ### Containing Preset
 A pre-assembled weapon configuration sold by traders that includes a receiver and pre-attached components with integer counts $q_{b,i} \in \mathbb{Z}_{\ge 0}$. When selected as the base, included components are acquired at zero marginal cost. A containing preset provides free components but never forces a preset purchase when a component can be legally supplied via standalone purchase or owned stash inventory.
 
