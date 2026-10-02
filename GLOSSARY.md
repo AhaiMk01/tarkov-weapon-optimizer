@@ -64,14 +64,20 @@ The classification of a Pareto frontier sweep response (`ExploreResponse`):
 ### Statistical Acceptance Protocol
 A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
 - **Gate 1 (Hard Fail)**: Any physical validation failure (`validateBuild` errors > 0) or Issue #36 oracle/domain violation $\implies$ `FAIL`.
-- **Gate 2 (Hard Fail)**: Any on-time certification or completion rate drop, tail regression ($> 1.05 \times$ baseline), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
-- **Gate 3 (Pass)**: Zero correctness failures, rate and tail non-regression hold, both-success pairs count $N_{\text{both}} \ge 5$, and 95% bootstrap CI upper bound on paired latency ratio is strictly $< 0.95$ ($\delta = 0.05$ practical speedup) $\implies$ `PASS`.
-- **Gate 4 (Inconclusive)**: All other outcomes (rates match or improve, but speedup is unproven or CI spans across 1.0) $\implies$ `INCONCLUSIVE`.
+- **Gate 2 (Hard Fail)**: Any primary on-time success rate drop (physical optimum, proved infeasibility, or sweep completion), tail regression ($> 1.05 \times$ baseline), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
+- **Gate 3 (Pass)**: Zero correctness failures, rate and tail non-regression hold, both-success pairs count $N_{\text{both}} \ge 5$, and 95% bootstrap CI is non-degenerate with upper bound strictly $< 0.95$ ($\delta = 0.05$ practical speedup) $\implies$ `PASS`.
+- **Gate 4 (Inconclusive)**: All other outcomes (speedup unproven, zero variance, or CI spans across 1.0) $\implies$ `INCONCLUSIVE`.
+
+### Case-Specific Success Rates
+The primary rate metric evaluated over all planned attempts $N_{\text{planned}}$:
+- Feasible optimization cases: `physical_optimum_rate` (on-time `certified_optimal`).
+- Infeasible cases: `proved_infeasible_rate` (on-time `certified_infeasible` under #36 equivalence).
+- Explore sweep cases: `completed_sweep_rate` (on-time `curve_status === 'complete'`). Typed as `null` with reason for non-Explore cases.
 
 ### Disjoint Timing Trace Invariant
-The accounting invariant partitioning total caller wall-clock time into non-overlapping spans plus an explicit unclassified residual:
-$T_{\text{client\_elapsed}} = t_{\text{client\_queue}} + t_{\text{worker\_lifecycle}} + t_{\text{prep}} + t_{\text{lp\_build}} + t_{\text{highs\_wall}} + t_{\text{decode}} + t_{\text{return\_transport}} + t_{\text{unclassified\_residual}}$.
-`time_to_trusted_cert_ms` encompasses caller entry through runner-side independent validation.
+The accounting invariant partitioning total caller wall-clock time into non-overlapping spans with a signed discrepancy:
+$\Delta_{\text{trace}} = T_{\text{client\_elapsed}} - \sum_{k} t_{\text{phase\_}k}$.
+If $\Delta_{\text{trace}} < -1.0\text{ ms}$, the trace is flagged `overlapping_spans` and rejected. Otherwise, positive $\Delta_{\text{trace}}$ is recorded as `unclassified_residual_ms`.
 
 ### Versioned Request Identity
 A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter of an optimization or explore request across core problem definition, physical limits, objective weights and reference points, inventory multisets, and algorithm configuration, bound to the full 64-character SHA-256 digest of `snapshot.json` (`219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c`).
@@ -79,16 +85,16 @@ A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter
 ### 5-Element Cache State Vector
 A structured vector explicitly declaring the caching state of benchmark runs:
 `[worker: fresh | reused, data: cold | warm, wasm: cold | warm, prep: cold | warm, endpoint: cold | hit | miss | n/a]`
-Replaces ambiguous boolean "warm" flags to ensure comparable execution arms.
+Replaces ambiguous boolean "warm" flags with reproducible manifest recipes and watchdog recovery.
 
 ### Alternating Paired Protocol
 A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical budgets, and runner watchdogs terminate and recreate workers immediately upon timeout to prevent background execution leakage.
 
 ### Emission-Time Model Counters
-Direct measurement of model dimensions (`matrix_rows`, `matrix_cols`, `matrix_nonzeros`, `discrete_variables`) incremented at statement emission time within `lpBuilder.ts` (excluding bounds and objective rows), eliminating reparsing overhead on the solve path.
+Direct measurement of model dimensions (`matrix_rows`, `matrix_cols`, `model_total_variables`, `matrix_nonzeros`, `discrete_variables`) incremented at statement emission time within `lpBuilder.ts` (excluding bounds and objective rows), eliminating reparsing overhead on the solve path.
 
 ### Emitted vs. Native Metric Provenance
-The explicit distinction between dimensions directly countable from the emitted CPLEX model (`provenance: 'emitted_lp'`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`) which are labeled `UNAVAILABLE` (`null`, `reason: 'unsupported_by_shipped_wasm'`) in the shipped WASM wrapper.
+The explicit distinction between dimensions directly countable from the emitted CPLEX model (`provenance: 'emitted_lp'`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`, `presolved_integer_variables`, `native_relative_gap`) which are labeled `UNAVAILABLE` (`null`, `reason: 'unsupported_by_shipped_wasm'`) in the shipped WASM wrapper.
 
 ### Time-to-Trusted-Certificate
 The total elapsed wall-clock latency from public request creation until an independent physical build check validates with zero errors (`validateBuild` errors = 0) and physical optimality is certified (`physical_certificate === 'certified_optimal'`). Distinct from raw solver exit time; evaluates to `null` if uncertified.
