@@ -64,9 +64,10 @@ The classification of a Pareto frontier sweep response (`ExploreResponse`):
 ### Statistical Acceptance Protocol
 A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
 - **Gate 1 (Hard Fail)**: Any physical validation failure (`validateBuild` errors > 0) or Issue #36 oracle/domain violation $\implies$ `FAIL`.
-- **Gate 2 (Hard Fail)**: Any primary on-time success rate drop (physical optimum, proved infeasibility, or sweep completion), tail regression ($> 1.05 \times$ baseline), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
+- **Gate 2 (Hard Fail)**: Any primary on-time success rate drop (physical optimum, proved infeasibility, or sweep completion), tail regression (candidate P95 $> 1.05 \times$ baseline P95), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
 - **Gate 3 (Pass)**: Zero correctness failures, rate and tail non-regression hold, both-success pairs count $N_{\text{both}} \ge 5$, and 95% bootstrap CI is non-degenerate with upper bound strictly $< 0.95$ ($\delta = 0.05$ practical speedup) $\implies$ `PASS`.
 - **Gate 4 (Inconclusive)**: All other outcomes (speedup unproven, zero variance, or CI spans across 1.0) $\implies$ `INCONCLUSIVE`.
+Cross-case adoption requires Gate 1 and Gate 2 to pass across all cases, and Gate 3 on every declared primary case.
 
 ### Case-Specific Success Rates
 The primary rate metric evaluated over all planned attempts $N_{\text{planned}}$:
@@ -84,11 +85,11 @@ A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter
 
 ### 5-Element Cache State Vector
 A structured vector explicitly declaring the caching state of benchmark runs:
-`[worker: fresh | reused, data: cold | warm, wasm: cold | warm, prep: cold | warm, endpoint: cold | hit | miss | n/a]`
-Replaces ambiguous boolean "warm" flags with reproducible manifest recipes and watchdog recovery.
+`[worker: fresh | reused, data: cold | warm, wasm: cold | warm, prep: cold | warm, endpoint_pre_state: cold | seeded | n/a]`
+Replaces ambiguous boolean "warm" flags with reproducible manifest recipes and arm-isolated watchdog recovery.
 
 ### Alternating Paired Protocol
-A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical budgets, and runner watchdogs terminate and recreate workers immediately upon timeout to prevent background execution leakage.
+A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical budgets, separate isolated worker threads per arm, and runner watchdogs terminating failing workers immediately upon timeout to prevent background execution leakage.
 
 ### Emission-Time Model Counters
 Direct measurement of model dimensions (`matrix_rows`, `matrix_cols`, `model_total_variables`, `matrix_nonzeros`, `discrete_variables`) incremented at statement emission time within `lpBuilder.ts` (excluding bounds and objective rows), eliminating reparsing overhead on the solve path.

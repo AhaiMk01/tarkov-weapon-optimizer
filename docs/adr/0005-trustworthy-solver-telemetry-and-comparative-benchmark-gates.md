@@ -1,7 +1,7 @@
 # ADR 0005: Trustworthy Solver Telemetry and Comparative Benchmark Gates
 
 ## Status
-Proposed (Refs #37). Canonical Resolution v4 2026-10-02.
+Proposed (Refs #37). Canonical Resolution v5 2026-10-02.
 
 ## Context
 Capability research (Issue #30) and benchmark audits revealed critical gaps in how solver performance is measured, compared, and certified:
@@ -18,35 +18,37 @@ We establish six core principles governing telemetry, benchmarking, and reconsid
 
 1. **Strictly Ordered, Exhaustive Statistical Acceptance Protocol**:
    - Direction: Paired latency ratio $\text{Ratio} = \text{latency}_{\text{cand}} / \text{latency}_{\text{base}}$ ($< 1.0$ better).
-   - Resampling Unit: Paired blocks across alternating sequence ($A \to B, B \to A$), $N \ge 5$ alternating pairs per case (no optional stopping). 10,000 BCa bootstrap resamples with pinned seed (`seed = 42`).
+   - Resampling Unit: Paired blocks across alternating sequence ($A \to B, B \to A$), $N \ge 5$ alternating pairs per case (no optional stopping). 10,000 BCa bootstrap resamples with pinned Mulberry32 PRNG seed (`seed = 42`) and leave-one-paired-block-out jackknife.
    - Non-Degeneracy Requirement: Sample variance must be strictly positive; zero-variance or undefined acceleration intervals are strictly routed to Gate 4 (`INCONCLUSIVE`).
-   - Predeclared Margins: Practical speedup $\delta = 0.05$ (ratio $< 0.95$), tail regression margin $0.05$, zero rate drop tolerance.
+   - Predeclared Margins: Practical speedup $\delta = 0.05$ (ratio $< 0.95$), P95 tail regression margin $0.05$, zero rate drop tolerance.
    - Ordered Decision Rules:
      - **Gate 1 (FAIL)**: Any physical validation error (`validateBuild` errors > 0), domain drop, or Issue #36 oracle violation $\implies$ `FAIL`.
-     - **Gate 2 (FAIL)**: Any primary on-time success rate drop (physical optimum, proved infeasibility, or sweep completion), tail regression ($> 1.05 \times$ baseline), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
+     - **Gate 2 (FAIL)**: Any primary on-time success rate drop (physical optimum, proved infeasibility, or sweep completion), P95 tail regression ($> 1.05 \times$ baseline), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
      - **Gate 3 (PASS)**: Zero correctness failures, rate and tail non-regression hold, $N_{\text{both}} \ge 5$, non-degenerate bootstrap CI, and 95% bootstrap CI upper bound $< 0.95 \implies$ `PASS`.
      - **Gate 4 (INCONCLUSIVE)**: All other outcomes (speedup unproven, zero variance, or CI spans across 1.0) $\implies$ `INCONCLUSIVE`.
+   - Cross-Case Adoption: Experiment is accepted iff Gate 1 and Gate 2 pass on all $K$ cases and Gate 3 passes on every declared primary benchmark case.
 2. **Case-Specific Success Rates & Latency Endpoints**:
    - Denominator: Total planned attempts $N_{\text{planned}}$ for that case and arm.
    - Numerators:
      - Feasible optimization cases: `physical_optimum_rate` (on-time `certified_optimal`).
      - Infeasible cases: `proved_infeasible_rate` (on-time `certified_infeasible` under #36 equivalence).
      - Explore cases: `completed_sweep_rate` (on-time `curve_status === 'complete'`); strictly `null` with reason for non-Explore cases.
-   - Latency ratio endpoint: strictly on-time both-success pairs. Late diagnostic certificates excluded.
-3. **Versioned Canonical Semantic Request Identity**:
+   - Latency ratio endpoint: strictly on-time both-success pairs ($\text{client\_elapsed\_ms} \le \text{deadline}$). Late diagnostic certificates excluded.
+3. **Versioned Canonical Semantic Request Identity & Clean-Tree Provenance**:
    - Pinned by full 64-hex SHA-256 digest of `snapshot.json` (`219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c`).
    - Pinned by deterministic canonical JSON SHA-256 hash covering: `weapon_id`, `game_mode`, `player_level`, canonicalized `trader_levels`, flea/barter flags, `max_price`, hard physical limits, `equip_ergo_modifier`, TrueErgo/overswing/Tchebycheff flags, objective weights and reference points $(z, nad)$, canonicalized multiset `owned_items` (preserving multiplicity), `include_items`, `exclude_items`, category groups, precision mode, and Explore sweep parameters.
+   - Formal runs require a demonstrably clean working tree (`is_dirty: false`). Per-arm resolved artifact hashes recorded.
 4. **Signed Timing Trace Accounting Invariant**:
    - Total caller latency $T_{\text{client\_elapsed}}$ satisfies:
      $$T_{\text{client\_elapsed}} = t_{\text{client\_queue}} + t_{\text{worker\_lifecycle}} + t_{\text{prep}} + t_{\text{lp\_build}} + t_{\text{highs\_wall}} + t_{\text{decode}} + t_{\text{return\_transport}} + t_{\text{unclassified\_residual}}$$
    - Discrepancy $\Delta_{\text{trace}} = T_{\text{client\_elapsed}} - \sum t_k$. If $< -1.0\text{ ms}$, flagged `overlapping_spans` and rejected. Positive $\Delta_{\text{trace}}$ recorded as `unclassified_residual_ms`.
    - `time_to_trusted_cert_ms`: Caller entry through runner-side independent validation (`validateBuild` errors = 0); `null` if uncertified.
    - Independent runner `harness_verify_ms` recorded separately.
-5. **Frozen Data, 5-Element Cache State Vector & Watchdog Isolation**:
+5. **Frozen Data, 5-Element Cache State Vector & Arm-Isolated Watchdog Recovery**:
    - Pinned by dataset SHA-256; live network fallback strictly prohibited.
-   - Cache state vector: `[worker, data, wasm, prep, endpoint]`.
+   - Cache state vector: `[worker, data, wasm, prep, endpoint_pre_state]`.
    - Alternating paired execution: $A \to B, B \to A, A \to B \dots$
-   - Runner watchdog deadline: $\text{deadline} + 5000\text{ ms}$ grace. If triggered, hard terminate and recreate worker, restoring declared state before partner arm. Late certificates recorded as valid diagnostic evidence, but count as missed on-time deadlines.
+   - Runner watchdog deadline: $\text{deadline} + 5000\text{ ms}$ grace. Arm A and Arm B run on separate worker threads. If triggered on Arm A, terminate Arm A worker only; Arm B worker is unaffected.
 6. **Mathematical Model-Counting & Metric Provenance**:
    - Git source revision: 40-character Git object commit SHA (`git rev-parse HEAD`) + `is_dirty: boolean` + patch SHA-256 if dirty. Pinned by resolved worker bundle SHA-256 and WASM binary SHA-256.
    - Model dimensions counted at statement emission time in `lpBuilder.ts`:
