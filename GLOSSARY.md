@@ -62,24 +62,30 @@ The classification of a Pareto frontier sweep response (`ExploreResponse`):
 - `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
 
 ### Statistical Acceptance Protocol
-A predeclared benchmarking decision rule evaluating paired execution arms:
-- **PASS**: Zero rate regression ($\text{rate}_{\text{cand}} \ge \text{rate}_{\text{base}}$), clean validation under Issue #36 equivalence gates, and the upper bound of the 95% bootstrap confidence interval on paired latency ratio (candidate / baseline) is strictly $< (1.0 - \delta)$ with $\delta = 0.05$ (5% practical speedup).
-- **FAIL**: Any rate regression or 95% bootstrap lower bound $> 1.0$.
-- **INCONCLUSIVE**: Rates match, but the 95% bootstrap CI spans across 1.0 (unproven speedup).
+A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
+- **Gate 1 (Hard Fail)**: Any physical validation failure (`validateBuild` errors > 0) or Issue #36 oracle/domain violation $\implies$ `FAIL`.
+- **Gate 2 (Hard Fail)**: Any on-time certification or completion rate drop, tail regression ($> 1.05 \times$ baseline), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
+- **Gate 3 (Pass)**: Zero correctness failures, rate and tail non-regression hold, both-success pairs count $N_{\text{both}} \ge 5$, and 95% bootstrap CI upper bound on paired latency ratio is strictly $< 0.95$ ($\delta = 0.05$ practical speedup) $\implies$ `PASS`.
+- **Gate 4 (Inconclusive)**: All other outcomes (rates match or improve, but speedup is unproven or CI spans across 1.0) $\implies$ `INCONCLUSIVE`.
+
+### Disjoint Timing Trace Invariant
+The accounting invariant partitioning total caller wall-clock time into non-overlapping spans plus an explicit unclassified residual:
+$T_{\text{client\_elapsed}} = t_{\text{client\_queue}} + t_{\text{worker\_lifecycle}} + t_{\text{prep}} + t_{\text{lp\_build}} + t_{\text{highs\_wall}} + t_{\text{decode}} + t_{\text{return\_transport}} + t_{\text{unclassified\_residual}}$.
+`time_to_trusted_cert_ms` encompasses caller entry through runner-side independent validation.
 
 ### Versioned Request Identity
-A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter of an optimization or explore request across core problem definition, physical limits, objective weights and reference points, inventory multisets, and algorithm configuration.
+A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter of an optimization or explore request across core problem definition, physical limits, objective weights and reference points, inventory multisets, and algorithm configuration, bound to the full 64-character SHA-256 digest of `snapshot.json` (`219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c`).
 
 ### 5-Element Cache State Vector
 A structured vector explicitly declaring the caching state of benchmark runs:
-`[worker: fresh | reused, data: cold | warm, wasm: cold | warm, prep: cold | warm, endpoint: cold | hit | miss]`
+`[worker: fresh | reused, data: cold | warm, wasm: cold | warm, prep: cold | warm, endpoint: cold | hit | miss | n/a]`
 Replaces ambiguous boolean "warm" flags to ensure comparable execution arms.
 
 ### Alternating Paired Protocol
 A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical budgets, and runner watchdogs terminate and recreate workers immediately upon timeout to prevent background execution leakage.
 
 ### Emission-Time Model Counters
-Direct measurement of model dimensions (`rows`, `columns`, `nonzeros`, `integer_variables`) incremented at statement emission time within `lpBuilder.ts`, eliminating the need for unmetered reparsing on the solve path.
+Direct measurement of model dimensions (`matrix_rows`, `matrix_cols`, `matrix_nonzeros`, `discrete_variables`) incremented at statement emission time within `lpBuilder.ts` (excluding bounds and objective rows), eliminating reparsing overhead on the solve path.
 
 ### Emitted vs. Native Metric Provenance
 The explicit distinction between dimensions directly countable from the emitted CPLEX model (`provenance: 'emitted_lp'`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`) which are labeled `UNAVAILABLE` (`null`, `reason: 'unsupported_by_shipped_wasm'`) in the shipped WASM wrapper.
