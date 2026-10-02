@@ -61,8 +61,14 @@ The classification of a Pareto frontier sweep response (`ExploreResponse`):
 - `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible on the precise model under Issue #36 equivalence).
 - `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
 
-### Time-to-Trusted-Certificate
-The total elapsed wall-clock latency from public request creation until an independent physical build check validates with zero errors (`validateBuild` errors = 0) and physical optimality is certified (`physical_certificate === 'certified_optimal'`). Distinct from raw solver exit time; evaluates to `null` if uncertified.
+### Statistical Acceptance Protocol
+A predeclared benchmarking decision rule evaluating paired execution arms:
+- **PASS**: Zero rate regression ($\text{rate}_{\text{cand}} \ge \text{rate}_{\text{base}}$), clean validation under Issue #36 equivalence gates, and the upper bound of the 95% bootstrap confidence interval on paired latency ratio (candidate / baseline) is strictly $< (1.0 - \delta)$ with $\delta = 0.05$ (5% practical speedup).
+- **FAIL**: Any rate regression or 95% bootstrap lower bound $> 1.0$.
+- **INCONCLUSIVE**: Rates match, but the 95% bootstrap CI spans across 1.0 (unproven speedup).
+
+### Versioned Request Identity
+A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter of an optimization or explore request across core problem definition, physical limits, objective weights and reference points, inventory multisets, and algorithm configuration.
 
 ### 5-Element Cache State Vector
 A structured vector explicitly declaring the caching state of benchmark runs:
@@ -70,10 +76,16 @@ A structured vector explicitly declaring the caching state of benchmark runs:
 Replaces ambiguous boolean "warm" flags to ensure comparable execution arms.
 
 ### Alternating Paired Protocol
-A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical deadlines, and runner watchdogs terminate and recreate workers immediately upon timeout to prevent background execution leakage.
+A comparative benchmarking protocol where paired arms alternate execution sequence per case ($A \to B, B \to A, A \to B$) with identical budgets, and runner watchdogs terminate and recreate workers immediately upon timeout to prevent background execution leakage.
+
+### Emission-Time Model Counters
+Direct measurement of model dimensions (`rows`, `columns`, `nonzeros`, `integer_variables`) incremented at statement emission time within `lpBuilder.ts`, eliminating the need for unmetered reparsing on the solve path.
 
 ### Emitted vs. Native Metric Provenance
-The explicit distinction between dimensions directly countable from the emitted CPLEX model (`rows`, `columns`, `nonzeros`, `integer_variables`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`) which are labeled `UNAVAILABLE` in the shipped WASM wrapper.
+The explicit distinction between dimensions directly countable from the emitted CPLEX model (`provenance: 'emitted_lp'`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`) which are labeled `UNAVAILABLE` (`null`, `reason: 'unsupported_by_shipped_wasm'`) in the shipped WASM wrapper.
+
+### Time-to-Trusted-Certificate
+The total elapsed wall-clock latency from public request creation until an independent physical build check validates with zero errors (`validateBuild` errors = 0) and physical optimality is certified (`physical_certificate === 'certified_optimal'`). Distinct from raw solver exit time; evaluates to `null` if uncertified.
 
 ### Containing Preset
 A pre-assembled weapon configuration sold by traders that includes a receiver and pre-attached components with integer counts $q_{b,i} \in \mathbb{Z}_{\ge 0}$. When selected as the base, included components are acquired at zero marginal cost. A containing preset provides free components but never forces a preset purchase when a component can be legally supplied via standalone purchase or owned stash inventory.
