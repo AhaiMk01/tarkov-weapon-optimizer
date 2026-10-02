@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { validateExplorePoint } from './benchmarks/exploreValidation.ts';
+import { validateExplorePoint, validateExploreResponse } from './benchmarks/exploreValidation.ts';
+import type { ExploreResponse } from './src/api/client.ts';
 import { planReuseWork } from './benchmarks/reusePlan.ts';
 import { choiceFixture } from './test_solver_fixtures.ts';
 import type { ExplorePoint } from './src/api/client.ts';
@@ -54,4 +55,44 @@ const seq = (id: string): BenchmarkCase => ({ id, kind: 'optimize', description:
 const plan = planReuseWork([seq('sparse-explore'), seq('sparse-sweet-seq-1'), seq('dense-restricted'), seq('sparse-sweet-seq-2')]);
 assert.deepEqual(plan.map(item => item.kind === 'sequence' ? item.id : item.caseItem.id), ['sparse-explore', 'sparse-sweet-seq', 'dense-restricted']);
 
+
+// Seam 2: validateExploreResponse checks terminal curve statuses
+{
+  const goodPoint = point();
+  const incompletePoint = point({ status: 'incomplete' });
+  
+  // 1. Partial sweep with curve_status 'complete' must report error
+  const mismatchedResponse: ExploreResponse = {
+    curve_status: 'complete',
+    points: [goodPoint, incompletePoint],
+    total_solve_time_ms: 200,
+  };
+  const errors = validateExploreResponse({ weapon_id: 'gun' }, mismatchedResponse, lookup);
+  assert.ok(
+    errors.some(e => e.includes('Curve status mismatch: expected partial, received complete')),
+    `Expected curve status mismatch error, got: ${errors.join('; ')}`
+  );
+
+  // 2. Consistent partial sweep with curve_status 'partial' reports no status mismatch
+  const partialResponse: ExploreResponse = {
+    curve_status: 'partial',
+    points: [goodPoint, incompletePoint],
+    total_solve_time_ms: 200,
+  };
+  const partialErrors = validateExploreResponse({ weapon_id: 'gun' }, partialResponse, lookup);
+  assert.ok(
+    !partialErrors.some(e => e.includes('Curve status mismatch')),
+    `Consistent partial status must not report status mismatch; got: ${partialErrors.join('; ')}`
+  );
+
+  // 3. Fully verified sweep with curve_status 'complete' is clean
+  const completeResponse: ExploreResponse = {
+    curve_status: 'complete',
+    points: [goodPoint],
+    total_solve_time_ms: 100,
+  };
+  const cleanErrors = validateExploreResponse({ weapon_id: 'gun' }, completeResponse, lookup);
+  assert.deepEqual(cleanErrors, [], `Complete response should have no errors; got ${cleanErrors.join('; ')}`);
+}
+console.log('validateExploreResponse passed');
 console.log('explore point validation passed');

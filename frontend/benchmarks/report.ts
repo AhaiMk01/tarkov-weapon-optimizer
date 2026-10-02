@@ -20,7 +20,8 @@ export function classifySample(sample: Sample): SampleClassification {
   if (sample.request.kind === 'explore' || !('selected_items' in sample.response)) {
     const isExplore = sample.request.kind === 'explore' && 'points' in sample.response;
     const pointsCount = isExplore ? ((sample.response as any).points?.length ?? 0) : 0;
-    const completedCurve = isExplore && pointsCount > 0;
+    const curveStatus = isExplore ? (sample.response as any).curve_status : undefined;
+    const completedCurve = isExplore && (curveStatus != null ? curveStatus === 'complete' : pointsCount > 0);
     const validatedBuild = !!sample.validation?.checked && sample.validation.errors.length === 0;
     return {
       certified: false,
@@ -58,10 +59,13 @@ export function classifySample(sample: Sample): SampleClassification {
     };
   }
 
-  const gap = opt.upper_bound - opt.lower_bound;
-  const isFiniteGap = Number.isFinite(gap) && gap >= -1e-9;
+  const hasBounds = opt.upper_bound != null && opt.lower_bound != null;
+  const gap = hasBounds ? opt.upper_bound - opt.lower_bound : undefined;
+  const isFiniteGap = gap != null && Number.isFinite(gap) && gap >= -1e-9;
   const withinTol = isFiniteGap && gap <= opt.tolerance + 1e-9;
-  const certified = validatedBuild && withinTol && opt.termination === 'optimal';
+  const isPrecise = optRes.precision_resolved === 'precise';
+  const isPhysicalCert = optRes.physical_certificate == null || optRes.physical_certificate === 'certified_optimal';
+  const certified = validatedBuild && isPrecise && isPhysicalCert && withinTol && opt.termination === 'optimal';
 
   return {
     certified,

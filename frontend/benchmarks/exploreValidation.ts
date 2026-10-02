@@ -1,4 +1,4 @@
-import type { ExplorePoint, OptimizeRequest, OptimizeResponse } from '../src/api/client.ts';
+import type { ExplorePoint, ExploreResponse, OptimizeRequest, OptimizeResponse } from '../src/api/client.ts';
 import type { ItemLookup } from '../src/solver/types.ts';
 import { validateBuild } from './validateBuild.ts';
 
@@ -110,5 +110,57 @@ export function validateExploreCurve(request: OptimizeRequest, points: ExplorePo
       errors.push(`Point ${index} (E=${point.ergo}, R=${point.recoil_v}): ${error}`);
     }
   }
+  return errors;
+}
+
+/**
+ * Validates an aggregate ExploreResponse against ADR 0004's 7-state terminal curve matrix.
+ */
+export function validateExploreResponse(request: OptimizeRequest, response: ExploreResponse, lookup: ItemLookup): string[] {
+  const errors: string[] = [];
+  const points = response.points || [];
+  let verifiedCount = 0;
+  let infeasibleCount = 0;
+  let unresolvedCount = 0;
+  let errorCount = 0;
+
+  for (let index = 0; index < points.length; index++) {
+    const pt = points[index];
+    if (pt.status === 'infeasible') {
+      infeasibleCount++;
+    } else if (pt.status === 'error') {
+      errorCount++;
+    } else if (pt.status === 'incomplete') {
+      unresolvedCount++;
+    } else {
+      const pointErrors = validateExplorePoint(request, pt, lookup);
+      if (pointErrors.length === 0 && (pt.status === 'optimal' || pt.status === 'feasible')) {
+        verifiedCount++;
+      } else {
+        unresolvedCount++;
+        for (const err of pointErrors) {
+          errors.push(`Point ${index} (E=${pt.ergo}, R=${pt.recoil_v}): ${err}`);
+        }
+      }
+    }
+  }
+
+  let expectedStatus: 'complete' | 'partial' | 'infeasible' | 'invalid';
+  if (verifiedCount === points.length && points.length > 0) {
+    expectedStatus = 'complete';
+  } else if (verifiedCount >= 1 && infeasibleCount >= 1 && unresolvedCount === 0 && errorCount === 0) {
+    expectedStatus = 'complete';
+  } else if (verifiedCount >= 1 && (unresolvedCount >= 1 || errorCount >= 1)) {
+    expectedStatus = 'partial';
+  } else if (verifiedCount === 0 && infeasibleCount === points.length && points.length > 0) {
+    expectedStatus = 'infeasible';
+  } else {
+    expectedStatus = 'invalid';
+  }
+
+  if (response.curve_status && response.curve_status !== expectedStatus) {
+    errors.push(`Curve status mismatch: expected ${expectedStatus}, received ${response.curve_status}`);
+  }
+
   return errors;
 }
