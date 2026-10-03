@@ -20,6 +20,17 @@ A physical interference constraint (`conflicting_slot_ids`) where installing an 
 ### Instance Tree Manifest
 A build export and validation structure (`slot_pairs`) where each connection explicitly identifies `{ parentInstanceId, slotId, childInstanceId, itemId }`. Maintains a strict 1-to-1 bijection where each selected `ItemDetail` record carries a unique `instanceId` referenced exactly once as a manifest `childInstanceId`.
 
+### Weapon MOA Semantics
+The in-game accuracy formula:
+$$\text{MOA} = \text{effectiveCOI} \times \left(1 - \frac{\sum_{i} \text{accuracy\_modifier}_i}{100}\right) \times \frac{100}{2.9089}$$
+at 100% full weapon and barrel durability.
+
+### Barrel Replacement COI
+The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Empirically confirmed by the M4A1 14.5" barrel discriminator ($0.053 \times (100 / 2.9089) = 1.82\text{ MOA}$, matching the in-game inspection screen and Official Wiki, refuting the additive hypothesis of $2.17\text{ MOA}$).
+
+### Radian-to-MOA Conversion Factor
+The physical conversion factor $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256248\dots$, representing the arc in centimeters of 1 Minute of Angle at a 100-meter target distance. Retires the empirical constant $34.3$.
+
 ### Physical Certificate
 The explicit level of authoritative proof provided by a solve response:
 - `certified_optimal`: Solved on the precise placement model with certified optimality (gap $\le$ tolerance), clean physical validation, and conditional on the domain/objective equivalence gates established in Issue #36.
@@ -55,11 +66,11 @@ A complete physical weapon build record backing an achieved MOA value (`hi`), ca
 Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable, with numerical proof delegated to Issue #34.
 
 ### Curve Status
-The 7-row classification of a Pareto frontier sweep response (`ExploreResponse`) established in ADR 0004:
-- `complete`: All $N$ requested points terminated with certified outcomes (all verified builds $V=N$, or a proved mix of verified builds and proved-infeasible points $V \ge 1, I \ge 1, U=0, E=0$).
-- `partial`: Usable sweep where at least one point yielded a verified build ($V \ge 1$), but others timed out, errored, or were cancelled ($U \ge 1 \lor E \ge 1$).
-- `infeasible`: Entire requested range is proved infeasible ($I=N$ on the precise model under Issue #36 equivalence).
-- `invalid`: Zero verified builds produced ($V=0$) due to timeout, error, or early cancellation.
+The classification of a Pareto frontier sweep response (`ExploreResponse`):
+- `complete`: All $N$ requested points terminated with certified outcomes (all verified builds, or a proved mix of verified builds and proved-infeasible points).
+- `partial`: Usable sweep where at least one point yielded a verified build, but others timed out, errored, or were cancelled.
+- `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible on the precise model under Issue #36 equivalence).
+- `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
 
 ### Statistical Acceptance Protocol
 A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
