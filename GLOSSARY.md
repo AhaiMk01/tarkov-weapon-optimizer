@@ -55,17 +55,19 @@ The objective upper bound across the entire spatial branch-and-bound search tree
 A complete physical weapon build record backing an achieved MOA value (`hi`), carrying an instance-qualified attachment manifest, occurrence-aware `ItemDetail[]`, and configuration scope for independent verification. Bisection requires a finite, mathematically justified lower bound $\text{lo}$ before proceeding.
 
 ### Outward Ceiling Rounding
-Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable, with numerical proof delegated to Issue #34.
+The outward-safe floor function `outwardSafeCeil(hi, decimals)` guaranteeing that $\text{display\_floor} \ge hi$ across IEEE 754 floating-point multiplication, string serialization, and UI request re-parsing. Overcomes binary64 downward roundoff (such as $0.043000000000000003 \times 1000 = 43.0$), ensuring that setting the UI cap to the displayed floor never rejects the witness build.
 
 ### Signed-Accuracy Big-M Bound
-The exact Big-M row $\frac{c_b}{100} A(x) - M_b x_b \ge c_b - L - M_b$ (where $c_b = \text{coi}_b \cdot K, L = \text{maxMOA}$) with $M_b = \max(0, \text{MOA}_b^{\max} - L)$ and $\text{MOA}_b^{\max} = c_b (1 - A_{\min} / 100)$. $A_{\min} = \sum_{s \in \text{Slots}} \min(0, \min_{i \in \text{Allowed}(s)} \text{acc}_i)$ is derived by summing worst-case negative accuracy modifiers across reachable physical slot instances, preserving multi-copy placement. Enforces $\text{MOA}_b \le L$ when $x_b = 1$ and remains mathematically non-binding when $x_b = 0$.
+The exact Big-M row $\frac{c_b}{100} A(x) - M_b x_b \ge c_b - L - M_b$ (where $c_b = \text{coi}_b \cdot K, L = \text{maxMOA}$) with $M_b = \max(0, \text{MOA}_b^{\max} - L)$ and $\text{MOA}_b^{\max} = c_b (1 - A_{\min} / 100)$, paired with nonconstant fallback row $\frac{c_{\text{base}}}{100} A(x) + M_{\text{fb}} \sum_{b} x_b \ge c_{\text{base}} - L$. $A_{\min} = \sum_{s \in \text{Slots}} \min(0, \min_{i \in \text{Allowed}(s)} \text{acc}_i)$ is derived by summing worst-case negative accuracy modifiers across reachable physical slot instances, preserving multi-copy placement.
 
 ### Ergonomics Clamp Specialization
-The 4-way dynamic specialization of raw ergonomics clamping based on provable structural DAG bounds $[rawLo, rawHi]$:
-- $rawLo \ge 0 \land rawHi \le 1000$: Identity linear equality (0 binary variables, 0 Big-M rows).
-- $rawLo \ge 0 \land rawHi > 1000$: One-sided upper saturation clamp (1 binary variable, 3 Big-M rows).
-- $rawLo < 0 \land rawHi \le 1000$: One-sided lower floor clamp (1 binary variable, 3 Big-M rows).
-- $rawLo < 0 \land rawHi > 1000$: Full 3-regime piecewise clamp (3 binary variables, 8 Big-M rows).
+The dynamic specialization of raw ergonomics clamping based on unclipped structural bounds $[rawLo, rawHi]$:
+- $rawHi \le 0$: $t = 0$ (0 binary vars, 0 Big-M rows).
+- $rawLo \ge 1000$: $t = 1000$ (0 binary vars, 0 Big-M rows).
+- $rawLo \ge 0 \land rawHi \le 1000$: $t - r = 0$ (0 binary vars, 0 Big-M rows).
+- $0 \le rawLo \le 1000 < rawHi$: Upper saturation clamp with $t \le r$, $t \ge r - (rawHi - 1000)z$, $t \ge 1000 - (1000 - rawLo)(1 - z)$ (1 binary var, 3 rows).
+- $rawLo < 0 \le rawHi \le 1000$: Lower floor clamp with $t \ge r$, $t \le r + (-rawLo)z$, $t \le rawHi(1 - z)$ (1 binary var, 3 rows).
+- $rawLo < 0 \land rawHi > 1000$: Full 3-regime piecewise clamp with $M = \max(|rawLo|, |rawHi|, 1000) + 1000$ (3 binary vars, 8 Big-M rows).
 
 ### Second-Clamp Elimination
 The mathematical reduction establishing that when equipment ergonomics modifiers are non-positive ($factor = \max(0, 1 + \text{equipErgoModifier}) \le 1.0$), the product $factor \cdot \text{capped\_ergo}$ is strictly bounded in $[0, 1000]$. The second clamp is 100% mathematically redundant and replaced by a direct linear equality (`effective_ergo - gear_ergo = 0`), eliminating 3 binary variables and 8 Big-M rows.
@@ -74,7 +76,7 @@ The mathematical reduction establishing that when equipment ergonomics modifiers
 The search tree invariant requiring any initial weight interval spanning $W = 3\text{ kg}$ to be split at the root node into $[W_{\min}, 3]$ (where weight penalty $q(W) \equiv 0$) and $[3, W_{\max}]$ (where $q(W)$ is strictly concave), with node weight intervals $[W_1, W_2]$ enforced as hard LP bounds on `total_weight`. Guarantees that interval secants are valid under-estimators of $q(W)$ and valid upper bounds on TED.
 
 ### Outward Boundary Safety Pad
-An outward numerical safety pad $\epsilon_{\text{pad}} = 10^{-7}$ applied to LP inequality bounds relative to `VALIDATION_EPSILON = 1e-6` ($\text{LHS} \ge \text{RHS} - 10^{-7}$) as a continuous formulation relaxation. Does not prove feasible set equivalence or zero validation errors; post-solve validation against the unrelaxed original model in `validateBuild` remains mandatory.
+An outward numerical safety pad $\epsilon_{\text{pad}} = 10^{-7}$ in native row units applied to LP inequality bounds relative to `VALIDATION_EPSILON = 1e-6` ($\text{LHS} \ge \text{RHS} - 10^{-7}$) as a continuous formulation relaxation. Does not prove feasible set equivalence or zero validation errors; post-solve validation against the unrelaxed original model in `validateBuild` remains mandatory.
 
 ### Bound Provenance
 The explicit tracking of bound derivation sources: distinguishing tight physical domain extrema tagged `provenance: 'structural_dag'` (used in search queues and bisection) from padded Big-M formulation constants (restricted strictly to LP constraint coefficients), validated by the standing invalidation conventions (ADR 0001 / Issue #22).
