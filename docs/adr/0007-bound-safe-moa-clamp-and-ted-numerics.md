@@ -1,7 +1,7 @@
 # ADR 0007: Bound-Safe MOA, Clamp and TED Numerics
 
 ## Status
-Proposed (Refs #34). Canonical Resolution v3 2026-10-03.
+Proposed (Refs #34). Canonical Resolution v4 2026-10-03.
 
 ## Context
 Auditing of `lpBuilder.ts`, `trueErgo.ts`, and spatial branch-and-bound search revealed numerical failure modes and unnecessary complexity:
@@ -17,28 +17,30 @@ Auditing of `lpBuilder.ts`, `trueErgo.ts`, and spatial branch-and-bound search r
 
 We establish six core numerical contracts:
 
-1. **Correct Big-M Replacement Barrel & Nonconstant Fallback Formulations**:
-   - For replacement barrel $b$ with $c_b = \text{coi}_b \cdot K$ and selector $x_b \in \{0, 1\}$:
+1. **MOA Formulation, Correct Big-M & Edge-Path Coverage**:
+   - For replacement barrel $b$ with $\text{coi}_b > 0$, define $c_b = \text{coi}_b \cdot K$ ($K = 100 / 2.9089$).
+   - Row coefficients are unscaled: $\frac{c_b}{100}$ and RHS $c_b - L$ (no double-K multiplication):
      $$\frac{c_b}{100} A(x) - M_b x_b \ge c_b - L - M_b$$
-     *(equivalently $-\frac{c_b}{100} A(x) + M_b x_b \le M_b - (c_b - L)$)*.
-   - When $x_b = 1$, enforces $\text{MOA}_b \le L$.
-   - When $x_b = 0$, non-binding for all feasible builds when $M_b = \max(0, \text{MOA}_b^{\max} - L)$, where $\text{MOA}_b^{\max} = c_b (1 - A_{\min} / 100)$.
-   - Nonconstant Fallback Row: When replacement barrels exist, a build selecting no positive-COI barrel falls back to intrinsic $c_{\text{base}} = \text{baseCOI} \cdot K$:
-     $$\frac{c_{\text{base}}}{100} A(x) + M_{\text{fb}} \sum_{b} x_b \ge c_{\text{base}} - L$$
-     where $M_{\text{fb}} = \max(0, \text{MOA}_{\text{fallback}}^{\max} - L)$.
-2. **Occurrence-Counted Negative-Accuracy Lower Bound ($A_{\min}$)**:
+   - Non-binding when $x_b = 0$ with $M_b = \max(0, \text{MOA}_b^{\max} - L)$, where $\text{MOA}_b^{\max} = c_b (1 - A_{\min} / 100)$.
+   - Nonconstant Intrinsic Fallback Rows:
+     - When no positive replacement barrels exist: emit unconditional $\frac{c_{\text{base}}}{100} A(x) \ge c_{\text{base}} - L$.
+     - When positive replacement barrels exist: emit $\frac{c_{\text{base}}}{100} A(x) + M_{\text{fb}} \sum_{b} x_b \ge c_{\text{base}} - L$, omitted if a positive barrel is required by the rooted conditional occupancy graph.
+   - Nonpositive/missing COI barrels fall back to intrinsic $c_{\text{base}}$.
+2. **Conservative Occurrence-Counted Negative-Accuracy Lower Bound ($A_{\min}$)**:
    - Sum worst-case negative accuracy modifiers across reachable **physical slot instances**:
      $$A_{\min} = \sum_{s \in \text{Slots}_{\text{reachable}}} \min\left(0, \min_{i \in \text{Allowed}(s)} \text{acc}_i\right)$$
-   - Guarantees valid bounds under multi-copy placement without banning duplicate parts.
-3. **Constant-Only Modular Presolve with Intrinsic Fallback**:
-   - Impossibility Predicate: A weapon under constant-only MOA is declared `model_infeasible` in presolve iff:
-     $$(\forall b \in \text{Eligible Replacement Barrels}: C_b > L) \land (\text{fallback is physically impossible} \lor C_{\text{fallback}} > L)$$
+   - Defined as a provably valid conservative lower bound on installed accuracy (and $\text{MOA}_b^{\max}$ as a conservative upper bound on dispersion), preserving multi-copy placement without claiming an attainable supremum.
+3. **Constant-Only Modular Presolve with Graph-Based Impossibility**:
+   - Impossibility Predicate: A weapon under constant accuracy is provably incapable of meeting $\text{maxMOA}$ if:
+     $$(\forall b \in \text{Eligible Positive Barrels}: C_b > L) \land (\text{fallback is physically impossible} \lor C_{\text{fallback}} > L)$$
+     where $\text{Eligible}$ means physically feasible complete alternatives under rooted conditional occupancy and locks.
+   - Fallback is physically impossible iff every valid physical build rooted from the weapon is required by slot hierarchy and locks to select a positive-COI barrel.
    - Barrel elimination ($x_b = 0$) propagates conditional required child slot rules.
-4. **Full IEEE 754 `toString()` Formatting, Row Scaling & Incumbent Retention**:
-   - Format all LP numbers with `n.toString()`. Fixed truncation (`.toFixed(6)`) and precision-capped `toPrecision(15)` are prohibited.
-   - Outward boundary safety pad $\epsilon_{\text{pad}} = 10^{-7}$ in native row units (Ergo $\times 10$, Recoil $\times 1000$, MOA unscaled) serves solely as a continuous relaxation buffer.
-   - Independent post-solve validation (`validateBuild`) against the unrelaxed original non-linear model with `VALIDATION_EPSILON = 1e-6` is the sole authoritative proof gate.
-   - Prior verified incumbents are strictly retained upon later candidate validation failure.
+4. **Derived Row-Wise Continuous Allowance & Dual-Model Relaxation Policy**:
+   - Total floating-point evaluation deficit across any row on the admitted physical domain is bounded by $\delta_{\text{float}} \le 1.3 \times 10^{-13}$ in row units.
+   - Row-wise continuous allowance $\epsilon_{\text{pad}} = 10^{-7}$ in native row units (Ergo $\times 10$, Recoil $\times 1000$, MOA unscaled) provably dominates $\delta_{\text{float}}$, guaranteeing that the represented LP in HiGHS is a strict mathematical outer relaxation of the physical model.
+   - Dual bounds provide valid upper bounds on the true objective; if a provable outer relaxation cannot be constructed, spatial proof is withheld.
+   - Post-solve validation (`validateBuild`) against the unrelaxed original non-linear model with `VALIDATION_EPSILON = 1e-6` is the sole authoritative proof gate for discrete candidate feasibility. Prior verified incumbents are strictly retained upon later candidate validation failure.
 5. **Exact Ergonomics Clamp Formulations & Second-Clamp Elimination**:
    - Specialize continuous `capped_ergo` ($t$) from unclipped structural bounds $[rawLo, rawHi]$ and `raw_ergo` ($r$):
      - Wholly below-zero ($rawHi \le 0$): $t = 0$ (**0 binary vars, 0 Big-M rows**).
@@ -53,7 +55,8 @@ We establish six core numerical contracts:
    - Initial weight intervals spanning $W = 3\text{ kg}$ must be split at root into $[W_{\min}, 3]$ and $[3, W_{\max}]$.
    - Every candidate build is re-scored with exact non-linear formulas before updating the incumbent.
 7. **Delegated Outward-Safe Floor / Display Rounding Contract**:
-   - `outwardSafeCeil(hi, decimals)` guarantees $\text{display\_floor} \ge hi$ through floating arithmetic, string serialization, and UI re-parsing, eliminating binary64 downward deficits.
+   - `outwardSafeCeil(hi, decimals)` evaluated on the bounded representation domain ($0 \le hi \le 9 \times 10^{12}\text{ MOA}$), guaranteeing $\text{display\_floor} \ge hi$ across IEEE 754 multiplication, string serialization, and UI re-parsing.
+   - Enforces strict postcondition `parsed >= hi` and withholds rounding (returning `null`) on unsupported representation states or overflow, preserving raw witness $hi$.
    - Evaluated under the provisional software model without claiming game-physics authority.
 
 ## Consequences & Downstream Handoff
