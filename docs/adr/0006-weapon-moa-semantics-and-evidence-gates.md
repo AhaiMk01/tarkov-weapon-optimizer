@@ -1,7 +1,7 @@
 # ADR 0006: Weapon MOA Semantics and Evidence Gates
 
 ## Status
-Proposed (Refs #41). Canonical Resolution v5 2026-10-03.
+Proposed (Refs #41). Canonical Resolution v6 2026-10-03.
 
 ## Context
 Upstream research (Issue #29) identified a fundamental implementation discrepancy between third-party API code and the consumer optimizer:
@@ -23,7 +23,7 @@ We establish five core principles governing weapon MOA authority, certification 
      - *Model Infeasible*: Receives `status: 'incomplete'`, `reason: 'Provisional MOA model infeasible'`, and `physical_certificate: 'none'`. Fenced from claiming `certified_infeasible`.
      - *Validation Failure*: Receives `status: 'incomplete'`, `physical_certificate: 'none'`.
    - **Model-Relative MOA-Floor Outcomes**:
-     `computeMOAFloor` outcomes under the provisional model are strictly model-relative (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Model infeasibility must never advance an authoritative physical lower bound.
+     `computeMOAFloor` outcomes under the provisional model are strictly model-relative (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Inherits full ADR 0004 safeguards: requires a verified instance witness, a finite mathematically justified lower bound $\text{lo}$, non-null bisection gate, and $\text{hi} - \text{lo} \le 0.02\text{ MOA}$ for `model_proved`. Model infeasibility must never advance an authoritative physical lower bound.
    - Requests without MOA constraints are completely unfenced and may achieve `certified_optimal`.
 2. **Empirical Evidence & Baseline Replacement Discrimination**:
    - Tested against the stock Colt M4A1 in-game:
@@ -43,7 +43,7 @@ We establish five core principles governing weapon MOA authority, certification 
      - Q2 (M4A1 $+16\%$ cumulative acc): Linear predicts $0.8663 \implies \mathbf{0.87\text{ MOA}}$ vs Divisor $0.8891 \implies \mathbf{0.89\text{ MOA}}$ vs Multiplicative $0.8750 \implies \mathbf{0.87\text{ MOA}}$.
      - Q3 (Mosin Rifle $+5\%/-5\%$ mods): Linear and Divisor both predict $1.3063 \implies \mathbf{1.31\text{ MOA}}$ vs Multiplicative $1.3031 \implies \mathbf{1.30\text{ MOA}}$.
      - Q4 (AK-74N fixed-barrel fallback): Unmodified $1.96\text{ MOA}$; with PBS-4 ($-3\%$) $2.02\text{ MOA}$.
-   - *Display-Bin Mapping Rule*: Two formulas are observationally separated iff their prediction intervals map to disjoint rounding bins $[x - 0.005, x + 0.005)$. On 2-decimal displays, Linear ($0.866$) and Multiplicative ($0.875$) both map to $0.87$. Matching a display bin provides consistency evidence, but universal physical certification requires first-party client decompilation.
+   - *Display-Bin Mapping Rule & Provisional Formatting*: In-game rounding is defined strictly as an unverified provisional half-up convention pending client attestation. Two formulas are observationally separated iff their prediction intervals map to disjoint rounding bins. On 2-decimal displays, Linear ($0.866$) and Multiplicative ($0.875$) both map to $0.87$. Matching a display bin provides consistency evidence, but universal physical certification requires first-party client decompilation.
 4. **Physical Arc Geometry vs. Software Comparison Envelope**:
    - Circular arc: $S = 10000\text{ cm} \times \frac{\pi}{180 \times 60} = 2.908882086657216\text{ cm}$.
    - Tangent displacement: $D = 10000\text{ cm} \times \tan(\frac{\pi}{180 \times 60}) = 2.908882168703159\text{ cm}$.

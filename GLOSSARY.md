@@ -29,7 +29,7 @@ The explicit level of authoritative proof provided by a solve response:
 - `none`: No verified physical build exists.
 
 ### Model-Relative MOA Floor
-MOA-floor search outcomes evaluated strictly within the provisional software model (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Model infeasibility must never advance an authoritative physical lower bound.
+MOA-floor search outcomes evaluated strictly within the provisional software model (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Inherits full ADR 0004 safeguards: requires a verified instance witness, a finite mathematically justified lower bound $\text{lo}$, non-null bisection gate, and $\text{hi} - \text{lo} \le 0.02\text{ MOA}$ for `model_proved`. Model infeasibility must never advance an authoritative physical lower bound.
 
 ### Model Qualification
 The explicit classification of solver baseline: `exact` (solved on the exact placement model with physical instance variables) versus `approximate` (solved on the relaxed binary fast model). Fast mode reports `optimal` or `feasible` with `model_qualification: 'approximate'`, while mathematical optimality certification requires `exact` and `precision_resolved: 'precise'`.
@@ -73,7 +73,7 @@ evaluated at 100% full weapon and barrel durability.
 The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Supported on baseline by the M4A1 14.5" barrel discriminator ($0.053 \times 34.377 = 1.82\text{ MOA}$ matching in-game inspection and Official Wiki, vs additive $2.17\text{ MOA}$).
 
 ### Display-Bin Mapping Rule
-The empirical observation principle where a test case discriminates between formula families if and only if their prediction intervals map to disjoint rounding bins $[x - 0.005, x + 0.005)$. On standard 2-decimal displays, Linear ($0.866$) and Multiplicative Compound ($0.875$) both map to the $0.87$ bin; matching a display bin constitutes consistency evidence, while universal physical certification requires first-party client decompilation.
+The empirical observation principle where a test case discriminates between formula families if and only if their prediction intervals map to disjoint rounding bins. Half-up rounding $[x - 0.005, x + 0.005)$ is an unverified provisional display convention pending client attestation. On standard 2-decimal displays, Linear ($0.866$) and Multiplicative Compound ($0.875$) both map to the $0.87$ bin; matching a display bin constitutes consistency evidence, while universal physical certification requires first-party client decompilation.
 
 ### Four-Quadrant MOA Calibration Gate
 The empirical evidence protocol across candidate formula families (Linear Subtractive, Divisor, Multiplicative Compound). Recognizes display rounding limits and requires client decompilation or high-divergence measurements exceeding display rounding intervals.
