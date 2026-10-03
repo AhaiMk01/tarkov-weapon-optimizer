@@ -21,15 +21,22 @@ A physical interference constraint (`conflicting_slot_ids`) where installing an 
 A build export and validation structure (`slot_pairs`) where each connection explicitly identifies `{ parentInstanceId, slotId, childInstanceId, itemId }`. Maintains a strict 1-to-1 bijection where each selected `ItemDetail` record carries a unique `instanceId` referenced exactly once as a manifest `childInstanceId`.
 
 ### Weapon MOA Semantics
-The in-game accuracy formula:
+The in-game accuracy formula under `moa_contract_scope: 'calibrated_consumer_baseline'`:
 $$\text{MOA} = \text{effectiveCOI} \times \left(1 - \frac{\sum_{i} \text{accuracy\_modifier}_i}{100}\right) \times \frac{100}{2.9089}$$
-at 100% full weapon and barrel durability.
+evaluated at 100% full weapon and barrel durability.
 
 ### Barrel Replacement COI
-The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Empirically confirmed by the M4A1 14.5" barrel discriminator ($0.053 \times (100 / 2.9089) = 1.82\text{ MOA}$, matching the in-game inspection screen and Official Wiki, refuting the additive hypothesis of $2.17\text{ MOA}$).
+The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Supported on baseline by the M4A1 14.5" barrel discriminator ($0.053 \times 34.377 = 1.82\text{ MOA}$ matching in-game inspection and Official Wiki, vs additive $2.17\text{ MOA}$).
+
+### Four-Quadrant MOA Calibration Gate
+The empirical evidence protocol required to certify universal physical accuracy:
+- Q1: Zero-mod barrel replacement (M4A1 14.5" barrel)
+- Q2: Positive accuracy modifier (16" Hanson barrel with $+7\%$ acc)
+- Q3: Negative accuracy modifier (suppressors with $-3\%$ or $-5\%$ acc)
+- Q4: Fixed-barrel fallback (receiver intrinsic COI on SKS, AK-74M, Mosin)
 
 ### Radian-to-MOA Conversion Factor
-The physical conversion factor $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256248\dots$, representing the arc in centimeters of 1 Minute of Angle at a 100-meter target distance. Retires the empirical constant $34.3$.
+The normative decimal model convention $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256007\dots$, representing the arc in centimeters of 1 Minute of Angle at 100 meters, with numerical uncertainty intervals delegated to Issue #34.
 
 ### Physical Certificate
 The explicit level of authoritative proof provided by a solve response:
@@ -89,7 +96,7 @@ The primary rate metric evaluated over all planned attempts $N_{\text{planned}}$
 ### Disjoint Timing Trace Invariant
 The accounting invariant partitioning total caller wall-clock time into non-overlapping spans with a signed discrepancy:
 $\Delta_{\text{trace}} = T_{\text{client\_elapsed}} - \sum_{k} t_{\text{phase\_}k}$.
-If $\Delta_{\text{trace}} < -1.0\text{ ms}$, the trace is flagged `overlapping_spans` and rejected. Otherwise, positive $\Delta_{\text{trace}}$ is recorded as `unclassified_residual_ms`.
+If $\Delta_{\text{trace}} < -1.0\text{ ms}$, the trace is flagged `overlapping_spans` and rejected. Otherwise, positive $\Delta_{\text{trace}} is recorded as `unclassified_residual_ms`.
 
 ### Versioned Request Identity
 A deterministic canonical JSON SHA-256 hash uniquely identifying every parameter of an optimization or explore request across core problem definition, physical limits, objective weights and reference points, inventory multisets, and algorithm configuration, bound to explicit contract versions (ADR-0002, ADR-0003, ADR-0004, ADR-0005) and the full 64-character SHA-256 digest of `snapshot.json` (`219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c`).
