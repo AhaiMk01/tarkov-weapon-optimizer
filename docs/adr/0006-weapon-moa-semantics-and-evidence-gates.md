@@ -1,7 +1,7 @@
 # ADR 0006: Weapon MOA Semantics and Evidence Gates
 
 ## Status
-Proposed (Refs #41). Canonical Resolution v4 2026-10-03.
+Proposed (Refs #41). Canonical Resolution v5 2026-10-03.
 
 ## Context
 Upstream research (Issue #29) identified a fundamental implementation discrepancy between third-party API code and the consumer optimizer:
@@ -16,11 +16,14 @@ We establish five core principles governing weapon MOA authority, certification 
 1. **Game Client Observation as Sole Authority & Proof-State Certificate Fence**:
    - In-game weapon inspection measurements and decompiled client ballistics (`EFT.Ballistics` / `Weapon`) are the sole authoritative ground truth.
    - **Certificate Fence for MOA-Dependent Solves**:
-     - *Optimal on Precise Model*: Receives `status: 'optimal'`, `model_qualification: 'exact'`, and **`physical_certificate: 'approximate_optimal'`**. Fenced from claiming `certified_optimal`.
-     - *Feasible Incumbent (Limit Reached)*: Receives `status: 'feasible'`, `model_qualification: 'exact'`, and **`physical_certificate: 'feasible'`**. A merely feasible incumbent is never promoted to `approximate_optimal`.
+     - *Optimal on Precise Model*: Receives `status: 'optimal'`, `model_qualification: 'exact'`, `moa_qualification: 'provisional_model'`, and **`physical_certificate: 'approximate_optimal'`**. Fenced from claiming `certified_optimal`.
+     - *Optimal on Fast Model*: Receives `status: 'optimal'`, `model_qualification: 'approximate'`, `moa_qualification: 'provisional_model'`, and `physical_certificate: 'approximate_optimal'`.
+     - *Feasible Incumbent (Limit Reached)*: Receives `status: 'feasible'`, `model_qualification: (precision_resolved === 'precise' ? 'exact' : 'approximate')`, `moa_qualification: 'provisional_model'`, and **`physical_certificate: 'feasible'`**. A merely feasible incumbent is never promoted to `approximate_optimal`.
      - *Limit with No Incumbent*: Receives `status: 'incomplete'`, `lower_bound: null`, and `physical_certificate: 'none'`.
      - *Model Infeasible*: Receives `status: 'incomplete'`, `reason: 'Provisional MOA model infeasible'`, and `physical_certificate: 'none'`. Fenced from claiming `certified_infeasible`.
      - *Validation Failure*: Receives `status: 'incomplete'`, `physical_certificate: 'none'`.
+   - **Model-Relative MOA-Floor Outcomes**:
+     `computeMOAFloor` outcomes under the provisional model are strictly model-relative (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Model infeasibility must never advance an authoritative physical lower bound.
    - Requests without MOA constraints are completely unfenced and may achieve `certified_optimal`.
 2. **Empirical Evidence & Baseline Replacement Discrimination**:
    - Tested against the stock Colt M4A1 in-game:
@@ -40,14 +43,16 @@ We establish five core principles governing weapon MOA authority, certification 
      - Q2 (M4A1 $+16\%$ cumulative acc): Linear predicts $0.8663 \implies \mathbf{0.87\text{ MOA}}$ vs Divisor $0.8891 \implies \mathbf{0.89\text{ MOA}}$ vs Multiplicative $0.8750 \implies \mathbf{0.87\text{ MOA}}$.
      - Q3 (Mosin Rifle $+5\%/-5\%$ mods): Linear and Divisor both predict $1.3063 \implies \mathbf{1.31\text{ MOA}}$ vs Multiplicative $1.3031 \implies \mathbf{1.30\text{ MOA}}$.
      - Q4 (AK-74N fixed-barrel fallback): Unmodified $1.96\text{ MOA}$; with PBS-4 ($-3\%$) $2.02\text{ MOA}$.
-   - *Observational Limits*: On 2-decimal in-game displays, Linear ($0.866$) and Multiplicative ($0.875$) are observationally indistinguishable on moderate modifiers. In-game inspection provides consistency evidence within rounding intervals; universal physical certification requires client decompilation or high-divergence tests.
+   - *Display-Bin Mapping Rule*: Two formulas are observationally separated iff their prediction intervals map to disjoint rounding bins $[x - 0.005, x + 0.005)$. On 2-decimal displays, Linear ($0.866$) and Multiplicative ($0.875$) both map to $0.87$. Matching a display bin provides consistency evidence, but universal physical certification requires first-party client decompilation.
 4. **Physical Arc Geometry vs. Software Comparison Envelope**:
    - Circular arc: $S = 10000\text{ cm} \times \frac{\pi}{180 \times 60} = 2.908882086657216\text{ cm}$.
    - Tangent displacement: $D = 10000\text{ cm} \times \tan(\frac{\pi}{180 \times 60}) = 2.908882168703159\text{ cm}$.
-   - $\text{MOA\_K} = 100 / 2.9089 \approx 34.377256007$ is adopted as a normative decimal model convention; $[34.3, 34.3775]$ is a historical software comparison envelope, not an established physical uncertainty bound. Durability baseline is fixed at 100% full condition.
-5. **Normative In-Game MOA Formula**:
-   $$\text{MOA} = \text{effectiveCOI} \times \left(1 - \frac{\sum_{i} \text{accuracy\_modifier}_i}{100}\right) \times \frac{100}{2.9089}$$
-   where $\text{effectiveCOI} = \text{barrelCOI} > 0 \ ?\ \text{barrelCOI} : \text{weapon.center\_of\_impact}$.
+   - $\text{MOA\_K} = 100 / 2.9089 \approx 34.377256007$ is adopted as a normative decimal model convention; $[34.3, 34.3775]$ is an arbitrary software comparison envelope. Durability baseline is fixed at 100% full condition.
+5. **Pinned Fixture Scope & Normative In-Game MOA Formula**:
+   - The provisional software model is strictly scoped to the pinned fixture digest `219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c`, with game client build correspondence explicitly labeled `unattested`.
+   - Formula:
+     $$\text{MOA} = \text{effectiveCOI} \times \left(1 - \frac{\sum_{i} \text{accuracy\_modifier}_i}{100}\right) \times \frac{100}{2.9089}$$
+     where $\text{effectiveCOI} = \text{barrelCOI} > 0 \ ?\ \text{barrelCOI} : \text{weapon.center\_of\_impact}$.
 
 ## Consequences & Downstream Contracts
 

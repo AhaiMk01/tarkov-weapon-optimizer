@@ -28,8 +28,11 @@ The explicit level of authoritative proof provided by a solve response:
 - `certified_infeasible`: Mathematically or physically impossible within the domain, certified strictly on the precise model and conditional on Issue #36 domain equivalence.
 - `none`: No verified physical build exists.
 
+### Model-Relative MOA Floor
+MOA-floor search outcomes evaluated strictly within the provisional software model (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Model infeasibility must never advance an authoritative physical lower bound.
+
 ### Model Qualification
-The explicit classification of solver baseline: `exact` (solved on the exact placement model with physical instance variables) versus `approximate` (solved on the relaxed binary fast model). Fast mode can report `optimal` only with `model_qualification: 'approximate'`, while mathematical optimality certification requires `exact` and `precision_resolved: 'precise'`.
+The explicit classification of solver baseline: `exact` (solved on the exact placement model with physical instance variables) versus `approximate` (solved on the relaxed binary fast model). Fast mode reports `optimal` or `feasible` with `model_qualification: 'approximate'`, while mathematical optimality certification requires `exact` and `precision_resolved: 'precise'`.
 
 ### Strict Infeasibility Gating
 The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'` on the precise model under Issue #36 domain equivalence. Unresolved outcomes (timeouts, limits, errors, or Fast-model infeasibility) must never advance an infeasible bound.
@@ -69,8 +72,11 @@ evaluated at 100% full weapon and barrel durability.
 ### Barrel Replacement COI
 The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Supported on baseline by the M4A1 14.5" barrel discriminator ($0.053 \times 34.377 = 1.82\text{ MOA}$ matching in-game inspection and Official Wiki, vs additive $2.17\text{ MOA}$).
 
+### Display-Bin Mapping Rule
+The empirical observation principle where a test case discriminates between formula families if and only if their prediction intervals map to disjoint rounding bins $[x - 0.005, x + 0.005)$. On standard 2-decimal displays, Linear ($0.866$) and Multiplicative Compound ($0.875$) both map to the $0.87$ bin; matching a display bin constitutes consistency evidence, while universal physical certification requires first-party client decompilation.
+
 ### Four-Quadrant MOA Calibration Gate
-The empirical evidence protocol across candidate formula families (Linear Subtractive, Divisor, Multiplicative Compound). Recognizes that within 2-decimal in-game display precision, Linear ($0.866$) and Multiplicative ($0.875$) are observationally indistinguishable on moderate modifiers. Full physical certification requires first-party client decompilation or high-divergence measurements exceeding display rounding intervals.
+The empirical evidence protocol across candidate formula families (Linear Subtractive, Divisor, Multiplicative Compound). Recognizes display rounding limits and requires client decompilation or high-divergence measurements exceeding display rounding intervals.
 
 ### Radian-to-MOA Conversion Factor
 The normative decimal model convention $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256007\dots$, representing the arc in centimeters of 1 Minute of Angle at 100 meters, with $[34.3, 34.3775]$ designated an arbitrary software comparison envelope.
