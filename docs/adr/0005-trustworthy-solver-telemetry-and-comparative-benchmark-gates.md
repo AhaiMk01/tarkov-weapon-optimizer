@@ -49,6 +49,7 @@ We establish six core principles governing telemetry, benchmarking, and reconsid
    - Cache state vector: `[worker, data, wasm, prep, endpoint_pre_state]`.
    - Alternating paired execution: $A \to B, B \to A, A \to B \dots$
    - Runner watchdog deadline: $\text{deadline} + 5000\text{ ms}$ grace. Arm A and Arm B run on separate worker threads. If triggered on Arm A, terminate Arm A worker only; Arm B worker is unaffected.
+   - Replay setup: Recreating an arm executes an explicit unmeasured warm-up prefix before the next measured attempt.
 6. **Mathematical Model-Counting & Metric Provenance**:
    - Git source revision: 40-character Git object commit SHA (`git rev-parse HEAD`) + `is_dirty: boolean` + patch SHA-256 if dirty. Pinned by resolved worker bundle SHA-256 and WASM binary SHA-256.
    - Model dimensions counted at statement emission time in `lpBuilder.ts`:
