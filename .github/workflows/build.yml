@@ -21,7 +21,7 @@ jobs:
     if: github.event.inputs.platform != 'linux' && github.event.inputs.platform != 'macos'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -96,7 +96,7 @@ jobs:
     if: github.event.inputs.platform != 'windows' && github.event.inputs.platform != 'macos'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Python
         uses: actions/setup-python@v5
@@ -171,7 +171,7 @@ jobs:
     if: github.event.inputs.platform != 'windows' && github.event.inputs.platform != 'linux'
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Setup Python
         uses: actions/setup-python@v5
