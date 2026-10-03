@@ -78,6 +78,15 @@ The search tree invariant requiring any initial weight interval spanning $W = 3\
 ### Outward Boundary Safety Pad & Objective Upper Bound Correction
 An algorithmic row construction error bound $\delta_{\text{computed}}(k)$ derived through the complete expression DAG (incorporating the three-operation $\gamma_3$ bound for $\text{MOA}^{\max} = c_b(1 - A_{\min}/100)$ and directly accommodating fractional inputs like 15.5 g mounts without integer rounding) and dynamically gated against outward continuous allowances ($\epsilon_{\text{row}}(k) \ge \delta_{\text{computed}}(k)$). Paired with node-specific downward secant shifts ($s_{\text{outward}}(W) = \tilde{s}(W) - \Delta_{\text{secant\_node}}$) and linear/scalarized objective error corrections over absolute variable domains $B_j = \max(|lower_j|, |upper_j|)$ with outward rounding $\mathbf{UB_{\text{valid}} = \text{nextUp}(UB_{\text{native}} + \Delta_{\text{obj}})}$, mathematically proving that the represented LP is a strict outer relaxation of the physical model and that its dual bound is a strict upper bound on the true physical objective.
 
+### Exact Purchase Deficit
+The normative non-negative integer quantity equality $buy_i = \max(0, \sum_{s \in \text{Slots}(i)} p_{i,s} - N_{\text{owned}}(i) - \sum_b q_{b,i} base_b)$ governing out-of-pocket wallet expenditure, objective price axes ($fP$), price reconstruction, shopping list generation, and independent build validation across all objective weightings.
+
+### Lexicographic Purchase Tie-Breaker
+A secondary objective penalty ($-10^{-7} \sum buy_i - 10^{-7} \sum base_b$) added in the LP objective to strictly eliminate phantom purchases under zero price weight ($p = 0$) or price indifference, without perturbing ergonomics/recoil Pareto tradeoffs.
+
+### Purchase Variable Reduction
+The exact substitution of $buy_i \equiv x_i$ into budget and objective rows for single-slot, unowned, non-preset mods ($q_{b,i} == 0 \land N_{\text{owned}}(i) == 0 \land \text{max\_installed}_i == 1$), and the complete presolve elimination of $buy_i$ for fully-owned ($N_{\text{owned}} \ge \text{max\_installed}$) or zero-cost items.
+
 ### Bound Provenance
 The explicit tracking of bound derivation sources: distinguishing tight physical domain extrema tagged `provenance: 'structural_dag'` (used in search queues and bisection) from padded Big-M formulation constants (restricted strictly to LP constraint coefficients), validated by the standing invalidation conventions (ADR 0001 / Issue #22).
 
@@ -157,7 +166,7 @@ A component already in the player's personal inventory (`owned_items?: string[]`
 Whether an item can be acquired standalone under the request's specific market configuration (`flea_available`, `barter_available`, `player_level`, `trader_levels`). An enabled barter at an accessible trader level constitutes an accessible standalone acquisition path.
 
 ### Out-of-Pocket Expenditure
-Actual rubles spent to acquire the base and unowned components, counting direct currency spend (trader cash and flea market) plus the established RUB-equivalent valuation of required barter items when barters are enabled. The hard budget constraint `max_price` applies strictly to out-of-pocket expenditure.
+Actual rubles spent to acquire the base and unowned components, counting direct currency spend (trader cash and flea market) plus the established RUB-equivalent valuation of required barter items when barters are enabled. Evaluates exact deficit purchases ($buy_i^*$), strictly excluding owned and preset-supplied parts from budget consumption. The hard budget constraint `max_price` applies strictly to out-of-pocket expenditure.
 
 ### Required Slot
 A slot marked as mandatory (`required: true`).
