@@ -1,7 +1,7 @@
 # ADR 0007: Bound-Safe MOA, Clamp and TED Numerics
 
 ## Status
-Proposed (Refs #34). Canonical Resolution v5 2026-10-03.
+Proposed (Refs #34). Canonical Resolution v6 2026-10-03.
 
 ## Context
 Auditing of `lpBuilder.ts`, `trueErgo.ts`, and spatial branch-and-bound search revealed numerical failure modes and unnecessary complexity:
@@ -10,7 +10,7 @@ Auditing of `lpBuilder.ts`, `trueErgo.ts`, and spatial branch-and-bound search r
 3. **Multiplicity Underestimation**: Summing reachable templates once underestimated worst-case negative accuracy on multi-copy physical slots.
 4. **Precision Loss from Truncation**: Coefficients and RHS values formatted with `.toFixed(6)` rounded fractional numbers, causing exact boundary solutions to be rejected as infeasible by HiGHS.
 5. **Redundant Binary Variables in Ergonomics Clamps**: Unconditional 3-regime clamping emitted 3 binary variables and 8 Big-M rows for `capped_ergo`, and blindly duplicated them for `effective_ergo`, even though structural bounds and non-positive equipment modifiers provably restrict values to $[0, 1000]$.
-6. **TED Secant Validity**: The weight penalty curve $q(W) = \max(0, 100 - 300/W)$ is non-convex across $W = 3\text{ kg}$. An interval crossing $3\text{ kg}$ produces secants that cut above $q(W)$, producing invalid under-estimates of penalty that corrupt spatial upper bounds. Furthermore, secants are valid under-estimators only within their local weight interval.
+6. **TED Secant Validity**: The weight penalty curve $q(W) = \max(0, 100 - 300/W)$ is non-convex across $W = 3\text{ kg}$. An interval crossing $3\text{ kg}$ produces secants that cut above $q(W)$, producing invalid under-estimates of penalty that corrupt spatial upper bounds. Furthermore, floating endpoint evaluations introduce small upward biases that can cause unshifted floating secants to exceed real penalty.
 7. **Floor Display Downward Deficit**: Naive ceiling rounding on binary64 floats suffers from multiplication roundoff ($0.043000000000000003 \times 1000 = 43.0$), causing display floor to be strictly smaller than the witness value.
 
 ## Decision
@@ -36,16 +36,18 @@ We establish six core numerical contracts:
      where $\text{Eligible}$ means physically feasible complete alternatives under rooted conditional occupancy and locks.
    - Fallback is physically impossible iff every valid physical build rooted from the weapon is required by slot hierarchy and locks to select a positive-COI barrel.
    - Barrel elimination ($x_b = 0$) propagates conditional required child slot rules.
-4. **Derived Row-Wise Continuous Error Allowances & Dual-Model Relaxation Policy**:
-   - Total floating-point evaluation deficit across any row on the admitted physical domain is derived using standard Higham backward error analysis: $\Delta_{\text{sum}} \le \gamma_{N_{\max}-1} \sum |a_i x_i|$ with $\gamma_{N-1} = \frac{(N-1) u}{1 - (N-1) u}$ ($u = 2^{-53} \approx 1.110223 \times 10^{-16}$).
-   - Row-wise continuous allowances on verified software domains:
-     - MOA rows ($N \le 200, \sum |a_i| \le 140, M \le 500$): $\delta_{\text{MOA}} \le 3.32 \times 10^{-12}\text{ MOA} \implies \epsilon_{\text{MOA}} = 10^{-7}\text{ MOA}$.
-     - Ergonomics clamp rows ($N \le 200, \sum |a_i| \le 101{,}000, M \le 12{,}000\text{ scaled units}$): $\delta_{\text{ergo}} \le 2.25 \times 10^{-9}\text{ scaled units} \implies \epsilon_{\text{ergo}} = 10^{-6}\text{ scaled units}$ ($10^{-7}\text{ raw ergo}$).
-     - Recoil rows (scaled $\times 1000$): $\epsilon_{\text{recoil}} = 10^{-6}$ scaled units.
-     - Weight rows ($W \le 30\text{ kg}$): $\epsilon_{\text{weight}} = 10^{-7}\text{ kg}$.
-   - Adding $\epsilon_{\text{row}}$ to inequality constraints ($\text{LHS} \ge \text{RHS} - \epsilon_{\text{row}}$) mathematically proves that the represented LP in HiGHS is a strict outer relaxation of the physical model.
-   - Dual bounds provide valid upper bounds on the true objective; if a provable outer relaxation cannot be constructed, spatial proof is withheld.
-   - Post-solve validation (`validateBuild`) against the unrelaxed original non-linear model with `VALIDATION_EPSILON = 1e-6` is the sole authoritative proof gate for discrete candidate feasibility. Prior verified incumbents are strictly retained upon later candidate validation failure.
+4. **Operand-Magnitude Error Propagation Across Expression DAG & Row-Specific Allowances**:
+   - Error in $M = \max(0, \text{MOA}^{\max} - L)$ is bounded by operand magnitudes $\Delta_M \le u (\text{MOA}^{\max} + L) + \Delta_{\text{MOA}^{\max}} + \Delta_L$, NOT the cancelled result $M$.
+   - Higham backward summation analysis: $\Delta_{\text{sum}} \le \gamma_{N_{\max}-1} \sum |a_i x_i|$ with $\gamma_{N-1} = \frac{(N-1) u}{1 - (N-1) u}$ ($u = 2^{-53} \approx 1.110223 \times 10^{-16}$).
+   - Derived row-specific continuous allowances on verified software domains:
+     - MOA rows ($N \le 200, \sum |a_i| \le 140, M \le 500$): $\delta_{\text{MOA}} \le 3.50 \times 10^{-12}\text{ MOA} \implies \epsilon_{\text{MOA}} = 10^{-7}\text{ MOA}$ ($\text{LHS} \ge \text{RHS} - 10^{-7}$).
+     - Ergonomics clamp rows ($N \le 200, \sum |a_i| \le 101{,}000, M \le 12{,}000\text{ scaled units}$): $\delta_{\text{ergo}} \le 2.25 \times 10^{-9}\text{ scaled units} \implies \epsilon_{\text{ergo}} = 10^{-6}\text{ scaled units}$ ($\text{LHS} \ge \text{RHS} - 10^{-6}$ for $\ge$, $\text{LHS} \le \text{RHS} + 10^{-6}$ for $\le$).
+     - Recoil rows (scaled $	imes 1000$): $\epsilon_{\text{recoil}} = 10^{-6}$ scaled units.
+     - Price rows (exact integer rubles): $\epsilon_{\text{price}} = 10^{-6}$ rubles.
+     - Weight rows (integer grams / 1000): $\epsilon_{\text{weight}} = 10^{-7}\text{ kg}$.
+   - Continuous outer relaxation mathematically guarantees that the LP dual bound is a valid upper bound on the true objective.
+   - Dynamic domain verification checks instance parameters before solving; if outside domain, spatial proof is withheld.
+   - Post-solve validation (`validateBuild`) against unrelaxed original model with `VALIDATION_EPSILON = 1e-6` is the sole check for candidate feasibility. Prior verified incumbents are strictly retained upon later candidate validation failure.
 5. **Exact Ergonomics Clamp Formulations & Second-Clamp Elimination**:
    - Specialize continuous `capped_ergo` ($t$) from unclipped structural bounds $[rawLo, rawHi]$ and `raw_ergo` ($r$):
      - Wholly below-zero ($rawHi \le 0$): $t = 0$ (**0 binary vars, 0 Big-M rows**).
@@ -55,10 +57,11 @@ We establish six core numerical contracts:
      - Lower Floor Only ($rawLo < 0 \le rawHi \le 1000$): $t \ge r$, $t \le r + (-rawLo)z$, $t \le rawHi(1 - z)$ with $z \in \{0, 1\}$ (**1 binary var, 3 linear rows**).
      - Full Disjunction ($rawLo < 0 \land rawHi > 1000$): Full 3-regime clamp with $M = \max(|rawLo|, |rawHi|, 1000) + 1000$ (**3 binary vars, 8 Big-M rows**).
    - Second Clamp Elimination: When equipment factor $factor = \max(0, 1 + \text{equipErgoModifier}) \le 1.0$, `effective_ergo` is provably contained in $[0, 1000]$. Eliminate the second clamp entirely: `effective_ergo - gear_ergo = 0` (**0 binary vars, 0 Big-M rows**).
-6. **Spatial Bounds Weight Interval Enforcement & Exact Incumbent Scoring**:
-   - Node weight intervals $[W_1, W_2]$ are enforced as hard LP bounds on `total_weight` ($W_1 \le \text{total\_weight} \le W_2$).
-   - Initial weight intervals spanning $W = 3\text{ kg}$ must be split at root into $[W_{\min}, 3]$ and $[3, W_{\max}]$.
-   - Every candidate build is re-scored with exact non-linear formulas before updating the incumbent.
+6. **Outward Lower Secant Shift & Objective Upper-Bound Proof**:
+   - Outward Lower Secant Shift: $s_{\text{outward}}(W) = \tilde{s}(W) - 10^{-9}$ on node interval $[W_1, W_2]$ with $W_1 \ge 3\text{ kg}$ dominates floating endpoint evaluation errors ($\le 10^{-13}$), guaranteeing $s_{\text{outward}}(W) \le q(W)$ for all $W \in [W_1, W_2]$.
+   - In LP objective: $\text{ergo} - s_{\text{outward}}(W) \ge \text{ergo} - q(W) = \text{TED}(W)$, proving that the LP dual bound is a strict upper bound on true TED.
+   - Enforced node weight intervals $W_1 \le \text{total\_weight} \le W_2$ in LP. 3 kg root split into $[W_{\min}, 3]$ and $[3, W_{\max}]$. Exact non-linear re-scoring of candidates before incumbent update.
+   - Proof withholding statuses: with verified incumbent $\implies$ `status: 'feasible'`, `physical_certificate: 'feasible'`, `lower_bound: incumbent.objective`, `upper_bound: global_upper_bound`; without verified incumbent $\implies$ `status: 'incomplete'`, `physical_certificate: 'none'`, `lower_bound: null`.
 7. **Precision-Dependent Bounded Rounding & Outward UI Submission Contract**:
    - `outwardSafeCeil(hi, decimals)` evaluated on precision-dependent safe representation domain $\text{MAX\_SAFE\_WITNESS}(\text{decimals}) = (\text{Number.MAX\_SAFE\_INTEGER} - 10) / 10^{\text{decimals}}$ for $\text{decimals} \in \{1, 2, 3, 4\}$.
    - Strictly validates `decimals` as integer in $\{1, 2, 3, 4\}$; withholds display rounding and returns `null` on unsupported precision, overflow, or representability failure, preserving raw witness $hi$.
