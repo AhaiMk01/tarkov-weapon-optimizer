@@ -1,7 +1,7 @@
 # ADR 0007: Bound-Safe MOA, Clamp and TED Numerics
 
 ## Status
-Proposed (Refs #34). Canonical Resolution v9 2026-10-03.
+Accepted (Refs #34). 2026-10-03.
 
 ## Context
 Auditing of `lpBuilder.ts`, `trueErgo.ts`, and spatial branch-and-bound search revealed numerical failure modes and unnecessary complexity:
@@ -36,9 +36,9 @@ We establish six core numerical contracts:
      where $\text{Eligible}$ means physically feasible complete alternatives under rooted conditional occupancy and locks.
    - Fallback is physically impossible iff every valid physical build rooted from the weapon is required by slot hierarchy and locks to select a positive-COI barrel.
    - Barrel elimination ($x_b = 0$) propagates conditional required child slot rules.
-4. **Expression-DAG Error Propagation & Algorithmic Continuous Gating**:
-   - $\text{MOA}^{\max} = c_b \cdot (1 - A_{\min}/100)$ error bound incorporates full three-operation $\gamma_3 = \frac{3u}{1-3u}$ analysis:
-     $$\Delta_{\text{MOA}^{\max}} \le \gamma_3 \cdot c_b \left(1 + \frac{|A_{\min}|}{100}\right) + \Delta_{c_b} \left(1 + \frac{|A_{\min}|}{100}\right) + \frac{c_b}{100} \Delta_{A_{\min}}$$
+4. **Full Operation-Level Error Enclosures and Row Gates**:
+   - $\text{MOA}^{\max} = c_b \cdot (1 - A_{\min}/100)$ error bound incorporates full three-operation $\gamma_3 = \frac{3u}{1-3u}$ analysis with uncertainty products:
+     $$\Delta_{\text{MOA}^{\max}} \le \gamma_3 \cdot |c_b| \left(1 + \frac{|A_{\min}|}{100}\right) + \Delta_{c_b} \left(1 + \frac{|A_{\min}|}{100}\right) + \frac{|c_b| + \Delta_{c_b}}{100} \Delta_{A_{\min}}$$
    - Error in $M = \max(0, \text{MOA}^{\max} - L)$ is bounded by operand magnitudes $\Delta_M \le u (\text{MOA}^{\max} + L) + \Delta_{\text{MOA}^{\max}} + \Delta_L$, NOT the cancelled result $M$.
    - Higham backward summation analysis: $\Delta_{\text{sum}} \le \gamma_{N_{\max}-1} \sum |a_i| B_i$ with $\gamma_{N-1} = \frac{(N-1) u}{1 - (N-1) u}$ ($u = 2^{-53} \approx 1.110223 \times 10^{-16}$) and $B_i = \max(|lower_i|, |upper_i|)$.
    - Directly accommodates fractional data inputs (such as Elcan SpecterDR plate $0.0155\text{ kg} = 15.5\text{ g}$) as exact binary64 floats without integer rounding.
