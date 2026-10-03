@@ -55,11 +55,11 @@ A complete physical weapon build record backing an achieved MOA value (`hi`), ca
 Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable, with numerical proof delegated to Issue #34.
 
 ### Curve Status
-The classification of a Pareto frontier sweep response (`ExploreResponse`):
-- `complete`: All $N$ requested points terminated with certified outcomes (all verified builds, or a proved mix of verified builds and proved-infeasible points).
-- `partial`: Usable sweep where at least one point yielded a verified build, but others timed out, errored, or were cancelled.
-- `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible on the precise model under Issue #36 equivalence).
-- `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
+The 7-row classification of a Pareto frontier sweep response (`ExploreResponse`) established in ADR 0004:
+- `complete`: All $N$ requested points terminated with certified outcomes (all verified builds $V=N$, or a proved mix of verified builds and proved-infeasible points $V \ge 1, I \ge 1, U=0, E=0$).
+- `partial`: Usable sweep where at least one point yielded a verified build ($V \ge 1$), but others timed out, errored, or were cancelled ($U \ge 1 \lor E \ge 1$).
+- `infeasible`: Entire requested range is proved infeasible ($I=N$ on the precise model under Issue #36 equivalence).
+- `invalid`: Zero verified builds produced ($V=0$) due to timeout, error, or early cancellation.
 
 ### Statistical Acceptance Protocol
 A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
