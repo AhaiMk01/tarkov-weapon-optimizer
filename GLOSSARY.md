@@ -57,6 +57,28 @@ A complete physical weapon build record backing an achieved MOA value (`hi`), ca
 ### Outward Ceiling Rounding
 Rounding an unrounded witnessed MOA float upward to the nearest thousandth ($\lceil \text{hi} \times 1000 \rceil / 1000$) for UI slider consumption, guaranteeing that setting the slider to the displayed floor is physically achievable, with numerical proof delegated to Issue #34.
 
+### Signed-Accuracy Big-M Bound
+The conservative data-derived bound $M_b = \text{coi}_b \cdot K \cdot (1 - \text{acc}_{\min} / 100)$ derived by summing all negative accuracy modifiers across reachable mods ($\text{acc}_{\min} = \sum_{i, \text{acc}_i < 0} \text{acc}_i$). Guarantees that replacement barrel constraints are mathematically non-binding for unselected barrels ($x_b = 0$) under any feasible mod combination without numerical conditioning degradation.
+
+### Ergonomics Clamp Specialization
+The 4-way dynamic specialization of raw ergonomics clamping based on provable structural DAG bounds $[rawLo, rawHi]$:
+- $rawLo \ge 0 \land rawHi \le 1000$: Identity linear equality (0 binary variables, 0 Big-M rows).
+- $rawLo \ge 0 \land rawHi > 1000$: One-sided upper saturation clamp (1 binary variable, 3 Big-M rows).
+- $rawLo < 0 \land rawHi \le 1000$: One-sided lower floor clamp (1 binary variable, 3 Big-M rows).
+- $rawLo < 0 \land rawHi > 1000$: Full 3-regime piecewise clamp (3 binary variables, 8 Big-M rows).
+
+### Second-Clamp Elimination
+The mathematical reduction establishing that when equipment ergonomics modifiers are non-positive ($factor = \max(0, 1 + \text{equipErgoModifier}) \le 1.0$), the product $factor \cdot \text{capped\_ergo}$ is strictly bounded in $[0, 1000]$. The second clamp is 100% mathematically redundant and replaced by a direct linear equality (`effective_ergo - gear_ergo = 0`), eliminating 3 binary variables and 8 Big-M rows.
+
+### 3 kg Root Split Invariant
+The search tree invariant requiring any initial weight interval spanning $W = 3\text{ kg}$ to be split at the root node into $[W_{\min}, 3]$ (where weight penalty $q(W) \equiv 0$) and $[3, W_{\max}]$ (where $q(W)$ is strictly concave). Guarantees that interval secants are valid under-estimators of $q(W)$ and valid upper bounds on TED.
+
+### Outward Boundary Safety Pad
+An outward numerical safety pad $\epsilon_{\text{pad}} = 10^{-7}$ applied to LP inequality bounds relative to `VALIDATION_EPSILON = 1e-6` ($\text{LHS} \ge \text{RHS} - 10^{-7}$), preventing false solver rejections at exact mathematical boundaries while guaranteeing clean independent validation.
+
+### Bound Provenance
+The explicit tracking of bound derivation sources: distinguishing tight physical domain extrema tagged `provenance: 'structural_dag'` (used in search queues and bisection) from padded Big-M formulation constants (restricted strictly to LP constraint coefficients).
+
 ### Curve Status
 The classification of a Pareto frontier sweep response (`ExploreResponse`):
 - `complete`: All $N$ requested points terminated with certified outcomes (all verified builds, or a proved mix of verified builds and proved-infeasible points).
