@@ -29,13 +29,13 @@ The explicit level of authoritative proof provided by a solve response:
 - `none`: No verified physical build exists.
 
 ### Independent Physical Oracle
-A brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly in exact rational arithmetic ($\mathbb{Q}$) on unpruned raw `ItemLookup` data within the versioned adopted software domain, completely decoupled from `buildLP`, `compatibilityMap`, or continuous relaxations, establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites under the accepted status and provisional MOA authority fences.
+A brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly in exact rational arithmetic ($\mathbb{Q}$) with direct IEEE binary64 input decoding on unpruned raw `ItemLookup` data within the versioned adopted software domain. Evaluates normative weighted scoring ($(e/10)fE - r \cdot fR - (p/1000)fP$) and un-clamped augmented Tchebycheff ($0.01(c_e fE - c_r fR - c_p fP) - \max(d_a)$), establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites under the accepted status and provisional MOA authority fences.
 
 ### Behavioral Regression Matrix
 The canonical 14-scenario physical edge-case suite (covering empty required routes, disconnected cycles, one item / two required slots with standalone-inaccessibility, inaccessible base fallback, zero price weight phantom spend, MOA boundaries, and fixed-build spend/score monotonicity) required to accept any solver modification.
 
 ### Model Reduction Equivalence Gates
-The 4-gate verification requirement for mathematical formulation reductions compared against a correct, versioned unreduced baseline: Gate A (Selection Projection Equivalence $\pi_{\text{sel}}(\mathcal{F}(\mathcal{M}_{\text{red}})) \equiv \pi_{\text{sel}}(\mathcal{F}(\mathcal{M}_{\text{base}}))$), Gate B (Optimum & Ties Invariance with separated fixture gaps), Gate C (Infeasibility Equivalence), and Gate D (Full 4-Gate Statistical Comparative Benchmarks).
+The 4-gate verification requirement for mathematical formulation reductions compared against a correct, versioned unreduced baseline: Gate A (Selection Projection Equivalence $\pi_{\text{sel}}(\mathcal{F}(\mathcal{M}_{\text{red}})) \equiv \pi_{\text{sel}}(\mathcal{F}(\mathcal{M}_{\text{base}}))$), Gate B (Optimum & Ties Invariance in $\mathbb{Q}$ with separated fixture gaps), Gate C (Infeasibility Equivalence), and Gate D (Full 4-Gate Statistical Comparative Benchmarks).
 
 ### Three-Tier Verification Hierarchy
 The explicit authority ordering: Tier 1 (Brute-Force Physical Oracle & Independent `validateBuild`), Tier 2 (Frontend JS / HiGHS Implementation), Tier 3 (Differential Python / CP-SAT cross-checks on reconciled sub-problems).
