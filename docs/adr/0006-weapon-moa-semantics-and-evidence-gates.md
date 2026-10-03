@@ -1,7 +1,7 @@
 # ADR 0006: Weapon MOA Semantics and Evidence Gates
 
 ## Status
-Proposed (Refs #41). Canonical Resolution v3 2026-10-03.
+Proposed (Refs #41). Canonical Resolution v4 2026-10-03.
 
 ## Context
 Upstream research (Issue #29) identified a fundamental implementation discrepancy between third-party API code and the consumer optimizer:
@@ -13,9 +13,14 @@ Upstream research (Issue #29) identified a fundamental implementation discrepanc
 
 We establish five core principles governing weapon MOA authority, certification fencing, and mathematical formulation:
 
-1. **Game Client Observation as Sole Authority & Certificate Fence**:
+1. **Game Client Observation as Sole Authority & Proof-State Certificate Fence**:
    - In-game weapon inspection measurements and decompiled client ballistics (`EFT.Ballistics` / `Weapon`) are the sole authoritative ground truth.
-   - **Certificate Fence**: Requests with active `max_moa` constraints (or MOA-floor search / Gunsmith tasks with MOA caps) operate under the provisional consumer model: they receive `model_qualification: 'exact'` (if placement is precise) but their physical certificate is strictly fenced as `physical_certificate: 'approximate_optimal'`. They are forbidden from claiming `certified_optimal` or `certified_infeasible` until the calibration gate in Section 3 is satisfied.
+   - **Certificate Fence for MOA-Dependent Solves**:
+     - *Optimal on Precise Model*: Receives `status: 'optimal'`, `model_qualification: 'exact'`, and **`physical_certificate: 'approximate_optimal'`**. Fenced from claiming `certified_optimal`.
+     - *Feasible Incumbent (Limit Reached)*: Receives `status: 'feasible'`, `model_qualification: 'exact'`, and **`physical_certificate: 'feasible'`**. A merely feasible incumbent is never promoted to `approximate_optimal`.
+     - *Limit with No Incumbent*: Receives `status: 'incomplete'`, `lower_bound: null`, and `physical_certificate: 'none'`.
+     - *Model Infeasible*: Receives `status: 'incomplete'`, `reason: 'Provisional MOA model infeasible'`, and `physical_certificate: 'none'`. Fenced from claiming `certified_infeasible`.
+     - *Validation Failure*: Receives `status: 'incomplete'`, `physical_certificate: 'none'`.
    - Requests without MOA constraints are completely unfenced and may achieve `certified_optimal`.
 2. **Empirical Evidence & Baseline Replacement Discrimination**:
    - Tested against the stock Colt M4A1 in-game:
@@ -25,17 +30,17 @@ We establish five core principles governing weapon MOA authority, certification 
      - Replacement hypothesis predicts: $0.053 \times 34.377 = 1.82\text{ MOA}$.
    - The in-game weapon inspection screen and Official Tarkov Wiki display exactly **$1.82\text{ MOA}$**, providing strong discriminating evidence supporting the **Barrel Replacement model** over additive COI for this baseline configuration.
    - A single zero-modifier sample does not prove universal platform truth or modifier scaling.
-3. **Four-Quadrant Calibration Evidence Gate Across Formula Families**:
+3. **Four-Quadrant Calibration Matrix Across Formula Families**:
    - Predeclared candidate formula families:
      - Family 1 (Linear Subtractive - Provisional): $\text{effectiveCOI} \times (1 - \sum A_i / 100) \times K$
      - Family 2 (Divisor): $\text{effectiveCOI} / (1 + \sum A_i / 100) \times K$
      - Family 3 (Multiplicative Compound): $\text{effectiveCOI} \times \prod (1 - A_i / 100) \times K$
-   - Full physical certification across all platforms requires recording in-game inspection values across the high-divergence 4-quadrant test matrix:
-     - Q1: Zero-mod barrel replacement (M4A1 14.5\" barrel $\to$ 1.82 MOA)
-     - Q2: Cumulative positive modifiers (M4A1 $+16\%$ cumulative accuracy $\to$ Linear 0.87 MOA vs Divisor 0.89 MOA)
-     - Q3: Cancelling positive/negative modifiers (Mosin Rifle $+5\%/-5\%$ mods $\to$ Linear 1.31 MOA vs Divisor 1.18 MOA)
-     - Q4: Fixed-barrel fallback (AK-74N intrinsic COI fallback $\to$ 1.96 MOA unmodified, 2.02 MOA with PBS-4)
-   - Certified if and only if predictions match verified in-game inspection values with divergence exceeding display rounding, or first-party client decompilation validates the AST.
+   - Calibration setups:
+     - Q1 (M4A1 14.5\" barrel): Replacement predicts $1.82199 \implies \mathbf{1.82\text{ MOA}}$ vs Additive $2.1658 \implies \mathbf{2.17\text{ MOA}}$.
+     - Q2 (M4A1 $+16\%$ cumulative acc): Linear predicts $0.8663 \implies \mathbf{0.87\text{ MOA}}$ vs Divisor $0.8891 \implies \mathbf{0.89\text{ MOA}}$ vs Multiplicative $0.8750 \implies \mathbf{0.87\text{ MOA}}$.
+     - Q3 (Mosin Rifle $+5\%/-5\%$ mods): Linear and Divisor both predict $1.3063 \implies \mathbf{1.31\text{ MOA}}$ vs Multiplicative $1.3031 \implies \mathbf{1.30\text{ MOA}}$.
+     - Q4 (AK-74N fixed-barrel fallback): Unmodified $1.96\text{ MOA}$; with PBS-4 ($-3\%$) $2.02\text{ MOA}$.
+   - *Observational Limits*: On 2-decimal in-game displays, Linear ($0.866$) and Multiplicative ($0.875$) are observationally indistinguishable on moderate modifiers. In-game inspection provides consistency evidence within rounding intervals; universal physical certification requires client decompilation or high-divergence tests.
 4. **Physical Arc Geometry vs. Software Comparison Envelope**:
    - Circular arc: $S = 10000\text{ cm} \times \frac{\pi}{180 \times 60} = 2.908882086657216\text{ cm}$.
    - Tangent displacement: $D = 10000\text{ cm} \times \tan(\frac{\pi}{180 \times 60}) = 2.908882168703159\text{ cm}$.

@@ -23,8 +23,8 @@ A build export and validation structure (`slot_pairs`) where each connection exp
 ### Physical Certificate
 The explicit level of authoritative proof provided by a solve response:
 - `certified_optimal`: Solved on the precise placement model with certified optimality (gap $\le$ tolerance), clean physical validation, and conditional on the domain/objective equivalence gates established in Issue #36. Strictly fenced from claiming certification on requests whose feasibility depends on unverified MOA constraints.
-- `approximate_optimal`: Optimal under relaxed binary model assumptions or unverified provisional physics (such as requests with active `max_moa` constraints under the provisional consumer model).
-- `feasible`: A verified physical build exists, but optimality is unproven in either model.
+- `approximate_optimal`: Optimal under relaxed binary model assumptions, or optimal on the precise placement model under unverified provisional physics (such as requests with active `max_moa` constraints). A merely feasible incumbent is never promoted to this status.
+- `feasible`: A verified physical build exists, but optimality is unproven in either model (e.g. time/node limit reached with an incumbent).
 - `certified_infeasible`: Mathematically or physically impossible within the domain, certified strictly on the precise model and conditional on Issue #36 domain equivalence.
 - `none`: No verified physical build exists.
 
@@ -70,14 +70,10 @@ evaluated at 100% full weapon and barrel durability.
 The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Supported on baseline by the M4A1 14.5" barrel discriminator ($0.053 \times 34.377 = 1.82\text{ MOA}$ matching in-game inspection and Official Wiki, vs additive $2.17\text{ MOA}$).
 
 ### Four-Quadrant MOA Calibration Gate
-The high-divergence empirical protocol required to certify universal physical accuracy across candidate formula families:
-- Q1: Zero-mod barrel replacement (M4A1 14.5" barrel $\to$ 1.82 MOA)
-- Q2: Cumulative positive modifiers (M4A1 $+16\%$ cumulative accuracy $\to$ Linear 0.87 MOA vs Divisor 0.89 MOA)
-- Q3: Cancelling positive/negative modifiers (Mosin Rifle $+5\%/-5\%$ mods $\to$ Linear 1.31 MOA vs Divisor 1.18 MOA)
-- Q4: Fixed-barrel fallback (AK-74N intrinsic COI fallback $\to$ 1.96 MOA unmodified, 2.02 MOA with PBS-4)
+The empirical evidence protocol across candidate formula families (Linear Subtractive, Divisor, Multiplicative Compound). Recognizes that within 2-decimal in-game display precision, Linear ($0.866$) and Multiplicative ($0.875$) are observationally indistinguishable on moderate modifiers. Full physical certification requires first-party client decompilation or high-divergence measurements exceeding display rounding intervals.
 
 ### Radian-to-MOA Conversion Factor
-The normative decimal model convention $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256007\dots$, representing the arc in centimeters of 1 Minute of Angle at 100 meters, with $[34.3, 34.3775]$ defined as a software comparison envelope.
+The normative decimal model convention $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256007\dots$, representing the arc in centimeters of 1 Minute of Angle at 100 meters, with $[34.3, 34.3775]$ designated an arbitrary software comparison envelope.
 
 ### Statistical Acceptance Protocol
 A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
