@@ -1,7 +1,7 @@
 # ADR 0007: Bound-Safe MOA, Clamp and TED Numerics
 
 ## Status
-Proposed (Refs #34). Canonical Resolution v6 2026-10-03.
+Proposed (Refs #34). Canonical Resolution v7 2026-10-03.
 
 ## Context
 Auditing of `lpBuilder.ts`, `trueErgo.ts`, and spatial branch-and-bound search revealed numerical failure modes and unnecessary complexity:
@@ -36,17 +36,14 @@ We establish six core numerical contracts:
      where $\text{Eligible}$ means physically feasible complete alternatives under rooted conditional occupancy and locks.
    - Fallback is physically impossible iff every valid physical build rooted from the weapon is required by slot hierarchy and locks to select a positive-COI barrel.
    - Barrel elimination ($x_b = 0$) propagates conditional required child slot rules.
-4. **Operand-Magnitude Error Propagation Across Expression DAG & Row-Specific Allowances**:
+4. **Expression-DAG Error Propagation & Algorithmic Continuous Gating**:
    - Error in $M = \max(0, \text{MOA}^{\max} - L)$ is bounded by operand magnitudes $\Delta_M \le u (\text{MOA}^{\max} + L) + \Delta_{\text{MOA}^{\max}} + \Delta_L$, NOT the cancelled result $M$.
-   - Higham backward summation analysis: $\Delta_{\text{sum}} \le \gamma_{N_{\max}-1} \sum |a_i x_i|$ with $\gamma_{N-1} = \frac{(N-1) u}{1 - (N-1) u}$ ($u = 2^{-53} \approx 1.110223 \times 10^{-16}$).
-   - Derived row-specific continuous allowances on verified software domains:
-     - MOA rows ($N \le 200, \sum |a_i| \le 140, M \le 500$): $\delta_{\text{MOA}} \le 3.50 \times 10^{-12}\text{ MOA} \implies \epsilon_{\text{MOA}} = 10^{-7}\text{ MOA}$ ($\text{LHS} \ge \text{RHS} - 10^{-7}$).
-     - Ergonomics clamp rows ($N \le 200, \sum |a_i| \le 101{,}000, M \le 12{,}000\text{ scaled units}$): $\delta_{\text{ergo}} \le 2.25 \times 10^{-9}\text{ scaled units} \implies \epsilon_{\text{ergo}} = 10^{-6}\text{ scaled units}$ ($\text{LHS} \ge \text{RHS} - 10^{-6}$ for $\ge$, $\text{LHS} \le \text{RHS} + 10^{-6}$ for $\le$).
-     - Recoil rows (scaled $	imes 1000$): $\epsilon_{\text{recoil}} = 10^{-6}$ scaled units.
-     - Price rows (exact integer rubles): $\epsilon_{\text{price}} = 10^{-6}$ rubles.
-     - Weight rows (integer grams / 1000): $\epsilon_{\text{weight}} = 10^{-7}\text{ kg}$.
+   - Higham backward summation analysis: $\Delta_{\text{sum}} \le \gamma_{N_{\max}-1} \sum |a_i| \max |x_i|$ with $\gamma_{N-1} = \frac{(N-1) u}{1 - (N-1) u}$ ($u = 2^{-53} \approx 1.110223 \times 10^{-16}$).
+   - Directly accommodates fractional data inputs (such as Elcan SpecterDR plate $0.0155\text{ kg} = 15.5\text{ g}$) as exact binary64 floats without integer rounding.
+   - For each emitted row $k$, computes conservative construction error $\delta_{\text{computed}}(k)$ and dynamically gates against outward allowances: $\epsilon_{\text{row}}(k) \ge \delta_{\text{computed}}(k)$.
+   - Applied directions: $\text{LHS} \ge \text{RHS} - \epsilon_{\text{row}}$ for $\ge$; $\text{LHS} \le \text{RHS} + \epsilon_{\text{row}}$ for $\le$; bounded $[-\epsilon, +\epsilon]$ for continuous equalities.
    - Continuous outer relaxation mathematically guarantees that the LP dual bound is a valid upper bound on the true objective.
-   - Dynamic domain verification checks instance parameters before solving; if outside domain, spatial proof is withheld.
+   - If on any row $\delta_{\text{computed}}(k) > \epsilon_{\text{row}}(k)$ or prerequisites fail, spatial proof is withheld (`physical_certificate: 'feasible'` with incumbent, `'none'` without).
    - Post-solve validation (`validateBuild`) against unrelaxed original model with `VALIDATION_EPSILON = 1e-6` is the sole check for candidate feasibility. Prior verified incumbents are strictly retained upon later candidate validation failure.
 5. **Exact Ergonomics Clamp Formulations & Second-Clamp Elimination**:
    - Specialize continuous `capped_ergo` ($t$) from unclipped structural bounds $[rawLo, rawHi]$ and `raw_ergo` ($r$):
@@ -57,11 +54,12 @@ We establish six core numerical contracts:
      - Lower Floor Only ($rawLo < 0 \le rawHi \le 1000$): $t \ge r$, $t \le r + (-rawLo)z$, $t \le rawHi(1 - z)$ with $z \in \{0, 1\}$ (**1 binary var, 3 linear rows**).
      - Full Disjunction ($rawLo < 0 \land rawHi > 1000$): Full 3-regime clamp with $M = \max(|rawLo|, |rawHi|, 1000) + 1000$ (**3 binary vars, 8 Big-M rows**).
    - Second Clamp Elimination: When equipment factor $factor = \max(0, 1 + \text{equipErgoModifier}) \le 1.0$, `effective_ergo` is provably contained in $[0, 1000]$. Eliminate the second clamp entirely: `effective_ergo - gear_ergo = 0` (**0 binary vars, 0 Big-M rows**).
-6. **Outward Lower Secant Shift & Objective Upper-Bound Proof**:
-   - Outward Lower Secant Shift: $s_{\text{outward}}(W) = \tilde{s}(W) - 10^{-9}$ on node interval $[W_1, W_2]$ with $W_1 \ge 3\text{ kg}$ dominates floating endpoint evaluation errors ($\le 10^{-13}$), guaranteeing $s_{\text{outward}}(W) \le q(W)$ for all $W \in [W_1, W_2]$.
-   - In LP objective: $\text{ergo} - s_{\text{outward}}(W) \ge \text{ergo} - q(W) = \text{TED}(W)$, proving that the LP dual bound is a strict upper bound on true TED.
-   - Enforced node weight intervals $W_1 \le \text{total\_weight} \le W_2$ in LP. 3 kg root split into $[W_{\min}, 3]$ and $[3, W_{\max}]$. Exact non-linear re-scoring of candidates before incumbent update.
-   - Proof withholding statuses: with verified incumbent $\implies$ `status: 'feasible'`, `physical_certificate: 'feasible'`, `lower_bound: incumbent.objective`, `upper_bound: global_upper_bound`; without verified incumbent $\implies$ `status: 'incomplete'`, `physical_certificate: 'none'`, `lower_bound: null`.
+6. **Node-Specific Secant Shift & Objective Upper-Bound Proof**:
+   - For node interval $[W_1, W_2]$ with $W_1 \ge 3\text{ kg}$, computes node-specific secant construction error bound $\delta_{\text{secant\_node}}$ (handling singleton $W_2 == W_1$ and non-singleton $W_2 > W_1$).
+   - Downward Secant Shift: $s_{\text{outward}}(W) = \tilde{s}(W) - \Delta_{\text{secant\_node}}$ guarantees $s_{\text{outward}}(W) \le q(W)$ for all $W \in [W_1, W_2]$, held strictly within enforced LP bounds $W_1 \le \text{total\_weight} \le W_2$.
+   - Linear & Scalarized Objective Correction: $\Delta_{\text{obj}} = \Delta_{\text{obj\_linear}} + \Delta_{\text{secant\_node}}$ where $\Delta_{\text{obj\_linear}} = \sum_j \Delta_{c_j} x_{j,\max} + \Delta_{\text{const}}$.
+   - Valid Upper Bound: $\mathbf{UB_{\text{valid}} = UB_{\text{native}} + \Delta_{\text{obj}}}$ proves that the LP dual bound on any node is a strict mathematical upper bound on the true physical objective over reals.
+   - Proof withholding statuses: with verified incumbent $\implies$ `status: 'feasible'`, `physical_certificate: 'feasible'`, `lower_bound: incumbent.objective`, `upper_bound: null`; without verified incumbent $\implies$ `status: 'incomplete'`, `physical_certificate: 'none'`, `lower_bound: null`.
 7. **Precision-Dependent Bounded Rounding & Outward UI Submission Contract**:
    - `outwardSafeCeil(hi, decimals)` evaluated on precision-dependent safe representation domain $\text{MAX\_SAFE\_WITNESS}(\text{decimals}) = (\text{Number.MAX\_SAFE\_INTEGER} - 10) / 10^{\text{decimals}}$ for $\text{decimals} \in \{1, 2, 3, 4\}$.
    - Strictly validates `decimals` as integer in $\{1, 2, 3, 4\}$; withholds display rounding and returns `null` on unsupported precision, overflow, or representability failure, preserving raw witness $hi$.
