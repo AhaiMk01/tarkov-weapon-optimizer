@@ -1,7 +1,7 @@
 # ADR 0012: Prepared-Model Ownership and Invalidation Boundaries
 
 ## Status
-Proposed (Refs #38). Canonical Resolution v3 2026-10-04.
+Accepted (Refs #38). 2026-10-04.
 
 ## Context
 Auditing of `solver.ts`, `lpBuilder.ts`, and `structuralBounds.ts` revealed two architectural bottlenecks:
@@ -21,13 +21,13 @@ We establish five core principles governing model preparation, direct outer boun
    - **`specializeLP(domain, options): SpecializedLP` (Tier 3)**:
      Specializes Tier 2 by appending node-specific lines: normalized objective function line, Tchebycheff active deviation rows, spatial node weight bounds ($W_1 \le \text{total\_weight} \le W_2$), interval-local outward lower secant rows ($s_{\text{outward}}(W) = \tilde{s}(W) - \Delta_{\text{secant\_node}}$), and `total_obj` line-length parser seam. Assembles final LP string in target $< 0.5\text{ ms}$.
 2. **Preservation of Three-Solve Payoff-Table Normalization (ADR 0001)**:
-   - In accordance with ADR 0001 and `solver.ts:170–187`, the solver evaluates ideal points using **three extreme payoff solves** (`[100, 0, 0]`, `[0, 100, 0]`, `[0, 0, 100]`), deriving all six $(z, nad)$ coordinates from the resulting payoff vectors.
-   - Normalized single-axis endpoint objectives evaluate single axes without double-scaling: $+1 \cdot fE$, $-1 \cdot fR$, $-1 \cdot fP$.
+   - In accordance with ADR 0001 and `solver.ts:170–187`, the solver evaluates ideal points using **three extreme payoff solves** (`weights: [100, 0, 0]`, `[0, 100, 0]`, `[0, 0, 100]`), deriving all six $(z, nad)$ coordinates from the resulting payoff vectors.
+   - Normalized single-axis endpoint objectives evaluate single axes matching weights `[100, 0, 0]`, `[0, 100, 0]`, `[0, 0, 100]`: $+10 \cdot fE$, $-100 \cdot fR$, $-0.1 \cdot fP$.
 3. **Raw Physical Bounds vs. Request-Scoped Clamping & Qualified Infeasibility**:
    - Tier 1 stores request-independent raw ergonomics bounds: `rawErgoBounds = [minRaw, maxRaw]`. Direct physical outer bounds are computed via `computeStructuralBounds(weaponId, lookup, physicalGraph)` from unpruned physical input (engineering target $< 1\text{ ms}$).
    - In Tier 2, effective ergonomics bounds evaluate the normative two-stage clamp:
      $$\text{effectiveErgo}(raw) = \min\left(100, \max\left(0, \min(100, \max(0, \text{rawErgo})) \times factor\right)\right)$$
-   - Empty clipped interval ($W_{\text{phys\_min}} > \text{max\_weight}$): Precise Mode $\implies$ certified `status: 'infeasible'`, `physical_certificate: 'certified_infeasible'`; Fast Mode $\implies$ `status: 'incomplete'`, `reason: 'Fast model infeasible'`, `physical_certificate: 'none'`; MOA-dependent $\implies$ `status: 'incomplete'`, `reason: 'Provisional MOA model infeasible'`.
+   - Empty clipped interval ($W_{\text{phys\_min}} > \text{req.max\_weight}$): Precise Mode $\implies$ certified `status: 'infeasible'`, `physical_certificate: 'certified_infeasible'`; Fast Mode $\implies$ `status: 'incomplete'`, `reason: 'Fast model infeasible'`, `physical_certificate: 'none'`; MOA-dependent $\implies$ `status: 'incomplete'`, `reason: 'Provisional MOA model infeasible'`.
 4. **Invalidation Ledgers & Endpoint Reuse Qualification**:
    - **Tier 2 Invalidation Ledger**: Tier 2 is completely invalidated if any of the following 24 parameters change:
      `data_generation_id`, `snapshot_sha`, `weapon_id`, `trader_levels`, `flea_available`, `barter_available`, `barter_exclude_dogtags`, `player_level`, `owned_items` (full validated multiset), `include_items`, `exclude_items`, `include_categories`, `exclude_categories`, `max_price`, `max_weight`, `max_recoil_v`, `max_recoil_sum`, `min_ergonomics`, `min_mag_capacity`, `min_sighting_range`, `max_moa`, `prevent_overswing`, `equip_ergo_modifier`, `use_true_ergo`, `bounds_mode`, `precise_mode`.
