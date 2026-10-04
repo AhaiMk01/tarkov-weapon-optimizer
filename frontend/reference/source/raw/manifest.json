@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "kind": "tarkov.dev JSON API raw source pin",
+  "gameMode": "regular",
+  "baseUrl": "https://json.tarkov.dev",
+  "capturedAt": "2026-10-04T18:13:11.902Z",
+  "pinScript": "frontend/reference/source/pin_raw_sources.ts",
+  "node": "v26.7.0",
+  "documents": {
+    "items": {
+      "file": "items.json",
+      "url": "https://json.tarkov.dev/regular/items",
+      "role": "adapter-input",
+      "lang": null,
+      "why": "items, presets, categories, handbook categories, flea market descriptor",
+      "fetchedAt": "2026-10-04T18:13:10.533Z",
+      "httpStatus": 200,
+      "bytes": 17234509,
+      "sha256": "9c003fcf7e1ee587847271fe2dfffad61b7e4652c742ff972393ad1aa638bf78",
+      "http": {
+        "etag": "W/\"ea8e3e4a69d5068de573452647eff3a2\"",
+        "lastModified": "Sun, 04 Oct 2026 18:10:30 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:09 GMT",
+        "contentType": "application/json"
+      }
+    },
+    "items_en": {
+      "file": "items_en.json",
+      "url": "https://json.tarkov.dev/regular/items_en",
+      "role": "adapter-input",
+      "lang": "en",
+      "why": "English translation keys for items, slots, categories",
+      "fetchedAt": "2026-10-04T18:13:11.431Z",
+      "httpStatus": 200,
+      "bytes": 1691890,
+      "sha256": "3815fb498a0aec9ffe01bf67eff8bc540d05a703fbc032872156e9a81ef81cb7",
+      "http": {
+        "etag": "W/\"ddcdb183564b7ab374616993b2b3991a\"",
+        "lastModified": "Tue, 29 Sep 2026 10:35:30 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:10 GMT",
+        "contentType": "application/json"
+      }
+    },
+    "barters": {
+      "file": "barters.json",
+      "url": "https://json.tarkov.dev/regular/barters",
+      "role": "adapter-input",
+      "lang": null,
+      "why": "barter recipes, indexed by offered item",
+      "fetchedAt": "2026-10-04T18:13:11.616Z",
+      "httpStatus": 200,
+      "bytes": 278394,
+      "sha256": "05eb72bfc9cfd8aba1af553ba2bbb977b92459e9dcd2308fc6b69f36bd16dd83",
+      "http": {
+        "etag": "W/\"211eea835bfb253a09156418b2555d36\"",
+        "lastModified": "Sun, 04 Oct 2026 16:47:06 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:10 GMT",
+        "contentType": "application/json"
+      }
+    },
+    "traders": {
+      "file": "traders.json",
+      "url": "https://json.tarkov.dev/regular/traders",
+      "role": "adapter-input",
+      "lang": null,
+      "why": "trader ids, normalized names and translation keys",
+      "fetchedAt": "2026-10-04T18:13:11.652Z",
+      "httpStatus": 200,
+      "bytes": 50675,
+      "sha256": "7114bf7175414691692c19dded5a1ae140365516c5e4c5afcde3d4d330779549",
+      "http": {
+        "etag": "W/\"1523682283de002bb5c889d5f0869daa\"",
+        "lastModified": "Sun, 04 Oct 2026 18:11:45 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:10 GMT",
+        "contentType": "application/json"
+      }
+    },
+    "traders_en": {
+      "file": "traders_en.json",
+      "url": "https://json.tarkov.dev/regular/traders_en",
+      "role": "adapter-input",
+      "lang": "en",
+      "why": "English trader names",
+      "fetchedAt": "2026-10-04T18:13:11.686Z",
+      "httpStatus": 200,
+      "bytes": 3537,
+      "sha256": "1d837a5d33dbde4b8860ba49488b3f885af8adbb13c5c52bcecd26637a6568c7",
+      "http": {
+        "etag": "W/\"928a838efe04dd5c3ffd8f4d9610c50e\"",
+        "lastModified": "Mon, 03 Aug 2026 17:11:49 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:10 GMT",
+        "contentType": "application/json"
+      }
+    },
+    "items_zh": {
+      "file": "items_zh.json",
+      "url": "https://json.tarkov.dev/regular/items_zh",
+      "role": "supplementary-translation",
+      "lang": "zh",
+      "why": "exercise the requested-language -> English -> key chain",
+      "fetchedAt": "2026-10-04T18:13:11.724Z",
+      "httpStatus": 200,
+      "bytes": 1643097,
+      "sha256": "fdf422ca95c613e149cb0a97095e3b27c20887e728b816409bba9ffd0606cd9f",
+      "http": {
+        "etag": "W/\"c3d515ae7265348df1e4844ac7581a99\"",
+        "lastModified": "Tue, 29 Sep 2026 10:35:31 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:10 GMT",
+        "contentType": "application/json"
+      }
+    },
+    "traders_zh": {
+      "file": "traders_zh.json",
+      "url": "https://json.tarkov.dev/regular/traders_zh",
+      "role": "supplementary-translation",
+      "lang": "zh",
+      "why": "exercise the trader translation fallback chain",
+      "fetchedAt": "2026-10-04T18:13:11.864Z",
+      "httpStatus": 200,
+      "bytes": 3260,
+      "sha256": "97ee70d26787648c185228822d7cbca266235a1a5e79b68c2f4db9763bdfe908",
+      "http": {
+        "etag": "W/\"47fb11b6e10c1b15652c35a72a4aa92f\"",
+        "lastModified": "Mon, 03 Aug 2026 17:11:50 GMT",
+        "serverDate": "Sun, 04 Oct 2026 18:13:11 GMT",
+        "contentType": "application/json"
+      }
+    }
+  },
+  "normalizedSnapshot": {
+    "path": "frontend/benchmarks/snapshot.json",
+    "sha256": "219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c",
+    "producedBy": "fetchAllData(en, regular) through the production JSON API adapter",
+    "relationship": "NOT byte-linked to these raw documents. The snapshot was captured at a different time (the live JSON API changes continuously) and no raw upstream capture of its source exists, so no byte-level provenance between the snapshot and this pin is claimed. Differential checks run the production adapter on THESE raw documents; checks on the snapshot use only fields the snapshot itself retains."
+  },
+  "adapterTransformationsUnderTest": [
+    "translation resolution (requested language -> English -> key)",
+    "categories chain rebuilt from categories[0]",
+    "presets/defaultPreset/containsItems/conflictingItems id dereferencing",
+    "synthesized flea offer (skipped for noFlea or absent lastLowPrice; price avg24hPrice || lastLowPrice)",
+    "trader offers from buyFromTrader",
+    "barters indexed by offered item; level = minTraderLevel"
+  ]
+}
