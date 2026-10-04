@@ -1,34 +1,61 @@
 # ADR 0013: Correctness-First Handoff and Adoption Sequence
 
 ## Status
-Proposed (Refs #40). Canonical Resolution 2026-10-04.
+Proposed (Refs #40). Revised 2026-10-04 after parent review. Not accepted. The full proposal is [issue comment 5976882470](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/40#issuecomment-5976882470), which replaces comment 5976708799.
 
 ## Context
-The decision map ([Issue #28](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/28)) resolved the authoritative physical domain (ADR 0002), precise occupancy and rootedness (ADR 0003), certificate and deadline semantics (ADR 0004), telemetry and comparative benchmarks (ADR 0005), provisional MOA authority (ADR 0006), bound-safe numerics and clamps (ADR 0007), stash inventory (ADR 0008), exact purchase deficits and reductions (ADR 0009), independent physical oracles (ADR 0010), binary placement retention (ADR 0011), and model preparation boundaries (ADR 0012). An implementation-ready cutover roadmap was required to govern execution without unverified intermediate states or backward-incompatible shims.
+The decision map ([Issue #28](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/28)) has accepted planning contracts for the physical domain, placement, certificates, benchmarks, provisional MOA, numerics, inventory, purchase, the oracle, binary placement, and preparation. Those comments remain normative in full. This ADR only sequences their implementation.
+
+The first handoff proposal adopted inventory and manifest semantics before the API, worker, and UI that read them, treated every deadline as a feasible build, treated every MOA-dependent result as `approximate_optimal`, and described unfinished proofs as already complete. This revision removes those claims. Acceptance of this plan would not complete the oracle, native, browser, or comparative proofs, and it would not authorize a production change.
 
 ## Decision
 
-We establish four core principles governing implementation sequencing, complete consumer migration, acceptance/rollback gates, and standing boundaries:
+### 1. Four stages, one public correctness cutover
 
-1. **Six-Stage Implementation-Ready Cutover Sequence**:
-   - **Stage 1 (Verification Foundation)**: Independent Physical Oracle (raw JSON parsing, exhaustive enumeration in $\mathbb{Q}$, 14 scenario families) and upgraded `validateBuild.ts` (manifest validation, exact deficits $d_i$, normative MOA $K=100/2.9089$). *(Gate: Oracle and validateBuild pass on all 14 baseline scenario families before solver edits).*
-   - **Stage 2 (Core Physical Correctness Repairs)**: Rooted instance compatibility graph, branch acyclicity ($A \notin \text{Ancestors}$), exact required-slot placement rows ($p_{i,s}$), physical slot-occupancy conflicts (`conflicting_slot_ids`), multi-copy preset supply ($q_{b,i}$), owned stash inventory ($N_{\text{owned}}$), unperturbed deficit acquisition ($u_i \ge d_i$), and hard inventory caps. *(Gate: 100% pass on all 14 Behavioral Regression Families against Tier 1 Oracle).*
-   - **Stage 3 (Bound-Safe Numerics, Proof Gating & Outward Rounding)**: Full IEEE 754 `toString()` formatting, expression-DAG error bounds ($\gamma_3$ on $\text{MOA}^{\max}$, row continuous allowances $\epsilon_{\text{row}} \ge \delta_{\text{computed}}$), outward lower secant shift ($s_{\text{outward}}$), linear objective correction ($UB_{\text{valid}} = \text{nextUp}(UB + \Delta_{\text{obj}})$), precision-dependent `outwardSafeCeil`, and offset-grid UI ceiling snapping. *(Gate: Passes all numerical boundary & exact cancellation fixtures; zero false infeasibility).*
-   - **Stage 4 (Three-Tier Model Preparation & Endpoint Reuse Seam)**: Tier 1 `preparePhysicalWeapon` & direct `computeStructuralBounds` (no unused LP), Tier 2 `prepareSubproblemDomain` & 24-parameter Invalidation Ledger, Tier 3 `specializeLP` (<0.5 ms assembly) & normalized endpoint scaling ($+10 fE, -100 fR, -0.1 fP$), and separate `endpointDomainKey` with tightened-tolerance reuse qualification. *(Gate: Zero stale filter leakage; 3-solve payoff normalization verified).*
-   - **Stage 5 (Exact Model Reductions & Statistical Benchmark Adoption)**: Clamp specialization (0 binary vars in identity regime, 1 in upper/lower), second-clamp elimination ($factor \le 1.0$), $buy_i \equiv x_i$ substitution for single-capacity unowned non-preset mods, and recoil cap collapse into $\min(bound_V, bound_{\text{sum}})$. *(Gate: Gates A, B, C mathematical equivalence proof + full 4-gate comparative benchmark pass under ADR 0005).*
-   - **Stage 6 (Public API, Web Worker, and UI Consumer Cutover)**: Exposes `owned_items?: string[]` across client schemas and Explore/MOA-floor; response manifest rendering (`price: 0`, `source: 'owned' | 'preset'`); clean cutover deleting legacy FiR/owned shortcuts and single-copy readers. *(Gate: End-to-end browser smoke test, clean build, zero TypeScript errors).*
-2. **Complete Consumer Migration & Zero-Shim Policy**:
-   - Migration executes directly across all eight affected layers (`dataService.ts`, `lpBuilder.ts`, `solver.ts`, `solver.worker.ts`, `client.ts`, UI `BuildManifest.tsx`, `validateBuild.ts`, and `benchmarks/`).
-   - Strictly prohibits intermediate compatibility shims, dual-path wrappers, or fake fallbacks. Obsolete single-copy readers, flat preset sets, and `purchasable: false => FiR` shortcuts are completely deleted.
-3. **Objective Acceptance, Reduction Adoption & Rollback Framework**:
-   - **Correctness Repairs (Bug Fixes)**: Earn acceptance strictly via 100% pass across all 14 Behavioral Regression Families against the Physical Oracle and zero validation errors. Never required to demonstrate a 5% speedup.
-   - **Exact Performance Reductions (Optimizations)**: Earn adoption via mathematical equivalence (Gates A, B, C) and Gate 3 on the full 4-gate comparative benchmark harness (ADR 0005: $\ge 5\%$ speedup, no tail regression). Gate 4 (Inconclusive) immediately triggers rollback to the unreduced baseline.
-4. **Standing Boundaries & Decision Map Completion**:
-   - Standing Dense-TED 60-second target remains a deferred stretch goal; no tolerance weakening or valid build dropping is permitted to manufacture a 60s completion.
-   - Provisional MOA authority fence preserved (`approximate_optimal` under provisional model).
-   - Python / CP-SAT remains differential cross-check evidence only; backend engine migration is out of scope.
-   - **Completion of Decision Map ([Issue #28](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/28))**: With the resolution of Issue #40, all 14 sub-issues of the decision map are settled. The planning phase is 100% complete.
+Private commits on a future isolated branch may be incomplete. No intermediate public contract is adopted. There are no shims, legacy aliases, or fake fallbacks. The implementation branch is not created by this ADR. When implementation is separately authorized, it starts from the preserved source baseline, not from a merge or deploy onto reverted `master`.
 
-## Consequences & Downstream Handoff
+| Stage | Adoptable result |
+| :--- | :--- |
+| 1. Independent oracle, raw-source checks, and the 14-family case ledger, including required rejection of invalid fixtures | The oracle and ledger only. The legacy solver is not required to pass before repairs. "Zero validation errors" applies to builds claimed valid, not to negative fixtures. The 14 families are a ledger of subcases, not 14 files |
+| 2. Private implementation of the correctness contract together with its types, decoder, worker, client, UI, benchmarks, native evidence surface, and minimal preparation seam | Nothing public |
+| 3. Proof of that whole cutover, including numerical, TED, and MOA boundary families, operation transitions, and browser smoke | The cutover, or nothing. A solver that still fails those families is not adopted |
+| 4. Optional equivalent reductions against the proved unreduced baseline | Only a candidate that passes Gates A–C and the full comparative contract. Otherwise the Stage 3 baseline stays |
 
-- This capstone resolution concludes the decision map ([Issue #28](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/28)) and delivers the implementation handoff.
+Correctness repairs are judged against the independent oracle and do not need a 5% speedup. Stage 4 candidates include clamp specialization, second-clamp elimination, a proved single-capacity presence substitution, recoil-cap collapse, and measured preparation reuse. A failed or inconclusive performance candidate does not restore the legacy model. There is no automatic production rollback. This plan does not authorize commits, releases, or pushes.
+
+Preparation is split. The ownership seam required to state the correct model is in Stages 2–3. Measured reuse is Stage 4. Endpoint weights `[100,0,0]`, `[0,100,0]`, and `[0,0,100]` produce `10*fE`, `-100*fR`, and `-0.1*fP`. Unit-axis objectives are not substituted. Sub-millisecond assembly figures are targets, not gates. Domain identity is the full preparation ledger, including stable occurrence masks, not a hardcoded parameter count. The decoded deficit is the authoritative `d_i`; the LP emits linear epigraph inequalities and does not emit a nonlinear max row.
+
+### 2. Status and certificates
+
+Use the accepted deadline, MOA, and oracle tables. In particular:
+
+- A deadline with a verified incumbent and no completed proof is `feasible` / `feasible`, with the witness and justified bounds. The upper bound is finite only when a proved bound exists.
+- A deadline with no verified incumbent is `incomplete` / `none`, with `lower_bound: null` and a finite upper bound only when proved.
+- A qualified optimum or infeasibility that has already completed stays proved after a late deadline or cancellation.
+- Hard client cancellation and native runtime failure use their operation error and snapshot contracts. They are not rewritten as feasible builds.
+- `approximate_optimal` is only a qualified model optimum: Fast, or precise and MOA-dependent. An unproved MOA incumbent is `feasible` with `provisional_model`. Proved provisional-model infeasibility is public `incomplete` / `none`, and its internal model proof is retained. Fast and MOA-dependent requests keep both qualifiers.
+- MOA-floor (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`) and the seven-row Explore contract are separate outcomes. Explore does not cache another point's solution or certificate.
+- Invalid `owned_items` does not run HiGHS. Optimize returns `incomplete` / `none`. Explore returns `curve_status: 'invalid'` and no points. MOA-floor returns unresolved with a null floor. Metadata fetches, including `getGunsmithTasks`, stay unchanged.
+
+The shipped HiGHS solution object does not provide a MIP dual bound or native gap. A qualified optimality certificate, certified endpoint cache, or trusted comparative claim waits until the integrated native surface returns the fields it uses. A diagnostic log is not a proof, and a time-limit primal is not an upper bound. Provisional MOA correctness is not attested game-engine truth.
+
+### 3. Source-grounded migration
+
+Preserve `extractAllPresets`: `presetItems` is already a string array that retains repeats. Do not replace that extractor. Add independent source quantity checks.
+
+Preserve `computeIdealPointCacheKey`. It already includes feasibility, acquisition, physical-mode, and filter inputs. Extend it with the owned multiset, versions, and certificate provenance. Do not describe or delete it as a weapon-only key. `computeStructuralBoundsCacheKey` remains the narrower unclipped-bounds key. Do not pass `owned_items` through `canonicalizeArray`.
+
+Keep valid parent coupling, including `p - x_owner <= 0` and the single-owner `x_i - x_owner <= 0` rows. Remove the actual single-copy and FiR defects: `presetItemsMap`'s `Set` construction, the decoder sets that place each item id at most once, the `purchasable: false` FiR path and `UNPURCHASABLE_OBJECTIVE_PRICE_MIN_RUB` objective stand-in, and `buy_eq_${i}: buy_i - x_i = 0` where capacity, preset supply, and owned offset have not been proved.
+
+Manifest, shopping-list, and stat readers must handle repeated copies and chosen base cost. A new owned label is not sufficient. The consumers named in the revised handoff move in the same cutover as the model.
+
+### 4. Comparative non-adoption
+
+The Issue #37 contract is normative, including planned denominators, independent workers, versioned identity, artifact digests, paired blocks, and degeneracy. A BCa interval of `[1.01, 1.03]` is Gate 2 `FAIL`. An upper bound of exactly `0.95` is not Gate 3 `PASS`. A zero-variance apparent speedup is `INCONCLUSIVE`.
+
+## Consequences
+
+- Issue #40 stays open for parent acceptance. This ADR does not close Issue #28 and does not declare the map's proofs complete.
+- The dense-TED 60-second target stays deferred. Tolerances are not weakened and valid builds are not dropped to manufacture a timeout success.
+- Python or CP-SAT output remains differential evidence only. Backend replacement and new cache tiers stay out of scope.
+- A later implementation updates docs and the changelog only after browser smoke. This revision changes the planning record only.
