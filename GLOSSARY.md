@@ -65,7 +65,7 @@ The executable Issue #40 sequence. Private commits may be incomplete. No interme
 4. Freeze the proved unreduced model, then optionally evaluate equivalent reductions under Gates A–C and the full comparative contract. Non-adoption keeps that baseline.
 
 ### Zero-Shim Migration Policy
-The adopted public contract changes in one cutover. Private commits on the isolated implementation branch may be incomplete. No shim, legacy alias, or fake fallback is adopted. Valid parent-coupling rows stay. `extractAllPresets` already keeps repeated preset item ids and is preserved; the single-copy defects are the later set and count consumers, the FiR objective stand-in, and the unproved `buy_i = x_i` alias.
+The adopted public contract changes in one cutover. Private commits on the isolated implementation branch may be incomplete. No shim, legacy alias, or fake fallback is adopted. Parent-to-child coupling survives as occurrence and parent-instance constraints; a legacy single-owner template row is not copied unchanged when alternative parents or repeated copies make its indices wrong. `extractAllPresets` already keeps repeated preset item ids and is preserved; the single-copy defects are the later set and count consumers, the FiR objective stand-in, and the unproved `buy_i = x_i` alias. The session physical key does not depend on a request-clipped weight cap.
 
 ### Model-Relative MOA Floor
 MOA-floor search outcomes evaluated strictly within the provisional software model (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Inherits full ADR 0004 safeguards: requires a verified instance witness, a finite mathematically justified lower bound $\text{lo}$, non-null bisection gate, and $\text{hi} - \text{lo} \le 0.02\text{ MOA}$ for `model_proved`. Model infeasibility must never advance an authoritative physical lower bound.
@@ -88,7 +88,7 @@ The linear objective coordinate system defined in `lpBuilder.ts` and `trueErgo.t
 All objective values, bounds, and tolerances are expressed strictly in these shared units.
 
 ### Global Spatial Upper Bound
-The objective upper bound across the entire spatial branch-and-bound search tree, aggregated as $\max(\text{incumbent.objective}, \max_{k \in \text{OpenNodes}} \text{node}_k.\text{upper\_bound})$, yielding $+\infty$ if any open region is unbounded. Never replaced by the bound of a single closed node.
+The request-wide objective upper bound is the maximum of the verified incumbent and every live justified frontier bound in the same objective frame. A node bound may come from the structured native dual or from an accepted analytic bound. An unknown frontier bound stays unknown (`null` in transport). A finite sibling or a time-limit primal does not hide it. A rejected later decode does not erase a prior verified witness or a completed proof.
 
 ### Witness Build
 A complete physical weapon build record backing an achieved MOA value (`hi`), carrying an instance-qualified attachment manifest, occurrence-aware `ItemDetail[]`, and configuration scope for independent verification. Bisection requires a finite, mathematically justified lower bound $\text{lo}$ before proceeding.
