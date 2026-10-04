@@ -1,6 +1,7 @@
 import type { OptimizeRequest, OptimizeResponse } from '../api/client';
 import type { ItemLookup, OfferInfo, SlotInfo } from './types';
 import { canonicalizeTraderLevels } from './reuseKey';
+import { presetSupply } from './presetSupply';
 
 /** Absolute tolerances: hard constraints and reconstructed display statistics. */
 export const VALIDATION_EPSILON = 1e-6;
@@ -89,8 +90,11 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
     const preset = base.id === request.weapon_id ? undefined : weapon.presets.find(p => p.id === base.id);
     if (base.id !== request.weapon_id && !preset) fail(`Unknown/unavailable purchase preset ${base.id}`);
     else {
-      retained = new Set(preset?.items ?? []);
-      if (base.items.length !== retained.size || base.items.some(id => !retained.has(id))) fail('Preset contents mismatch');
+      const supplied = presetSupply(preset?.items);
+      retained = new Set(supplied.keys());
+      // The response must carry the preset's exact count-bearing contents: same items, same copies.
+      const reported = presetSupply(base.items);
+      if (reported.size !== supplied.size || [...supplied].some(([id, copies]) => reported.get(id) !== copies)) fail('Preset contents mismatch');
       const purchase = offer(preset ?? weapon.stats);
       if (!purchase) fail('Purchase base is inaccessible');
       else { price = purchase.price; close('Base price', base.price, purchase.price); if (base.source !== purchase.source) fail('Base purchase source mismatch'); }

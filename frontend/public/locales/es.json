@@ -142,6 +142,7 @@
     "build_manifest": "Manifiesto de Build",
     "new_changed_parts": "Partes Nuevas/Cambiadas",
     "retained_from_preset_short": "Retenido del Preset",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Retroceso (Ignorar Precio)",
     "tradeoff_ergo_vs_price": "Ergo vs Precio (Ignorar Retroceso)",
     "tradeoff_recoil_vs_price": "Retroceso vs Precio (Ignorar Ergo)",

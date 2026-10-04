@@ -142,6 +142,7 @@
     "build_manifest": "Build manifest",
     "new_changed_parts": "Új/módosított alkatrészek",
     "retained_from_preset_short": "Presetből megtartva",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Visszarúgás (Ár figyelmen kívül)",
     "tradeoff_ergo_vs_price": "Ergo vs Ár (Visszarúgás figyelmen kívül)",
     "tradeoff_recoil_vs_price": "Visszarúgás vs Ár (Ergo figyelmen kívül)",

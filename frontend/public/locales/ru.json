@@ -142,6 +142,7 @@
     "build_manifest": "Манифест сборки",
     "new_changed_parts": "Новые/изменённые детали",
     "retained_from_preset_short": "Сохранено из пресета",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Эрго vs Отдача (без цены)",
     "tradeoff_ergo_vs_price": "Эрго vs Цена (без отдачи)",
     "tradeoff_recoil_vs_price": "Отдача vs Цена (без эрго)",

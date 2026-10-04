@@ -1,5 +1,6 @@
 import { buildLP } from '../../src/solver/lpBuilder.ts';
 import { getAvailablePrice } from '../../src/solver/dataService.ts';
+import { presetSupply } from '../../src/solver/presetSupply.ts';
 import type { LPResult } from '../../src/solver/lpBuilder.ts';
 import type { ItemLookup, ModLookupEntry, SolveParams, SlotInfo } from '../../src/solver/types.ts';
 
@@ -220,7 +221,7 @@ function separatelyBuyable(params: SolveParams, itemId: string): { buyable: bool
 function presetIds(lookup: ItemLookup, weaponId: string, itemId: string): string[] {
   const weapon = lookup[weaponId];
   if (weapon?.type !== 'gun') return [];
-  return weapon.presets.filter(preset => preset.items.includes(itemId)).map(preset => preset.id).sort();
+  return weapon.presets.filter(preset => presetSupply(preset.items).has(itemId)).map(preset => preset.id).sort();
 }
 
 function conflictClosure(lookup: ItemLookup, itemId: string): string[] {

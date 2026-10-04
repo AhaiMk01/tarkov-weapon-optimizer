@@ -142,6 +142,7 @@
     "build_manifest": "빌드 매니페스트",
     "new_changed_parts": "새로운/변경된 부품",
     "retained_from_preset_short": "프리셋에서 유지",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "에르고 vs 반동 (가격 무시)",
     "tradeoff_ergo_vs_price": "에르고 vs 가격 (반동 무시)",
     "tradeoff_recoil_vs_price": "반동 vs 가격 (에르고 무시)",

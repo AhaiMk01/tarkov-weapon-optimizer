@@ -31,9 +31,16 @@
  *  - **Presets / `defaultPreset`** are item IDs; dereferenced here into objects.
  *  - **IDs vs objects**: `containsItems[].item` and `conflictingItems[]` are
  *    plain ID strings and are wrapped back into `{ id }` / `{ item: { id } }`.
+ *  - **Quantities are never defaulted** (ADR 0013 section 4A): a preset
+ *    `containsItems[].count` must be a finite nonnegative integer and a barter
+ *    `requiredItems[].count` a finite nonnegative number. An absent, null or
+ *    malformed count throws a `SourceDataError` naming the preset/barter and the
+ *    item; there is no `?? 1`.
  *  - **`imageLink`** is GraphQL's deprecated alias for `inspectImageLink`
  *    (per the schema), not `gridImageLink`.
  */
+
+import { barterIngredientCount, presetComponentCount } from './sourceErrors.ts';
 
 const JSON_API_URL = 'https://json.tarkov.dev';
 const LANG_FALLBACK = 'en';
@@ -207,6 +214,7 @@ export async function fetchAllDataFromJsonApi(
       level: barter.minTraderLevel ?? 1,
       requiredItems: (barter.requiredItems ?? []).map(req => {
         const source = (typeof req.item === 'string' ? items[req.item] : undefined) ?? {};
+        const offered = items[itemId];
         return {
           item: {
             id: req.item ?? '',
@@ -215,7 +223,13 @@ export async function fetchAllDataFromJsonApi(
             basePrice: source.basePrice ?? null,
             iconLink: source.iconLink ?? '',
           },
-          count: req.count ?? 1,
+          // Fractional quantities are genuine source data; an absent count is a source error.
+          count: barterIngredientCount(req.count, {
+            offeredItemId: itemId,
+            offeredItemName: offered ? tr(offered.name) : undefined,
+            itemId: req.item ?? '',
+            itemName: tr(source.name) || undefined,
+          }),
         };
       }),
     }));
@@ -286,10 +300,20 @@ export async function fetchAllDataFromJsonApi(
       name: tr(raw.name),
       shortName: tr(raw.shortName),
       ...imageLinks(raw),
-      containsItems: (raw.containsItems ?? []).map((contained: RawItem) => ({
-        item: { id: contained.item ?? '' },
-        count: contained.count ?? 1,
-      })),
+      // Counts are validated, never defaulted (ADR 0013 section 4A). Repeated entries stay
+      // separate here; dataService.extractAllPresets sums them.
+      containsItems: (raw.containsItems ?? []).map((contained: RawItem) => {
+        const componentSource = (typeof contained.item === 'string' ? items[contained.item] : undefined) ?? {};
+        return {
+          item: { id: contained.item ?? '' },
+          count: presetComponentCount(contained.count, {
+            presetId: raw.id ?? id,
+            presetName: tr(raw.name) || undefined,
+            itemId: contained.item ?? '',
+            itemName: tr(componentSource.name) || undefined,
+          }),
+        };
+      }),
       buyFor: buildBuyFor(raw),
       bartersFor: buildBartersFor(raw.id ?? id),
     };

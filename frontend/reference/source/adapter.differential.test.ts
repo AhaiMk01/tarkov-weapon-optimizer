@@ -12,6 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { isDeepStrictEqual } from 'node:util';
 import { fetchAllDataFromJsonApi } from '../../src/solver/jsonApiAdapter';
+import { SourceDataError } from '../../src/solver/sourceErrors';
 import { loadPinnedDocument } from './pins';
 import { loadPinnedWorld, pinnedTexts } from './pinnedWorld';
 import { withPinnedFetch } from './pinnedFetchStub';
@@ -258,7 +259,7 @@ const TRANSFORMATIONS: Array<[string, string]> = [
   ['population', 'guns/mods split by `types`, document order, no duplicates'],
   ['translation', 'translation keys resolved for names, short names, slot/category/handbook/trader/flea names'],
   ['dereference', 'preset/defaultPreset/containsItems/conflictingItems/allowedItems IDs rewrapped; slot ids, nameId, required'],
-  ['preset components', 'preset containsItems ids and counts passed through unchanged'],
+  ['preset components', 'preset containsItems ids and validated counts passed through unchanged (no count default)'],
   ['categories', 'bsgCategory parent chain rebuilt from categories[0]'],
   ['trader offers', 'buyFromTrader mapped to buyFor (source/vendor/price/priceRUB/minTraderLevel/buyLimit)'],
   ['flea offer', 'synthesized flea offer (rule, price, vendor descriptor)'],
@@ -293,16 +294,17 @@ test('adapter defaults: record which are ever exercised on the pinned capture', 
   const containsAudit = auditContainsCounts(docs.itemsData);
   const barterAudit = auditBarterCounts(docs.barters);
   const exercised: Record<string, number> = {
-    'preset containsItems count ?? 1': containsAudit.absent + containsAudit.nullCount,
-    'barter requirement count ?? 1': barterAudit.absentOrNull,
+    'absent/null preset containsItems count (now a source error)': containsAudit.absent + containsAudit.nullCount,
+    'absent/null barter requirement count (now a source error)': barterAudit.absentOrNull,
     ...Object.fromEntries(enLedger.defaulted),
   };
   t.diagnostic(`defaults exercised (en): ${JSON.stringify(exercised)}`);
-  // ADR 0013 §4A: the `contained.count ?? 1` default is unproved. On the pinned capture it is
-  // never exercised: every raw entry carries an explicit integer count. That is evidence about
-  // THIS capture only, not a source-schema contract that a default is safe.
-  assert.equal(exercised['preset containsItems count ?? 1'], 0);
-  assert.equal(exercised['barter requirement count ?? 1'], 0);
+  // ADR 0013 section 4A: the adapter no longer defaults a count (`contained.count ?? 1` and
+  // `req.count ?? 1` were removed in Stage 2 phase 2.2); an absent or null count is a SourceDataError.
+  // On the pinned capture none occurs: every raw entry carries an explicit count, which is why the
+  // repair changes no pinned output. That is evidence about THIS capture only.
+  assert.equal(exercised['absent/null preset containsItems count (now a source error)'], 0);
+  assert.equal(exercised['absent/null barter requirement count (now a source error)'], 0);
   // Every default the pinned capture DOES exercise, recorded exactly: only the 172 guns lack the
   // mod-only `accuracyModifier`/`recoilModifier` fields. No other `??` default fires.
   assert.deepEqual(Object.fromEntries(enLedger.defaulted), {
@@ -367,9 +369,7 @@ test('trusted vs untrusted adapter transformations (recorded from this compariso
     .map(([id, description]) => `${id}: ${description} (${enLedger.tallies.get(id)?.checks} en + ${zhLedger.tallies.get(id)?.checks} zh checks)`);
 
   const untrusted = [
-    'containsItems[].count ?? 1: unproved default (ADR 0013 §4A). Never exercised here (0 absent of ' +
-      `${auditContainsCounts(loadPinnedWorld('en').docs.itemsData).entries} entries), but the adapter would silently turn an absent count into 1.`,
-    'req.count ?? 1 for barter ingredients: same unproved default; never exercised (0 absent).',
+    `(repaired) containsItems[].count and barter req.count are no longer defaulted: an absent/null/malformed count is a SourceDataError (0 absent of ${auditContainsCounts(loadPinnedWorld('en').docs.itemsData).entries} entries here).`,
     'slot.filters is projected to allowedItems only: allowedCategories/excludedCategories/excludedItems are dropped. ' +
       'Never non-empty in the pinned capture, so nothing is lost here, but the source schema does not promise that.',
     `barter offeredItem.count is ignored: ${world.barters.filter(b => b.offered.count !== 1).length} barters offer >1 unit ` +
@@ -378,10 +378,10 @@ test('trusted vs untrusted adapter transformations (recorded from this compariso
       'targets are task-gated, yet are mapped like any other barter.',
     'flea `||` rule (avg24hPrice || lastLowPrice): zero avg24hPrice never occurs in the pinned capture, so `||` vs `??` is not distinguished by data (the reference unit test pins the rule).',
     'iconLink / image links and other display-only fields are not compared.',
-    `preset quantities downstream: adapter output preserves counts, but dataService extractAllPresets drops them (${summary.entriesGt1} gun-preset entries with count > 1); see extractors.differential.test.ts.`,
+    `(repaired) preset quantities downstream: dataService extractAllPresets now keeps the ${summary.entriesGt1} gun-preset entries with count > 1; see extractors.differential.test.ts.`,
   ];
   t.diagnostic(`TRUSTED (${trusted.length}):\n  - ${trusted.join('\n  - ')}`);
-  t.diagnostic(`NOT TRUSTED / UNPROVED (${untrusted.length}):\n  - ${untrusted.join('\n  - ')}`);
+  t.diagnostic(`NOT TRUSTED / UNPROVED / REPAIRED (${untrusted.length}):\n  - ${untrusted.join('\n  - ')}`);
   assert.equal(trusted.length, TRANSFORMATIONS.length, 'every compared transformation is trusted on the pinned capture');
 });
 
@@ -429,32 +429,116 @@ function firstMultiCopyEntry(): { presetId: string; index: number; itemId: strin
   return { presetId: first.presetId, index, itemId: first.itemId, count: first.count };
 }
 
-async function adapterWithAbsentCount() {
+/** Run the adapter on the pinned bytes with one preset component's raw `count` replaced (a SYNTHETIC perturbation). */
+function mutatePresetCount(mutate: (entry: Loose) => void) {
   const target = firstMultiCopyEntry();
-  const items = mutateDoc('items', data => { delete data.items[target.presetId].containsItems[target.index].count; });
-  return { target, items, run: await runAdapter('en', { items }) };
+  const items = mutateDoc('items', data => { mutate(data.items[target.presetId].containsItems[target.index]); });
+  return { target, items };
 }
 
-test('SYNTHETIC: the reference reader rejects an absent preset count; the adapter does not', async () => {
-  const { target, items } = await adapterWithAbsentCount();
+test('SYNTHETIC: the reference reader rejects an absent preset count', () => {
+  const { target, items } = mutatePresetCount(entry => { delete entry.count; });
   assert.throws(
     () => readRawWorld({ ...pinnedTexts('en'), items }),
     (error: unknown) => error instanceof SourceError && error.path.includes(target.presetId) && /count is absent/.test(error.message),
   );
 });
 
-test('current behavior: the adapter silently defaults an absent preset count to 1 (the unproved default)', async () => {
-  const { target, run } = await adapterWithAbsentCount();
-  const gun = run.result.guns.find(g => (g.properties?.presets ?? []).some((p: Loose) => p.id === target.presetId));
-  assert.ok(gun, 'a gun carrying the perturbed preset');
-  const preset = gun.properties.presets.find((p: Loose) => p.id === target.presetId);
-  const entry = preset.containsItems[target.index];
-  assert.equal(entry.item.id, target.itemId);
-  assert.equal(entry.count, 1, `adapter turned a missing count (truth unknown, was ${target.count}) into 1`);
+test('the adapter rejects an absent/null/malformed preset count as a source error naming the preset and the item', async () => {
+  const cases: Array<[string, (entry: Loose) => void, RegExp]> = [
+    ['absent', entry => { delete entry.count; }, /absent/],
+    ['null', entry => { entry.count = null; }, /null/],
+    ['fractional', entry => { entry.count = 1.5; }, /integer/],
+    ['negative', entry => { entry.count = -1; }, /nonnegative/],
+    ['string', entry => { entry.count = '2'; }, /string/],
+    ['boolean', entry => { entry.count = true; }, /boolean/],
+    ['unsafe integer', entry => { entry.count = 2 ** 53; }, /integer/],
+  ];
+  for (const [label, mutate, message] of cases) {
+    const { target, items } = mutatePresetCount(mutate);
+    await assert.rejects(
+      () => runAdapter('en', { items }),
+      (error: unknown) => error instanceof SourceDataError
+        && error.kind === 'preset_component_count'
+        && error.subjectId === target.presetId
+        && error.itemId === target.itemId
+        && message.test(error.message)
+        && /count/i.test(error.message)
+        && error.message.includes(target.presetId)
+        && error.message.includes(target.itemId),
+      `${label} count must be rejected`,
+    );
+  }
 });
 
-test('Stage 2 target: the adapter rejects an absent/null/malformed preset count as a source error', { todo: 'Stage 2 removes `contained.count ?? 1` (ADR 0013 §4A)' }, async () => {
+test('the adapter rejects an overflowing preset count (JSON 1e999 parses to Infinity)', async () => {
   const target = firstMultiCopyEntry();
-  const items = mutateDoc('items', data => { delete data.items[target.presetId].containsItems[target.index].count; });
-  await assert.rejects(() => runAdapter('en', { items }), /count/i);
+  const original = loadPinnedDocument('items').text;
+  // Text-level perturbation: JSON.stringify cannot write an Infinity, the raw token can.
+  const marker = '"count":';
+  const presetStart = original.indexOf(`"${target.presetId}":{`);
+  assert.ok(presetStart >= 0, 'target preset located in the raw text');
+  const containsStart = original.indexOf('"containsItems"', presetStart);
+  const entryStart = original.indexOf(marker, containsStart);
+  const numberStart = entryStart + marker.length;
+  const numberEnd = numberStart + /^\d+/.exec(original.slice(numberStart))![0].length;
+  const items = original.slice(0, numberStart) + '1e999' + original.slice(numberEnd);
+  await assert.rejects(
+    () => runAdapter('en', { items }),
+    (error: unknown) => error instanceof SourceDataError && error.kind === 'preset_component_count' && /finite|integer/.test(error.message),
+  );
+});
+
+test('a valid multi-copy preset count passes through the adapter exactly (no default, no clamp)', async () => {
+  const target = firstMultiCopyEntry();
+  const run = await runAdapter('en');
+  const gun = run.result.guns.find(g => (g.properties?.presets ?? []).some((p: Loose) => p.id === target.presetId));
+  assert.ok(gun, 'a gun carrying the multi-copy preset');
+  const preset = gun.properties.presets.find((p: Loose) => p.id === target.presetId);
+  assert.equal(preset.containsItems[target.index].count, target.count);
+  assert.ok(target.count > 1);
+});
+
+test('the adapter rejects an absent/null/negative barter ingredient count, naming the barter and the ingredient; fractional counts stay valid', async () => {
+  // A barter that offers a mod (so the adapter converts it) and has at least one ingredient.
+  const modIds = new Set([...enWorld.items.values()].filter(i => i.types.includes('mods')).map(i => i.id));
+  const index = enWorld.barters.findIndex(b => modIds.has(b.offered.itemId) && b.requirements.length > 0);
+  assert.ok(index >= 0);
+  const barter = enWorld.barters[index];
+  const mutateBarter = (mutate: (requirement: Loose) => void) => mutateDoc('barters', data => { mutate((data as unknown as Loose[])[index].requiredItems[0]); });
+  const cases: Array<[string, (requirement: Loose) => void, RegExp]> = [
+    ['absent', r => { delete r.count; }, /absent/],
+    ['null', r => { r.count = null; }, /null/],
+    ['negative', r => { r.count = -0.5; }, /nonnegative/],
+    ['string', r => { r.count = '155.1'; }, /string/],
+  ];
+  for (const [label, mutate, message] of cases) {
+    const barters = mutateBarter(mutate);
+    await assert.rejects(
+      () => runAdapter('en', { barters }),
+      (error: unknown) => error instanceof SourceDataError
+        && error.kind === 'barter_ingredient_count'
+        && error.subjectId === barter.offered.itemId
+        && error.itemId === barter.requirements[0].itemId
+        && message.test(error.message)
+        && error.message.includes(barter.offered.itemId)
+        && error.message.includes(barter.requirements[0].itemId),
+      `${label} ingredient count must be rejected`,
+    );
+  }
+  // A fractional count is genuine source data and is accepted unchanged.
+  const fractional = mutateBarter(r => { r.count = 155.1; });
+  const run = await runAdapter('en', { barters: fractional });
+  const mod = run.result.mods.find((m: Loose) => m.id === barter.offered.itemId) as Loose;
+  const offerIndex = enWorld.barters.filter(b => b.offered.itemId === barter.offered.itemId).findIndex(b => b.id === barter.id);
+  assert.equal(mod.bartersFor[offerIndex].requiredItems[0].count, 155.1);
+});
+
+test('a barter that offers an item the adapter never converts (ammunition) does not block loading', async () => {
+  const convertedIds = new Set([...enWorld.items.values()].filter(i => i.types.includes('mods') || i.types.includes('gun') || i.types.includes('preset')).map(i => i.id));
+  const index = enWorld.barters.findIndex(b => !convertedIds.has(b.offered.itemId) && b.requirements.length > 0);
+  assert.ok(index >= 0, 'an ammunition/other barter exists');
+  const barters = mutateDoc('barters', data => { delete (data as unknown as Loose[])[index].requiredItems[0].count; });
+  const run = await runAdapter('en', { barters });
+  assert.ok(run.result.guns.length > 0);
 });

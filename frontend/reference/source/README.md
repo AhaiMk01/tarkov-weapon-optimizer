@@ -4,7 +4,8 @@ Refs #40, ADR 0010 §1/§5, ADR 0013 §1/§3/§4A.
 
 This directory holds the **raw upstream evidence**, an **independent reader** for it, **source
 checks**, and **differential checks** of the production JSON adapter and preset extraction against
-that reader. Nothing here is imported by production code, and reference files (everything except
+that reader. (Stage 2 phase 2.2 repaired the preset count loss and the `count ?? 1` defaults that
+these checks exposed; the repair is recorded below.) Nothing here is imported by production code, and reference files (everything except
 `*.differential.test.ts`) never import production code
 (`frontend/reference/independence.test.ts` enforces it).
 
@@ -89,15 +90,24 @@ says the same; do not deduplicate it against the oracle.
 
 ## Findings on the pinned capture
 
-* **Preset count loss (Stage 2 defect).** The adapter preserves counts; `dataService.extractAllPresets`
-  discards them. Production `all_presets` vs the reference: **56** (preset, item) quantities wrong in
+* **Preset count loss (repaired in Stage 2 phase 2.2).** Before the repair the adapter preserved counts
+  but `dataService.extractAllPresets` discarded them: **56** (preset, item) quantities wrong in
   **52 of 399** presets, **626** units missing: 35 weapon-mod entries (41 units; rails, flashlights)
-  and 21 ammo entries (585 units, e.g. 60 rounds in a magazine). Every mismatch is exactly a raw
-  `count > 1` entry read as one copy; nothing else diverges. Raw `containsItems`: 6112 entries, all
-  integer counts, 381 with count > 1 (56 of them in gun presets).
-* **`count ?? 1` is never exercised** on the pinned bytes (0 absent/null of 6112 entries; 0 of 1128
-  barter ingredients). That is evidence about this capture only. A synthetic perturbation shows the
-  adapter silently turns an absent count into 1 while the reference reader rejects it.
+  and 21 ammo entries (585 units, e.g. 60 rounds in a magazine). Every mismatch was exactly a raw
+  `count > 1` entry read as one copy; nothing else diverged. Raw `containsItems`: 6112 entries, all
+  integer counts, 381 with count > 1 (56 of them in gun presets). Now `extractAllPresets` returns
+  `{ itemId, count }[]` (repeated entries summed) and the differential test passes with **0 mismatches**
+  on all 399 presets, including all 56 multi-copy entries.
+* **Receiver as a component.** Every one of the 399 gun presets lists its own receiver exactly once with
+  count 1 in `containsItems`. Production carries that entry as `receiver_id` (base identity) and keeps it
+  out of the supplied stock, so it can never be mistaken for an installable part (the old structural
+  weight bound counted the receiver twice for this reason). The differential test compares the stock
+  without the receiver and checks the receiver separately.
+* **`count ?? 1` is gone.** It was never exercised on the pinned bytes (0 absent/null of 6112 entries; 0 of
+  1128 barter ingredients), so the repair changes no pinned output. An absent, null or malformed preset
+  count (not a finite nonnegative safe integer) and an absent, null, negative or non-finite barter
+  ingredient count now throw a `SourceDataError` naming the preset or barter and the item (synthetic
+  perturbation tests in `adapter.differential.test.ts`); the reference reader rejects the same inputs.
 * **References:** 0 unresolved references across items, presets, default presets, slot filters,
   conflicts, categories, handbook categories, trader offers and barters.
 * **Slot ids:** unique within every template (3673 slots, 1329 templates); **0 cross-template
@@ -132,7 +142,7 @@ language; Chinese produces the same counts.
 | guns/mods split by `types`, document order, no duplicates | 3 | `adapter.differential.test.ts` |
 | translation: names, short names, slot/category/handbook/trader/flea names | 19,528 | requested -> English -> key, plus a synthetic fallback test on perturbed docs |
 | ID dereferencing: presets, default preset, `containsItems[].item`, `conflictingItems`, slot `allowedItems`, slot ids, `nameId`, `required` | 21,996 | compared to raw ids |
-| preset `containsItems` ids and counts passed through | 399 | all gun presets |
+| preset `containsItems` ids and validated counts passed through (no default) | 399 | all gun presets |
 | `bsgCategory` chain rebuilt from `categories[0]` | 2,486 | also `findCategoryChainMismatches` = 0 |
 | `buyFromTrader` -> `buyFor` (source, vendor, price, priceRUB, minTraderLevel, buyLimit) | 18,691 | trader ids all resolve |
 | synthesized flea offer (rule, price, vendor descriptor) | 12,313 | against `referenceFleaOffer` |
@@ -144,28 +154,30 @@ transformation.
 
 | NOT trusted / unproved | Why |
 | :--- | :--- |
-| `containsItems[].count ?? 1` | Unproved default (ADR 0013 §4A). Never exercised here, but the adapter would hide an absent count. Stage 2 must reject it. |
-| barter `req.count ?? 1` | Same unproved default; never exercised. |
+| `containsItems[].count ?? 1` | **Repaired.** The unproved default (ADR 0013 §4A) was removed; an absent/null/malformed count is a `SourceDataError`. |
+| barter `req.count ?? 1` | **Repaired.** Same default removed; an absent/null count is a `SourceDataError`, fractional counts stay valid. |
 | slot `filters` projected to `allowedItems` | Drops three source fields; nothing lost in this capture, but no source contract promises that. |
 | barter `offeredItem.count` | Ignored. The reference buys a barter in whole lots (`INTERPRETATIONS.md` choice 1): a lot of n units costs its rounded total once, so a deficit of one unit costs the whole lot and a deficit above n needs another lot. Production prices every unit at the full lot price, which over-charges any deficit of two or more units from such a lot. Matters only for ammunition here (29 barters). |
 | barter `taskUnlock` | Ignored; 34 gun/mod/preset barters are task-gated yet treated as available. |
 | flea `avg24hPrice \|\| lastLowPrice` | Zero `avg24hPrice` never occurs, so the data cannot tell `\|\|` from `??`; only the reference unit test pins the rule. |
 | display-only fields (`iconLink`, image links) | Not compared. |
-| downstream `extractAllPresets` | Loses counts (the Stage 2 defect above). |
+| downstream `extractAllPresets` | **Repaired.** Keeps counts (repeated entries summed, receiver carried as `receiver_id`). |
 
-## Known Stage 2 tests (node:test `todo`)
+## The two Stage 1 `todo` tests are repaired (Stage 2 phase 2.2)
 
-Two tests run their comparison today, print the mismatches, and are reported as `todo`:
+Stage 1 shipped two `todo` tests, each with a companion test that pinned the defect. Both are now real
+tests, the companions were deleted, and the suite has no `todo`:
 
 * `extractors.differential.test.ts` -- "production extractAllPresets preserves reference preset
-  quantities" (`Stage 2 repairs preset count loss`). Companion non-todo test **"KNOWN DEFECT
-  PRESENT"** asserts the exact current mismatch set, so the suite flags the repair. A control test shows a
-  count-bearing `{itemId, count}[]` output (any of `itemId`/`id` + `count`) passes the same comparison.
-* `adapter.differential.test.ts` -- "the adapter rejects an absent/null/malformed preset count"
-  (`Stage 2 removes contained.count ?? 1`). Companion non-todo test **"current behavior"** asserts the
-  silent default today.
-
-When Stage 2 lands, the companion tests fail on purpose: delete them and drop the `todo` options.
+  quantities" passes: zero mismatches over all 399 presets. Controls show it can fail: a tampered count is
+  flagged, and a count-collapsed output (the pre-repair shape) is flagged for exactly the 56 multi-copy
+  entries. Further tests pin the multi-copy population (56 entries, 52 presets, 35 mods) and the
+  receiver-as-identity rule.
+* `adapter.differential.test.ts` -- "the adapter rejects an absent/null/malformed preset count as a source
+  error naming the preset and the item" passes, with absent, null, fractional, negative, string, boolean,
+  unsafe-integer and overflowing (`1e999`) variants, and the barter ingredient count rule (absent, null,
+  negative and string rejected; fractional accepted; a barter for an item the adapter never converts does
+  not block loading).
 
 ## Known limits
 

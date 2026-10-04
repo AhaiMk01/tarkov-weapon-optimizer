@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import type { ItemDetail } from '../api/client'
 import { priceCell } from './priceCell'
 import { TedTag } from './TedTag'
+import { QuantityTag } from './QuantityTag'
 import { isShownTedDelta } from '../solver/trueErgo'
 
 const { Text } = Typography
@@ -125,6 +126,8 @@ export function ItemTooltip({ item, children }: { item: ItemDetail; children: Re
 
 interface ItemRowProps {
   item: ItemDetail
+  /** Copies of this part a factory preset supplies; shown as a "×N" badge when above one. */
+  quantity?: number
   hidePrice?: boolean
   compactMode?: boolean
   lockedIds?: string[]
@@ -133,7 +136,7 @@ interface ItemRowProps {
   onToggleExclude?: (id: string) => void
 }
 
-export function ItemRow({ item, hidePrice = false, compactMode = false, lockedIds, excludedIds, onToggleLock, onToggleExclude }: ItemRowProps) {
+export function ItemRow({ item, quantity, hidePrice = false, compactMode = false, lockedIds, excludedIds, onToggleLock, onToggleExclude }: ItemRowProps) {
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.sm
   const { t } = useTranslation()
@@ -215,6 +218,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
                <ItemTooltip item={item}>
                  <Text strong style={{ fontSize: 13, display: 'inline-block', lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
                </ItemTooltip>
+               <QuantityTag count={quantity} style={{ alignSelf: 'flex-start', fontSize: 11 }} />
                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                  {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
                  <TedTag item={item} style={{ margin: 0, fontSize: 11 }} />
@@ -236,6 +240,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
           <ItemTooltip item={item}>
             <Text strong style={{ fontSize: 12, ...truncateStyle, display: 'inline', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
           </ItemTooltip>
+          <QuantityTag count={quantity} style={{ fontSize: 11 }} />
           {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
           <TedTag item={item} style={{ margin: 0, fontSize: 11, flexShrink: 0 }} />
           {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
@@ -274,7 +279,10 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-            <Text strong style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+              <Text strong style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+              <QuantityTag count={quantity} style={{ fontSize: 11 }} />
+            </div>
             {!hidePrice && <Tag color="gold" style={{ margin: 0, flexShrink: 0, border: 'none', background: token.colorFillQuaternary, fontWeight: 600 }}>{priceCell(item)}</Tag>}
           </div>
 
@@ -311,7 +319,10 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         </div>
       </ItemTooltip>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+          <QuantityTag count={quantity} />
+        </div>
         {(item.handbook_categories?.[0] || item.category) && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }} title={item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}>{item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}</Text>}
         {hasTags && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, overflow: 'hidden' }}>

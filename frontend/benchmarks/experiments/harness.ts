@@ -1,4 +1,4 @@
-import { buildItemLookup } from '../../src/solver/dataService';
+import { buildItemLookup, CACHE_VERSION } from '../../src/solver/dataService';
 import { validateBuild } from '../../src/solver/validateBuild';
 import type { ItemLookup } from '../../src/solver/types';
 import type { OptimizeResponse } from '../../src/api/client';
@@ -6,7 +6,6 @@ import type { OptimizeResponse } from '../../src/api/client';
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
 const STORE_NAME = 'graphql-cache';
-const CACHE_VERSION = 15;
 
 function seedIndexedDB(data: { guns: Record<string, unknown>[]; mods: Record<string, unknown>[] }): Promise<void> {
   const { promise, resolve, reject } = Promise.withResolvers<void>();

@@ -1,4 +1,5 @@
 import type { CompatibilityMap, ItemLookup, ModLookupEntry, SlotInfo } from './types.ts';
+import { presetSupply } from './presetSupply.ts';
 
 export interface StructuralBoundsOptions {
   maxWeight?: number | null;
@@ -234,14 +235,16 @@ export function computeStructuralBounds(
   const rawMinW = getMinWeight(weaponId, new Set()).val;
   let rawMaxW = Math.max(rawMinW, getMaxWeight(weaponId, new Set()).val);
 
-  // Account for preset base weights if any presets exist
+  // Account for preset base weights if any presets exist: the receiver once (it is base identity,
+  // not part of the supplied stock) plus every supplied component weighed once per supplied copy.
   const baseW = weapon.stats.weight || 0;
   for (const preset of weapon.presets || []) {
-    const presetItemsWeight = (preset.items || []).reduce((sum, id) => {
+    let presetItemsWeight = 0;
+    for (const [id, copies] of presetSupply(preset.items)) {
       const m = lookup[id];
       const mw = m && 'weight' in m.stats ? (m.stats.weight || 0) : 0;
-      return sum + mw;
-    }, 0);
+      presetItemsWeight += copies * mw;
+    }
     const presetW = baseW + presetItemsWeight;
     if (presetW > rawMaxW) {
       rawMaxW = presetW;

@@ -9,6 +9,7 @@ import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOptio
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
+import { shoppingListLines } from './components/common/shoppingList'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
 import { ExplorePanel } from './components/explore/ExplorePanel'
@@ -828,7 +829,7 @@ function AppContent({
       `${t('sidebar.ergonomics')}: ${result.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil')}: ${result.final_stats.recoil_vertical.toFixed(1)} | ${t('ui.horiz_recoil')}: ${result.final_stats.recoil_horizontal.toFixed(1)} | ${t('ui.weight_label')}: ${result.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost')}: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
       '',
       `${t('ui.table_items')}:`,
-      ...result.selected_items.map(i => i.name)
+      ...shoppingListLines(result)
     ]
     copyToClipboard(lines.join('\n'))
   }
@@ -841,7 +842,7 @@ function AppContent({
       `${t('sidebar.ergonomics')}: ${gunsmithResult.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil')}: ${gunsmithResult.final_stats.recoil_vertical.toFixed(1)} | ${t('ui.horiz_recoil')}: ${gunsmithResult.final_stats.recoil_horizontal.toFixed(1)} | ${t('ui.weight_label')}: ${gunsmithResult.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost')}: ~ ₽${gunsmithResult.final_stats.total_price.toLocaleString()}`,
       '',
       `${t('ui.table_items')}:`,
-      ...gunsmithResult.selected_items.map(i => i.name)
+      ...shoppingListLines(gunsmithResult)
     ]
     copyToClipboard(lines.join('\n'))
   }

@@ -142,6 +142,7 @@
     "build_manifest": "Manifest Buildu",
     "new_changed_parts": "Nowe/Zmienione Części",
     "retained_from_preset_short": "Zachowane z Presetu",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Odrzut (Ignoruj Cenę)",
     "tradeoff_ergo_vs_price": "Ergo vs Cena (Ignoruj Odrzut)",
     "tradeoff_recoil_vs_price": "Odrzut vs Cena (Ignoruj Ergo)",

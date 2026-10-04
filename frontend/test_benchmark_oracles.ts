@@ -161,7 +161,9 @@ console.log('Running benchmark oracle correctness checks...');
     price: 500,
     price_source: 'mechanic',
     purchasable: true,
-    items: ['P1'],
+    receiver_id: 'gun',
+    items: [{ itemId: 'P1', count: 1 }],
+    image: null,
     offers: [{ price: 500, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
   }];
   p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
@@ -180,6 +182,34 @@ console.log('Running benchmark oracle correctness checks...');
   assert.equal(res.selected_preset?.id, 'preset_bundle');
   assert.equal(res.final_stats?.total_price, 500);
   assert.deepEqual(validateBuild({ weapon_id: 'gun' }, res, p.itemLookup), []);
+}
+
+// 8. A preset that supplies two copies of its part. The model installs one copy, so the part is still retained
+// at 0 RUB, and the response carries the count-bearing contents that the validator checks.
+{
+  const p = choiceFixture([{ id: 'P1', weight: 1, ergo: 10, price: 300 }]);
+  p.itemLookup.gun.presets = [{
+    id: 'preset_pair',
+    name: 'Pair Preset',
+    price: 500,
+    price_source: 'mechanic',
+    purchasable: true,
+    receiver_id: 'gun',
+    items: [{ itemId: 'P1', count: 2 }],
+    image: null,
+    offers: [{ price: 500, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
+  }];
+  p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
+  const res = await solve({ ...p, ergoWeight: 0, priceWeight: 100, recoilWeight: 0, preciseMode: true });
+  assert.equal(res.status, 'optimal');
+  assert.equal(res.selected_preset?.id, 'preset_pair');
+  assert.deepEqual(res.selected_preset?.items, [{ itemId: 'P1', count: 2 }]);
+  assert.equal(res.selected_preset?.receiver_id, 'gun');
+  assert.equal(res.final_stats?.total_price, 500);
+  assert.deepEqual(validateBuild({ weapon_id: 'gun' }, res, p.itemLookup), []);
+  // A response that misreports the supplied count is a contents mismatch.
+  const misreported = { ...res, selected_preset: { ...res.selected_preset!, items: [{ itemId: 'P1', count: 1 }] } };
+  assert.ok(validateBuild({ weapon_id: 'gun' }, misreported, p.itemLookup).includes('Preset contents mismatch'));
 }
 
 console.log('All benchmark oracle checks passed successfully.');

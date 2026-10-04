@@ -142,6 +142,7 @@
     "build_manifest": "Build Manifestosu",
     "new_changed_parts": "Yeni/Değişen Parçalar",
     "retained_from_preset_short": "Ön Ayardan Korunan",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Geri Tepme (Fiyat Yoksay)",
     "tradeoff_ergo_vs_price": "Ergo vs Fiyat (Geri Tepme Yoksay)",
     "tradeoff_recoil_vs_price": "Geri Tepme vs Fiyat (Ergo Yoksay)",

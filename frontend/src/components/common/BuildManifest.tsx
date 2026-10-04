@@ -6,6 +6,7 @@ import { ItemRow, ItemTooltip, TraderIcon } from '../ItemRow'
 import { priceCell } from '../priceCell'
 import { TedTag } from '../TedTag'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
+import { presetSupply } from '../../solver/presetSupply'
 import { useMemo } from 'react'
 
 const { Text } = Typography
@@ -175,8 +176,10 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
     )
   }
 
-  const itemsToRender = result.selected_preset
-    ? result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id))
+  // The manifest lists what is bought on top of the base; parts the preset supplies are shown on its card.
+  const supplied = result.selected_preset ? presetSupply(result.selected_preset.items) : null
+  const itemsToRender = supplied
+    ? result.selected_items.filter(i => !supplied.has(i.id))
     : result.selected_items
 
   return (

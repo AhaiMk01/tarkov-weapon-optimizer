@@ -3,6 +3,7 @@ import { choiceFixture } from './test_solver_fixtures.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { computeStructuralBounds } from './src/solver/structuralBounds.ts';
 import { fetchAllData, buildItemLookup } from './src/solver/dataService.ts';
+import { presetSupply } from './src/solver/presetSupply.ts';
 
 console.log('Running structural bounds tests...');
 
@@ -51,10 +52,12 @@ console.log('Running structural bounds tests...');
     if (gunEntry?.type === 'gun') {
       const baseW = gunEntry.stats.weight || 0;
       for (const preset of gunEntry.presets) {
-        const presetWeight = baseW + (preset.items || []).reduce((sum, id) => {
+        // The receiver once, plus every supplied component weighed once per supplied copy.
+        let presetWeight = baseW;
+        for (const [id, copies] of presetSupply(preset.items)) {
           const m = lookup[id];
-          return sum + (m && 'weight' in m.stats ? (m.stats.weight || 0) : 0);
-        }, 0);
+          presetWeight += copies * (m && 'weight' in m.stats ? (m.stats.weight || 0) : 0);
+        }
         assert.ok(
           presetWeight >= minW - 1e-4 && presetWeight <= maxW + 1e-4,
           `Preset ${preset.name} weight ${presetWeight} must be within [${minW}, ${maxW}]`

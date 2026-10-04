@@ -6,6 +6,8 @@
  */
 /* eslint-disable @typescript-eslint/no-explicit-any -- this harness probes raw API shapes on purpose */
 import { fetchAllData, buildItemLookup, getAvailablePrice } from './src/solver/dataService.ts';
+import { fetchAllDataFromJsonApi } from './src/solver/jsonApiAdapter.ts';
+import { SourceDataError } from './src/solver/sourceErrors.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { solve } from './src/solver/solver.ts';
 import type { ItemLookup, SolveParams } from './src/solver/types.ts';
@@ -20,7 +22,114 @@ function check(name: string, ok: boolean, detail = '') {
   if (!ok) failures++;
 }
 
+// --------------------------------------------------------------------------------------------
+// Offline: preset quantities through the adapter and the extractors, on a tiny synthetic JSON API
+// world served through a stubbed fetch (no network). Counts are explicit; there is no default.
+// --------------------------------------------------------------------------------------------
+
+const JSON_API = 'https://json.tarkov.dev/regular/';
+
+async function withStubbedJsonApi<T>(docs: Record<string, unknown>, run: () => Promise<T>): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (input: string | URL | Request): Promise<Response> => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    if (!url.startsWith(JSON_API)) throw new Error(`stub refuses ${url}`);
+    const name = url.slice(JSON_API.length);
+    if (!(name in docs)) throw new Error(`stub has no document ${name}`);
+    return new Response(JSON.stringify({ data: docs[name] }), { status: 200 });
+  }) as typeof fetch;
+  try { return await run(); } finally { globalThis.fetch = original; }
+}
+
+const rawItem = (id: string, over: Record<string, unknown> = {}) => ({
+  id, name: `${id} Name`, shortName: `${id} Short`, normalizedName: `n-${id}`, basePrice: 100, weight: 1, types: [] as string[],
+  containsItems: [] as unknown[], categories: [] as string[], handbookCategories: [] as string[], conflictingItems: [] as string[],
+  conflictingSlotIds: [] as string[], buyFromTrader: [] as unknown[], properties: null as unknown, ...over,
+});
+
+/** One gun, one rail mod and one preset on the gun, whose `containsItems` is supplied by the caller. */
+function syntheticDocs(containsItems: unknown[], barter?: { count?: unknown }): Record<string, unknown> {
+  const items: Record<string, unknown> = {
+    gun: rawItem('gun', { types: ['gun'], properties: { slots: [], presets: ['pre'], defaultPreset: 'pre' } }),
+    rail: rawItem('rail', { types: ['mods'], buyFromTrader: [{ trader: 't1', price: 50, priceRUB: 50, currency: 'RUB', minTraderLevel: 1 }] }),
+    pre: rawItem('pre', {
+      types: ['preset'], containsItems,
+      buyFromTrader: [{ trader: 't1', price: 1000, priceRUB: 1000, currency: 'RUB', minTraderLevel: 1 }],
+    }),
+  };
+  const names: Record<string, string> = {};
+  for (const it of Object.values(items) as Array<{ name: string; shortName: string; id: string }>) {
+    names[it.name] = `EN ${it.id}`;
+    names[it.shortName] = `EN short ${it.id}`;
+  }
+  return {
+    items: { items, itemCategories: {}, handbookCategories: {}, fleaMarket: { name: 'FleaMarket', normalizedName: 'flea-market' } },
+    items_en: { ...names, FleaMarket: 'Flea Market' },
+    barters: barter ? [{
+      trader: 't1', minTraderLevel: 1, offeredItem: { item: 'rail', count: 1 },
+      requiredItems: [{ item: 'rail', ...('count' in barter ? { count: barter.count } : {}) }],
+    }] : [],
+    traders: { t1: { id: 't1', name: 't1 Nickname', normalizedName: 'prapor' } },
+    traders_en: { 't1 Nickname': 'Prapor' },
+  };
+}
+
+const component = (item: string, count?: unknown) => ({ item, ...(count === undefined ? {} : { count }) });
+
+async function offlinePresetQuantityChecks() {
+  console.log('=== Preset quantities (offline, synthetic JSON API world) ===');
+
+  // Explicit multi-copy counts and repeated entries pass through the adapter verbatim, then accumulate downstream.
+  const valid = await withStubbedJsonApi(
+    syntheticDocs([component('gun', 1), component('rail', 2), component('rail', 1), component('ammo', 60)]),
+    () => fetchAllDataFromJsonApi('en', 'regular'),
+  );
+  const rawPreset = valid.guns[0].properties.presets[0];
+  check('adapter keeps every containsItems entry with its explicit count',
+    JSON.stringify(rawPreset.containsItems.map((c: any) => [c.item.id, c.count])) === JSON.stringify([['gun', 1], ['rail', 2], ['rail', 1], ['ammo', 60]]),
+    JSON.stringify(rawPreset.containsItems));
+  const lookup = buildItemLookup(valid.guns, valid.mods);
+  const preset = (lookup.gun as any).all_presets[0];
+  check('buildItemLookup keeps the multi-copy count and sums repeated entries',
+    JSON.stringify(preset.items) === JSON.stringify([{ itemId: 'rail', count: 3 }, { itemId: 'ammo', count: 60 }]), JSON.stringify(preset.items));
+  check('the receiver entry is carried as receiver_id, not as supplied stock', preset.receiver_id === 'gun' && !preset.items.some((c: any) => c.itemId === 'gun'));
+
+  // An absent, null or malformed count is a source error naming the preset and the item; nothing is defaulted.
+  const bad: Array<[string, unknown, RegExp]> = [
+    ['absent', undefined, /absent/],
+    ['null', null, /null/],
+    ['fractional', 1.5, /integer/],
+    ['negative', -2, /nonnegative/],
+    ['numeric string', '2', /string/],
+  ];
+  for (const [label, count, message] of bad) {
+    let error: unknown;
+    try {
+      await withStubbedJsonApi(syntheticDocs([component('gun', 1), component('rail', count)]), () => fetchAllDataFromJsonApi('en', 'regular'));
+    } catch (e) { error = e; }
+    check(`adapter rejects an ${label} preset count with a SourceDataError naming preset and item`,
+      error instanceof SourceDataError && error.kind === 'preset_component_count' && error.subjectId === 'pre' && error.itemId === 'rail'
+        && message.test(error.message) && error.message.includes('pre') && error.message.includes('rail'),
+      error instanceof Error ? error.message : String(error));
+  }
+
+  // Barter ingredient counts: absent/null throws, a fractional quantity is genuine source data.
+  for (const [label, count] of [['absent', undefined], ['null', null]] as const) {
+    let error: unknown;
+    try {
+      await withStubbedJsonApi(syntheticDocs([component('gun', 1)], label === 'absent' ? {} : { count }), () => fetchAllDataFromJsonApi('en', 'regular'));
+    } catch (e) { error = e; }
+    check(`adapter rejects an ${label} barter ingredient count`,
+      error instanceof SourceDataError && error.kind === 'barter_ingredient_count' && error.subjectId === 'rail' && error.itemId === 'rail',
+      error instanceof Error ? error.message : String(error));
+  }
+  const fractional = await withStubbedJsonApi(syntheticDocs([component('gun', 1)], { count: 155.1 }), () => fetchAllDataFromJsonApi('en', 'regular'));
+  check('a fractional barter ingredient count is kept exactly', fractional.mods[0].bartersFor[0].requiredItems[0].count === 155.1);
+}
+
 async function main() {
+  await offlinePresetQuantityChecks();
+
   console.log('=== Fetching en/regular via fetchAllData (JSON API path) ===');
   const t0 = Date.now();
   const { guns, mods } = await fetchAllData('en', 'regular');
@@ -82,6 +191,11 @@ async function main() {
   check('gun presets dereferenced to objects', presets.length > 0 && typeof presets[0] === 'object', `${presets.length}`);
   check('preset has containsItems as {item:{id}}',
     (presets[0]?.containsItems ?? []).every((c: any) => typeof c.item?.id === 'string'));
+  check('every preset component carries an explicit nonnegative integer count (no default)',
+    guns.every((g: any) => (g.properties?.presets ?? []).every((p: any) =>
+      (p.containsItems ?? []).every((c: any) => Number.isInteger(c.count) && c.count >= 0))));
+  check('some gun preset holds more than one copy of a part (counts are real, not all 1)',
+    guns.some((g: any) => (g.properties?.presets ?? []).some((p: any) => (p.containsItems ?? []).some((c: any) => c.count > 1))));
   check('preset has buyFor array', Array.isArray(presets[0]?.buyFor));
   check('preset name translated', typeof presets[0]?.name === 'string' && !/ Name$/.test(presets[0].name), presets[0]?.name);
   check('defaultPreset is an object with images',
@@ -109,6 +223,30 @@ async function main() {
   check('gun stats category', (m4Entry as any).stats.category === 'Assault rifle', (m4Entry as any).stats.category);
   check('gun purchasable presets extracted', (m4Entry as any).presets.length > 0, `${(m4Entry as any).presets.length}`);
   check('preset prices > 0', (m4Entry as any).presets.every((p: any) => p.price > 0));
+
+  // Every preset's extracted quantities equal the raw containsItems counts (repeated entries summed, receiver apart).
+  let presetsChecked = 0;
+  let multiCopy = 0;
+  const quantityMismatches: string[] = [];
+  for (const gun of guns as any[]) {
+    const entry = lookup[gun.id] as any;
+    const rawPresets: any[] = gun.properties?.presets ?? [];
+    rawPresets.forEach((raw, index) => {
+      const extracted = entry.all_presets[index];
+      const expected = new Map<string, number>();
+      for (const c of raw.containsItems ?? []) {
+        if (c.item.id === gun.id) continue;
+        expected.set(c.item.id, (expected.get(c.item.id) ?? 0) + c.count);
+      }
+      const got = new Map<string, number>(extracted.items.map((c: any) => [c.itemId, c.count] as [string, number]));
+      presetsChecked++;
+      for (const [, count] of expected) if (count > 1) multiCopy++;
+      if (extracted.id !== raw.id || extracted.receiver_id !== gun.id
+        || JSON.stringify([...expected].sort()) !== JSON.stringify([...got].sort())) quantityMismatches.push(`${gun.id}/${raw.id}`);
+    });
+  }
+  check('every extracted preset quantity equals the raw count', quantityMismatches.length === 0 && presetsChecked > 300, `${presetsChecked} presets, ${multiCopy} multi-copy entries, mismatches: ${quantityMismatches.slice(0, 3).join(',')}`);
+  check('multi-copy preset entries are kept (not collapsed to one)', multiCopy > 0, `${multiCopy}`);
 
   const modEntries = Object.values(lookup).filter((e: any) => e.type === 'mod') as any[];
   const purchasable = modEntries.filter(e => e.stats.purchasable);

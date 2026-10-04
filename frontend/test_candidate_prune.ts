@@ -4,6 +4,7 @@ import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { getAvailablePrice } from './src/solver/dataService.ts';
 import { buildLP } from './src/solver/lpBuilder.ts';
 import { solve } from './src/solver/solver.ts';
+import { presetSupply } from './src/solver/presetSupply.ts';
 import type { GunLookupEntry, ItemLookup, ModLookupEntry, OfferInfo, PresetInfo, SolveParams, SlotInfo } from './src/solver/types.ts';
 
 const offer = (price: number): OfferInfo[] => [{
@@ -43,6 +44,7 @@ function slot(spec: SlotSpec): SlotInfo {
 function graph(input: {
   slots: SlotSpec[];
   mods: ModSpec[];
+  /** `items` are the ids the preset supplies, one copy each. */
   presets?: { id: string; items: string[]; price?: number }[];
   includeItems?: string[];
   excludeItems?: string[];
@@ -50,7 +52,8 @@ function graph(input: {
   const presets: PresetInfo[] = (input.presets ?? []).map(preset => ({
     id: preset.id,
     name: preset.id,
-    items: preset.items,
+    receiver_id: 'gun',
+    items: preset.items.map(itemId => ({ itemId, count: 1 })),
     image: null,
     price: preset.price ?? 500,
     price_source: 'mechanic',
@@ -116,7 +119,7 @@ function feasibleBuilds(params: SolveParams): string[][] {
   const weapon = params.itemLookup[params.weaponId];
   if (weapon?.type !== 'gun') throw new Error('fixture weapon missing');
   const bases: { id: string; items: Set<string> }[] = [{ id: 'naked', items: new Set() }];
-  for (const preset of weapon.presets) bases.push({ id: preset.id, items: new Set(preset.items) });
+  for (const preset of weapon.presets) bases.push({ id: preset.id, items: new Set(presetSupply(preset.items).keys()) });
   const builds: string[][] = [];
   const limit = 1 << ids.length;
   for (let mask = 0; mask < limit; mask++) {

@@ -5,6 +5,7 @@ import { EmptyState } from '../common/EmptyState'
 import { StatsCards } from '../common/StatsCards'
 import { BuildManifest } from '../common/BuildManifest'
 import { UsingPresetCard } from '../common/UsingPresetCard'
+import { presetSupply } from '../../solver/presetSupply'
 import type { OptimizeResponse } from '../../api/client'
 
 interface GunsmithResultProps {
@@ -33,6 +34,7 @@ export function GunsmithResult({ result, viewMode, onViewModeChange, optimizing,
       />
     )
   }
+  const presetSupplied = result.selected_preset ? presetSupply(result.selected_preset.items) : null
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <Alert
@@ -56,7 +58,7 @@ export function GunsmithResult({ result, viewMode, onViewModeChange, optimizing,
           {result.selected_preset && (
             <UsingPresetCard
               preset={result.selected_preset}
-              retainedItems={result.selected_items.filter(i => result.selected_preset!.items.includes(i.id))}
+              retainedItems={result.selected_items.filter(i => presetSupplied!.has(i.id))}
               compactMode={viewMode === 'compact' || viewMode === 'table'}
               viewMode={viewMode}
             />

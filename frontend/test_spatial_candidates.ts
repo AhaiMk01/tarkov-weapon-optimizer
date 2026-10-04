@@ -240,7 +240,8 @@ console.log('  2. Verifying oracle preservation across canonical benchmark fixtu
     price: 500,
     price_source: 'mechanic',
     purchasable: true,
-    items: ['P1'],
+    receiver_id: 'gun',
+    items: [{ itemId: 'P1', count: 1 }],
     image: undefined,
     offers: [{ price: 500, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
   } as any];

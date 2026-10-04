@@ -12,6 +12,7 @@ import { trueErgoDelta, overswingPercent, tedContribution } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { getAvailablePrice } from './dataService';
 import { canonicalizeTraderLevels } from './reuseKey';
+import { mergeComponents, presetSupply } from './presetSupply';
 
 interface HighsInstance {
   solve(problem: string, options?: {
@@ -511,6 +512,7 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
         id: params.weaponId,
         name: (gunData.name as string) ?? 'Naked Gun',
         price: basePrice,
+        receiver_id: params.weaponId,
         items: [],
         icon: (gunData.iconLink ?? gunData.iconLinkFallback ?? wStats.default_preset_image) as string | undefined,
         image_large: (gunData.image512pxLink ?? gunData.imageLink ?? gunData.image8xLink) as string | undefined,
@@ -541,13 +543,14 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
           id: preset.id,
           name: preset.name,
           price: filteredPrice,
-          items: preset.items || [],
+          receiver_id: preset.receiver_id,
+          items: mergeComponents(preset.items ?? []),
           icon: preset.image ?? undefined,
           image_large: preset.image ?? undefined,
           source,
           purchase_label: label,
           barter_requirements: presetBarterReqs,
-          parts_count: preset.items?.length || undefined,
+          parts_count: presetSupply(preset.items).size || undefined,
           ...weaponTooltip,
         };
       }

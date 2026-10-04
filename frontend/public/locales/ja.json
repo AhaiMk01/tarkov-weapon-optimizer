@@ -142,6 +142,7 @@
     "build_manifest": "ビルドマニフェスト",
     "new_changed_parts": "新規/変更パーツ",
     "retained_from_preset_short": "プリセットから保持",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "エルゴ vs 反動 (価格無視)",
     "tradeoff_ergo_vs_price": "エルゴ vs 価格 (反動無視)",
     "tradeoff_recoil_vs_price": "反動 vs 価格 (エルゴ無視)",

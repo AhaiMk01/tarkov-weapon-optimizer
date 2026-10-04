@@ -142,6 +142,7 @@
     "build_manifest": "Build Manifest",
     "new_changed_parts": "New/Changed Parts",
     "retained_from_preset_short": "Retained from Preset",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Recoil (Price optional)",
     "tradeoff_ergo_vs_price": "Ergo vs Price (Recoil optional)",
     "tradeoff_recoil_vs_price": "Recoil vs Price (Ergo optional)",

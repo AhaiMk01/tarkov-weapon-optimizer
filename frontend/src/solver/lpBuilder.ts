@@ -18,6 +18,7 @@ import type {
 } from './types';
 import { DEFAULT_TRADER_LEVELS } from './types';
 import { getAvailablePrice } from './dataService';
+import { presetSupply } from './presetSupply';
 import { objectiveModel, objectiveScore, weightPenalty } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { computeStructuralBounds } from './structuralBounds';
@@ -98,7 +99,8 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   // ========================================================================
 
   const presets: PresetInfo[] = weapon.presets;
-  const presetItemsMap: Record<string, Set<string>> = {};
+  // Component supply q_{b,i}: preset id -> item id -> copies supplied (positive only).
+  const presetSupplyMap: Record<string, Map<string, number>> = {};
   const itemToPresets: Record<string, string[]> = {};
   const presetPricesMap: Record<string, number> = {};
 
@@ -114,9 +116,9 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     if (pPrice <= 0 && !pAvail) continue; // skip unpurchasable
     const pid = preset.id;
     presetPricesMap[pid] = pPrice;
-    const items = new Set(preset.items);
-    presetItemsMap[pid] = items;
-    for (const itemId of items) {
+    const supply = presetSupply(preset.items);
+    presetSupplyMap[pid] = supply;
+    for (const itemId of supply.keys()) {
       if (!itemToPresets[itemId]) itemToPresets[itemId] = [];
       itemToPresets[itemId].push(pid);
     }
@@ -258,10 +260,10 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
       basePrices.push(0);
       baseIsNaked.push(0);
       // Add fallback preset items
-      const fbItems = new Set(fb.items);
-      presetItemsMap[fbId] = fbItems;
+      const fbSupply = presetSupply(fb.items);
+      presetSupplyMap[fbId] = fbSupply;
       presetPricesMap[fbId] = 0;
-      for (const iid of fbItems) {
+      for (const iid of fbSupply.keys()) {
         if (!itemToPresets[iid]) itemToPresets[iid] = [];
         itemToPresets[iid].push(fbId);
         if (iid in reachable && !(iid in availableItems)) {
@@ -433,13 +435,15 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
 
   const preset_base_of: number[] = [];
   const preset_item_of: number[] = [];
-  for (const pid of Object.keys(presetItemsMap)) {
+  const preset_supply_of: number[] = []; // q_{b,i}: copies of the item the preset supplies
+  for (const pid of Object.keys(presetSupplyMap)) {
     const bIdx = baseIndex.get(pid);
     if (bIdx === undefined) continue;
-    for (const iid of presetItemsMap[pid]) {
+    for (const [iid, supplied] of presetSupplyMap[pid]) {
       if (itemIndex.has(iid)) {
         preset_base_of.push(bIdx);
         preset_item_of.push(itemIndex.get(iid)!);
+        preset_supply_of.push(supplied);
       }
     }
   }
@@ -495,14 +499,25 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     }
   }
 
-  // Group preset memberships by item
+  // Group preset memberships by item: the bases that supply it and q_{b,i} per base.
   const itemToPresetBases = new Map<number, number[]>();
+  const itemToPresetSupply = new Map<number, number[]>();
   for (let m = 0; m < preset_base_of.length; m++) {
     const bIdx = preset_base_of[m];
     const iIdx = preset_item_of[m];
-    if (!itemToPresetBases.has(iIdx)) itemToPresetBases.set(iIdx, []);
+    if (!itemToPresetBases.has(iIdx)) {
+      itemToPresetBases.set(iIdx, []);
+      itemToPresetSupply.set(iIdx, []);
+    }
     itemToPresetBases.get(iIdx)!.push(bIdx);
+    itemToPresetSupply.get(iIdx)!.push(preset_supply_of[m]);
   }
+  /** `base_b` terms weighted by the copies each preset supplies: sum_b q_{b,i} * base_b (unit weight omitted). */
+  const suppliedBy = (item: number): string => {
+    const bases = itemToPresetBases.get(item)!;
+    const supply = itemToPresetSupply.get(item)!;
+    return bases.map((b, k) => (supply[k] === 1 ? `base_${b}` : `${fmt(supply[k])} base_${b}`)).join(' + ');
+  };
 
   const model = objectiveModel(params);
   const weapon_naked_ergo_scaled = weaponStats.naked_ergonomics * ERGO_SCALE;
@@ -712,8 +727,8 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     if (item_available[i] === 1) continue;
     const presetBases = itemToPresetBases.get(i);
     if (presetBases && presetBases.length > 0) {
-      const expr = presetBases.map(b => `base_${b}`).join(' + ');
-      L(`  avail_${i}: x_${i} - ${expr} <= 0`);
+      // x_i can only be 1 when some selected preset supplies at least one copy: x_i <= sum_b q_{b,i} base_b.
+      L(`  avail_${i}: x_${i} - ${suppliedBy(i)} <= 0`);
     } else if (!fiR) {
       L(`  avail_${i}: x_${i} = 0`);
     }
@@ -729,10 +744,9 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
       for (const b of presetBases) {
         L(`  buy_le_nb_${i}_${b}: buy_${i} + base_${b} <= 1`);
       }
-      // buy[i] >= x[i] - sum(base[b])
-      // buy[i] - x[i] + sum(base[b]) >= 0
-      const presetSum = presetBases.map(b => `base_${b}`).join(' + ');
-      L(`  buy_ge_${i}: buy_${i} - x_${i} + ${presetSum} >= 0`);
+      // buy[i] >= x[i] - sum_b q_{b,i} base[b]: the single installed copy is paid for unless a preset supplies it.
+      // buy[i] - x[i] + sum_b q_{b,i} base[b] >= 0
+      L(`  buy_ge_${i}: buy_${i} - x_${i} + ${suppliedBy(i)} >= 0`);
     } else {
       // Not in any preset — buy = x (unpurchasable mods use stand-in objective price only)
       L(`  buy_eq_${i}: buy_${i} - x_${i} = 0`);

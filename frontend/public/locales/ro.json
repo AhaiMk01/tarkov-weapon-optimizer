@@ -142,6 +142,7 @@
     "build_manifest": "Manifest Build",
     "new_changed_parts": "Părți Noi/Modificate",
     "retained_from_preset_short": "Păstrat din Preset",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Recul (Ignoră Preț)",
     "tradeoff_ergo_vs_price": "Ergo vs Preț (Ignoră Recul)",
     "tradeoff_recoil_vs_price": "Recul vs Preț (Ignoră Ergo)",

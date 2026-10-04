@@ -3,9 +3,10 @@
 //
 // The lookup is built directly, not through the production extractors: the extractors are compared with the
 // reference reader separately (reference/source/*.differential.test.ts). Here the stats are written in the
-// units production stores them in, and the offers are written the way `extractModStats` / `extractAllPresets`
-// would have produced them from the equivalent raw data (positive prices only, barters priced as a float sum
-// and rounded, offers sorted by price), so production sees what it would see in the app.
+// units production stores them in, and the offers and preset components are written the way `extractModStats` /
+// `extractAllPresets` would have produced them from the equivalent raw data (positive prices only, barters priced
+// as a float sum and rounded, offers sorted by price, count-bearing preset components), so production sees what it
+// would see in the app.
 //
 // A fixture or request feature that today's production inputs cannot carry is never dropped silently. It is
 // returned in `unsupported` (feature id plus detail) and the harness treats the case as a recorded failure
@@ -16,8 +17,8 @@
 // may import this one.
 
 import type {
-  CompatibilityMap, GunLookupEntry, GunStats, IdealPoint, ItemLookup, ModLookupEntry, ModStats, OfferInfo, PresetInfo,
-  SlotInfo, SolveParams, TraderLevels,
+  CompatibilityMap, GunLookupEntry, GunStats, IdealPoint, ItemLookup, ModLookupEntry, ModStats, OfferInfo, PresetComponent,
+  PresetInfo, SlotInfo, SolveParams, TraderLevels,
 } from '../../src/solver/types';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import type {
@@ -33,8 +34,6 @@ import type {
 export const UNSUPPORTED_FEATURES = [
   /** `request.owned_items`: production has no stash input at all. */
   'owned_items',
-  /** A preset component quantity above one: production keeps a flat id list and the LP reads it as a set. */
-  'preset_component_count_gt_1',
   /** A barter lot delivering more than one unit: `OfferInfo` has no lot size. */
   'barter_offered_count_gt_1',
   /** A player-level flea gate on a receiver or preset: only mods carry `min_level_flea`. */
@@ -78,12 +77,6 @@ export function detectUnsupported(fixture: ReferenceFixture, request: ReferenceR
 
   const owned = request.owned_items ?? [];
   if (owned.length > 0) add('owned_items', `owned_items has ${owned.length} entr${owned.length === 1 ? 'y' : 'ies'}; production takes no stash input`);
-
-  for (const preset of fixture.presets ?? []) {
-    for (const [itemId, count] of presetSupply(preset)) {
-      if (itemId !== preset.weaponId && count > 1) add('preset_component_count_gt_1', `preset ${preset.id}: ${itemId} x${count} (production keeps a flat id list read as a set)`);
-    }
-  }
 
   const subjects: { id: string; kind: 'mod' | 'receiver' | 'preset'; offers: ReferenceOffer[] }[] = [
     ...fixture.items.map(i => ({ id: i.id, kind: 'mod' as const, offers: i.offers ?? [] })),
@@ -238,11 +231,14 @@ function modEntry(item: ReferenceItem, receiverConflicts: readonly string[]): Mo
 
 function presetInfo(preset: ReferencePreset): PresetInfo {
   const offers = mapOffers(preset.offers);
-  const items: string[] = [];
-  for (const [itemId, count] of presetSupply(preset)) if (count > 0) items.push(itemId);
+  // Count-bearing components the way extractAllPresets writes them: repeated entries summed, a zero count kept as a
+  // component that supplies nothing, and the receiver's own entry carried as `receiver_id` (base identity), not as stock.
+  const items: PresetComponent[] = [];
+  for (const [itemId, count] of presetSupply(preset)) if (itemId !== preset.weaponId) items.push({ itemId, count });
   return {
     id: preset.id,
     name: preset.id,
+    receiver_id: preset.weaponId,
     items,
     image: null,
     price: offers.length ? offers[0].price : 0,

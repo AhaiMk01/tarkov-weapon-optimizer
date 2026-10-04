@@ -142,6 +142,7 @@
     "build_manifest": "Manifest sestavy",
     "new_changed_parts": "Nové/změněné díly",
     "retained_from_preset_short": "Zachováno z presetu",
+    "preset_supply_copies": "The preset supplies {{count}} copies",
     "tradeoff_ergo_vs_recoil": "Ergo vs Zpětný ráz (Ignorovat cenu)",
     "tradeoff_ergo_vs_price": "Ergo vs Cena (Ignorovat zpětný ráz)",
     "tradeoff_recoil_vs_price": "Zpětný ráz vs Cena (Ignorovat ergo)",

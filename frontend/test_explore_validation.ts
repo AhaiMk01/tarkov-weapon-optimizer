@@ -17,7 +17,7 @@ function point(overrides: Partial<ExplorePoint> = {}): ExplorePoint {
     recoil_h: 100,
     price: 1100,
     selected_items: [{ id: 'A', name: 'A', price: 100, source: 'mechanic', ergonomics: 20, recoil_modifier: 0 }],
-    selected_preset: { id: 'gun', name: 'Receiver', price: 1000, source: 'mechanic', items: [] },
+    selected_preset: { id: 'gun', name: 'Receiver', price: 1000, source: 'mechanic', receiver_id: 'gun', items: [] },
     slot_pairs: [['choice', 'A']],
     status: 'optimal',
     ...overrides,

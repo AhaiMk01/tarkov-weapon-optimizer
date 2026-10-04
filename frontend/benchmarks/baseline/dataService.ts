@@ -11,7 +11,9 @@ import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 15;
+// Tracks the candidate's cache version (src/solver/dataService.ts CACHE_VERSION) so that the one snapshot the harness
+// seeds under `json:en:regular` is accepted by both workers. Only this constant moves; the baseline solver is frozen.
+const CACHE_VERSION = 16;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;

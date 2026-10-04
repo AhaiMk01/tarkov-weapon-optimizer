@@ -142,6 +142,7 @@
     "build_manifest": "配装清单",
     "new_changed_parts": "新增/更换",
     "retained_from_preset_short": "来自预设",
+    "preset_supply_copies": "预设提供 {{count}} 件",
     "tradeoff_ergo_vs_recoil": "人机 ↔ 后坐（价格不计入）",
     "tradeoff_ergo_vs_price": "人机 ↔ 价格（后坐不计入）",
     "tradeoff_recoil_vs_price": "后坐 ↔ 价格（人机不计入）",

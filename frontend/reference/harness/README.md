@@ -65,7 +65,6 @@ A feature production's inputs cannot carry is returned in `unsupported`, never d
 | Feature id | Meaning | Cases when the baseline was created |
 | :--- | :--- | ---: |
 | `owned_items` | `request.owned_items`: production has no stash input | 15 |
-| `preset_component_count_gt_1` | a preset component quantity above one (flat id list, read as a set) | 3 |
 | `barter_offered_count_gt_1` | a barter lot delivering several units (`OfferInfo` has no lot size) | 1 |
 | `category_chain_ancestor_match` | a category filter that matches an item only through an ancestor (only the own `category_id` exists) | 1 |
 | `flea_player_level_on_base` | a player-level flea gate on a receiver or preset (only mods carry `min_level_flea`) | 0 |
@@ -120,8 +119,14 @@ exception while evaluating the custom build would still fall back unseen. The te
 
 * Response shape: `decodeBuild` already accepts both `slot_pairs: [slotId, itemId][]` (today) and `Placement[]`
   (ADR 0013 section 5); reading instance ids from `selected_items` is the follow-up when phase 2.6 lands.
-* Count-bearing presets (phase 2.2): change `presetInfo` to emit `{ itemId, count }` components and delete the
-  `preset_component_count_gt_1` detector.
+* Count-bearing presets (phase 2.2, done): `presetInfo` emits `{ itemId, count }` components exactly as
+  `extractAllPresets` does (repeated entries summed, a zero count kept as a component that supplies nothing, the
+  receiver's own entry carried as `receiver_id`), and the `preset_component_count_gt_1` detector is gone. The three
+  cases that carry a count above one (`F06-preset-count-gt-one-two-copies`, `F06-base-cost-once-extra-copy-paid`,
+  `F14-source-quantities-repeated-entries-and-zero-count`) now run for real. The two F06 cases still fail
+  `scoreOptimal` because the optimum installs more than one copy and production installs at most one copy of a
+  template until the physical model (phase 2.4); F14 still fails `buildValid` because production's free-of-charge
+  stand-in for unpurchasable parts installs a part (`c`) that the preset supplies zero copies of (also phase 2.4).
 * `owned_items` (phase 2.7): add the field to `mapRequest` and delete its detector.
 * Every removed detector turns its cases from `unsupported` failures into real runs; the ratchet then demands the baseline
   update that records whatever they now score.

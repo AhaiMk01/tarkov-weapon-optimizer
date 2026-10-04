@@ -1,5 +1,5 @@
-import type { IdealPoint } from '../solver/types';
-export type { IdealPoint } from '../solver/types';
+import type { IdealPoint, PresetComponent } from '../solver/types';
+export type { IdealPoint, PresetComponent } from '../solver/types';
 
 /**
  * API Client - uses Web Worker + HiGHS solver instead of HTTP backend.
@@ -98,7 +98,10 @@ export interface PresetDetail {
   id: string;
   name: string;
   price: number;
-  items: string[];
+  /** The receiver the base is built on. Equal to `id` for the naked receiver. */
+  receiver_id: string;
+  /** Supplied component stock with quantities ({ itemId, count }); empty for the naked receiver. */
+  items: PresetComponent[];
   icon?: string;
   /** API source key for the offer used (e.g. trader id, fleaMarket) */
   source?: string;
@@ -114,6 +117,7 @@ export interface PresetDetail {
   default_recoil_v?: number;
   default_recoil_h?: number;
   weight?: number;
+  /** Number of distinct component items the preset supplies (not the sum of their counts). */
   parts_count?: number;
 }
 

@@ -5,13 +5,22 @@
  */
 
 import type {
-  ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetInfo, TraderLevels,
+  ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetComponent, PresetInfo, TraderLevels,
 } from './types.ts';
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
+import { barterIngredientCount, presetComponentCount } from './sourceErrors.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 15;
+/**
+ * Version of the normalized payloads kept in IndexedDB. A cached entry written under any other
+ * version is ignored and refetched.
+ *
+ *  - 16: preset `containsItems[].count` and barter ingredient counts are validated, never
+ *    defaulted to 1 (ADR 0013 section 4A), and the GraphQL fallback query carries `count`.
+ *    Payloads cached at 15 were normalized with the `?? 1` default and must not be reused.
+ */
+export const CACHE_VERSION = 16;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -104,6 +113,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
             item {
               id
             }
+            count
           }
           buyFor {
             source
@@ -462,7 +472,15 @@ function extractSlots(itemData: RawItem): SlotInfo[] {
   });
 }
 
-function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetInfo[] {
+/**
+ * Factory presets of a gun with their supplied component stock.
+ *
+ * `containsItems` entries become count-bearing components: each count is validated (a finite
+ * nonnegative integer, never defaulted; absent/null/malformed throws a `SourceDataError` naming the
+ * preset and the item) and repeated entries for one item are summed. The receiver's own entry is
+ * base identity, not stock, so it is dropped from `items` and carried in `receiver_id` instead.
+ */
+export function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetInfo[] {
   const props = gun.properties ?? {};
   const presetsData = props.presets ?? [];
   if (!presetsData.length) return [];
@@ -471,13 +489,21 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
   for (const preset of presetsData) {
     if (typeof preset !== 'object' || !preset) continue;
 
-    const presetItems: string[] = [];
+    const supplied = new Map<string, number>();
     const containsItems = preset.containsItems ?? [];
     for (const contained of containsItems) {
-      if (typeof contained === 'object' && contained?.item?.id) {
-        presetItems.push(contained.item.id);
-      }
+      if (typeof contained !== 'object' || !contained?.item?.id) continue;
+      const itemId: string = contained.item.id;
+      const count = presetComponentCount(contained.count, {
+        presetId: preset.id ?? '',
+        presetName: preset.name ?? preset.shortName,
+        itemId,
+        itemName: contained.item.name,
+      });
+      if (itemId === gun.id) continue;
+      supplied.set(itemId, (supplied.get(itemId) ?? 0) + count);
     }
+    const presetItems: PresetComponent[] = [...supplied].map(([itemId, count]) => ({ itemId, count }));
 
     const presetImage =
       preset.image512pxLink ?? preset.imageLink ??
@@ -506,7 +532,7 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
     }
     const bartersFor = preset.bartersFor ?? [];
     if (Array.isArray(bartersFor)) {
-      offers.push(...extractBarterOffers(bartersFor));
+      offers.push(...extractBarterOffers(bartersFor, preset.id));
     }
     offers.sort((a, b) => a.price - b.price);
     let lowestPrice = 0;
@@ -521,6 +547,7 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
       presets.push({
         id: preset.id ?? '',
         name: preset.name ?? preset.shortName ?? 'Unknown',
+        receiver_id: gun.id,
         items: presetItems,
         image: presetImage,
         price: lowestPrice,
@@ -616,7 +643,7 @@ function extractGunStats(gun: RawItem): GunStats {
 }
 
 /** Convert bartersFor entries into OfferInfo with "barter:" source prefix. */
-function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
+function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): OfferInfo[] {
   const offers: OfferInfo[] = [];
   for (const barter of bartersFor) {
     if (typeof barter !== 'object' || !barter) continue;
@@ -625,13 +652,18 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
     if (!trader) continue;
     const level = typeof b.level === 'number' ? b.level : 1;
     const requiredItems = (b.requiredItems ?? []) as Array<{
-      item?: { name?: string; avg24hPrice?: number | null; basePrice?: number | null; iconLink?: string };
-      count?: number;
+      item?: { id?: string; name?: string; avg24hPrice?: number | null; basePrice?: number | null; iconLink?: string };
+      count?: unknown;
     }>;
     let totalCost = 0;
     const reqs: import('./types').BarterRequirement[] = [];
     for (const ri of requiredItems) {
-      const count = ri.count ?? 1;
+      // No default: an absent/null/negative ingredient quantity is a source error, never 1.
+      const count = barterIngredientCount(ri.count, {
+        offeredItemId: offeredItemId ?? '',
+        itemId: ri.item?.id ?? '',
+        itemName: ri.item?.name,
+      });
       const price = ri.item?.avg24hPrice ?? ri.item?.basePrice ?? 0;
       totalCost += count * price;
       reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price, icon: ri.item?.iconLink || undefined });
@@ -707,7 +739,7 @@ function extractModStats(mod: RawItem): ModStats {
   }
   const bartersFor = mod.bartersFor ?? [];
   if (Array.isArray(bartersFor)) {
-    offers.push(...extractBarterOffers(bartersFor));
+    offers.push(...extractBarterOffers(bartersFor, mod.id));
   }
   offers.sort((a, b) => a.price - b.price);
   const purchasable = offers.length > 0;

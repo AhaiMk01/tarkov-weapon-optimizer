@@ -1,11 +1,13 @@
 // Differential: production dataService extractors (via buildItemLookup) vs the independent
 // reference reader, on the production adapter's output for the pinned raw documents.
 //
-//  * Known Stage 2 defect (ADR 0013 §4A): `extractAllPresets` pushes one item id per
-//    `containsItems` entry and ignores `count`, so a preset holding 3 copies of a part reads as
-//    1. Stage 1 expects to expose this; it does not require the extractor to pass.
+//  * Preset quantities (ADR 0013 section 4A, repaired in Stage 2 phase 2.2): `extractAllPresets` returns
+//    count-bearing components `{ itemId, count }` (repeated entries summed) and carries the receiver's
+//    own `containsItems` entry as `receiver_id`, base identity kept apart from component supply. Before
+//    the repair it pushed one item id per entry and ignored `count`, so a preset holding 3 copies of a
+//    part read as 1 (56 (preset, item) quantities wrong in 52 of 399 presets).
 //  * Barter valuation: production sums in binary64 and uses Math.round; the reference evaluates
-//    avg24hPrice ?? basePrice ?? 0 exactly over Q and rounds floor(total + 1/2) (ADR 0010 §2).
+//    avg24hPrice ?? basePrice ?? 0 exactly over Q and rounds floor(total + 1/2) (ADR 0010 section 2).
 //
 // One of the few files allowed to import production code, strictly as the system under test.
 import { test } from 'node:test';
@@ -33,8 +35,10 @@ interface ProductionOffer {
 interface ProductionPreset {
   id: string;
   name: string;
-  /** string[] today (one id per raw entry); {itemId,count}[] after the Stage 2 repair. */
-  items: unknown[];
+  /** The receiver the preset is built on: base identity, not component supply. */
+  receiver_id: string;
+  /** Count-bearing component supply, one entry per distinct item; excludes the receiver. */
+  items: Array<{ itemId: string; count: number }>;
   offers: ProductionOffer[];
 }
 interface ProductionLookupEntry {
@@ -54,18 +58,10 @@ const { world } = loadPinnedWorld('en');
 // Preset quantities
 // ----------------------------------------------------------------------------------------
 
-/** Per-item quantity as production represents it, tolerant of the Stage 2 count-bearing shape. */
-function productionQuantities(items: readonly unknown[]): Map<string, number> {
+/** Per-item quantity as production represents it: repeated entries sum (the extractor already merged them). */
+function productionQuantities(items: readonly { itemId: string; count: number }[]): Map<string, number> {
   const out = new Map<string, number>();
-  for (const entry of items) {
-    if (typeof entry === 'string') {
-      out.set(entry, (out.get(entry) ?? 0) + 1);
-    } else if (typeof entry === 'object' && entry !== null) {
-      const e = entry as { itemId?: unknown; id?: unknown; count?: unknown };
-      const id = String(e.itemId ?? e.id);
-      out.set(id, (out.get(id) ?? 0) + (typeof e.count === 'number' ? e.count : 1));
-    }
-  }
+  for (const { itemId, count } of items) out.set(itemId, (out.get(itemId) ?? 0) + count);
   return out;
 }
 
@@ -74,6 +70,7 @@ interface QuantityMismatch { gunId: string; presetId: string; presetName: string
 function comparePresetQuantities(source: Record<string, ProductionLookupEntry> = lookup) {
   const mismatches: QuantityMismatch[] = [];
   const identityProblems: string[] = [];
+  const receiverProblems: string[] = [];
   let comparedPresets = 0;
   for (const gun of world.items.values()) {
     if (!gun.types.includes('gun')) continue;
@@ -88,6 +85,11 @@ function comparePresetQuantities(source: Record<string, ProductionLookupEntry> =
       comparedPresets++;
       const rawPreset = world.items.get(preset.id) as RefItem;
       const expected = expandComponents(rawPreset.components);
+      // The raw preset lists the receiver itself as a component; production carries it as `receiver_id` (base
+      // identity) and keeps it out of the supplied stock. Compare the stock, and the receiver separately.
+      if (preset.receiver_id !== gun.id) receiverProblems.push(`${preset.id}: receiver_id ${preset.receiver_id} != ${gun.id}`);
+      if (expected.get(gun.id) !== 1) receiverProblems.push(`${preset.id}: raw source lists the receiver x${expected.get(gun.id) ?? 0}, not exactly once`);
+      expected.delete(gun.id);
       const got = productionQuantities(preset.items);
       for (const itemId of new Set([...expected.keys(), ...got.keys()])) {
         const e = expected.get(itemId) ?? 0;
@@ -106,7 +108,7 @@ function comparePresetQuantities(source: Record<string, ProductionLookupEntry> =
       }
     });
   }
-  return { mismatches, identityProblems, comparedPresets };
+  return { mismatches, identityProblems, receiverProblems, comparedPresets };
 }
 
 const quantities = comparePresetQuantities();
@@ -116,54 +118,68 @@ test('production all_presets lists exactly the reference presets for every gun, 
   assert.equal(quantities.comparedPresets, 399);
 });
 
-test('KNOWN DEFECT PRESENT: production extractAllPresets currently loses preset counts', t => {
-  const presets = new Set(quantities.mismatches.map(m => m.presetId));
-  const unitsLost = quantities.mismatches.reduce((sum, m) => sum + (m.expected - m.got), 0);
-  t.diagnostic(`count loss: ${quantities.mismatches.length} (preset,item) quantities wrong in ${presets.size} of ${quantities.comparedPresets} presets, ${unitsLost} units missing`);
-  const isMod = (itemId: string) => (world.items.get(itemId) as RefItem).types.includes('mods');
-  const modMismatches = quantities.mismatches.filter(m => isMod(m.itemId));
-  const modUnitsLost = modMismatches.reduce((sum, m) => sum + (m.expected - m.got), 0);
-  t.diagnostic(`  of which mods: ${modMismatches.length} entries, ${modUnitsLost} units; non-mod (ammo) entries: ${quantities.mismatches.length - modMismatches.length}, ${unitsLost - modUnitsLost} units`);
-  // The mismatch set must be exactly the reference's own count>1 entries, each read as 1 copy:
-  // no other kind of divergence hides inside the defect.
-  const { summary } = gunPresetMultiplicities(world);
-  const expected = summary.multiplicities.map(m => `${m.presetId}|${m.itemId}|${m.count}|1`).sort();
-  const actual = quantities.mismatches.map(m => `${m.presetId}|${m.itemId}|${m.expected}|${m.got}`).sort();
-  assert.deepEqual(actual, expected);
-  assert.equal(quantities.mismatches.length, 56);
-  assert.equal(presets.size, 52);
-  assert.equal(modMismatches.length, 35, 'entries whose item is a weapon mod (the rest are ammo in magazines)');
-  assert.equal(unitsLost, 626);
-  // When Stage 2 repairs the extractor this assertion fails: remove the todo flag below and
-  // retire this test at the same time.
-  assert.ok(quantities.mismatches.length > 0);
+test('production extractAllPresets preserves reference preset quantities', t => {
+  for (const m of quantities.mismatches) {
+    t.diagnostic(`preset ${m.presetId} "${m.presetName}" (gun ${m.gunId}): item ${m.itemId} "${m.itemName}" expected x${m.expected}, production x${m.got}`);
+  }
+  assert.deepEqual(quantities.mismatches, [], `${quantities.mismatches.length} preset quantities differ from the raw source`);
 });
 
-test(
-  'production extractAllPresets preserves reference preset quantities',
-  { todo: 'Stage 2 repairs preset count loss (ADR 0013 §4A)' },
-  t => {
-    for (const m of quantities.mismatches) {
-      t.diagnostic(`preset ${m.presetId} "${m.presetName}" (gun ${m.gunId}): item ${m.itemId} "${m.itemName}" expected x${m.expected}, production x${m.got}`);
-    }
-    assert.deepEqual(quantities.mismatches, [], `${quantities.mismatches.length} preset quantities differ from the raw source`);
-  },
-);
+test('the quantity comparison covers the real multi-copy population: 56 gun-preset entries with count > 1 (35 mods)', t => {
+  const { summary } = gunPresetMultiplicities(world);
+  const isMod = (itemId: string) => (world.items.get(itemId) as RefItem).types.includes('mods');
+  const modEntries = summary.multiplicities.filter(m => isMod(m.itemId));
+  t.diagnostic(`${summary.multiplicities.length} multi-copy entries in ${summary.presetsWithGt1} presets (${modEntries.length} weapon mods, the rest ammunition)`);
+  assert.equal(summary.multiplicities.length, 56);
+  assert.equal(summary.presetsWithGt1, 52);
+  assert.equal(modEntries.length, 35);
+  // Each of them is read back with its exact raw count, not as one copy.
+  const byPreset = new Map(Object.values(lookup).flatMap(e => e.all_presets ?? []).map(p => [p.id, p]));
+  for (const m of summary.multiplicities) {
+    assert.equal(productionQuantities(byPreset.get(m.presetId)?.items ?? []).get(m.itemId), m.count, `${m.presetId} ${m.itemId}`);
+  }
+});
 
-test('control: a count-bearing extractor output (the Stage 2 shape) passes the same comparison', () => {
-  const repaired: Record<string, ProductionLookupEntry> = {};
-  for (const [id, entry] of Object.entries(lookup)) {
-    repaired[id] = entry.type !== 'gun' ? entry : {
+test('the receiver is base identity: every preset carries receiver_id and keeps the receiver out of the supplied stock', () => {
+  assert.deepEqual(quantities.receiverProblems, []);
+  const presets = Object.values(lookup).flatMap(e => e.all_presets ?? []);
+  assert.equal(presets.length, 399);
+  for (const p of presets) assert.ok(!p.items.some(c => c.itemId === p.receiver_id), `${p.id} lists its receiver as stock`);
+});
+
+test('control: a tampered count is flagged by the quantity comparison', () => {
+  const victim = Object.entries(lookup).find(([, e]) => e.type === 'gun' && (e.all_presets ?? []).some(p => p.items.length > 0));
+  assert.ok(victim);
+  const [id, entry] = victim;
+  let tamperedOnce = false;
+  const tampered: Record<string, ProductionLookupEntry> = {
+    ...lookup,
+    [id]: {
       ...entry,
-      all_presets: (entry.all_presets ?? []).map(p => ({
-        ...p,
-        items: (world.items.get(p.id) as RefItem).components.map(c => ({ itemId: c.itemId, count: c.count })),
-      })),
+      all_presets: (entry.all_presets ?? []).map(p => {
+        if (tamperedOnce || p.items.length === 0) return p;
+        tamperedOnce = true;
+        return { ...p, items: p.items.map((c, i) => (i === 0 ? { ...c, count: c.count + 1 } : c)) };
+      }),
+    },
+  };
+  const result = comparePresetQuantities(tampered);
+  assert.equal(result.mismatches.length, 1);
+  assert.equal(result.comparedPresets, 399);
+});
+
+test('control: a count-collapsed output (the pre-repair shape, one copy per entry) is flagged for exactly the multi-copy entries', () => {
+  const collapsed: Record<string, ProductionLookupEntry> = {};
+  for (const [id, entry] of Object.entries(lookup)) {
+    collapsed[id] = entry.type !== 'gun' ? entry : {
+      ...entry,
+      all_presets: (entry.all_presets ?? []).map(p => ({ ...p, items: p.items.map(c => ({ itemId: c.itemId, count: 1 })) })),
     };
   }
-  const result = comparePresetQuantities(repaired);
-  assert.deepEqual(result.mismatches, []);
-  assert.equal(result.comparedPresets, 399);
+  const result = comparePresetQuantities(collapsed);
+  const { summary } = gunPresetMultiplicities(world);
+  assert.equal(result.mismatches.length, summary.multiplicities.length);
+  assert.equal(result.mismatches.length, 56);
 });
 
 // ----------------------------------------------------------------------------------------

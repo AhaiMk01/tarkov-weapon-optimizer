@@ -103,10 +103,31 @@ export interface SlotInfo {
 
 // --- Preset Info ---
 
+/**
+ * One component of a factory preset: `count` copies of `itemId`, supplied at no extra cost
+ * (the q_{b,i} of the model). The single count-bearing representation of preset contents:
+ * a preset never degrades to a flat id list or a Set of ids.
+ */
+export interface PresetComponent {
+  itemId: string;
+  /** Finite nonnegative integer, validated at the source; never defaulted. */
+  count: number;
+}
+
 export interface PresetInfo {
   id: string;
   name: string;
-  items: string[];
+  /**
+   * The receiver (gun) the preset is built on. This is base identity, kept apart from component
+   * supply: the receiver entry of the raw `containsItems` is not an installable stock item and is
+   * not repeated in `items`.
+   */
+  receiver_id: string;
+  /**
+   * Supplied component stock, one entry per distinct item in source order. Repeated source entries
+   * for one item are summed by the extractor; a consumer that builds its own list must sum too.
+   */
+  items: PresetComponent[];
   image: string | null;
   price: number;
   price_source: string;

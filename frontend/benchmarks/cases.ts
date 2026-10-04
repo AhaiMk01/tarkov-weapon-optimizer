@@ -1,5 +1,6 @@
 import { buildItemLookup } from '../src/solver/dataService.ts';
 import { buildCompatibilityMap } from '../src/solver/compatibilityMap.ts';
+import { presetSupply } from '../src/solver/presetSupply.ts';
 import type { OptimizeRequest, SolverPrecisionMode } from '../src/api/client.ts';
 import type { BenchmarkCase, Snapshot } from './types.ts';
 
@@ -34,7 +35,7 @@ export function makeCases(snapshot: Snapshot): BenchmarkCase[] {
     const reachable = Object.keys(buildCompatibilityMap(gun.id, lookup).reachable_items).sort();
     const preset = lookup[gun.id];
     if (!preset || preset.type !== 'gun') throw new Error('Missing weapon lookup');
-    const retained = preset.presets.flatMap(p => p.items).filter(id => reachable.includes(id)).sort();
+    const retained = preset.presets.flatMap(p => [...presetSupply(p.items).keys()]).filter(id => reachable.includes(id)).sort();
     const locked = retained[0] ?? reachable[0];
     const banned = reachable.find(id => id !== locked);
     if (!locked || !banned) throw new Error(`No lock/ban candidates for ${gun.id}`);

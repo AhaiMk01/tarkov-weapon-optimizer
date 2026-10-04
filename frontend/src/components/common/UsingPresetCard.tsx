@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space, Table } from 'antd'
 import { TraderIcon, ItemRow, ItemTooltip } from '../ItemRow'
+import { QuantityTag } from '../QuantityTag'
+import { presetSupply } from '../../solver/presetSupply'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 
 const { Text } = Typography
@@ -47,6 +49,10 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
   }
   const unknown = t('ui.unknown')
   const tooltipContent = <PresetTooltipContent preset={preset} />
+  // Copies of each part the preset supplies (a part listed twice, or with a count above one, shows ×N).
+  const supplied = presetSupply(preset.items)
+  // The naked receiver is the base that is not a factory preset; its id is the receiver's own.
+  const isFactoryPreset = preset.id !== preset.receiver_id
   return (
     <Card size="small" style={{ overflow: 'hidden' }}>
       {contextHolder}
@@ -70,7 +76,7 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
               {preset.name}
             </Text>
           </Tooltip>
-          <Text type="secondary" style={{ fontSize: 11 }}>{preset.items.length > 0 ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
+          <Text type="secondary" style={{ fontSize: 11 }}>{isFactoryPreset ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           <TraderIcon source={preset.source} unknownLabel={unknown} barterRequirements={preset.barter_requirements} />
@@ -102,9 +108,12 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
                     dataIndex: 'name',
                     key: 'name',
                     render: (text: string, record: ItemDetail) => (
-                      <ItemTooltip item={record}>
-                        <Text strong style={{ fontSize: 13, cursor: 'pointer' }}>{text}</Text>
-                      </ItemTooltip>
+                      <Space size={6}>
+                        <ItemTooltip item={record}>
+                          <Text strong style={{ fontSize: 13, cursor: 'pointer' }}>{text}</Text>
+                        </ItemTooltip>
+                        <QuantityTag count={supplied.get(record.id)} />
+                      </Space>
                     ),
                   },
                   {
@@ -141,7 +150,7 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
               />
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${compactMode ? 380 : 480}px), 1fr))`, gap: 8 }}>
-                {retainedItems.map(item => <ItemRow key={item.id} item={item} hidePrice compactMode={compactMode} />)}
+                {retainedItems.map(item => <ItemRow key={item.id} item={item} quantity={supplied.get(item.id)} hidePrice compactMode={compactMode} />)}
               </div>
             ),
           }]}

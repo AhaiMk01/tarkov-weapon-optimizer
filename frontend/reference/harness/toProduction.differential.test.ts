@@ -168,7 +168,7 @@ test('a barter is priced as the extractor prices it (float sum, rounded) and kee
   assert.deepEqual(offers[0].barter_requirements?.map(r => [r.name, r.count, r.unit_price]), [['bolt', 2.5, 100], ['wire', 3, 11], ['ghost', 1, 0]]);
 });
 
-test('receiver and preset offers map like mod offers; presets are flat id lists with the base price from their cheapest offer', () => {
+test('receiver and preset offers map like mod offers; presets carry count-bearing components with the base price from their cheapest offer', () => {
   const lookup = mapFixture(fixture({
     items: [{ id: 'a' }, { id: 'b' }],
     weapons: [{ id: 'gun', offers: [{ kind: 'trader', trader: 'prapor', level: 1, price: 1000 }, { kind: 'flea', price: 1200 }] }],
@@ -183,7 +183,8 @@ test('receiver and preset offers map like mod offers; presets are flat id lists 
   assert.deepEqual(g.all_presets.map(p => p.id), ['p1', 'p2']);
   assert.deepEqual(g.presets.map(p => p.id), ['p1'], 'presets lists the purchasable ones, as the extractor does');
   const p1 = g.all_presets[0];
-  assert.deepEqual(p1.items, ['a', 'gun'], 'a zero-count component supplies nothing and is omitted; the receiver entry is kept as in real data');
+  assert.deepEqual(p1.items, [{ itemId: 'a', count: 1 }, { itemId: 'b', count: 0 }], 'count-bearing components; a zero count stays a component that supplies nothing; the receiver entry is base identity, not stock');
+  assert.equal(p1.receiver_id, 'gun');
   assert.equal(p1.price, 2500);
   assert.equal(p1.purchasable, true);
   assert.equal(g.all_presets[1].purchasable, false);
@@ -275,15 +276,30 @@ test('owned_items is unsupported: production has no stash input', () => {
   assert.match(detectUnsupported(f, request({ owned_items: ['a', 'a'] }))[0].detail, /2/);
 });
 
-test('a preset component with total count above one is unsupported; count 1 and 0 are representable', () => {
+test('preset component quantities of every size are representable, so none is reported as unsupported', () => {
   const mk = (components: { itemId: string; count: number }[]) => fixture({
     items: [{ id: 'a' }], presets: [{ id: 'p', weaponId: 'gun', components, offers: [{ kind: 'trader', trader: 'prapor', level: 1, price: 5 }] }],
   });
   assert.deepEqual(flags(mk([{ itemId: 'a', count: 1 }])), []);
   assert.deepEqual(flags(mk([{ itemId: 'a', count: 0 }])), []);
-  assert.deepEqual(flags(mk([{ itemId: 'a', count: 2 }])), ['preset_component_count_gt_1']);
-  assert.deepEqual(flags(mk([{ itemId: 'a', count: 1 }, { itemId: 'a', count: 1 }])), ['preset_component_count_gt_1'], 'repeated entries sum');
+  assert.deepEqual(flags(mk([{ itemId: 'a', count: 2 }])), []);
+  assert.deepEqual(flags(mk([{ itemId: 'a', count: 1 }, { itemId: 'a', count: 1 }])), []);
   assert.deepEqual(flags(mk([{ itemId: 'gun', count: 1 }])), []);
+  assert.ok(!(UNSUPPORTED_FEATURES as readonly string[]).includes('preset_component_count_gt_1'), 'the detector was removed with the repair');
+});
+
+test('preset components keep their quantities: repeated entries sum, counts above one survive, the receiver entry is identity', () => {
+  const lookup = mapFixture(fixture({
+    items: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
+    presets: [{
+      id: 'p', weaponId: 'gun',
+      components: [{ itemId: 'gun', count: 1 }, { itemId: 'a', count: 2 }, { itemId: 'b', count: 1 }, { itemId: 'b', count: 1 }, { itemId: 'c', count: 60 }],
+      offers: [{ kind: 'trader', trader: 'prapor', level: 1, price: 5 }],
+    }],
+  }));
+  const p = gun(lookup, 'gun').all_presets[0];
+  assert.deepEqual(p.items, [{ itemId: 'a', count: 2 }, { itemId: 'b', count: 2 }, { itemId: 'c', count: 60 }]);
+  assert.equal(p.receiver_id, 'gun');
 });
 
 test('a barter lot of more than one unit is unsupported', () => {
@@ -328,10 +344,10 @@ test('a preset id equal to its receiver id or to the naked-base marker cannot be
 test('several unsupported features are all listed, once per feature id per subject, in a stable order', () => {
   const f = fixture({
     items: [{ id: 'a', offers: [{ kind: 'barter', trader: 'prapor', level: 1, offeredCount: 2, requirements: [{ count: 1, basePrice: 1 }] }] }],
-    presets: [{ id: 'p', weaponId: 'gun', components: [{ itemId: 'a', count: 3 }], offers: [{ kind: 'trader', trader: 'prapor', level: 1, price: 5 }] }],
+    presets: [{ id: 'p', weaponId: 'gun', components: [{ itemId: 'a', count: 3 }], offers: [{ kind: 'flea', price: 5, minPlayerLevel: 20 }] }],
   });
   const found = flags(f, request({ owned_items: ['a'] }));
-  assert.deepEqual(found, ['owned_items', 'preset_component_count_gt_1', 'barter_offered_count_gt_1']);
+  assert.deepEqual(found, ['owned_items', 'barter_offered_count_gt_1', 'flea_player_level_on_base']);
   assert.deepEqual(found, flags(f, request({ owned_items: ['a'] })), 'deterministic');
 });
 
