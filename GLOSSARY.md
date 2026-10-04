@@ -55,6 +55,18 @@ The 4-gate verification requirement for mathematical formulation reductions comp
 ### Three-Tier Verification Hierarchy
 The explicit authority ordering: Tier 1 (Brute-Force Physical Oracle & Independent `validateBuild`), Tier 2 (Frontend JS / HiGHS Implementation), Tier 3 (Differential Python / CP-SAT cross-checks on reconciled sub-problems).
 
+### Correctness-First Adoption Sequence
+The ordered 6-stage cutover roadmap governing implementation of the solver handoff:
+1. Verification Foundation (Physical Oracle & upgraded `validateBuild.ts`).
+2. Core Physical Correctness Repairs (instance compatibility, required-slot $p_{i,s}$, conflicts, multi-copy presets, exact deficits, hard inventory caps).
+3. Bound-Safe Numerics, Proof Gating & Outward Rounding (`n.toString()`, DAG error bounds, outward secants, `outwardSafeCeil`).
+4. Three-Tier Model Preparation Seam (session blueprint, subproblem domain, fast specialization, separate `endpointDomainKey`).
+5. Exact Model Reductions & Statistical Benchmark Adoption (clamp specialization, second-clamp elimination, $buy_i \equiv x_i$, recoil cap collapse; Gates A–D).
+6. Public API, Web Worker, and UI Consumer Cutover (`owned_items`, shopping list rendering, delete legacy FiR/owned shortcuts).
+
+### Zero-Shim Migration Policy
+The refactoring invariant requiring all eight affected codebase layers to migrate directly to the new contracts without intermediate compatibility shims, dual-path wrappers, or fake fallbacks, completely deleting obsolete legacy single-copy and unbuyable-item assumptions.
+
 ### Model-Relative MOA Floor
 MOA-floor search outcomes evaluated strictly within the provisional software model (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Inherits full ADR 0004 safeguards: requires a verified instance witness, a finite mathematically justified lower bound $\text{lo}$, non-null bisection gate, and $\text{hi} - \text{lo} \le 0.02\text{ MOA}$ for `model_proved`. Model infeasibility must never advance an authoritative physical lower bound.
 
