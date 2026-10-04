@@ -122,7 +122,7 @@ Native UB correction is valid only for a qualified native bound and proved objec
 
 One queue-inclusive request epoch deadline, default Optimize/Explore 60000 ms and floor 30000 ms; guards before every stage and after **explicit macrotask** yields. Out-of-band cancel bypasses dispatchChain. Yield between endpoint, spatial, Pareto and floor sub-solves; a microtask await alone does not dispatch worker cancel. Native allowance is positive and at least .001 s only while time remains. Hard termination rejects active/queued promises exactly once with CancellationError, retains published snapshots and starts a fresh worker. Native failure uses typed SolverError envelope, not a normal feasible result.
 
-Validate owned_items (including sparse holes) and snapshot its full <=10000 nonempty-string multiset before hashing/cache/model work. Omitted/[] mean zero stock; do not deduplicate. Forward it and the full acquisition/feasibility domain to direct solve, Explore, floor queries and actual Gunsmith optimize. Floor queries share the floor-resolved Precise domain and price preference; only their MOA cap changes. Each cap trial is its own prepared domain. Missing justified lo **starts discovery**, never immediate witnessed-only return: qualified Precise infeasibility at a probe establishes lo, then bisect. Unresolved/unqualified trials halt with the last upper-bound witness; discovery plus bisection has <=14 trials. Section6 controls; no invented lo=0.
+Validate owned_items (including sparse holes) and snapshot its full <=10000 nonempty-string multiset before hashing/cache/model work. Omitted/[] mean zero stock; do not deduplicate. Forward it and the full acquisition/feasibility domain to direct solve, Explore, floor queries and actual Gunsmith optimize. Floor queries share the floor-resolved Precise domain, constant-zero feasibility objective and explicit first-witness stop policy; only their MOA cap changes. Each cap trial is its own prepared domain. Missing justified lo **starts discovery**, never immediate witnessed-only return: qualified Precise infeasibility at a probe establishes lo, then bisect. Unresolved/unqualified trials halt with the last upper-bound witness; discovery plus bisection has <=14 trials. Section6 controls; no invented lo=0.
 
 Metadata operations getGunsmithTasks/getInfo/getWeaponMods/getStatus/loadData/clearCache do not require stash input. Reload/replacement/clearCache invalidates affected physical/endpoint state, even if language/game-mode names match. User changed acquisition domain is not a cache hit.
 
@@ -249,13 +249,17 @@ The API floor request carries the normalized Optimize-domain fields except the M
 
 `optimization.termination` is search completion only: retain legacy-named `optimal` for completed executed-model search and `limit` for unfinished/unstarted search. No certificate follows from either value. A completed search followed by failed validation/proof qualification remains optimal; an unfinished spatial search is limit even if its last native sub-solve completed. The no-proof rows cover interruption, representation/parser/native proof withholding and rejected decoding independently of clock events. A rejected candidate never erases an earlier witness or completed proof. Full native errors use typed SolverError with completion metadata captured before failure, no fabricated normal result. Hard terminate uses CancellationError and retained snapshots. UI shows time/node/cancel retry advice only from the factual reason, not from limit alone.
 
-Public reason strings: **Approximate model infeasible**, **Provisional MOA model infeasible**, **Fast provisional MOA model infeasible**, **Invalid owned_items format**, **Queue timeout before dispatch**, **Independent build validation failed**, **Required proof prerequisite unavailable**; pure interrupt diagnostics **Cancelled by user**, **Time limit reached**, **Node limit reached**. Locale mappings cover these strings rather than divergent aliases.
+Public reason strings: **Approximate model infeasible**, **Provisional MOA model infeasible**, **Fast provisional MOA model infeasible**, **Invalid owned_items format**, **Queue timeout before dispatch**, **Independent build validation failed**, **Required proof prerequisite unavailable**; pure interrupt diagnostics **Cancelled by user**, **Time limit reached**, **Node limit reached**, **Native solution limit reached**. Locale mappings cover these strings rather than divergent aliases. Native solution-limit diagnostics do not imply a timeout.
 
-Precedence: already completed qualified proof wins and is not downgraded. Entry inventory failure is reported before hash/cache/model work. Otherwise an observed validation/proof-prerequisite failure outranks coincident interrupt flags, while retained witness/proof state still decides the status; pure simultaneous interrupt flags use cancel, deadline, node limit in that order. Queue expiry stops before preparation and uses its operation envelope. Typed native failure is not rewritten to an interrupt result. All diagnostics preserve the factual stop cause, not an invented infeasibility.
+Precedence: already completed qualified proof wins and is not downgraded. Entry inventory failure is reported before hash/cache/model work. Otherwise an observed validation/proof-prerequisite failure outranks coincident interrupt flags, while retained witness/proof state still decides the status; pure simultaneous interrupt flags use cancel, deadline, node limit, native solution limit in that order. Queue expiry stops before preparation and uses its operation envelope. Typed native failure is not rewritten to an interrupt result. All diagnostics preserve the factual stop cause, not an invented infeasibility.
 
 ### MOA floor
 
-Default time_limit_ms=30000. Resolve floor queries Precise (record requested/resolved mode), weighted price preference with ergo/recoil weights zero and price weight one; no Sweet Spot payoff solves. Price is a secondary witness preference within each cap's unchanged feasible set, not the MOA-floor objective. Accept any independently verified witness, including limited queries; do not wait for price optimality or add extra tie-breaking solves. Equal-price/free-extra witnesses may still vary, and no minimum-part-count guarantee is made. Preserve all caller hard/acquisition constraints except the searched MOA cap. Seed supplies achievable hi only, never a minimum. No witness gives unresolved, or model_infeasible after qualified Precise seed emptiness. Invalid stock/queue expiry has null bounds/display and no witness.
+Default time_limit_ms=30000. Resolve floor queries Precise (record requested/resolved mode), with a constant-zero weighted objective: ergo/recoil/price weights all zero, no Sweet Spot payoff solves. This supersedes the interim price preference because accepting a witness does not by itself stop a price-optimizing native call. No extra display/price/tie-breaking solve. Preserve all caller hard/acquisition constraints except the searched MOA cap, including the real spend/budget constraints. Arbitrary-price/equal-price/free-extra witness selection is accepted; neither stable selection nor minimum spend/part count is promised. Seed supplies achievable hi only, never a minimum. No witness gives unresolved, or model_infeasible after qualified Precise seed emptiness. Invalid stock/queue expiry has null bounds/display and no witness.
+
+**Explicit per-query/native stopping.** Every floor seed/cap MIP sub-solve sets `mip_max_improving_sols=1` and a positive native time allowance derived from the remaining shared request deadline. Constant-zero objective feasibility already attains the mathematical optimum; the native limit also requests stop at the first improving incumbent. End the enclosing seed/cap query at the first independently validated full witness satisfying the exact hard constraints, including TED/overswing if active. A native relaxed-interval candidate is insufficient: retain the existing spatial/exact-feasibility safeguards until a full witness, qualified whole-query emptiness or unresolved stop. Do not continue for a cheaper/nicer witness. Neither the native option nor a feasible objective guarantees instant return or a fast infeasibility proof.
+
+Native `optimal` completion and an unfinished native solution-limit stop (`limit`, factual reason **Native solution limit reached**) remain distinct; either can yield a verified hi witness. A solution/no-witness/time limit never raises lo. Qualified whole-query Precise infeasibility alone can do so. No new per-trial time slice: one hard infeasible/unresolved query can still exhaust the remaining 30 seconds. Stage2 must verify the effective integer option and structured stop/completion code in the pinned core/glue; byte-string presence is not ABI/status evidence. Keep these options scoped to floor calls, not other operations sharing an engine. Stage3 supplies real first-witness, infeasible, no-witness-limit and option-isolation regressions; the finite checker proves none of that native behavior.
 
 **Discover before bisecting.** An independently proved analytic lo may be used but is not required or promised. With no lo, set d=max(1 MOA,abs(hi)/2), probe t=hi-d, and double d after each verified feasible discovery probe. Update hi only to the smaller independently enclosed achieved MOA, never to an unsupported trial number. Qualified Precise provisional-model infeasibility at t establishes lo=t and switches to bisection t=lo+(hi-lo)/2. This explicitly supersedes #41's immediate no-lo return and makes model_proved reachable without an analytic formula.
 
@@ -295,7 +299,7 @@ Fast does not get exact Gate A/B/C or physical infeasibility by declaration. Req
 
 Stage 3 evidence includes full ledger/reference-versus-production validator agreement; parser/readback and structured-primal precision; finite auxiliary and bound-error proof; completed and limit native cases; deadline/cancel/queue/withheld/invalid/validation transitions; full floor/Explore cases; expanded TypeScript checking; deterministic behavioral regressions; and actual browser Optimize, Explore, Gunsmith, manifest/export, nullable status and floor smoke. Docs/changelog for future implementation are updated after that smoke. These proofs are obligations, not already executed by planning.
 
-Stage3 must measure the actual Precise floor workflow at the default 30-second budget and <=14 threshold solves on predeclared real-weapon cases, including large platforms whose ordinary Auto optimization resolves Fast, plus smaller controls. Freeze weapon/request/snapshot/toolchain/cache identities. Report planned denominators, seed time, each discovery/bisection native call, trial count, end-to-end latency, status rates (model_proved/model_witnessed/unresolved/model_infeasible), achieved hi and justified bracket gaps, stop causes and validation. Do not assume 14 MIPs fit or interpret witnessed-only as completed minimum. These measurements characterize usability and inform a separate evidence-backed policy decision; they do not silently extend the budget, switch floor proofs to Fast, relax gaps or require a manufactured speedup for correctness adoption. None has been measured during planning.
+Stage3 must measure the actual Precise floor workflow at the default 30-second budget and <=14 threshold solves on predeclared real-weapon cases, including large platforms whose ordinary Auto optimization resolves Fast, plus smaller controls. Freeze weapon/request/snapshot/toolchain/cache identities. Report effective zero-objective/native stop options, planned denominators, seed time, each discovery/bisection native call and stop code, trial count, end-to-end latency, status rates (model_proved/model_witnessed/unresolved/model_infeasible), achieved hi and justified bracket gaps, stop causes and validation. Include difficult infeasible/no-witness cases that may spend the remaining deadline and nonlinear rejected-candidate paths. Do not assume 14 MIPs fit or interpret witnessed-only as completed minimum. These measurements characterize usability and inform a separate evidence-backed policy decision; they do not silently extend the budget, switch floor proofs to Fast, relax gaps or require a manufactured speedup for correctness adoption. None has been measured during planning.
 
 ### Primary comparative contract and nonempty relevance
 
@@ -329,7 +333,7 @@ After parent verification of these contracts, meaningful floor simulation, clean
 
 ## 9. Reproducible planning-only check
 
-Save the following block as floor-planning-check.mjs and run node floor-planning-check.mjs. This is only a finite-domain **floor-search simulation**, covering discovery/bisection, price-preferred witnesses/equal-price order permutations, zero/negative caps, scope and interruption/budget retention. It is not production solver/native/numerical/game/performance evidence. Self-defined termination/count assertions are removed: those contracts need future integration regressions at the real seams. Complete code is retained for offline reproduction.
+Save the following block as floor-planning-check.mjs and run node floor-planning-check.mjs. This is only a finite-domain **floor-search simulation**, covering discovery/bisection with first-feasible arbitrary witnesses and witness-order permutations, zero/negative caps, scope and interruption/budget retention. It does not implement or verify native stopping, production solver/native/numerical/game/performance behavior. Self-defined termination/count assertions remain removed: those contracts need future integration regressions at the real seams. Complete code is retained for offline reproduction.
 
 ```js
 // Planning-only finite-domain checker; NOT the production solver or numerical/native proof.
@@ -338,8 +342,7 @@ import assert from 'node:assert/strict';
 const TOL = 0.02;
 function floor(points, { maxTrials = 14, interruptAt = null, unresolvedAt = null } = {}) {
   const domain = points.filter(p => p.allowed !== false);
-  const preferPrice = candidates => candidates.reduce((best, p) => !best || (p.price ?? 0) < (best.price ?? 0) ? p : best, null);
-  const seed = preferPrice(domain);
+  const seed = domain[0];
   if (!seed) return { status: 'model_infeasible', hi: null, lo: null, trials: 0, trace: [] };
   let hi = seed.moa, lo = null, d = Math.max(1, Math.abs(hi) / 2), trials = 0;
   const trace = [];
@@ -349,8 +352,8 @@ function floor(points, { maxTrials = 14, interruptAt = null, unresolvedAt = null
     if (!Number.isFinite(cap) || cap >= hi || (lo !== null && cap <= lo)) break;
     trials++;
     if (unresolvedAt === trials) { trace.push({ cap, outcome: 'U' }); break; }
-    // Exact finite cap-feasible set; prefer price within it, deliberately retain equal-price order.
-    const witness = preferPrice(domain.filter(p => p.moa <= cap));
+    // Exact finite cap-feasible set; take its first witness without any price ranking.
+    const witness = domain.find(p => p.moa <= cap);
     trace.push({ cap, outcome: witness ? 'V' : 'I', witness: witness?.id ?? null });
     if (witness) {
       if (!(witness.moa < hi)) break;
@@ -368,9 +371,9 @@ function assertBracket(result, domain) {
   assert.ok(result.trials > 0 && result.trials <= 14);
 }
 const points = [
-  { id: 'cheap-wide', price: 1, moa: 9 },
-  { id: 'cheap-tight', price: 1, moa: 3 },
-  { id: 'accurate', price: 8, moa: 1.25 },
+  { id: 'wide', moa: 9 },
+  { id: 'medium', moa: 3 },
+  { id: 'accurate', moa: 1.25 },
 ];
 const a = floor(points), b = floor([points[1], points[0], points[2]]);
 assertBracket(a, points); assertBracket(b, points);
@@ -397,4 +400,4 @@ const summarize = ({ status, hi, lo, trials }) => ({ status, hi, lo, trials });
 console.log(JSON.stringify({ scope: 'planning-only finite-domain checker', tieOrderA: summarize(a), tieOrderB: summarize(b), zero: summarize(zero), negative: summarize(negative), scoped: summarize(scoped), interrupted: summarize(interrupted), unresolved: summarize(unresolved), limited: summarize(limited), checks: 'all assertions passed; no production/native/performance proof' }, null, 2));
 ```
 
-Observed in a fresh Node process: both cheap-tie orders reached `hi=1.25` in 10 trials with qualified finite fixture brackets (`lo=1.234375` and `1.23828125`); zero reached `[−0.015625,0]` in 9 trials; the signed case reached `[−1.51953125,−1.5]` in 10; the excluded-source case retained the legal minimum `1.5`; interruption, unresolved trial and a one-trial budget returned witnessed upper bounds with null lo, not proved minima. All checker assertions passed. The script's finite oracle supplies its own model-feasibility truth; no shipped solver/native or outward-arithmetic gate is thereby established.
+Observed in a fresh Node process: both witness orders reached `hi=1.25` in 10 trials with qualified finite fixture brackets (`lo=1.234375` and `1.23828125`); zero reached `[−0.015625,0]` in 9 trials; the signed case reached `[−1.51953125,−1.5]` in 10; the excluded-source case retained the legal minimum `1.5`; interruption, unresolved trial and a one-trial budget returned witnessed upper bounds with null lo, not proved minima. All checker assertions passed. The script's finite oracle supplies its own model-feasibility truth; no shipped solver/native stopping or outward-arithmetic gate is thereby established.
