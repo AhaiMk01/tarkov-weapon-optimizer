@@ -11,6 +11,11 @@
 //  * Unknown, malformed or unrepresentable source data throws a BridgeError (an evidence error, never an
 //    empty fixture and never infeasibility). A non-empty slot filter list other than allowedItems is
 //    refused rather than dropped.
+//  * Loaded ammunition is outside the physical domain (owner decision 2026-10-04, INTERPRETATIONS.md choice 15): a slot
+//    whose allowlist holds only ammunition templates (a revolver cylinder chamber, a camora) is REMOVED, never emptied
+//    (an emptied required slot would make its owner, and the weapon, unbuildable); a slot that mixes ammunition with
+//    other candidates is a BridgeError. Removed slots and templates are recorded in provenance. Preset ammunition stays
+//    inert supply.
 
 import { codeUnitCompare } from '../oracle/index';
 import type {
@@ -63,6 +68,17 @@ export interface TaskGatedOffer {
   taskUnlock: string;
 }
 
+/** A slot left out of the fixture because every template its allowlist names is ammunition (a camora / chamber). */
+export interface RemovedAmmoSlot {
+  /** The receiver or item that owns the slot. */
+  ownerId: string;
+  slotId: string;
+  /** The raw required flag. The slot is removed whatever it is: loaded ammunition is outside the physical domain. */
+  required: boolean;
+  /** The raw allowlist, in source order (all ammunition templates). */
+  allowedItemIds: string[];
+}
+
 export interface FixtureProvenance {
   weaponId: string;
   weaponName: string;
@@ -71,15 +87,22 @@ export interface FixtureProvenance {
   closure: {
     /** Items in fixture.items (installable closure plus supply-only items). */
     items: number;
-    /** Template slots over the receiver and every item. */
+    /** Template slots over the receiver and every item, after the ammunition-only slots are removed. */
     slots: number;
     presets: number;
     presetComponentEntries: number;
   };
   /** Preset components outside the installable closure (typically ammunition): kept as inert supply-only items. */
   supplyOnlyItemIds: string[];
-  /** Closure items whose raw `types` lack 'mods' (ammunition reached through revolver camora slots). */
+  /**
+   * Closure items whose raw `types` lack 'mods'. Empty on the pinned capture: ammunition is the only non-mod template
+   * a slot reaches there, and ammunition-only slots are removed. Kept as a tripwire for other non-mod templates.
+   */
   nonModItemIds: string[];
+  /** Ammunition-only slots removed from the fixture, owners in code-unit order, slots in source order. */
+  removedAmmoSlots: RemovedAmmoSlot[];
+  /** Ammunition templates those slots allowed (they left the closure unless a preset also lists them), code-unit sorted. */
+  removedAmmoItemIds: string[];
   defaults: AppliedDefault[];
   taskGated: TaskGatedOffer[];
 }
@@ -150,8 +173,37 @@ function categoryChain(world: RawWorld, item: RefItem): string[] {
   return chain;
 }
 
-function mapSlots(world: RawWorld, owner: RefItem): ReferenceSlot[] {
-  return owner.slots.map((slot: RefSlot): ReferenceSlot => {
+/** Ammunition template: the raw item type list carries `ammo`. */
+function isAmmunition(item: RefItem): boolean {
+  return item.types.includes('ammo');
+}
+
+/**
+ * Classifies one slot of `owner`: 'ammo' when its allowlist is non-empty and holds only ammunition templates (a camora
+ * or chamber; the slot is then removed from the fixture), otherwise 'plain'. A slot that mixes ammunition with other
+ * candidates is refused rather than split, and an unresolved candidate is an evidence error. An empty allowlist is
+ * plain: it names nothing, so it is neither ammunition nor removable.
+ */
+function slotKind(world: RawWorld, owner: RefItem, slot: RefSlot): 'ammo' | 'plain' {
+  const where = `${owner.id}/${slot.id}`;
+  let ammunition = 0;
+  for (const allowed of slot.allowedItemIds) {
+    const item = world.items.get(allowed);
+    if (!item) throw new BridgeError(where, `allowed item ${allowed} is unresolved`);
+    if (isAmmunition(item)) ammunition++;
+  }
+  if (ammunition === 0) return 'plain';
+  if (ammunition === slot.allowedItemIds.length) return 'ammo';
+  throw new BridgeError(
+    where,
+    `slot mixes ammunition (${ammunition}) with ${slot.allowedItemIds.length - ammunition} other candidates; ` +
+      'ammunition-only slots are removed from the physical domain and a mixed slot cannot be split faithfully',
+  );
+}
+
+function mapSlots(ctx: Context, owner: RefItem): ReferenceSlot[] {
+  const out: ReferenceSlot[] = [];
+  for (const slot of owner.slots) {
     const where = `${owner.id}/${slot.id}`;
     for (const [list, name] of [
       [slot.allowedCategoryIds, 'allowedCategories'],
@@ -162,11 +214,13 @@ function mapSlots(world: RawWorld, owner: RefItem): ReferenceSlot[] {
         throw new BridgeError(where, `slot filter ${name} is non-empty (${list.length} entries); the oracle schema only models allowedItems and refuses to drop it silently`);
       }
     }
-    for (const allowed of slot.allowedItemIds) {
-      if (!world.items.has(allowed)) throw new BridgeError(where, `allowed item ${allowed} is unresolved`);
+    if (slotKind(ctx.world, owner, slot) === 'ammo') {
+      ctx.removedAmmoSlots.push({ ownerId: owner.id, slotId: slot.id, required: slot.required, allowedItemIds: [...slot.allowedItemIds] });
+      continue;
     }
-    return { id: slot.id, required: slot.required, allowedItemIds: [...slot.allowedItemIds] };
-  });
+    out.push({ id: slot.id, required: slot.required, allowedItemIds: [...slot.allowedItemIds] });
+  }
+  return out;
 }
 
 interface StatFields {
@@ -245,6 +299,8 @@ interface Context {
   readonly options: { weaponOfferKinds: OfferKind[] };
   readonly defaults: DefaultLog;
   readonly taskGated: TaskGatedOffer[];
+  /** Filled by mapSlots, once per mapped receiver or item. */
+  readonly removedAmmoSlots: RemovedAmmoSlot[];
 }
 
 const bartersCache = new WeakMap<RawWorld, ReadonlyMap<string, readonly RefBarter[]>>();
@@ -343,6 +399,10 @@ const ALL_KINDS: readonly OfferKind[] = ['trader', 'flea', 'barter'];
 // closure
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * Templates reachable through slot allowlists. Ammunition-only slots are not followed (they are removed from the fixture),
+ * so ammunition reachable only through them is not in the result; a mixed slot throws.
+ */
 function reachableFrom(world: RawWorld, roots: Iterable<string>, skip: ReadonlySet<string>): Set<string> {
   const seen = new Set<string>();
   const queue: string[] = [];
@@ -355,7 +415,10 @@ function reachableFrom(world: RawWorld, roots: Iterable<string>, skip: ReadonlyS
   for (const id of roots) visit(id, 'closure root');
   for (let i = 0; i < queue.length; i++) {
     const owner = world.items.get(queue[i]) as RefItem;
-    for (const slot of owner.slots) for (const allowed of slot.allowedItemIds) visit(allowed, `${owner.id}/${slot.id}`);
+    for (const slot of owner.slots) {
+      if (slotKind(world, owner, slot) === 'ammo') continue;
+      for (const allowed of slot.allowedItemIds) visit(allowed, `${owner.id}/${slot.id}`);
+    }
   }
   return seen;
 }
@@ -374,9 +437,13 @@ export function fixtureForWeapon(world: RawWorld, weaponId: string, options: Fix
   if (gun.properties === null) throw new BridgeError(weaponId, 'gun has no properties object');
 
   const defaults = new DefaultLog();
-  const ctx: Context = { world, options: resolvedOptions, defaults, taskGated: [] };
+  const ctx: Context = { world, options: resolvedOptions, defaults, taskGated: [], removedAmmoSlots: [] };
 
-  const installable = reachableFrom(world, gun.slots.flatMap(slot => slot.allowedItemIds), new Set());
+  const installable = reachableFrom(
+    world,
+    gun.slots.filter(slot => slotKind(world, gun, slot) === 'plain').flatMap(slot => slot.allowedItemIds),
+    new Set(),
+  );
   if (installable.has(weaponId)) {
     throw new BridgeError(weaponId, 'a slot allowlist reaches the receiver itself; the oracle schema cannot express a receiver installed as an item');
   }
@@ -400,6 +467,9 @@ export function fixtureForWeapon(world: RawWorld, weaponId: string, options: Fix
 
   const weapon = mapWeapon(ctx, gun);
   const slotCount = weapon.slots?.length ?? 0;
+  // mapSlots visited the supply-only and installable items in code-unit id order and the receiver last; a stable sort by
+  // owner id puts the receiver among them and keeps each owner's slots in source order.
+  const removedAmmoSlots = [...ctx.removedAmmoSlots].sort((a, b) => codeUnitCompare(a.ownerId, b.ownerId));
 
   const fixture: ReferenceFixture = {
     schemaVersion: 1,
@@ -421,6 +491,8 @@ export function fixtureForWeapon(world: RawWorld, weaponId: string, options: Fix
     },
     supplyOnlyItemIds: [...supplyOnly].sort(codeUnitCompare),
     nonModItemIds: [...installable].filter(id => !isMod(world.items.get(id) as RefItem)).sort(codeUnitCompare),
+    removedAmmoSlots,
+    removedAmmoItemIds: [...new Set(removedAmmoSlots.flatMap(r => r.allowedItemIds))].sort(codeUnitCompare),
     defaults: defaults.list(),
     taskGated: ctx.taskGated,
   };
@@ -473,7 +545,7 @@ function mapItem(ctx: Context, item: RefItem): ReferenceItem {
   if (stats.centerOfImpact !== undefined) out.centerOfImpact = stats.centerOfImpact;
   if (stats.magazineCapacity !== undefined) out.magazineCapacity = stats.magazineCapacity;
   if (stats.sightingRange !== undefined) out.sightingRange = stats.sightingRange;
-  out.slots = mapSlots(world, item);
+  out.slots = mapSlots(ctx, item);
   out.conflictingItemIds = [...item.conflictingItemIds];
   out.conflictingSlotIds = [...item.conflictingSlotIds];
   out.offers = offersOf(ctx, item, ALL_KINDS, 'item');
@@ -503,7 +575,7 @@ function mapWeapon(ctx: Context, gun: RefItem): ReferenceWeapon {
   if (stats.centerOfImpact !== undefined) out.centerOfImpact = stats.centerOfImpact;
   if (stats.sightingRange !== undefined) out.sightingRange = stats.sightingRange;
   if (stats.magazineCapacity !== undefined) out.magazineCapacity = stats.magazineCapacity;
-  out.slots = mapSlots(world, gun);
+  out.slots = mapSlots(ctx, gun);
   out.conflictingItemIds = [...gun.conflictingItemIds];
   out.offers = offersOf(ctx, gun, ctx.options.weaponOfferKinds, 'weapon');
   return out;

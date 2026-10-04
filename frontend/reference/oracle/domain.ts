@@ -154,7 +154,10 @@ export interface ReferenceFixture {
 // Request (field names mirror production OptimizeRequest so Stage 3 can map requests 1:1)
 // ---------------------------------------------------------------------------------------------
 
-/** Ideal/nadir reference point in the objective frame: fE = 10 x ergo, fR = 1000 x recoilModSum, fP = RUB spend. */
+/**
+ * Ideal/nadir reference point in the objective frame: fE = 10 x ergo (TED under use_true_ergo), fR = 1000 x recoilModSum, fP = RUB spend.
+ * payoffTables / checkIdealPoint (payoff.ts) compute and verify the admissible tables of a domain.
+ */
 export interface ReferenceIdealPoint {
   zE: number;
   nadE: number;
@@ -362,7 +365,8 @@ export function checkRequest(fixture: ReferenceFixture, request: ReferenceReques
     player_level: request.player_level ?? undefined,
   }, issues);
   if (request.use_tchebycheff) {
-    // Interpretation 9: the reference cannot derive an ideal point, so its absence is an input error.
+    // Interpretation 9: the reference cannot derive an ideal point, so its absence is an input error. Which points are legitimate
+    // inputs (the admissible payoff tables of the domain) is interpretation 17, checked by payoff.ts.
     if (!request.ideal_point) issues.push({ code: 'MISSING_IDEAL_POINT', detail: 'use_tchebycheff requires ideal_point' });
     else checkNumbers('ideal_point', { ...request.ideal_point }, issues);
   }

@@ -18,7 +18,7 @@ import {
   type ReferenceOffer, type ReferencePreset, type ReferenceRequest, type ReferenceSlot, type ReferenceWeapon,
 } from '../oracle/index';
 import { admittedFor } from './outcomes';
-import type { Family, LedgerCase, Expected, ProvenanceCheck, Rejection, RuntimeTolerance, StatCheck, StatName } from './types';
+import type { Family, LedgerCase, Expected, PayoffExpectation, ProvenanceCheck, Rejection, RuntimeTolerance, StatCheck, StatName } from './types';
 
 /** Instance id of the receiver in every build (`weapon_0`). */
 export const ROOT = ROOT_INSTANCE_ID;
@@ -115,6 +115,8 @@ export interface CaseInput {
   statChecks?: StatCheck[];
   provenance?: ProvenanceCheck[];
   physicalBuildCount?: number;
+  /** Payoff-table admissibility of a Tchebycheff case (INTERPRETATIONS.md choice 17). */
+  payoff?: PayoffExpectation;
   /** Omit for a well-separated case. */
   tolerance?: { kind: 'tiny_positive_gap' | 'near_cap'; gap: string; absolute?: number; capCheck?: { build: ReferenceBuild; stat: StatName; value: string; cap: string; direction: 'max' | 'min' } };
   todo?: string;
@@ -148,6 +150,7 @@ export function defineCase(input: CaseInput): LedgerCase {
     ...(input.statChecks ? { statChecks: input.statChecks } : {}),
     ...(input.provenance ? { provenance: input.provenance } : {}),
     ...(input.physicalBuildCount === undefined ? {} : { physicalBuildCount: input.physicalBuildCount }),
+    ...(input.payoff === undefined ? {} : { payoff: input.payoff }),
   };
   return {
     id: input.id,

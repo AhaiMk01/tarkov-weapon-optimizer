@@ -18,6 +18,7 @@ The bridge maps the independent raw reader's world (`reference/source`) into the
 | `toFixture.offers.test.ts` | Trader, flea and barter offers, checked against the reference reader's own barter valuation. |
 | `toFixture.presets.test.ts` | Count-bearing preset supply, supply-only items, preset offers. |
 | `toFixture.provenance.test.ts` | Recorded defaults, JSON round trip, language independence, defensive source checks. |
+| `toFixture.ammo.test.ts` | Ammunition-only (camora) slots: removed, never emptied; mixed slots refused; recorded in provenance; real revolvers stay buildable. |
 | `toFixture.allGuns.test.ts` | Every gun of the pinned capture passes `checkFixture`; no barter is dropped, fractional-count ones included. |
 | `slice.test.ts` | Slicing semantics on hand-built fixtures plus one real SV-98 slice. |
 | `realCases.test.ts` | Four real-data oracle cases with hand-derived expectations. |
@@ -32,8 +33,9 @@ npx tsx reference/bridge/completeness.report.ts [--maxNodes N] [--maxTrees N] [-
 
 Builds the oracle `ReferenceFixture` for one weapon's full reachable closure:
 
-* **Items**: breadth-first over every slot `allowedItems`, starting at the receiver's slots. Each reachable template is
-  one `ReferenceItem`, sorted by id in UTF-16 code-unit order.
+* **Items**: breadth-first over every slot `allowedItems`, starting at the receiver's slots, except that ammunition-only
+  slots are removed and not followed (see "Ammunition-only slots"). Each reachable template is one `ReferenceItem`, sorted
+  by id in UTF-16 code-unit order.
 * **Receiver**: one `ReferenceWeapon`.
 * **Presets**: every id in the gun's `properties.presets`, as a `ReferencePreset` with the raw `containsItems` entries
   verbatim (`{itemId, count}`, one per raw entry; the oracle sums repeats).
@@ -67,10 +69,10 @@ Options (`FixtureOptions`):
 | `conflictingItemIds` | `conflictingItems` | Verbatim, **including self-listings** (3 items conflict with themselves). |
 | `conflictingSlotIds` | `conflictingSlotIds` | Verbatim. |
 
-Only items whose raw `types` include `mods` carry mod modifiers. Ammunition reached through revolver camora slots has
-no top-level modifiers (its `properties.recoilModifier` is the ammunition's own recoil number, e.g. 115), so its
-ergonomics, recoil and accuracy are recorded defaults (0), never the unrelated property. A non-`mods` item that does
-carry a top-level modifier is rejected: no rule maps it.
+Only items whose raw `types` include `mods` carry mod modifiers. Ammunition, which reaches a fixture only as preset
+supply (see "Ammunition-only slots"), has no top-level modifiers (its `properties.recoilModifier` is the ammunition's own
+recoil number, e.g. 115), so its ergonomics, recoil and accuracy are recorded defaults (0), never the unrelated property.
+A non-`mods` item that does carry a top-level modifier is rejected: no rule maps it.
 
 ### Offers
 
@@ -94,7 +96,7 @@ carry a top-level modifier is rejected: no rule maps it.
   English). The mapped lots were checked against `referenceBarterOffer` for several guns, and the dogtag flag against the
   English-name rule over all 855 barters.
 * **Task gating** (`taskUnlock`) is ignored by the adopted domain: a gated offer is mapped as available and counted in
-  `provenance.taskGated` (1121 trader offers and 514 barters over the 172 gun closures, counted per gun).
+  `provenance.taskGated` (1120 trader offers and 513 barters over the 172 gun closures, counted per gun; the camora ammunition left the domain with one of each).
 * **Naked receiver**: trader offers only by default. The gun template's flea price and barters price its factory
   configuration, not a bare receiver, and production's base model likewise lets the naked receiver be bought from
   traders only. Use `weaponOfferKinds` to opt in. 18 of the 172 guns have a naked trader offer; the rest are reachable
@@ -108,14 +110,36 @@ recorded as `{ scope, field, value, ids }`. Over the whole pinned capture (count
 | Scope.field | Default | Applies to |
 | :--- | ---: | :--- |
 | `weapon.magazineCapacity` | 0 | all 172 guns (gun templates have no `capacity`) |
-| `item.centerOfImpact` | 0 | 45530 records (every non-barrel) |
-| `item.magazineCapacity` | 0 | 44819 records (every non-magazine) |
-| `item.sightingRange` | 0 | 34333 records (every non-sight) |
-| `item.ergonomics`, `item.recoilModifier`, `item.accuracyModifier` | 0 | 61 records each (ammunition) |
+| `item.centerOfImpact` | 0 | 45491 records (every non-barrel) |
+| `item.magazineCapacity` | 0 | 44780 records (every non-magazine) |
+| `item.sightingRange` | 0 | 34294 records (every non-sight) |
+| `item.ergonomics`, `item.recoilModifier`, `item.accuracyModifier` | 0 | 22 records each (preset-supply ammunition) |
 
 No weight, receiver ergonomics, receiver recoil or flea gate is missing in the pinned capture, so none is recorded;
 if a future capture lacks one it is recorded, never invented. Structural emptiness (no slots, no offers, no conflicts)
 is not a default: those arrays are always written.
+
+### Ammunition-only slots (loaded ammunition is outside the domain)
+
+Owner decision of 2026-10-04 (`../INTERPRETATIONS.md` choice 15; decision map #28 puts loaded ammunition out of scope, and
+production does not model it). A slot whose allowlist is non-empty and holds only ammunition templates (raw `types` include
+`ammo`) is a camora or chamber, and:
+
+* it is **removed** from the mapped receiver or item, together with its allowlist, whether or not it is required. It is not
+  emptied: an emptied required slot would make its owner uninstallable and, on a required receiver slot, the weapon unbuildable.
+  Ammunition reachable only through such slots leaves the closure;
+* a slot that **mixes** ammunition with other candidates is a `BridgeError` (it is never silently split), and a slot with an
+  **empty** allowlist is not ammunition-only (it is kept as is);
+* `provenance.removedAmmoSlots` lists every removed slot as `{ ownerId, slotId, required, allowedItemIds }` (owners in code-unit
+  order, slots in source order) and `provenance.removedAmmoItemIds` the ammunition templates they allowed;
+* **preset ammunition is unchanged**: a preset component outside the installable closure is still an inert supply-only item that no
+  slot allows, listed in `supplyOnlyItemIds`;
+* `provenance.nonModItemIds` (installable items whose `types` lack `mods`) is now empty on the pinned capture and stays as a
+  tripwire for any other non-mod template a slot might reach.
+
+On the pinned capture this touches exactly **5 guns and 28 slot records**: the revolver cylinder magazines of the MTS-255-12 (5
+chambers, 17 templates), Chiappa Rhino 50DS (6, 4), Chiappa Rhino 200DS (6, 9), Milkor M32A1 (6, 6) and RSh-12 (5, 3), 39 distinct
+ammunition templates in all. Each cylinder stays a required, installable magazine with no slots.
 
 ### Defensive checks (a `BridgeError`, never an empty fixture)
 
@@ -126,7 +150,7 @@ value; disagreement between a top-level modifier and its `properties` twin, or p
 a non-zero `accuracyModifier` or `recoilModifier` (the receiver has no such field); a category list that is not the
 own-then-ancestors chain; a preset whose `baseItem` names another gun, whose type is not `preset`, or that contains a
 gun other than its receiver; a trader offer without `priceRUB` or with a bad loyalty level; a barter with a bad
-`offeredCount`; a non-canonical trader key.
+`offeredCount`; a non-canonical trader key; a slot that mixes ammunition with non-ammunition candidates.
 
 ### Fractional barter ingredient counts
 
@@ -134,7 +158,8 @@ gun other than its receiver; a trader offer without `priceRUB` or with a bad loy
 the only fractional entry of its barter). The oracle accepts any finite nonnegative requirement count
 (`checkOffers` in `oracle/domain.ts`), decodes it with `fromBinary64` and values the lot as the exact rational
 `sum(count x unit value)`, rounded `floor(total + 1/2)`. The bridge therefore maps every barter verbatim and drops none:
-88 distinct fractional-count barters over the 172 gun closures (45 in the M4A1 closure: 42 for mods, 3 for presets), and
+86 distinct fractional-count barters over the 172 gun closures (88 before camora ammunition left the domain; 45 in the M4A1
+closure: 42 for mods, 3 for presets), and
 all 172 fixtures pass `checkFixture`. There is no omission option and no `provenance.omitted` any more.
 
 The decimal and the double differ, so exactness matters: `Fraction(25.02)` is `7042503917300613 / 2^48`, slightly below
@@ -196,9 +221,11 @@ values, with the derivation in the comment above it.
 Run with the oracle's own default caps (5,000,000 nodes, 500,000 trees); about a minute. Numbers for the pinned capture:
 
 * 172 guns; closures hold 0 to 589 items (median 267) and 0 to 498 template slots (median 123); no closure has a template cycle.
-* **Full closure**: enumeration completes for **37 of 172** guns (36 within the oracle's 500,000 build cap once every
-  preset base is counted). The largest completed one has 268,380 rooted trees (Lebedev PL-15); 135 guns do not complete.
-  Exact DP tree counts of the others run up to about 1e39 (FN SCAR-L).
+* **Full closure**: enumeration completes for **41 of 172** guns (40 within the oracle's 500,000 build cap once every
+  preset base is counted). The largest completed one has 268,380 rooted trees (Lebedev PL-15); 131 guns do not complete.
+  Exact DP tree counts of the others run up to about 1e39 (FN SCAR-L). Removing the camora slots made four revolvers
+  enumerable (Chiappa Rhino 200DS, Chiappa Rhino 50DS, MTS-255-12, RSh-12; before, 39 ammunition templates multiplied the
+  trees of their cylinders); the Milkor M32A1 still does not complete.
 * **Preset-derived slices** (the mods of one real factory preset, valid by construction): **397 of 399** complete (median 32
   trees, max 466,560); every gun with presets (164 of 172) has at least one. The two that hit a cap are
   `sig-mpx-9x19-submachine-gun` preset 707265736574000000000069 and `fn-scar-h-762x51-assault-rifle` preset
@@ -215,9 +242,9 @@ hand-picked slice, which is what the cases above use.
   its own host slot id in `conflictingSlotIds` could never be installed there. The pinned capture has none: only 9 of 5442
   items list slot ids (32 entries, 18 of them match no template slot), 2 are mods, and none is allowed by a slot it blocks
   (observational test in `toFixture.allGuns.test.ts`).
-* **Camora ammunition**: 28 slots on 5 revolver magazines allow ammunition (39 templates); the full closure includes
-  them as installable items (`provenance.nonModItemIds`) although production only models `mods`-typed items. Slice them
-  away (or keep them out of `keepItemIds`) when comparing with production.
+* **Camora ammunition**: 28 slots on 5 revolver magazines allow ammunition (39 templates). Loaded ammunition is outside the
+  domain (owner decision 2026-10-04), so the bridge removes those slots, as production, which only models `mods`-typed items,
+  never had them. They are recorded in `provenance.removedAmmoSlots` and `removedAmmoItemIds` ("Ammunition-only slots").
 * **Real conflicts bite**: S (the self-conflicting stock) conflicts with 55 stock templates, and ADAR wooden handguard
   conflicts with the 10.3 inch barrel; an arbitrary required-slot skeleton is often empty.
 * **Production dogtag flag is language dependent** (translated name regex); the bridge uses the slug.

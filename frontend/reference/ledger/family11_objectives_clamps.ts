@@ -63,6 +63,26 @@ const tchebFixture = fix({
 const tchebKeys = [nk(), nk('a'), nk('b'), nk('a', 'b')];
 const TCHEB_TABLE = `Builds (ergonomics, recoil sum, spend): none (40, 0, 1000), a (50, 0, 1100), b (40, -1/4, 1300), a+b (50, -1/4, 1400); so fE = 400, 500, 400, 500 and fR = 0, 0, -250, -250.`;
 
+// --- payoff-table admissibility fixture -------------------------------------------------------------------------------
+
+/**
+ * Receiver ergonomics 40 and 1000 RUB; one slot s takes at most one of four parts, so the builds (fE, fR, fP) are
+ *   none (400, 0, 1000); a (+10 ergonomics, 150 RUB) (500, 0, 1150); b (+10, 400 RUB) (500, 0, 1400);
+ *   c (recoil -1/4, 200 RUB) (400, -250, 1200); m (+5, 10 RUB) (450, 0, 1010).
+ * a and b tie on the ergonomics axis and differ in price: the nadir of the price axis is not unique.
+ */
+const payoffFixture = fix({
+  items: [
+    { id: 'a', ergonomics: 10, offers: trader(150) },
+    { id: 'b', ergonomics: 10, offers: trader(400) },
+    { id: 'c', recoilModifier: -0.25, offers: trader(200) },
+    { id: 'm', ergonomics: 5, offers: trader(10) },
+  ],
+  weapon: { ergonomics: 40, slots: [slot('s', ['a', 'b', 'c', 'm'])] },
+});
+const payoffKeys = [nk(), nk('a'), nk('b'), nk('c'), nk('m')];
+const PAYOFF_TABLE_A = { zE: 500, nadE: 400, zR: -250, nadR: 0, zP: 1000, nadP: 1200 };
+
 export const FAMILY_11: LedgerCase[] = [
   defineCase({
     id: 'F11-clamp-raw-regimes-and-bounds',
@@ -423,6 +443,44 @@ b: d = (1/3, 0, 1/4); linear 4/3 + 1/3 - 13/12 = 7/12; 7/1200 - 1/3 = -131/400. 
     derivation: `${TCHEB_TABLE}
 Only the ergonomics axis is active: c_e = 1/(1 x 100) = 1/100, c_r = c_p = 0, so recoil and spend cannot matter. d_e = (500 - fE)/100.
 none and b (fE = 400): d_e = 1, linear 4, 0.04 - 1 = -24/25 (tied). a and a+b (fE = 500): d_e = 0, linear 5, 0.05 = 1/20 (tied maximum).`,
+  }),
+
+  defineCase({
+    id: 'F11-payoff-table-admissibility-tied-endpoints',
+    family: 11,
+    subcases: ['payoff_table_admissibility'],
+    title: 'A tied ergonomics optimum with different prices gives two admissible payoff tables, and the Tchebycheff optimum differs under them',
+    adrRefs: [...ADR, 'ADR 0010 section 2 (ideal point from three single-axis solves)', 'INTERPRETATIONS.md choice 17'],
+    prerequisites:
+      'e=1, r=0, p=1 (sum 2): recoil is an inactive axis of the score but its endpoint still enters the table. The ideal point is an input: the request carries ' +
+      'table A; table B differs only in nadP. Every coordinate is an integer, so each reported double is exact.',
+    source: 'payoffFixture (receiver ergonomics 40, 1000 RUB; slot s: a, b, c, m); ideal zE 500 / nadE 400, zR -250 / nadR 0, zP 1000 / nadP 1200 (table A).',
+    fixture: payoffFixture,
+    request: { recoil_weight: 0, price_weight: 1, use_tchebycheff: true, ideal_point: PAYOFF_TABLE_A },
+    feasible: payoffKeys,
+    maxScore: '-1011/4000',
+    maximizers: [nk('m')],
+    scores: [[nk(), '-101/200'], [nk('a'), '-303/800'], [nk('b'), '-101/100'], [nk('c'), '-51/100'], [nk('m'), '-1011/4000']],
+    payoff: {
+      ideal: { zE: '500', zR: '-250', zP: '1000' },
+      tables: [
+        { table: { zE: '500', nadE: '400', zR: '-250', nadR: '0', zP: '1000', nadP: '1200' }, maxScore: '-1011/4000', maximizers: [nk('m')] },
+        { table: { zE: '500', nadE: '400', zR: '-250', nadR: '0', zP: '1000', nadP: '1400' }, maxScore: '-283/1600', maximizers: [nk('a')] },
+      ],
+      rejected: [
+        { label: 'table of the endpoint triple {m, c, none}: m is not an ergonomics optimum', table: { zE: '450', nadE: '400', zR: '-250', nadR: '0', zP: '1000', nadP: '1200' }, code: 'IDEAL_MISMATCH' },
+        { label: 'nadP 1300 lies between the two attainable price nadirs', table: { zE: '500', nadE: '400', zR: '-250', nadR: '0', zP: '1000', nadP: '1300' }, code: 'NADIR_NOT_ATTAINABLE' },
+      ],
+    },
+    derivation: `Builds (fE, fR, fP): none (400, 0, 1000), a (500, 0, 1150), b (500, 0, 1400), c (400, -250, 1200), m (450, 0, 1010).
+Payoff solves. Ergonomics [100,0,0]: max fE = 500, tied {a, b} with the two vectors (500, 0, 1150) and (500, 0, 1400). Recoil [0,100,0]: min fR = -250, only c. Price [0,0,100]: min fP = 1000, only none. So zE = 500, zR = -250, zP = 1000 are unique.
+Tables (nadE = min fE, nadR = max fR, nadP = max fP over the three chosen endpoint vectors; r-endpoint c and p-endpoint none are forced): e-endpoint a: nadE min(500, 400, 400) = 400, nadR max(0, -250, 0) = 0, nadP max(1150, 1200, 1000) = 1200 (table A). e-endpoint b: nadP max(1400, 1200, 1000) = 1400, rest equal (table B). Exactly two tables.
+Rejected: a table from the triple {m, c, none} reports zE = max(450, 400, 400) = 450, not the exact ideal 500. nadP = 1300 matches neither 1200 nor 1400.
+Tchebycheff, e=1, r=0, p=1: sum 2, c_e = 1/(2 x max(500 - 400, 1)) = 1/200, c_r = 0, c_p = 1/(2 x (nadP - 1000)); active axes e and p. d_e = (500 - fE)/200, d_p = c_p (fP - 1000), score = (1/100)(c_e fE - c_p fP) - max(d_e, d_p).
+Table A (nadP 1200, c_p = 1/400): none d = (1/2, 0), linear 2 - 5/2 = -1/2, score -1/200 - 1/2 = -101/200. a d = (0, 3/8), linear 5/2 - 23/8 = -3/8, score -3/800 - 3/8 = -303/800. b d = (0, 1), linear 5/2 - 7/2 = -1, score -1/100 - 1 = -101/100. c d = (1/2, 1/2), linear 2 - 3 = -1, score -1/100 - 1/2 = -51/100. m d = (1/4, 1/40), linear 9/4 - 101/40 = -11/40, score -11/4000 - 1/4 = -1011/4000. Unique maximum m.
+Table B (nadP 1400, c_p = 1/800): none d = (1/2, 0), linear 2 - 5/4 = 3/4, score 3/400 - 1/2 = -197/400. a d = (0, 3/16), linear 5/2 - 23/16 = 17/16, score 17/1600 - 3/16 = -283/1600. b d = (0, 1/2), linear 5/2 - 7/4 = 3/4, score -197/400. c d = (1/2, 1/4), linear 2 - 3/2 = 1/2, score 1/200 - 1/2 = -99/200. m d = (1/4, 1/80), linear 9/4 - 101/80 = 79/80, score 79/8000 - 1/4 = -1921/8000. Unique maximum a.
+So the optimum is m under table A and a under table B: the table is an input of the result, which is why a solver's reported table must be checked for admissibility (and Gate B comparisons made under that same table).`,
+    notes: ['Relies on interpretation 17 (the payoff table is an input checked by exact admissibility). Reported doubles are compared exactly; Stage 3 needs tolerance handling for real data, whose exact coordinates are not doubles.'],
   }),
 
   defineCase({

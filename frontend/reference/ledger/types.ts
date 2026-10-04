@@ -5,7 +5,7 @@
 // case's `derivation` field); the oracle only checks the derivations, never produces them. The
 // ledger imports nothing but the oracle's public surface (reference/independence.test.ts).
 
-import type { ReferenceBuild, ReferenceFixture, ReferenceRequest, ViolationCode } from '../oracle/index';
+import type { IdealPointCheck, ReferenceBuild, ReferenceFixture, ReferenceRequest, ViolationCode } from '../oracle/index';
 
 export type Family = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14;
 
@@ -113,6 +113,30 @@ export interface Rejection {
   codes: ViolationCode[];
 }
 
+/** A Tchebycheff reference point (ideal and nadir) in the objective frame, as canonical rational strings. */
+export interface PayoffTableText {
+  zE: string;
+  nadE: string;
+  zR: string;
+  nadR: string;
+  zP: string;
+  nadP: string;
+}
+
+/**
+ * Hand-derived admissibility of the Tchebycheff payoff table (INTERPRETATIONS.md choice 17). The three single-axis payoff solves have
+ * tied optima, so the nadir is not unique: every admissible table (one tied optimal build per axis, chosen jointly) is listed with the
+ * exact Tchebycheff optimum under it, and tables a solver must NOT report are named with the verdict the oracle must return.
+ */
+export interface PayoffExpectation {
+  /** The exact, unique ideal coordinates: max fE, min fR, min fP over the feasible builds. */
+  ideal: { zE: string; zR: string; zP: string };
+  /** Every admissible table, sorted ascending by (zE, nadE, zR, nadR, zP, nadP), each with its exact Tchebycheff optimum. */
+  tables: { table: PayoffTableText; maxScore: string; maximizers: string[] }[];
+  /** Tables built from a non-optimal or non-attainable endpoint choice; the oracle must reject each with this code. */
+  rejected: { label: string; table: PayoffTableText; code: Extract<IdealPointCheck, { status: 'inadmissible' }>['code'] }[];
+}
+
 export interface Expected {
   /** Complete feasible projection keys (base + installed multiset), sorted in code-unit order. */
   projectionKeys: string[];
@@ -131,6 +155,8 @@ export interface Expected {
   provenance?: ProvenanceCheck[];
   /** Informative: number of accepted physical builds (distinct placements), for the oracle's multiplicity. */
   physicalBuildCount?: number;
+  /** Payoff-table admissibility of a Tchebycheff case (the request's own ideal_point is one of the admissible tables). */
+  payoff?: PayoffExpectation;
 }
 
 export interface LedgerCase {

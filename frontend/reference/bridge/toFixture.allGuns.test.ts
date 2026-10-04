@@ -74,11 +74,13 @@ test('the pinned capture holds 377 fractional-count barters, all offered by Ref,
   assert.deepEqual([...new Set(fractional.map(b => world.traders.get(b.traderId)?.normalizedName))], ['ref']);
 });
 
-test('over the 172 closures no barter of an item or preset is dropped: 88 distinct fractional-count barters are mapped', () => {
+test('over the 172 closures no barter of an item or preset is dropped: 86 distinct fractional-count barters are mapped', () => {
   const mappedFractional = new Set<string>();
   const expectedFractional = new Set<string>();
+  const removedAmmo = new Set<string>();
   for (const gunId of gunIds) {
-    const { fixture } = fixtureForWeapon(world, gunId);
+    const { fixture, provenance } = fixtureForWeapon(world, gunId);
+    provenance.removedAmmoItemIds.forEach(id => removedAmmo.add(id));
     for (const subject of [...fixture.items, ...(fixture.presets ?? [])]) {
       const raw = bartersByItem.get(subject.id) ?? [];
       const mapped = subject.offers?.filter(o => o.kind === 'barter') ?? [];
@@ -94,7 +96,11 @@ test('over the 172 closures no barter of an item or preset is dropped: 88 distin
       }
     }
   }
-  assert.equal(expectedFractional.size, 88);
+  // Before the owner decision of 2026-10-04 (loaded camora ammunition leaves the domain) the full closures reached 88 of them. The two
+  // that fell out are the fractional barters offering ammunition that only a removed chamber slot reached: 88 - 2 = 86.
+  const droppedWithTheChambers = [...removedAmmo].flatMap(id => (bartersByItem.get(id) ?? []).filter(isFractional)).filter(b => !expectedFractional.has(b.id));
+  assert.equal(droppedWithTheChambers.length, 2);
+  assert.equal(expectedFractional.size, 86);
   assert.deepEqual([...mappedFractional].sort(), [...expectedFractional].sort());
 });
 
@@ -119,4 +125,64 @@ test('observation: no real item lists in conflictingSlotIds a slot id whose allo
     }
   }
   assert.deepEqual(selfBlocked, []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Observations behind the owner decisions of 2026-10-04 (INTERPRETATIONS.md choices 2, 4, 7 and 10): the pinned capture holds no
+// instance of the situations whose handling the reference fixed by rule. Nothing here pins behaviour, it records that the rules are
+// vacuous on this data (they are exercised by the ledger and the oracle unit tests instead).
+// ---------------------------------------------------------------------------------------------
+
+test('observation: no offer has a stored price <= 0, no offer is level <= 0 and no barter totals <= 0 (choices 2 and 10)', () => {
+  const seen = new Set<string>();
+  let offers = 0;
+  const bad: string[] = [];
+  for (const gunId of gunIds) {
+    const { fixture } = fixtureForWeapon(world, gunId, { weaponOfferKinds: ['trader', 'flea', 'barter'] });
+    for (const subject of [...fixture.items, ...(fixture.presets ?? []), ...fixture.weapons]) {
+      for (const offer of subject.offers ?? []) {
+        const key = `${subject.id}${JSON.stringify(offer)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        offers++;
+        if (offer.kind !== 'flea' && offer.level <= 0) bad.push(`${subject.id}: level ${offer.level}`);
+        if (offer.kind === 'barter') {
+          const total = offer.requirements.reduce((n, r) => n + r.count * (r.avg24hPrice ?? r.basePrice ?? 0), 0);
+          if (total <= 0) bad.push(`${subject.id}: barter total ${total}`);
+        } else if (offer.price <= 0) bad.push(`${subject.id}: ${offer.kind} price ${offer.price}`);
+      }
+    }
+  }
+  assert.ok(offers > 4000, `the scan is not vacuous: ${offers} distinct offers`);
+  assert.deepEqual(bad, []);
+});
+
+test('observation: no receiver carries a magazine capacity (choice 7)', () => {
+  for (const gunId of gunIds) assert.equal(fixtureForWeapon(world, gunId).fixture.weapons[0].magazineCapacity, undefined, gunId);
+});
+
+test('observation: no gun can install two positive-COI items in one tree (choice 4), by a structural upper bound that ignores conflicts', () => {
+  // Most positive-COI items one rooted tree could hold: the item itself plus, per slot, the best single candidate below it (a template
+  // never repeats an ancestor). Conflicts and caps only lower this, so a bound of at most 1 proves the claim; the bound itself is not 0.
+  let withAnyPositive = 0;
+  for (const gunId of gunIds) {
+    const { fixture } = fixtureForWeapon(world, gunId);
+    const items = new Map(fixture.items.map(i => [i.id, i]));
+    const best = (id: string, ancestors: Set<string>): number => {
+      const item = items.get(id);
+      if (!item || ancestors.has(id)) return 0;
+      ancestors.add(id);
+      let total = (item.centerOfImpact ?? 0) > 0 ? 1 : 0;
+      for (const slot of item.slots ?? []) total += Math.max(0, ...[...new Set(slot.allowedItemIds)].map(a => best(a, ancestors)));
+      ancestors.delete(id);
+      return total;
+    };
+    const receiver = fixture.weapons[0];
+    const ancestors = new Set([receiver.id]);
+    let total = 0;
+    for (const slot of receiver.slots ?? []) total += Math.max(0, ...[...new Set(slot.allowedItemIds)].map(a => best(a, ancestors)));
+    assert.ok(total <= 1, `${world.items.get(gunId)?.normalizedName}: up to ${total} positive-COI items in one tree`);
+    if (total === 1) withAnyPositive++;
+  }
+  assert.ok(withAnyPositive > 100, `the bound is not vacuous: ${withAnyPositive} guns can install a positive-COI barrel`);
 });

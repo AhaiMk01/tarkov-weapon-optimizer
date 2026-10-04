@@ -14,8 +14,8 @@ import { BridgeError, fixtureForWeapon } from './toFixture';
 const { world } = loadPinnedWorld('en');
 
 const M4A1 = '5447a9cd4bdc2dbd208b4567';
-const MTS255 = '60db29ce99594040e04c4a27';
-const RIP_AMMO = '5c0d591486f7744c505b416f';
+const MTS255 = '60db29ce99594040e04c4a27'; // revolver: its provenance carries the removed chamber slots
+const FMJ_556 = '59e6920f86f77411d82aa167'; // 5.56x45 FMJ: ammunition, a 60-round component of an M4A1 preset
 const PLATE = '688b54a11cef2a61d005273b';
 const MAKAROV = '579204f224597773d619e051'; // small closure: used for the perturbation tests
 const MAKAROV_PRESET = '5841499024597759f825ff3e';
@@ -47,18 +47,32 @@ test('every field default is recorded with exactly the ids whose raw field is ab
   assert.equal(provenance.defaults.some(d => d.scope === 'weapon' && d.field !== 'magazineCapacity'), false);
 });
 
-test('ammunition reached through camora slots gets every modifier default recorded, never an invented value', () => {
-  const { fixture, provenance } = fixtureForWeapon(world, MTS255);
-  assert.ok(provenance.nonModItemIds.includes(RIP_AMMO));
-  const ammo = fixture.items.find(i => i.id === RIP_AMMO);
+test('ammunition that reaches a fixture as preset supply gets every modifier default recorded, never an invented value', () => {
+  // Camora ammunition no longer reaches a fixture (its chamber slots are removed); preset ammunition does, as an inert supply-only item.
+  const { fixture, provenance } = fixtureForWeapon(world, M4A1);
+  assert.ok(provenance.supplyOnlyItemIds.includes(FMJ_556));
+  assert.deepEqual(provenance.nonModItemIds, [], 'no installable item is a non-mod: ammunition is supply-only');
+  const ammo = fixture.items.find(i => i.id === FMJ_556);
   assert.ok(ammo);
   assert.equal(ammo.ergonomics, undefined);
   assert.equal(ammo.recoilModifier, undefined); // properties.recoilModifier of ammunition is a different quantity, never a mod modifier
   assert.equal(ammo.accuracyModifier, undefined);
   for (const field of ['ergonomics', 'recoilModifier', 'accuracyModifier']) {
-    assert.ok(provenance.defaults.find(d => d.scope === 'item' && d.field === field)?.ids.includes(RIP_AMMO), field);
+    assert.ok(provenance.defaults.find(d => d.scope === 'item' && d.field === field)?.ids.includes(FMJ_556), field);
   }
-  assert.equal(world.items.get(RIP_AMMO)?.properties?.recoilModifier !== undefined, true);
+  assert.equal(world.items.get(FMJ_556)?.properties?.recoilModifier !== undefined, true);
+});
+
+test('the ammunition default records of the whole capture are exactly the supply-only ammunition: 22 records over the 172 guns', () => {
+  // Over all 172 fixtures the 61 ammunition records of the pre-decision closure fall to 22: the 39 camora templates are gone.
+  let records = 0;
+  for (const gun of [...world.items.values()].filter(i => i.types.includes('gun'))) {
+    const { provenance } = fixtureForWeapon(world, gun.id);
+    const recorded = provenance.defaults.find(d => d.scope === 'item' && d.field === 'ergonomics')?.ids ?? [];
+    assert.deepEqual(recorded, provenance.supplyOnlyItemIds.filter(id => world.items.get(id)?.types.includes('ammo')), gun.normalizedName);
+    records += recorded.length;
+  }
+  assert.equal(records, 22);
 });
 
 test('the fixture is plain JSON: it survives a JSON round trip unchanged', () => {
@@ -215,7 +229,7 @@ test('a gun carrying a modifier the receiver schema cannot hold, or a category c
 
 test('a non-mod item carrying a mod modifier has no rule and is rejected rather than defaulted', () => {
   assert.throws(
-    () => fixtureForWeapon(patched({ [RIP_AMMO]: item => ({ ...item, ergonomicsModifier: 2 }) }), MTS255),
+    () => fixtureForWeapon(patched({ [FMJ_556]: item => ({ ...item, ergonomicsModifier: 2 }) }), M4A1),
     evidenceError(/non-mod item/),
   );
 });

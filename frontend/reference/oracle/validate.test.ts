@@ -212,6 +212,28 @@ test('category group includes are OR within a group and AND across groups; an em
   rejects(f, { include_categories: [[]] }, naked([R, 's1', 'a']), 'MISSING_INCLUDE_CATEGORY_GROUP');
 });
 
+test('include groups match through the category chain, like exclusions (interpretation 5, owner decision 2026-10-04)', () => {
+  // a and b sit in sibling leaf categories under one parent; z is elsewhere. A group naming the parent is matched only through the ancestor
+  // chain; a group naming the finest category agrees with the chain rule for items of that leaf.
+  const f = fixtureOf(
+    [
+      { id: 'a', categories: ['leaf-a', 'parent'] },
+      { id: 'b', categories: ['leaf-b', 'parent'] },
+      { id: 'z', categories: ['elsewhere'] },
+    ],
+    { slots: [slot('s1', ['a', 'b', 'z']), slot('s2', ['a', 'b', 'z'])] },
+  );
+  accepts(f, { include_categories: [['parent']] }, naked([R, 's1', 'a']));
+  accepts(f, { include_categories: [['parent']] }, naked([R, 's1', 'b']));
+  rejects(f, { include_categories: [['parent']] }, naked([R, 's1', 'z']), 'MISSING_INCLUDE_CATEGORY_GROUP');
+  accepts(f, { include_categories: [['leaf-a']] }, naked([R, 's1', 'a']));
+  rejects(f, { include_categories: [['leaf-a']] }, naked([R, 's1', 'b']), 'MISSING_INCLUDE_CATEGORY_GROUP');
+  // groups stay conjunctive: one item can satisfy two groups (its leaf and its parent), but two sibling leaves need two items
+  accepts(f, { include_categories: [['leaf-a'], ['parent']] }, naked([R, 's1', 'a']));
+  rejects(f, { include_categories: [['leaf-a'], ['leaf-b']] }, naked([R, 's1', 'a']), 'MISSING_INCLUDE_CATEGORY_GROUP');
+  accepts(f, { include_categories: [['leaf-a'], ['leaf-b']] }, naked([R, 's1', 'a'], [R, 's2', 'b']));
+});
+
 // --- acquisition ----------------------------------------------------------------------------------
 
 test('a standalone-inaccessible item is capped by owned stock', () => {

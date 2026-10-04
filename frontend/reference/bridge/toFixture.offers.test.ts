@@ -24,8 +24,8 @@ const PMAG_D60 = '59c1383d86f774290a37e0ca'; // noFlea, no trader offer, one fra
 const EOTECH_EXPS3_TAN = '558022b54bdc2dac148b458d'; // EOTech EXPS3-0 tan: one fractional (7.52) ref barter, no integer one
 const HENSOLDT = '56ea70acd2720b844b8b4594'; // Hensoldt FF 4-16x56 scope: skier L3 barter for 5 USEC dogtags
 const DOGTAG_USEC = '59f32c3b86f77472a31742f0';
-const MTS255 = '60db29ce99594040e04c4a27'; // MTS-255-12 shotgun; its revolver cylinder reaches 12/70 RIP ammunition
-const RIP_AMMO = '5c0d591486f7744c505b416f'; // 12/70 RIP: a barter offers 5 rounds per craft
+const AKM = '59d6088586f774275f37482f'; // AKM: its factory presets list 7.62x39 PS gzh ammunition, an inert supply-only item
+const PS_GZH = '5656d7c34bdc2d9d198b4587'; // 7.62x39mm PS gzh: a barter offers 20 rounds per craft
 
 const itemOf = (fixture: ReferenceFixture, id: string): ReferenceItem => {
   const found = fixture.items.find(i => i.id === id);
@@ -88,25 +88,29 @@ test('a barter keeps trader, level, ingredient valuation inputs, offeredCount an
   });
 });
 
-test('offeredCount > 1 survives and the oracle buys the lot whole: one unit costs the whole lot, six units two lots', () => {
-  // barters.json: skier L2 (task-gated) gives 5 x 12/70 RIP for 1 x T-Shaped Plug.
-  // T-Shaped Plug: avg24hPrice 23962 (basePrice 2481) -> lot total 23962 (avg ?? base), lot price 23962 for 5 units.
-  // Whole-lot rule (interpretation 1): a deficit of 1 or 5 costs one lot, 23962; a deficit of 6 needs ceil(6/5) = 2 lots, 47924.
-  const { fixture } = fixtureForWeapon(world, MTS255);
-  const barter = itemOf(fixture, RIP_AMMO).offers?.find(o => o.kind === 'barter');
+test('offeredCount > 1 survives and the oracle buys the lot whole: one unit costs the whole lot, twenty-one units two lots', () => {
+  // barters.json 6abb6e52ba8a04ed5c0730e02-5656d7c3...: prapor L2 (no task) gives 20 x 7.62x39 PS gzh for 1 x Malboro cigarettes.
+  // Malboro: avg24hPrice 21259 (basePrice 2210) -> lot total 21259 (avg ?? base), lot price 21259 for 20 units. The ammunition is a
+  // preset component of the AKM (30 in preset 5a327f90...), so it is a supply-only item of the fixture, offers included. Its cash
+  // offer is prapor level 3 (327 RUB), so at prapor level 2 the barter is its only legal offer.
+  // Whole-lot rule (interpretation 1): a deficit of 1 or 20 costs one lot, 21259; a deficit of 21 needs ceil(21/20) = 2 lots, 42518.
+  const { fixture, provenance } = fixtureForWeapon(world, AKM);
+  assert.equal(provenance.supplyOnlyItemIds.includes(PS_GZH), true);
+  const barter = itemOf(fixture, PS_GZH).offers?.find(o => o.kind === 'barter');
   assert.ok(barter && barter.kind === 'barter');
-  assert.equal(barter.offeredCount, 5);
-  assert.equal(barter.requirements[0].avg24hPrice, 23962);
-  const request: ReferenceRequest = { weapon_id: MTS255, barter_available: true, flea_available: false, trader_levels: { skier: 4, jaeger: 0 } };
-  const fromBarter = legalOffers(offersOf(fixture, RIP_AMMO), resolveRequest(fixture, request)).find(o => o.kind === 'barter');
-  assert.deepEqual(fromBarter?.lotPrice, q(23962));
-  assert.equal(fromBarter?.offeredCount, 5);
-  assert.ok(fromBarter);
-  assert.deepEqual([1, 5, 6].map(d => cheapestCover([fromBarter], d)?.cost), [q(23962), q(23962), q(47924)]);
+  assert.equal(barter.offeredCount, 20);
+  assert.equal(barter.requirements[0].avg24hPrice, 21259);
+  const request: ReferenceRequest = { weapon_id: AKM, barter_available: true, flea_available: false, trader_levels: { prapor: 2 } };
+  const legal = legalOffers(offersOf(fixture, PS_GZH), resolveRequest(fixture, request));
+  assert.deepEqual(legal.map(o => o.kind), ['barter'], 'the level-3 cash offer is locked at prapor level 2');
+  const fromBarter = legal[0];
+  assert.deepEqual(fromBarter.lotPrice, q(21259));
+  assert.equal(fromBarter.offeredCount, 20);
+  assert.deepEqual([1, 20, 21].map(d => cheapestCover([fromBarter], d)?.cost), [q(21259), q(21259), q(42518)]);
 });
 
 test('every mapped barter, fractional counts included, prices exactly like the reference reader says (lot = floor(total + 1/2)), offeredCount carried', () => {
-  for (const gunId of [M4A1, MTS255, AK74N]) {
+  for (const gunId of [M4A1, AKM, AK74N]) {
     const { fixture } = fixtureForWeapon(world, gunId);
     const request = resolveRequest(fixture, {
       weapon_id: gunId, barter_available: true, flea_available: false,
@@ -222,16 +226,19 @@ test('a second real fractional Ref barter, the only barter of its item: 7.52 x g
 });
 
 test('task-gated offers are mapped as available and counted in provenance', () => {
-  const { fixture, provenance } = fixtureForWeapon(world, MTS255);
+  // M4A1 closure: 6 gated barters and 11 gated trader offers over its items, plus 1 and 1 over its presets (the naked receiver's
+  // trader offer, mechanic L3, is not gated), so provenance lists 7 barters and 12 trader offers.
+  const { fixture, provenance } = fixtureForWeapon(world, M4A1);
   let rawGatedBarters = 0;
   let rawGatedTrader = 0;
-  for (const item of fixture.items) {
-    rawGatedBarters += (bartersByItem.get(item.id) ?? []).filter(b => b.taskUnlock !== null).length;
-    rawGatedTrader += (world.items.get(item.id)?.buyFromTrader ?? []).filter(o => o.taskUnlock !== null).length;
+  for (const subject of [...fixture.items, ...(fixture.presets ?? [])]) {
+    rawGatedBarters += (bartersByItem.get(subject.id) ?? []).filter(b => b.taskUnlock !== null).length;
+    rawGatedTrader += (world.items.get(subject.id)?.buyFromTrader ?? []).filter(o => o.taskUnlock !== null).length;
   }
-  assert.ok(rawGatedBarters > 0);
+  assert.equal(rawGatedBarters, 7);
+  assert.equal(rawGatedTrader, 12);
   assert.equal(provenance.taskGated.filter(t => t.kind === 'barter').length, rawGatedBarters);
   assert.equal(provenance.taskGated.filter(t => t.kind === 'trader').length, rawGatedTrader);
-  // barters.json 6abb6e15...: skier L2, taskUnlock 669fa39c64ea11e84c0642a6, offers the 12/70 RIP ammunition.
-  assert.ok(provenance.taskGated.some(t => t.kind === 'barter' && t.subjectId === RIP_AMMO && t.trader === 'skier' && t.level === 2 && t.taskUnlock === '669fa39c64ea11e84c0642a6'));
+  // barters.json 6abb6e34ba8a04ed5c07165b3: peacekeeper L4, taskUnlock 67a09724972c11a3f5077324, offers the PMAG D-60 magazine.
+  assert.ok(provenance.taskGated.some(t => t.kind === 'barter' && t.subjectId === PMAG_D60 && t.trader === 'peacekeeper' && t.level === 4 && t.taskUnlock === '67a09724972c11a3f5077324'));
 });

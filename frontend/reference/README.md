@@ -11,7 +11,7 @@ solver rewrite is measured against in Stage 3. It is test-side code: nothing in 
 
 | Directory | What it holds |
 | :--- | :--- |
-| `oracle/` | Exact-Q enumerator, reference validator, statistics, scoring and acquisition model for finite fixtures (`runOracle`, `validateReference`). Public surface: `oracle/index.ts`. |
+| `oracle/` | Exact-Q enumerator, reference validator, statistics, scoring and acquisition model for finite fixtures (`runOracle`, `validateReference`), plus the Tchebycheff payoff-table admissibility check (`payoffTables`, `checkIdealPoint`; `INTERPRETATIONS.md` choice 17). Public surface: `oracle/index.ts`. |
 | `source/` | Pinned raw tarkov.dev JSON documents, the independent reader for them, source checks and the differential checks of the production adapter and extractors. See `source/README.md`. |
 | `ledger/` | The 14-family ledger (`ledger/family*.ts`), its authoring DSL, the coverage catalogue (required subcases, ADR 0013 section 3 wording, deferred subcases) and the test that runs it against the oracle. |
 | `bridge/` | `fixtureForWeapon` / `sliceFixture`: maps the raw reader's world into the oracle's fixture schema, plus real-data cases. See `bridge/README.md`. |

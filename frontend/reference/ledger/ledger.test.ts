@@ -10,19 +10,58 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  abs, computeStats, eq, ge, lt, parseQ, ReferenceInputError, resolveFixture, resolveRequest, runOracle, sub, toString, validateReference, ZERO,
-  type BuildStats, type Q, type ValidationResult,
+  abs, checkIdealPoint, computeStats, eq, ge, lt, parseQ, payoffTables, ReferenceInputError, resolveFixture, resolveRequest, runOracle, sub, toNumber,
+  toString, validateReference, ZERO,
+  type BuildStats, type PayoffTable, type Q, type ReferenceIdealPoint, type ValidationResult,
 } from '../oracle/index';
 import {
   ADR_0013_SECTION_3_SUBCASES, CROSS_CUTTING_TAGS, DEFERRED_SUBCASES, LEDGER, MONOTONICITY, REQUIRED_SUBCASES, STAGE_3_NATIVE_NUMERICAL,
   type AdrSubcase,
 } from './index';
-import { FAMILIES, type LedgerCase, type StatName } from './types';
+import { FAMILIES, type LedgerCase, type PayoffTableText, type StatName } from './types';
 
 const byId = new Map(LEDGER.map(c => [c.id, c] as const));
 const describeViolations = (r: ValidationResult) => r.violations.map(v => `${v.code}(${v.detail})`).join('; ') || 'none';
 const distinctSorted = (codes: string[]) => [...new Set(codes)].sort();
 const statOf = (stats: BuildStats, name: StatName): Q => stats[name];
+
+// --- payoff-table admissibility (INTERPRETATIONS.md choice 17) --------------------------------------------------------------
+const textOf = (t: PayoffTable): PayoffTableText => ({
+  zE: toString(t.zE), nadE: toString(t.nadE), zR: toString(t.zR), nadR: toString(t.nadR), zP: toString(t.zP), nadP: toString(t.nadP),
+});
+/** The reported doubles of a hand-derived table (every ledger coordinate is an integer, hence an exact double). */
+const idealPointOf = (t: PayoffTableText): ReferenceIdealPoint => ({
+  zE: toNumber(parseQ(t.zE)), nadE: toNumber(parseQ(t.nadE)), zR: toNumber(parseQ(t.zR)),
+  nadR: toNumber(parseQ(t.nadR)), zP: toNumber(parseQ(t.zP)), nadP: toNumber(parseQ(t.nadP)),
+});
+
+function checkPayoff(c: LedgerCase): void {
+  const payoff = c.expected.payoff;
+  assert.ok(payoff, 'a payoff expectation');
+  const result = payoffTables(c.fixture, c.request);
+  assert.equal(result.status, 'tables', 'the payoff enumeration completes on a nonempty domain');
+  if (result.status !== 'tables') return;
+  assert.deepEqual(
+    { zE: toString(result.ideal.zE), zR: toString(result.ideal.zR), zP: toString(result.ideal.zP) },
+    payoff.ideal,
+    'the exact ideal coordinates',
+  );
+  assert.deepEqual(result.tables.map(t => textOf(t.table)), payoff.tables.map(t => t.table), 'every admissible table, and no other');
+  for (const expected of payoff.tables) {
+    const label = JSON.stringify(expected.table);
+    const verdict = checkIdealPoint(c.fixture, c.request, idealPointOf(expected.table));
+    assert.equal(verdict.status, 'admissible', `admissible table ${label}`);
+    const solved = runOracle(c.fixture, { ...c.request, use_tchebycheff: true, ideal_point: idealPointOf(expected.table) });
+    assert.equal(solved.complete, true);
+    assert.equal(solved.maxScore === null ? null : toString(solved.maxScore), expected.maxScore, `Tchebycheff maximum under ${label}`);
+    assert.deepEqual(solved.maximizers, [...expected.maximizers].sort(), `Tchebycheff maximizers under ${label}`);
+  }
+  for (const rejected of payoff.rejected) {
+    const verdict = checkIdealPoint(c.fixture, c.request, idealPointOf(rejected.table));
+    assert.equal(verdict.status, 'inadmissible', `${rejected.label} must be rejected`);
+    if (verdict.status === 'inadmissible') assert.equal(verdict.code, rejected.code, rejected.label);
+  }
+}
 
 // --- 1. every case agrees with its hand derivation ----------------------------------------------------------
 
@@ -62,6 +101,7 @@ for (const c of LEDGER) {
       }));
       assert.deepEqual(actual, check.occurrences, `${check.label}: per-occurrence provenance`);
     }
+    if (c.expected.payoff) checkPayoff(c);
     if (c.expected.statChecks?.length) {
       const resolvedFixture = resolveFixture(c.fixture);
       const resolvedRequest = resolveRequest(c.fixture, c.request);
@@ -90,6 +130,19 @@ test('coverage: all 14 families and every required subcase of ADR 0013 section 3
   for (const tag of CROSS_CUTTING_TAGS) {
     assert.ok(LEDGER.some(c => c.subcases.includes(tag)), `no case carries the cross-cutting tag ${tag}`);
   }
+});
+
+test('coverage: payoff_table_admissibility cases list at least two admissible tables with different Tchebycheff optima, and reject a table', () => {
+  const cases = LEDGER.filter(c => c.subcases.includes('payoff_table_admissibility'));
+  assert.ok(cases.length >= 1, 'a payoff-table case exists');
+  for (const c of cases) {
+    const payoff = c.expected.payoff;
+    assert.ok(payoff, `${c.id}: carries a payoff expectation`);
+    assert.ok(payoff.tables.length >= 2, `${c.id}: at least two admissible tables`);
+    assert.ok(new Set(payoff.tables.map(t => JSON.stringify([...t.maximizers].sort()))).size >= 2, `${c.id}: the optimum differs under the admissible tables`);
+    assert.ok(payoff.rejected.some(r => r.code === 'IDEAL_MISMATCH'), `${c.id}: a table built from a non-optimal build is rejected`);
+  }
+  for (const c of LEDGER.filter(x => x.expected.payoff)) assert.ok(c.subcases.includes('payoff_table_admissibility'), `${c.id}: payoff cases carry the tag`);
 });
 
 test('coverage: no case uses a subcase tag outside the catalogue (typos hide gaps)', () => {
@@ -281,6 +334,19 @@ test('schema: ids, expectations and admitted outcomes are consistent', () => {
         assert.equal(o.source === 'offer', o.via !== undefined, `${where}/${check.label}: only paid occurrences name an offer kind`);
         if (o.source !== 'offer') assert.equal(o.charged, '0', `${where}/${check.label}: preset, owned and unavailable units are charged 0`);
       }
+    }
+    if (e.payoff) {
+      const p = e.payoff;
+      assert.ok(c.request.use_tchebycheff === true && c.request.ideal_point, `${where}: a payoff case is a Tchebycheff case with its own ideal point`);
+      const strings = [
+        ...Object.values(p.ideal), ...p.tables.flatMap(t => [...Object.values(t.table), t.maxScore]),
+        ...p.rejected.flatMap(r => Object.values(r.table)),
+      ];
+      for (const s of strings) assert.equal(toString(parseQ(s)), s, `${where}: payoff value ${s} canonical`);
+      const own = p.tables.find(t => JSON.stringify(idealPointOf(t.table)) === JSON.stringify(c.request.ideal_point));
+      assert.ok(own, `${where}: the request's own ideal point is one of the admissible tables`);
+      assert.equal(own.maxScore, e.maxScore, `${where}: the case's maximum is the optimum under its own table`);
+      assert.deepEqual([...own.maximizers].sort(), e.maximizers, `${where}: the case's maximizers are the optimum under its own table`);
     }
     assert.equal(c.moaDependent, c.request.max_moa !== undefined && c.request.max_moa !== null, `${where}: MOA dependence follows max_moa`);
     assert.equal(c.request.weapon_id, 'gun', `${where}: weapon`);
