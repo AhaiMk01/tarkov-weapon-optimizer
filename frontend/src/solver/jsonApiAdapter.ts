@@ -36,11 +36,20 @@
  *    `requiredItems[].count` a finite nonnegative number. An absent, null or
  *    malformed count throws a `SourceDataError` naming the preset/barter and the
  *    item; there is no `?? 1`.
+ *  - **Barter lot size**: a barter's `offeredItem.count` is the units it delivers. It is
+ *    emitted as GraphQL's `rewardItems: [{ item: { id }, count }]` and must be an integer of
+ *    at least 1; an absent, null or malformed count throws a `SourceDataError`
+ *    (`barter_lot_size`) naming the offered item. Only barters of converted items (guns, mods,
+ *    presets) are read, so the ammunition barters (the only lots above one) never block loading.
+ *  - **Item types**: every converted item carries its raw `types` (GraphQL `types`), and every
+ *    slot's `allowedItems` entry is `{ id, types }` (GraphQL `allowedItems { id types }`), so the
+ *    extractors can tell ammunition (`ammo`, not in the guns/mods lookup) from a part. An id the
+ *    items document lacks has `types: []`.
  *  - **`imageLink`** is GraphQL's deprecated alias for `inspectImageLink`
  *    (per the schema), not `gridImageLink`.
  */
 
-import { barterIngredientCount, presetComponentCount } from './sourceErrors.ts';
+import { barterIngredientCount, barterLotSize, presetComponentCount } from './sourceErrors.ts';
 
 const JSON_API_URL = 'https://json.tarkov.dev';
 const LANG_FALLBACK = 'en';
@@ -212,6 +221,14 @@ export async function fetchAllDataFromJsonApi(
     return list.map(barter => ({
       trader: traderOf(barter.trader),
       level: barter.minTraderLevel ?? 1,
+      // GraphQL `Barter.rewardItems`: the units this barter delivers. The count is validated, never defaulted.
+      rewardItems: [{
+        item: { id: itemId },
+        count: barterLotSize(barter.offeredItem?.count, {
+          offeredItemId: itemId,
+          offeredItemName: items[itemId] ? tr(items[itemId].name) || undefined : undefined,
+        }),
+      }],
       requiredItems: (barter.requiredItems ?? []).map(req => {
         const source = (typeof req.item === 'string' ? items[req.item] : undefined) ?? {};
         const offered = items[itemId];
@@ -321,6 +338,12 @@ export async function fetchAllDataFromJsonApi(
     return preset;
   };
 
+  /** Raw item types of an id the items document may lack (`[]` then). Shared with the source item, never copied. */
+  const typesOf = (id: unknown): string[] => {
+    const raw = typeof id === 'string' ? items[id] : undefined;
+    return Array.isArray(raw?.types) ? raw.types : [];
+  };
+
   /** Translate slot names and dereference preset IDs inside `properties`. */
   const convertProperties = (props: RawItem | undefined | null): RawItem | null => {
     if (!props) return null;
@@ -331,7 +354,7 @@ export async function fetchAllDataFromJsonApi(
         name: tr(slot.name),
         nameId: slot.nameId ?? '',
         required: slot.required ?? false,
-        filters: { allowedItems: slot.filters?.allowedItems ?? [] },
+        filters: { allowedItems: (slot.filters?.allowedItems ?? []).map((id: string) => ({ id, types: typesOf(id) })) },
       }));
     }
     if (Array.isArray(props.presets)) {
@@ -350,6 +373,7 @@ export async function fetchAllDataFromJsonApi(
     name: tr(raw.name),
     shortName: tr(raw.shortName),
     normalizedName: raw.normalizedName ?? '',
+    types: Array.isArray(raw.types) ? raw.types : [],
     basePrice: raw.basePrice ?? 0,
     avg24hPrice: raw.avg24hPrice ?? null,
     weight: raw.weight ?? 0,

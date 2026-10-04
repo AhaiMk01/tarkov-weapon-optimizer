@@ -128,10 +128,11 @@ test('collisions among templates this weapon cannot reach do not matter', () => 
 });
 
 test('ammunition-only slots are removed from the physical domain, required or not, and recorded', () => {
-  // 'ammo*' ids are not in the lookup: production models only mods. A removed required slot must not make the owner unbuildable.
+  // 'ammo*' ids are not in the lookup (ammunition is no ItemLookup entry); the data layer flags them per slot (`ammoItems`).
+  // A removed required slot must not make the owner unbuildable.
   const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('chamber', ['ammo1', 'ammo2'], true), slot('grip', ['m1'])] }),
-    ['m1', mod('m1', { slots: [slot('mag', ['ammo1', 'ammo3'])] })],
+    gun(WEAPON, { slots: [slot('chamber', ['ammo1', 'ammo2'], true, ['ammo1', 'ammo2']), slot('grip', ['m1'])] }),
+    ['m1', mod('m1', { slots: [slot('mag', ['ammo1', 'ammo3'], false, ['ammo1', 'ammo3'])] })],
   );
   const bp = preparePhysicalWeapon(lookup, WEAPON);
   assert.deepEqual(instanceIds(bp), ['weapon_0/grip:m1']);
@@ -144,7 +145,7 @@ test('ammunition-only slots are removed from the physical domain, required or no
 });
 
 test('a slot that mixes ammunition with parts is an input error, never silently split', () => {
-  const lookup = lookupOf(gun(WEAPON, { slots: [slot('mixed', ['m1', 'ammo1'])] }), ['m1', mod('m1')]);
+  const lookup = lookupOf(gun(WEAPON, { slots: [slot('mixed', ['m1', 'ammo1'], false, ['ammo1'])] }), ['m1', mod('m1')]);
   assert.throws(
     () => preparePhysicalWeapon(lookup, WEAPON),
     (e: unknown) => e instanceof PhysicalModelError && e.code === 'MIXED_AMMO_SLOT',

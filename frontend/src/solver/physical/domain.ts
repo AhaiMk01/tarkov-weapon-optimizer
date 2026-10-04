@@ -26,12 +26,10 @@
  */
 
 import type { GunLookupEntry, ItemLookup, ModLookupEntry } from '../types';
-import { cheapestPrice, legalOfferIndexes, resolveMarket, type MarketInput } from './acquisition';
+import { cheapestPrice, legalOfferIndexes, legalOffers, resolveMarket, type AcquisitionOffer, type MarketInput } from './acquisition';
 import { blueprintMatchesLookup, type I32, type PhysicalBlueprint, type U8 } from './blueprint';
 import { PhysicalModelError } from './errors';
-
-/** Maximum entries of `owned_items` (ADR 0008 section 1). */
-export const OWNED_ITEMS_MAX = 10_000;
+import { countOwnedItems } from './ownedItems';
 
 /** Why an occurrence is not active. `ACTIVE` (0) means it is. Stored one byte per occurrence. */
 export const InactiveReason = {
@@ -57,8 +55,9 @@ export interface SubproblemRequest extends MarketInput {
   /** A category id matches an item whose own-or-ancestor category chain contains it. */
   excludeCategories?: readonly string[] | null;
   /**
-   * Stash multiset (ADR 0008): element multiplicity is quantity. Omitted, null and [] all mean no stock. `SolveParams` does
-   * not carry it yet, so it is an explicit input here. Owning a part never grants a receiver.
+   * Stash multiset (ADR 0008): element multiplicity is quantity. Omitted, null and [] all mean no stock. The shape matches
+   * `SolveParams.ownedItems`, so a `SolveParams` value is accepted as the request. An invalid stash is the typed input error
+   * `INVALID_OWNED_ITEMS` (see `ownedItems.ts`), never an empty domain. Owning a part never grants a receiver.
    */
   ownedItems?: readonly string[] | null;
 }
@@ -105,6 +104,11 @@ export interface TemplateAcquisition {
   receiverBanned: boolean;
   /** Legal standalone offers as ascending indexes into `ModStats.offers`. */
   standaloneOffers: readonly number[];
+  /**
+   * The same legal offers as lots (aligned with `standaloneOffers`): index, source, the price of one whole lot and the units one
+   * purchase delivers. A paid deficit is covered with whole lots (INTERPRETATIONS.md choice 1); there is no per-unit price.
+   */
+  standaloneLots: readonly AcquisitionOffer[];
   /** Cheapest stored price among the legal offers, or null: never a stand-in. */
   cheapestPrice: number | null;
   /** N_owned(i). */
@@ -137,24 +141,6 @@ export interface SubproblemDomain {
   readonly templates: readonly TemplateAcquisition[];
   /** The retained multiset: every owned id with its multiplicity, including ids outside the physical universe. */
   readonly ownedItems: ReadonlyMap<string, number>;
-}
-
-/** Validate and count an `owned_items` multiset. Sparse holes and non-strings are rejected, the cap bounds entries only. */
-export function countOwnedItems(ownedItems: readonly string[] | null | undefined): Map<string, number> {
-  const counts = new Map<string, number>();
-  if (ownedItems === undefined || ownedItems === null) return counts;
-  const reject = (detail: string): never => {
-    throw new PhysicalModelError('INVALID_OWNED_ITEMS', `owned_items rejected: ${detail}`);
-  };
-  if (!Array.isArray(ownedItems)) return reject('not an array');
-  if (ownedItems.length > OWNED_ITEMS_MAX) return reject(`more than ${OWNED_ITEMS_MAX} entries`);
-  for (let i = 0; i < ownedItems.length; i++) {
-    const id: unknown = ownedItems[i];
-    if (!(i in ownedItems)) return reject(`entry ${i} is missing`);
-    if (typeof id !== 'string' || id === '') return reject(`entry ${i} is not a nonempty string`);
-    counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
-  return counts;
 }
 
 /** One flea gate per item, carried by mods (`min_level_flea`); receivers and presets carry none. */
@@ -207,7 +193,7 @@ export function prepareSubproblemDomain(
   const templates: TemplateAcquisition[] = new Array<TemplateAcquisition>(T);
   const templateReason = new Uint8Array(T);
   templates[0] = {
-    excluded: false, receiverBanned: false, standaloneOffers: [], cheapestPrice: null, owned: 0, presetSupply: [], supply: 'receiver',
+    excluded: false, receiverBanned: false, standaloneOffers: [], standaloneLots: [], cheapestPrice: null, owned: 0, presetSupply: [], supply: 'receiver',
   };
   for (let t = 1; t < T; t++) {
     const id = blueprint.templateIds[t];
@@ -215,7 +201,8 @@ export function prepareSubproblemDomain(
     const chain = blueprint.templateCategoryChain[t];
     const excluded = excludeItems.has(id) || chain.some(category => excludeCategories.has(category));
     const receiverBanned = blueprint.templateReceiverBanned[t] === 1;
-    const standaloneOffers = legalOfferIndexes(entry.stats.offers, fleaGateOf(entry.stats), market);
+    const standaloneLots = legalOffers(entry.stats.offers, fleaGateOf(entry.stats), market);
+    const standaloneOffers = standaloneLots.map(offer => offer.index);
     const presetSupply: { base: number; quantity: number }[] = [];
     bases.forEach((base, b) => {
       if (base.kind !== 'preset') return;
@@ -228,6 +215,7 @@ export function prepareSubproblemDomain(
       excluded,
       receiverBanned,
       standaloneOffers,
+      standaloneLots,
       cheapestPrice: cheapestPrice(entry.stats.offers, standaloneOffers),
       owned: ownedCount,
       presetSupply,

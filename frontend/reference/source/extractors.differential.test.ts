@@ -31,6 +31,8 @@ interface ProductionOffer {
   source: string;
   trader_level: number | null;
   barter_requirements?: Array<{ name: string; count: number; unit_price: number }>;
+  /** Barters only: the units one barter delivers (`offeredItem.count`). */
+  lot_size?: number;
 }
 interface ProductionPreset {
   id: string;
@@ -191,7 +193,7 @@ const bartersByItem = indexBartersByOfferedItem(world.barters);
 function barterSignatures(offers: readonly ProductionOffer[]): string[] {
   return offers
     .filter(o => o.source.startsWith('barter:'))
-    .map(o => `${o.price}|${o.source}|${o.trader_level}|${JSON.stringify((o.barter_requirements ?? []).map(r => [r.name, r.count, r.unit_price]))}`)
+    .map(o => `${o.price}|${o.source}|${o.trader_level}|${JSON.stringify((o.barter_requirements ?? []).map(r => [r.name, r.count, r.unit_price]))}|lot ${o.lot_size}`)
     .sort();
 }
 
@@ -205,7 +207,7 @@ function referenceBarterSignatures(itemId: string): string[] {
       const source = world.items.get(r.itemId) as RefItem;
       return [world.translateItemKey(source.nameKey), r.count, source.avg24hPrice ?? source.basePrice ?? 0];
     });
-    out.push(`${offer.priceRUB}|barter:${trader?.normalizedName}|${barter.minTraderLevel}|${JSON.stringify(requirements)}`);
+    out.push(`${offer.priceRUB}|barter:${trader?.normalizedName}|${barter.minTraderLevel}|${JSON.stringify(requirements)}|lot ${barter.offered.count}`);
   }
   return out.sort();
 }
@@ -232,7 +234,7 @@ function compareBarterValuation(source: Record<string, ProductionLookupEntry> = 
   return { items, offers, mismatches };
 }
 
-test('barter valuation: production offers equal the exact-rational reference (price, trader, level, requirements)', t => {
+test('barter valuation: production offers equal the exact-rational reference (price, trader, level, requirements, lot size)', t => {
   const result = compareBarterValuation();
   t.diagnostic(`compared ${result.items} mods/presets with ${result.offers} reference barter offers; mismatches=${result.mismatches.length}`);
   for (const m of result.mismatches.slice(0, 10)) t.diagnostic(m);
@@ -244,6 +246,33 @@ test('barter valuation: production offers equal the exact-rational reference (pr
   // Float summation + Math.round disagreeing with exact floor(x + 1/2) would show up here; any
   // re-pin that changes this is flagged rather than silently accepted.
   assert.equal(result.mismatches.length, 0, result.mismatches.slice(0, 5).join(' | '));
+});
+
+test('barter lot sizes: every comparable production barter offer carries the source offeredItem.count (all one unit for mods and presets here)', () => {
+  const sizes = new Map<number, number>();
+  for (const entry of Object.values(lookup)) {
+    const offerLists = entry.type === 'mod' ? [entry.stats.offers] : (entry.all_presets ?? []).map(p => p.offers);
+    for (const offers of offerLists) {
+      for (const o of offers) {
+        if (!o.source.startsWith('barter:')) continue;
+        assert.ok(Number.isInteger(o.lot_size) && (o.lot_size as number) >= 1, 'a validated integer lot size on every barter offer');
+        sizes.set(o.lot_size as number, (sizes.get(o.lot_size as number) ?? 0) + 1);
+      }
+    }
+  }
+  // INTERPRETATIONS.md choice 1: the 29 multi-unit barters are all ammunition, which the adapter never converts.
+  assert.deepEqual([...sizes], [[1, 307]]);
+});
+
+test('control: a tampered lot size is flagged by the valuation comparison', () => {
+  const victim = Object.entries(lookup).find(([, e]) => e.type === 'mod' && e.stats.offers.some(o => o.source.startsWith('barter:')));
+  assert.ok(victim);
+  const [id, entry] = victim;
+  const tampered: Record<string, ProductionLookupEntry> = {
+    ...lookup,
+    [id]: { ...entry, stats: { ...entry.stats, offers: entry.stats.offers.map(o => (o.source.startsWith('barter:') ? { ...o, lot_size: (o.lot_size ?? 1) + 1 } : o)) } },
+  };
+  assert.ok(compareBarterValuation(tampered).mismatches.length >= 1);
 });
 
 test('control: a tampered production barter price is flagged by the valuation comparison', () => {

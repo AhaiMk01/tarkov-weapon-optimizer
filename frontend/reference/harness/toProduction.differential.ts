@@ -13,6 +13,11 @@
 // instead of running a different problem. When a Stage 2 phase teaches production a feature, the matching
 // detector below is removed together with the mapping change, and the ratchet picks up the newly passing cases.
 //
+// Phase 2.4b-1 gave the production INPUTS the stash (`SolveParams.ownedItems`) and the barter lot size
+// (`OfferInfo.lot_size`), so their detectors are gone: both are now mapped. Today's LP does not honour either, so
+// those cases run and are graded on the dimensions they still fail; the detectors only ever meant "the input cannot
+// be written", and it now can.
+//
 // Differential helper: may import production code (reference/independenceScan.ts); no non-differential file
 // may import this one.
 
@@ -32,10 +37,6 @@ import type {
 
 /** Every fixture/request feature the current production inputs cannot represent, in report order. */
 export const UNSUPPORTED_FEATURES = [
-  /** `request.owned_items`: production has no stash input at all. */
-  'owned_items',
-  /** A barter lot delivering more than one unit: `OfferInfo` has no lot size. */
-  'barter_offered_count_gt_1',
   /** A player-level flea gate on a receiver or preset: only mods carry `min_level_flea`. */
   'flea_player_level_on_base',
   /** One mod with flea offers at different player levels: `min_level_flea` is one number per item. */
@@ -75,20 +76,11 @@ export function detectUnsupported(fixture: ReferenceFixture, request: ReferenceR
   const found: UnsupportedFeature[] = [];
   const add = (feature: UnsupportedFeatureId, detail: string) => found.push({ feature, detail });
 
-  const owned = request.owned_items ?? [];
-  if (owned.length > 0) add('owned_items', `owned_items has ${owned.length} entr${owned.length === 1 ? 'y' : 'ies'}; production takes no stash input`);
-
   const subjects: { id: string; kind: 'mod' | 'receiver' | 'preset'; offers: ReferenceOffer[] }[] = [
     ...fixture.items.map(i => ({ id: i.id, kind: 'mod' as const, offers: i.offers ?? [] })),
     ...fixture.weapons.map(w => ({ id: w.id, kind: 'receiver' as const, offers: w.offers ?? [] })),
     ...(fixture.presets ?? []).map(p => ({ id: p.id, kind: 'preset' as const, offers: p.offers ?? [] })),
   ];
-
-  for (const s of subjects) {
-    for (const offer of s.offers) {
-      if (offer.kind === 'barter' && (offer.offeredCount ?? 1) > 1) add('barter_offered_count_gt_1', `${s.kind} ${s.id}: barter lot of ${offer.offeredCount} units (OfferInfo has no lot size)`);
-    }
-  }
 
   for (const s of subjects) {
     const fleas = s.offers.filter(isFlea).filter(positive);
@@ -160,6 +152,8 @@ function barterOffer(offer: ReferenceBarterOffer): OfferInfo | null {
     trader_level: offer.level,
     barter_requirements: requirements,
     requires_dogtag: offer.requiresDogtag === true ? true : undefined,
+    // Units one barter delivers, as the source says (an absent offeredCount is one unit, as in the oracle).
+    lot_size: offer.offeredCount ?? 1,
   };
 }
 
@@ -315,7 +309,7 @@ export type RequestParams = Omit<SolveParams, 'weaponId' | 'itemLookup' | 'compa
 
 /**
  * Every request field to its SolveParams counterpart. Absent fields stay absent (or null for the nullable caps), so
- * production applies its own defaults; a cap of 0 is a real cap. `owned_items` has no counterpart (see detectUnsupported).
+ * production applies its own defaults; a cap of 0 is a real cap. `owned_items` becomes `ownedItems` as a copy (null reads as omitted).
  */
 export function mapRequest(request: ReferenceRequest): RequestParams {
   const ideal: IdealPoint | undefined = request.ideal_point ? { ...request.ideal_point } : undefined;
@@ -345,6 +339,7 @@ export function mapRequest(request: ReferenceRequest): RequestParams {
     barterAvailable: request.barter_available,
     barterExcludeDogtags: request.barter_exclude_dogtags,
     playerLevel: request.player_level ?? null,
+    ownedItems: request.owned_items ? [...request.owned_items] : undefined,
   };
 }
 

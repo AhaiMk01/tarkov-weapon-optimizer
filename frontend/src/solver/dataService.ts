@@ -9,7 +9,7 @@ import type {
 } from './types.ts';
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
-import { barterIngredientCount, presetComponentCount } from './sourceErrors.ts';
+import { barterIngredientCount, barterLotSize, presetComponentCount, SourceDataError } from './sourceErrors.ts';
 
 const API_URL = 'https://api.tarkov.dev/graphql';
 /**
@@ -19,8 +19,13 @@ const API_URL = 'https://api.tarkov.dev/graphql';
  *  - 16: preset `containsItems[].count` and barter ingredient counts are validated, never
  *    defaulted to 1 (ADR 0013 section 4A), and the GraphQL fallback query carries `count`.
  *    Payloads cached at 15 were normalized with the `?? 1` default and must not be reused.
+ *  - 17: the payload carries the source item `types` of guns and mods, `allowedItems` entries
+ *    are `{ id, types }` (the only way the blueprint can tell ammunition from a part), each
+ *    barter carries `rewardItems` (its lot size), and the GraphQL fallback selects the whole
+ *    category chain with ids. Payloads cached at 16 lack all of these: a camora slot would read
+ *    as an empty required slot and a barter lot as one unit, so they must not be reused.
  */
-export const CACHE_VERSION = 16;
+export const CACHE_VERSION = 17;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -28,10 +33,58 @@ const STORE_NAME = 'graphql-cache';
 
 // --- GraphQL Queries ---
 
-const GUNS_QUERY = `
+/**
+ * Category levels the fallback queries request in full (id, name, normalizedName), counting the item's own category. The JSON API
+ * adapter hands over the whole chain (4 to 7 levels on the pinned capture); GraphQL has no unbounded recursion, so the queries nest
+ * this many levels and then ONE sentinel level that selects only `id`. A response whose chain reaches the sentinel is deeper than the
+ * query and is rejected (`assertCategoryChainsComplete`) instead of silently losing ancestors that category filters must match.
+ */
+export const CATEGORY_CHAIN_LEVELS = 10;
+
+/** `bsgCategory { ... }` nested to {@link CATEGORY_CHAIN_LEVELS} full levels plus the id-only sentinel. */
+function categorySelection(withChildren: boolean): string {
+  let selection = 'parent { id }';
+  for (let level = CATEGORY_CHAIN_LEVELS; level >= 1; level--) {
+    const children = level === 1 && withChildren ? ' children { id }' : '';
+    const fields = `id name normalizedName${children} ${selection}`;
+    selection = level === 1 ? `bsgCategory { ${fields} }` : `parent { ${fields} }`;
+  }
+  return selection;
+}
+
+/** A barter and the units it delivers: `rewardItems[].count` is the lot size (`offeredItem.count` of the JSON API). */
+const BARTERS_FOR = `bartersFor {
+      trader { name normalizedName }
+      level
+      requiredItems {
+        item { id name avg24hPrice basePrice iconLink }
+        count
+      }
+      rewardItems {
+        item { id }
+        count
+      }
+    }`;
+
+/** Slots with each allowed item's `types`: ammunition (`ammo`) is outside the physical build domain. */
+const SLOTS = `slots {
+          id
+          name
+          nameId
+          required
+          filters {
+            allowedItems {
+              id
+              types
+            }
+          }
+        }`;
+
+export const GUNS_QUERY = `
 query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
   items(gameMode: $gameMode, lang: $lang, types: gun) {
     id
+    types
     basePrice
     avg24hPrice
     buyFor {
@@ -50,14 +103,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
         }
       }
     }
-    bartersFor {
-      trader { name normalizedName }
-      level
-      requiredItems {
-        item { id name avg24hPrice basePrice iconLink }
-        count
-      }
-    }
+    ${BARTERS_FOR}
     accuracyModifier
     conflictingSlotIds
     ergonomicsModifier
@@ -74,10 +120,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
     iconLinkFallback
     iconLink
     handbookCategories { name }
-    bsgCategory {
-      id
-      name
-    }
+    ${categorySelection(false)}
     properties {
       ... on ItemPropertiesWeapon {
         caliber
@@ -132,26 +175,9 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
             priceRUB
             price
           }
-          bartersFor {
-            trader { name normalizedName }
-            level
-            requiredItems {
-              item { id name avg24hPrice basePrice iconLink }
-              count
-            }
-          }
+          ${BARTERS_FOR}
         }
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
         defaultPreset {
           baseImageLink
           gridImageLinkFallback
@@ -170,10 +196,11 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
 }
 `;
 
-const MODS_QUERY = `
+export const MODS_QUERY = `
 query AllMods($lang: LanguageCode, $gameMode: GameMode) {
   items(gameMode: $gameMode, lang: $lang, types: mods) {
     id
+    types
     basePrice
     avg24hPrice
     buyFor {
@@ -189,14 +216,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
         }
       }
     }
-    bartersFor {
-      trader { name normalizedName }
-      level
-      requiredItems {
-        item { id name avg24hPrice basePrice iconLink }
-        count
-      }
-    }
+    ${BARTERS_FOR}
     accuracyModifier
     ergonomicsModifier
     recoilModifier
@@ -217,33 +237,13 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
       ... on ItemPropertiesWeaponMod {
         ergonomics
         recoilModifier
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
       }
       ... on ItemPropertiesBarrel {
         ergonomics
         recoilModifier
         centerOfImpact
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
       }
       ... on ItemPropertiesMagazine {
         ergonomics
@@ -259,17 +259,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
         sightingRange
         sightModes
         zoomLevels
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
       }
     }
     imageLinkFallback
@@ -277,15 +267,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
     baseImageLink
     minLevelForFlea
     handbookCategories { name }
-    bsgCategory {
-      id
-      name
-      normalizedName
-      parent { name parent { name } }
-      children {
-        id
-      }
-    }
+    ${categorySelection(true)}
   }
 }
 `;
@@ -377,8 +359,29 @@ type RawItem = Record<string, any>;
 interface GunQueryResult { items: RawItem[] }
 interface ModQueryResult { items: RawItem[] }
 
+/**
+ * Reject a GraphQL response whose `bsgCategory` chain reached the sentinel level: the query asked for
+ * {@link CATEGORY_CHAIN_LEVELS} full levels and one id-only sentinel, so a chain of more nodes is deeper
+ * than the query and its ancestors would be missing from category matching (INTERPRETATIONS.md choice 5).
+ */
+export function assertCategoryChainsComplete(items: readonly RawItem[], what: string): void {
+  for (const item of items) {
+    let depth = 0;
+    for (let node = item?.bsgCategory; node && depth <= CATEGORY_CHAIN_LEVELS; node = node.parent) depth++;
+    if (depth > CATEGORY_CHAIN_LEVELS) {
+      throw new SourceDataError(
+        'category_chain_truncated',
+        String(item?.id ?? ''),
+        String(item?.bsgCategory?.id ?? ''),
+        depth,
+        `GraphQL ${what} item ${String(item?.id ?? '')}: category chain is deeper than the ${CATEGORY_CHAIN_LEVELS} levels the query requests; ancestors would be missing from category matching`,
+      );
+    }
+  }
+}
+
 /** Fetch guns and mods via the legacy GraphQL endpoint. */
-async function fetchAllDataFromGraphQL(
+export async function fetchAllDataFromGraphQL(
   lang: string,
   gameMode: string,
 ): Promise<{ guns: RawItem[]; mods: RawItem[] }> {
@@ -386,6 +389,8 @@ async function fetchAllDataFromGraphQL(
     runQuery<GunQueryResult>(GUNS_QUERY, { lang, gameMode }),
     runQuery<ModQueryResult>(MODS_QUERY, { lang, gameMode }),
   ]);
+  assertCategoryChainsComplete(gunsData.items, 'gun');
+  assertCategoryChainsComplete(modsData.items, 'mod');
   return { guns: gunsData.items, mods: modsData.items };
 }
 
@@ -421,23 +426,6 @@ export async function fetchAllData(lang: string, gameMode: string): Promise<{ gu
 
 // --- Data Extraction (ported from optimizer.py) ---
 
-function hasValidPrice(item: RawItem): boolean {
-  const buyFor = item.buyFor ?? [];
-  for (const offer of buyFor) {
-    if (typeof offer === 'object' && offer && (offer.priceRUB ?? 0) > 0) {
-      return true;
-    }
-  }
-  const bartersFor = item.bartersFor ?? [];
-  if (Array.isArray(bartersFor) && bartersFor.length > 0) return true;
-  // Include mods listed in API without buyFor when they have a BSG reference price (still not "purchasable")
-  const ap = item.avg24hPrice;
-  const bp = item.basePrice;
-  if (typeof ap === 'number' && ap > 0) return true;
-  if (typeof bp === 'number' && bp > 0) return true;
-  return false;
-}
-
 function extractConflictingItems(item: RawItem): string[] {
   const conflicts = item.conflictingItems ?? [];
   if (!conflicts.length) return [];
@@ -446,17 +434,25 @@ function extractConflictingItems(item: RawItem): string[] {
     .map((c: { id: string }) => c.id);
 }
 
+/**
+ * Slots of an item. An allowed item is a bare id (a payload that carries no item types) or an object `{ id, types }`
+ * (GraphQL `allowedItems { id types }`, which the JSON adapter also produces). The ids stay in `allowedItems`; those whose
+ * `types` include `ammo` are also listed in `ammoItems`, the only record that an allowed id is ammunition (ammunition is not
+ * an `ItemLookup` entry). A bare id or an object without a type list is never classified as ammunition.
+ */
 function extractSlots(itemData: RawItem): SlotInfo[] {
   const props = itemData.properties;
   if (!props?.slots) return [];
   return props.slots.map((slot: RawItem) => {
     const allowedIds: string[] = [];
+    const ammoIds: string[] = [];
     const filters = slot.filters;
     if (filters && typeof filters === 'object') {
       const allowedItems = filters.allowedItems ?? [];
       for (const item of allowedItems) {
         if (typeof item === 'object' && item) {
           allowedIds.push(item.id);
+          if (Array.isArray(item.types) && item.types.includes('ammo')) ammoIds.push(item.id);
         } else if (typeof item === 'string') {
           allowedIds.push(item);
         }
@@ -468,6 +464,7 @@ function extractSlots(itemData: RawItem): SlotInfo[] {
       nameId: slot.nameId as string,
       required: slot.required ?? false,
       allowedItems: allowedIds,
+      ...(ammoIds.length > 0 ? { ammoItems: ammoIds } : {}),
     };
   });
 }
@@ -642,6 +639,32 @@ function extractGunStats(gun: RawItem): GunStats {
   };
 }
 
+/**
+ * Units one barter delivers (its lot size), read from GraphQL `rewardItems` (`offeredItem.count` of the JSON API). The entries
+ * for the offered item are validated (an integer >= 1, never defaulted) and summed. A barter with no `rewardItems` field at all
+ * comes from a payload that predates lot sizes (the pinned snapshot) and has no lot size: `undefined`, which `lotSizeOf` reads
+ * as one unit. A present but malformed `rewardItems` is a source error.
+ */
+function extractBarterLotSize(barter: Record<string, unknown>, offeredItemId: string | undefined): number | undefined {
+  const rewardItems = barter.rewardItems;
+  if (rewardItems === undefined) return undefined;
+  const subject = { offeredItemId: offeredItemId ?? '' };
+  if (!Array.isArray(rewardItems)) {
+    throw new SourceDataError('barter_lot_size', subject.offeredItemId, subject.offeredItemId, rewardItems,
+      `Barter for ${subject.offeredItemId}: rewardItems must be a list, got ${typeof rewardItems}`);
+  }
+  let lot = 0;
+  let found = false;
+  for (const entry of rewardItems as Array<{ item?: { id?: string }; count?: unknown } | null>) {
+    if (offeredItemId !== undefined && entry?.item?.id !== offeredItemId) continue;
+    found = true;
+    lot += barterLotSize(entry?.count, subject);
+  }
+  // No entry for the offered item reads as an absent count: a barter never lists nothing it delivers.
+  if (!found) barterLotSize(undefined, subject);
+  return lot;
+}
+
 /** Convert bartersFor entries into OfferInfo with "barter:" source prefix. */
 function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): OfferInfo[] {
   const offers: OfferInfo[] = [];
@@ -668,6 +691,9 @@ function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): Off
       totalCost += count * price;
       reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price, icon: ri.item?.iconLink || undefined });
     }
+    // The lot size is validated for every barter record, like its ingredient counts: an unusable record is a source error even
+    // when the barter is then skipped for a non-positive total. It is never defaulted.
+    const lotSize = extractBarterLotSize(b, offeredItemId);
     if (totalCost <= 0) continue;
     const requiresDogtag = reqs.some(r => /dogtag/i.test(r.name));
     offers.push({
@@ -678,6 +704,7 @@ function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): Off
       trader_level: level,
       barter_requirements: reqs,
       requires_dogtag: requiresDogtag || undefined,
+      ...(lotSize !== undefined ? { lot_size: lotSize } : {}),
     });
   }
   return offers;
@@ -815,7 +842,8 @@ export function buildItemLookup(guns: RawItem[], mods: RawItem[]): ItemLookup {
     };
   }
   for (const mod of mods) {
-    if (!hasValidPrice(mod)) continue;
+    // Every mod stays, priced or not (ADR 0013 section 4A): a mod with no legal standalone offer is
+    // capped by preset supply plus owned stock downstream, never dropped and never given a stand-in price.
     lookup[mod.id] = {
       type: 'mod',
       data: mod,

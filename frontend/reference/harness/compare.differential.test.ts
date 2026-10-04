@@ -304,17 +304,17 @@ test('outcome contract: every admitted field is compared, and each missing or wr
 });
 
 test('an unsupported mapping fails every applicable dimension with the reason, and is graded the same in both modes', () => {
-  const c = LEDGER.find(x => (x.request.owned_items ?? []).length > 0 && !x.expected.empty);
-  assert.ok(c);
-  const outcome: ProductionOutcome = { kind: 'unsupported', unsupported: [{ feature: 'owned_items', detail: 'owned_items has 1 entry' }] };
+  const c = byId('F04-exclude-category-ancestor-chain');
+  assert.equal(c.expected.empty, false);
+  const outcome: ProductionOutcome = { kind: 'unsupported', unsupported: [{ feature: 'category_chain_ancestor_match', detail: 'category mod is an ancestor of 2 item(s)' }] };
   for (const mode of ['precise', 'fast'] as const) {
     const graded = gradeOutcome(c, mode, outcome);
     for (const d of DIMENSIONS) {
       if (d === 'scoreOptimal' && mode === 'fast') assert.equal(graded[d].verdict, 'n/a');
       else {
         assert.equal(graded[d].verdict, 'fail', `${mode}.${d}`);
-        assert.match(graded[d].reason, /^unsupported: owned_items has 1 entry/);
-        assert.equal(graded[d].key, 'unsupported: owned_items');
+        assert.match(graded[d].reason, /^unsupported: category mod is an ancestor of 2 item\(s\)/);
+        assert.equal(graded[d].key, 'unsupported: category_chain_ancestor_match');
       }
     }
   }
@@ -334,11 +334,11 @@ test('a production crash fails every applicable dimension and names the exceptio
 // --- gradeCase -------------------------------------------------------------------------------------------
 
 test('gradeCase does not run a case with an unsupported feature, and records the feature ids', async () => {
-  const c = LEDGER.find(x => (x.request.owned_items ?? []).length > 0)!;
+  const c = byId('F04-exclude-category-ancestor-chain');
   let calls = 0;
   const graded = await gradeCase(c, { runner: async () => { calls++; return { kind: 'threw', message: 'must not run' }; } });
   assert.equal(calls, 0);
-  assert.deepEqual(graded.unsupported, ['owned_items']);
+  assert.deepEqual(graded.unsupported, ['category_chain_ancestor_match']);
   assert.equal(graded.observed.precise, 'unsupported');
   assert.equal(graded.precise.emptiness.verdict, 'fail');
 });

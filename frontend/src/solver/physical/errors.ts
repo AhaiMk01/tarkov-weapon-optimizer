@@ -18,6 +18,8 @@ export type PhysicalModelErrorCode =
   | 'OCCURRENCE_LIMIT'
   /** `owned_items` is not a valid multiset input (ADR 0008 section 1). */
   | 'INVALID_OWNED_ITEMS'
+  /** An offer is malformed: a barter lot size that is not an integer of at least 1. */
+  | 'BAD_OFFER'
   /** A request field the domain preparation reads is malformed (a non-finite trader or player level). */
   | 'INVALID_REQUEST'
   /** The blueprint was not prepared from the lookup it is being used with. */

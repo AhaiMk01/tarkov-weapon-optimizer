@@ -268,12 +268,20 @@ test('toProduction assembles the lookup, the compatibility map and the solve par
 
 const flags = (f: ReferenceFixture, r: ReferenceRequest = request()) => detectUnsupported(f, r).map(u => u.feature);
 
-test('owned_items is unsupported: production has no stash input', () => {
+test('owned_items is carried to SolveParams.ownedItems as a multiset copy, so it is no longer an unsupported feature', () => {
   const f = fixture({ items: [{ id: 'a' }] });
-  assert.deepEqual(flags(f, request({ owned_items: ['a'] })), ['owned_items']);
-  assert.deepEqual(flags(f, request({ owned_items: [] })), []);
-  assert.deepEqual(flags(f, request({ owned_items: null })), []);
-  assert.match(detectUnsupported(f, request({ owned_items: ['a', 'a'] }))[0].detail, /2/);
+  for (const owned of [['a'], ['a', 'a', 'unknown'], [], null, undefined]) {
+    assert.deepEqual(flags(f, request({ owned_items: owned })), [], 'production inputs can represent every stash');
+  }
+  assert.ok(!(UNSUPPORTED_FEATURES as readonly string[]).includes('owned_items'), 'the detector was removed with the transport');
+  const source = ['a', 'a', 'unknown'];
+  const mapped = mapRequest(request({ owned_items: source })).ownedItems;
+  assert.deepEqual(mapped, ['a', 'a', 'unknown'], 'duplicates keep their multiplicity, unknown ids stay');
+  assert.notEqual(mapped, source, 'a copy, never the fixture array');
+  assert.deepEqual(mapRequest(request({ owned_items: [] })).ownedItems, []);
+  assert.equal(mapRequest(request({ owned_items: null })).ownedItems, undefined, 'null reads as omitted');
+  assert.equal(mapRequest(request()).ownedItems, undefined, 'absent stays absent');
+  assert.deepEqual(toProduction(f, request({ owned_items: ['a', 'a'] }), { preciseMode: true }).params.ownedItems, ['a', 'a']);
 });
 
 test('preset component quantities of every size are representable, so none is reported as unsupported', () => {
@@ -302,13 +310,34 @@ test('preset components keep their quantities: repeated entries sum, counts abov
   assert.equal(p.receiver_id, 'gun');
 });
 
-test('a barter lot of more than one unit is unsupported', () => {
+test('a barter lot of any size is representable: the lot size is carried on the offer, so it is no longer an unsupported feature', () => {
   const mk = (offeredCount?: number) => fixture({
     items: [{ id: 'a', offers: [{ kind: 'barter', trader: 'prapor', level: 1, requirements: [{ count: 1, basePrice: 10 }], ...(offeredCount === undefined ? {} : { offeredCount }) }] }],
   });
-  assert.deepEqual(flags(mk()), []);
-  assert.deepEqual(flags(mk(1)), []);
-  assert.deepEqual(flags(mk(3)), ['barter_offered_count_gt_1']);
+  const lotOf = (offeredCount?: number): number | undefined => {
+    const entry = mapFixture(mk(offeredCount)).a;
+    assert.equal(entry.type, 'mod');
+    return entry.type === 'mod' ? entry.stats.offers[0].lot_size : undefined;
+  };
+  for (const count of [undefined, 1, 3, 60]) assert.deepEqual(flags(mk(count)), []);
+  assert.ok(!(UNSUPPORTED_FEATURES as readonly string[]).includes('barter_offered_count_gt_1'), 'the detector was removed with the lot size');
+  assert.equal(lotOf(), 1, 'an absent offeredCount is one unit, as in the oracle');
+  assert.equal(lotOf(1), 1);
+  assert.equal(lotOf(3), 3);
+  assert.equal(lotOf(60), 60);
+  // The price stays the price of one whole lot (the rounded barter total), never a per-unit share.
+  const priced = mapFixture(mk(3)).a;
+  assert.equal(priced.type === 'mod' ? priced.stats.offers[0].price : -1, 10);
+});
+
+test('cash and flea offers carry no lot size; a barter lot size reaches a preset offer too', () => {
+  const lookup = mapFixture(fixture({
+    items: [{ id: 'a', offers: [{ kind: 'trader', trader: 'prapor', level: 1, price: 5 }, { kind: 'flea', price: 7 }] }],
+    presets: [{ id: 'p', weaponId: 'gun', components: [], offers: [{ kind: 'barter', trader: 'prapor', level: 1, offeredCount: 2, requirements: [{ count: 1, basePrice: 9 }] }] }],
+  }));
+  const a = lookup.a;
+  assert.ok(a.type === 'mod' && a.stats.offers.length === 2 && a.stats.offers.every(o => !('lot_size' in o)));
+  assert.equal(gun(lookup, 'gun').all_presets[0].offers[0].lot_size, 2);
 });
 
 test('a player-level flea gate is unsupported on a receiver or a preset, and on a mod with two flea offers at different levels', () => {
@@ -343,12 +372,12 @@ test('a preset id equal to its receiver id or to the naked-base marker cannot be
 
 test('several unsupported features are all listed, once per feature id per subject, in a stable order', () => {
   const f = fixture({
-    items: [{ id: 'a', offers: [{ kind: 'barter', trader: 'prapor', level: 1, offeredCount: 2, requirements: [{ count: 1, basePrice: 1 }] }] }],
+    items: [{ id: 'a', categories: ['leaf', 'branch'], offers: [{ kind: 'trader', trader: 'Prapor', level: 1, price: 5 }] }],
     presets: [{ id: 'p', weaponId: 'gun', components: [{ itemId: 'a', count: 3 }], offers: [{ kind: 'flea', price: 5, minPlayerLevel: 20 }] }],
   });
-  const found = flags(f, request({ owned_items: ['a'] }));
-  assert.deepEqual(found, ['owned_items', 'barter_offered_count_gt_1', 'flea_player_level_on_base']);
-  assert.deepEqual(found, flags(f, request({ owned_items: ['a'] })), 'deterministic');
+  const found = flags(f, request({ exclude_categories: ['branch'] }));
+  assert.deepEqual(found, ['flea_player_level_on_base', 'category_chain_ancestor_match', 'non_canonical_trader_name']);
+  assert.deepEqual(found, flags(f, request({ exclude_categories: ['branch'] })), 'deterministic');
 });
 
 // --- the real ledger -----------------------------------------------------------------------------------
@@ -367,9 +396,42 @@ test('every ledger case maps without throwing and into a lookup that holds every
   assert.ok(unsupportedCases > 0 && unsupportedCases < LEDGER.length, `unsupported cases: ${unsupportedCases}`);
 });
 
-test('the owned_items cases of the ledger are exactly the ones reported as owned_items', () => {
-  const withStock = LEDGER.filter(c => (c.request.owned_items ?? []).length > 0).map(c => c.id);
-  const reported = LEDGER.filter(c => toProduction(c.fixture, c.request, { preciseMode: true }).unsupported.some(u => u.feature === 'owned_items')).map(c => c.id);
-  assert.deepEqual(reported, withStock);
+test('every ledger case with owned_items hands its stash to production, and none is reported unsupported for it', () => {
+  const withStock = LEDGER.filter(c => (c.request.owned_items ?? []).length > 0);
   assert.ok(withStock.length >= 10);
+  for (const c of withStock) {
+    const inputs = toProduction(c.fixture, c.request, { preciseMode: true });
+    assert.deepEqual(inputs.params.ownedItems, c.request.owned_items, c.id);
+    assert.ok(!inputs.unsupported.some(u => (u.feature as string) === 'owned_items'), c.id);
+  }
+  for (const c of LEDGER.filter(x => (x.request.owned_items ?? []).length === 0)) {
+    const stash = toProduction(c.fixture, c.request, { preciseMode: true }).params.ownedItems;
+    assert.ok(stash === undefined || stash.length === 0, c.id);
+  }
+});
+
+test('every ledger barter lot reaches production as OfferInfo.lot_size, and none is reported unsupported for it', () => {
+  let lots = 0;
+  let multi = 0;
+  for (const c of LEDGER) {
+    const lookup = mapFixture(c.fixture);
+    const inputs = toProduction(c.fixture, c.request, { preciseMode: true });
+    assert.ok(!inputs.unsupported.some(u => (u.feature as string) === 'barter_offered_count_gt_1'), c.id);
+    const subjects = [
+      ...c.fixture.items.map(i => ({ id: i.id, offers: i.offers ?? [], mapped: lookup[i.id] })),
+      ...c.fixture.weapons.map(w => ({ id: w.id, offers: w.offers ?? [], mapped: lookup[w.id] })),
+    ];
+    for (const s of subjects) {
+      const barters = s.offers.filter(o => o.kind === 'barter');
+      if (barters.length === 0) continue;
+      const mappedOffers = s.mapped.stats.offers;
+      const mappedBarters = mappedOffers.filter(o => o.source.startsWith('barter:'));
+      for (const o of mappedBarters) {
+        lots++;
+        assert.ok(Number.isInteger(o.lot_size) && (o.lot_size as number) >= 1, `${c.id}: ${s.id}`);
+        if ((o.lot_size as number) > 1) multi++;
+      }
+    }
+  }
+  assert.ok(lots > 0 && multi >= 1, `barter offers ${lots}, multi-unit lots ${multi}`);
 });

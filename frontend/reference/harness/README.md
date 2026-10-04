@@ -64,14 +64,19 @@ A feature production's inputs cannot carry is returned in `unsupported`, never d
 
 | Feature id | Meaning | Cases when the baseline was created |
 | :--- | :--- | ---: |
-| `owned_items` | `request.owned_items`: production has no stash input | 15 |
-| `barter_offered_count_gt_1` | a barter lot delivering several units (`OfferInfo` has no lot size) | 1 |
 | `category_chain_ancestor_match` | a category filter that matches an item only through an ancestor (only the own `category_id` exists) | 1 |
 | `flea_player_level_on_base` | a player-level flea gate on a receiver or preset (only mods carry `min_level_flea`) | 0 |
 | `flea_offers_distinct_player_levels` | one mod with flea offers at different levels (`min_level_flea` is one number) | 0 |
 | `weapon_magazine_capacity` | a receiver magazine capacity under a magazine minimum (`GunStats` has no capacity) | 0 |
 | `non_canonical_trader_name` | a trader name that production would trim or lowercase into another key | 0 |
 | `ambiguous_preset_id` | a preset id equal to its receiver id or to the naked-base marker `naked` | 0 |
+
+The two detectors `owned_items` (15 cases) and `barter_offered_count_gt_1` (1 case) existed when the baseline was created and
+are gone: phase 2.4b-1 gave production's inputs `SolveParams.ownedItems` (the stash multiset, mapped as a copy; null reads as
+omitted) and `OfferInfo.lot_size` (the units one barter delivers; an absent `offeredCount` is one unit, as in the oracle).
+Today's LP honours neither, so those cases now run and are graded on what they still fail; 14 cases gained 56 passing cells
+(all in the baseline) with no regression. `category_chain_ancestor_match` stays: the data layer carries the whole chain on both
+paths, but today's LP still matches the own category only, so the detector goes when phase 2.4b replaces the LP.
 
 A receiver's `conflictingItemIds` is carried onto the listed mods as a conflict with the receiver (production has no
 receiver conflict list; the compatibility map skips a mod that lists the receiver, which is the exclusion the oracle's
@@ -127,6 +132,7 @@ exception while evaluating the custom build would still fall back unseen. The te
   `scoreOptimal` because the optimum installs more than one copy and production installs at most one copy of a
   template until the physical model (phase 2.4); F14 still fails `buildValid` because production's free-of-charge
   stand-in for unpurchasable parts installs a part (`c`) that the preset supplies zero copies of (also phase 2.4).
-* `owned_items` (phase 2.7): add the field to `mapRequest` and delete its detector.
+* `owned_items` and barter lot sizes (phase 2.4b-1, done): `mapRequest` writes `ownedItems`, `barterOffer` writes `lot_size`,
+  both detectors are gone, and `blueprint.differential` compares each template's legal offer lot sizes with the oracle.
 * Every removed detector turns its cases from `unsupported` failures into real runs; the ratchet then demands the baseline
   update that records whatever they now score.

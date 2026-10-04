@@ -16,8 +16,10 @@
  *  - Required slots with no candidate are KEPT (candidateCount 0): the owner of an empty required slot can never be
  *    built; for the receiver that makes the whole domain empty. The domain preparation propagates it.
  *  - Camora / ammunition-only slots are removed from the domain, not emptied (INTERPRETATIONS.md choice 15). The
- *    production lookup carries no ammunition entries (only guns and mods), so an allowed id the lookup does not hold is
- *    ammunition unless the caller says otherwise (`options.isAmmo`). A slot that mixes ammunition with parts throws.
+ *    production lookup holds guns and mods only, so ammunition is never an entry; an allowed id is ammunition only when
+ *    the data layer says so: it is listed in the slot's `ammoItems` (source item type `ammo`), or `options.isAmmo` says so.
+ *    An allowed id the lookup does not hold and nothing flags as ammunition is a recorded drop, never ammunition by
+ *    default. A slot that mixes ammunition with parts throws.
  *
  * Memory layout (all integer ids, flat typed arrays, no per-occurrence objects or strings). Occurrences are numbered in
  * breadth-first creation order, so every child index is greater than its owner's, the slots of one occurrence are
@@ -51,8 +53,9 @@ export const DEFAULT_MAX_OCCURRENCES = 4_000_000;
 
 export interface PreparePhysicalOptions {
   /**
-   * Classifies an allowed id the lookup does not hold. Default: every such id is ammunition (production models only
-   * guns and mods). With a classifier, a non-ammunition unknown id is dropped from its allowlist and recorded.
+   * Additional ammunition classifier for an allowed id the lookup does not hold, on top of the data-layer flags
+   * (`SlotInfo.ammoItems`). For payloads that carry no item types, such as the pinned snapshot. Default: none. An unknown id
+   * that neither the flags nor this classifier call ammunition is dropped from its allowlist and recorded.
    */
   isAmmo?: (itemId: string) => boolean;
   /**
@@ -305,7 +308,7 @@ export function preparePhysicalWeapon(
   if (!weapon || weapon.type !== 'gun') {
     throw new PhysicalModelError('UNKNOWN_WEAPON', `Weapon ${weaponId} is not a gun entry of the item lookup`, { weaponId });
   }
-  const isAmmo = options.isAmmo ?? (() => true);
+  const extraIsAmmo = options.isAmmo;
   const categoryChainOf = options.categoryChainOf ?? ((_id: string, entry: ItemLookupEntry) => defaultCategoryChain(entry));
   const maxOccurrences = options.maxOccurrences ?? DEFAULT_MAX_OCCURRENCES;
 
@@ -345,6 +348,7 @@ export function preparePhysicalWeapon(
       const parts: string[] = [];
       const ammo: string[] = [];
       const seenAllowed = new Set<string>();
+      const flaggedAmmo = slotInfo.ammoItems && slotInfo.ammoItems.length > 0 ? new Set(slotInfo.ammoItems) : null;
       for (const allowedId of slotInfo.allowedItems) {
         if (seenAllowed.has(allowedId)) continue;
         seenAllowed.add(allowedId);
@@ -353,7 +357,7 @@ export function preparePhysicalWeapon(
         } else if (hasEntry(lookup, allowedId)) {
           if (lookup[allowedId].type === 'mod') parts.push(allowedId);
           else droppedAllowedItems.push({ ownerTemplateId: ownerId, slotId: slotInfo.id, itemId: allowedId, reason: 'not_a_mod' });
-        } else if (isAmmo(allowedId)) {
+        } else if (flaggedAmmo?.has(allowedId) === true || extraIsAmmo?.(allowedId) === true) {
           ammo.push(allowedId);
         } else {
           droppedAllowedItems.push({ ownerTemplateId: ownerId, slotId: slotInfo.id, itemId: allowedId, reason: 'not_in_lookup' });

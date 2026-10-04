@@ -21,6 +21,13 @@ export interface OfferInfo {
   trader_level: number | null;
   barter_requirements?: BarterRequirement[];
   requires_dogtag?: boolean;
+  /**
+   * Barters only: the units one barter delivers (JSON `offeredItem.count`, GraphQL `rewardItems[].count`), an integer >= 1.
+   * `price` is the price of one whole lot. A lot is bought whole (INTERPRETATIONS.md choice 1): there is no per-unit price.
+   * Absent on cash and flea offers (always one unit), on hand-built offers, and on a barter from a payload that predates lot sizes
+   * (the pinned snapshot, where no gun, mod or preset barter delivers more than one unit); read it through `lotSizeOf`.
+   */
+  lot_size?: number;
 }
 
 // --- Gun Stats ---
@@ -99,6 +106,13 @@ export interface SlotInfo {
   nameId: string;
   required: boolean;
   allowedItems: string[];
+  /**
+   * The ids of `allowedItems` whose source item type is ammunition (`types` includes `ammo`): camora and chamber contents, which
+   * are outside the physical build domain (INTERPRETATIONS.md choice 15). Ammunition is not an `ItemLookup` entry, so this is the
+   * only place the data layer says an allowed id is ammunition. Omitted when no allowed item is ammunition, and for payloads
+   * that carry no item types (hand-built lookups, the pinned snapshot).
+   */
+  ammoItems?: string[];
 }
 
 // --- Preset Info ---
@@ -256,6 +270,13 @@ export interface SolveParams {
   barterAvailable?: boolean;
   barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
+  /**
+   * Stash multiset (ADR 0008): one entry per owned copy, duplicates kept, unknown ids retained. Omitted or [] means no stock.
+   * At most 10,000 nonempty strings with no sparse holes; anything else is the typed input error `INVALID_OWNED_ITEMS`
+   * (`physical/ownedItems.ts`, public reason `Invalid owned_items format`), never infeasibility. Owning a part supplies copies
+   * of it at no cost but never grants a receiver. Carried only; the solver does not honour it before the physical LP lands.
+   */
+  ownedItems?: string[];
   preciseMode?: boolean;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   boundsMode?: 'structural' | 'naive';

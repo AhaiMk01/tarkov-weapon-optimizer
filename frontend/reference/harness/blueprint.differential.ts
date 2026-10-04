@@ -167,8 +167,8 @@ export interface OracleSide {
   /** Accessible bases, `naked` or `preset:<id>`, sorted. */
   bases: string[];
   baseCheapest: Map<string, number>;
-  /** Per template id: acquisition facts of the oracle. */
-  templates: Map<string, { standalone: number; cheapest: number | null; owned: number; presets: string[] }>;
+  /** Per template id: acquisition facts of the oracle (`lotSizes`: units per purchase of each legal standalone offer, ascending). */
+  templates: Map<string, { standalone: number; cheapest: number | null; lotSizes: number[]; owned: number; presets: string[] }>;
 }
 
 export function oracleSide(fixture: ReferenceFixture, request: ReferenceRequest): OracleSide {
@@ -180,7 +180,7 @@ export function oracleSide(fixture: ReferenceFixture, request: ReferenceRequest)
   const baseCheapest = new Map<string, number>();
   for (const base of bases) baseCheapest.set(keyOf(base), toNumber(baseOffer(rf, rr, base)!.lotPrice));
 
-  const templates = new Map<string, { standalone: number; cheapest: number | null; owned: number; presets: string[] }>();
+  const templates = new Map<string, { standalone: number; cheapest: number | null; lotSizes: number[]; owned: number; presets: string[] }>();
   for (const item of rf.items.values()) {
     const offers = standaloneOffers(rf, rr, item.id);
     const presets: string[] = [];
@@ -191,6 +191,7 @@ export function oracleSide(fixture: ReferenceFixture, request: ReferenceRequest)
     templates.set(item.id, {
       standalone: offers.length,
       cheapest: offers.length ? Math.min(...offers.map(o => toNumber(o.lotPrice))) : null,
+      lotSizes: offers.map(o => o.offeredCount).sort((a, b) => a - b),
       owned: rr.owned.get(item.id) ?? 0,
       presets: presets.sort(),
     });

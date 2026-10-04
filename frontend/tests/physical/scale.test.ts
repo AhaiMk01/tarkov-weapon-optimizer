@@ -33,6 +33,14 @@ if (present) {
   lookup = buildItemLookup(guns as never, snapshot.mods as never);
 }
 
+/**
+ * The normalized snapshot predates item types, so its slots carry no ammunition flags. On this capture every allowed id the lookup
+ * does not hold is ammunition (tests/data/ammoSource.test.ts proves it against the raw item types, through the adapter and the
+ * flags), so the classifier says exactly that, explicitly, instead of the blueprint inferring it.
+ */
+const snapshotIsAmmo = (id: string): boolean => !Object.hasOwn(lookup, id);
+const prepare = (id: string): PhysicalBlueprint => preparePhysicalWeapon(lookup, id, { isAmmo: snapshotIsAmmo });
+
 const gunId = (shortName: string): string => {
   const gun = guns.find(g => g.shortName === shortName);
   assert.ok(gun, `${shortName} is in the snapshot`);
@@ -57,13 +65,13 @@ const checksum = (bp: PhysicalBlueprint): number => {
 test('M4A1 and AK-74N unroll to the measured occurrence universes, quickly and compactly', { skip }, t => {
   const m4 = gunId('M4A1');
   const started = performance.now();
-  const bp = preparePhysicalWeapon(lookup, m4);
+  const bp = prepare(m4);
   const m4Ms = performance.now() - started;
   assert.equal(bp.occurrenceCount - 1, 151_479, 'M4A1 item occurrences');
 
   const akId = gunId('AK-74N');
   const akStarted = performance.now();
-  const ak = preparePhysicalWeapon(lookup, akId);
+  const ak = prepare(akId);
   const akMs = performance.now() - akStarted;
   assert.equal(ak.occurrenceCount - 1, 41_153, 'AK-74N item occurrences');
 
@@ -81,7 +89,7 @@ test('all 172 guns prepare; the occurrence distribution matches the pinned measu
   let largest = { shortName: '', occurrences: 0, ms: 0 };
   for (const gun of guns) {
     const gunStarted = performance.now();
-    const bp = preparePhysicalWeapon(lookup, gun.id);
+    const bp = prepare(gun.id);
     const ms = performance.now() - gunStarted;
     const occurrences = bp.occurrenceCount - 1;
     counts.push(occurrences);
@@ -106,7 +114,7 @@ test('camora ammunition slots are removed, not emptied: 5 guns, 28 slot records,
   const ammoIds = new Set<string>();
   const gunsWithAmmo: string[] = [];
   for (const gun of guns) {
-    const bp = preparePhysicalWeapon(lookup, gun.id);
+    const bp = prepare(gun.id);
     if (bp.removedAmmoSlots.length > 0) gunsWithAmmo.push(gun.shortName);
     for (const record of bp.removedAmmoSlots) slotRecords.add(`${record.ownerTemplateId}/${record.slotId}`);
     for (const id of bp.removedAmmoItemIds) ammoIds.add(id);
@@ -123,7 +131,7 @@ test('direct raw bounds equal the legacy weight bounds and ergonomics minimum, a
   // only be looser than the exact bound, never tighter. Weight and the ergonomics minimum agree on every gun.
   let tighterErgoMax = 0;
   for (const gun of guns) {
-    const bp = preparePhysicalWeapon(lookup, gun.id);
+    const bp = prepare(gun.id);
     const legacy = computeStructuralBounds(gun.id, lookup, buildCompatibilityMap(gun.id, lookup));
     const raw = bp.rawBounds!;
     assert.ok(Math.abs(raw.weight.min - legacy.physicalWeightBounds[0]) < 1e-9, `${gun.shortName} weight min`);
@@ -136,7 +144,7 @@ test('direct raw bounds equal the legacy weight bounds and ergonomics minimum, a
 });
 
 test('M4A1 domain: masks cover every occurrence, the blueprint is untouched, reasons add up', { skip }, t => {
-  const bp = preparePhysicalWeapon(lookup, gunId('M4A1'));
+  const bp = prepare(gunId('M4A1'));
   const before = checksum(bp);
   const started = performance.now();
   const domain = prepareSubproblemDomain(bp, lookup, {});

@@ -62,6 +62,12 @@ export interface OptimizeRequest {
   barter_available?: boolean;
   barter_exclude_dogtags?: boolean;
   player_level?: number;
+  /**
+   * Stash multiset (ADR 0008): one entry per owned copy, so `['m', 'm']` is two copies. Omitted or [] means no stock. At most
+   * 10,000 nonempty strings; an invalid list is rejected as `Invalid owned_items format`, never reported as infeasible.
+   * Inherited by `ExploreRequest`. Not yet honoured by the solver or forwarded by the worker.
+   */
+  owned_items?: string[];
   /** Boolean values are normalized: true → precise, false → fast. */
   precise_mode?: boolean | SolverPrecisionMode;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */

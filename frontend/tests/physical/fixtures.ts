@@ -13,11 +13,20 @@ export interface SlotSpec {
   id: string;
   allowed: string[];
   required?: boolean;
+  /** The allowed ids the data layer flags as ammunition (`SlotInfo.ammoItems`); a subset of `allowed`. */
+  ammo?: string[];
 }
 
-export const slot = (id: string, allowed: string[], required = false): SlotSpec => ({ id, allowed, required });
+export const slot = (id: string, allowed: string[], required = false, ammo?: string[]): SlotSpec => ({ id, allowed, required, ...(ammo ? { ammo } : {}) });
 
-const toSlotInfo = (s: SlotSpec): SlotInfo => ({ id: s.id, name: s.id, nameId: s.id, required: s.required === true, allowedItems: [...s.allowed] });
+const toSlotInfo = (s: SlotSpec): SlotInfo => ({
+  id: s.id,
+  name: s.id,
+  nameId: s.id,
+  required: s.required === true,
+  allowedItems: [...s.allowed],
+  ...(s.ammo && s.ammo.length > 0 ? { ammoItems: [...s.ammo] } : {}),
+});
 
 export const trader = (vendor: string, level: number, price: number): OfferInfo => ({
   price, source: vendor, vendor_name: vendor, vendor_normalized: vendor, trader_level: level,
@@ -27,7 +36,8 @@ export const flea = (price: number): OfferInfo => ({
   price, source: 'fleaMarket', vendor_name: 'Flea Market', vendor_normalized: 'flea-market', trader_level: null,
 });
 
-export const barter = (vendor: string, level: number, price: number, requiresDogtag = false): OfferInfo => ({
+/** A barter offer; `lotSize` is the units one barter delivers (omitted: the offer states none, as from a payload that predates lot sizes). */
+export const barter = (vendor: string, level: number, price: number, requiresDogtag = false, lotSize?: number): OfferInfo => ({
   price,
   source: `barter:${vendor}`,
   vendor_name: vendor,
@@ -35,6 +45,7 @@ export const barter = (vendor: string, level: number, price: number, requiresDog
   trader_level: level,
   barter_requirements: [{ name: 'ingredient', count: 1, unit_price: price }],
   requires_dogtag: requiresDogtag ? true : undefined,
+  ...(lotSize !== undefined ? { lot_size: lotSize } : {}),
 });
 
 export interface ModSpec {

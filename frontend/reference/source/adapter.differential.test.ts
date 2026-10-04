@@ -123,6 +123,8 @@ function compareOffers(L: Ledger, adapter: Loose, raw: RefItem, world: RawWorld,
       L.eq('translation', a.trader?.name, world.translateTraderKey(trader.nameKey), `${ctx} barter ${barter.id} trader name`);
     }
     L.eqOrDefault('barter offers', a.level, barter.minTraderLevel, 'barter minTraderLevel ?? 1 (level)', `${ctx} barter ${barter.id} level`);
+    // The units one barter delivers: GraphQL `rewardItems` of the offered item, with the source `offeredItem.count` unchanged.
+    L.eq('barter offers', a.rewardItems, [{ item: { id: raw.id }, count: barter.offered.count }], `${ctx} barter ${barter.id} rewardItems (lot size)`);
     const required: Loose[] = a.requiredItems ?? [];
     L.eq('barter offers', required.length, barter.requirements.length, `${ctx} barter ${barter.id} requirement count`);
     barter.requirements.forEach((requirement, j) => {
@@ -171,6 +173,7 @@ function compareItem(L: Ledger, adapter: Loose, raw: RefItem, world: RawWorld, b
   L.eq('translation', adapter.name, world.translateItemKey(raw.nameKey), `${ctx} name`);
   L.eq('translation', adapter.shortName, world.translateItemKey(raw.shortNameKey), `${ctx} shortName`);
   L.eq('scalars', adapter.normalizedName, raw.normalizedName, `${ctx} normalizedName`);
+  L.eq('item types', adapter.types, raw.types, `${ctx} types`);
   L.eqOrDefault('scalars', adapter.weight, raw.weight?.value ?? null, 'item weight ?? 0', `${ctx} weight`);
   L.eqOrDefault('scalars', adapter.basePrice, raw.basePrice, 'item basePrice ?? 0', `${ctx} basePrice`);
   L.eq('scalars', adapter.avg24hPrice, raw.avg24hPrice, `${ctx} avg24hPrice`);
@@ -201,7 +204,10 @@ function compareItem(L: Ledger, adapter: Loose, raw: RefItem, world: RawWorld, b
     L.eq('translation', a.name, world.translateItemKey(slot.nameKey), `${ctx} slot ${i} name`);
     L.eq('dereference', a.nameId, slot.nameId, `${ctx} slot ${i} nameId`);
     L.eq('dereference', a.required, slot.required, `${ctx} slot ${i} required`);
-    L.eq('dereference', a.filters?.allowedItems, slot.allowedItemIds, `${ctx} slot ${i} allowedItems`);
+    const allowed: Loose[] = a.filters?.allowedItems ?? [];
+    L.eq('dereference', allowed.map(x => x.id), slot.allowedItemIds, `${ctx} slot ${i} allowedItems`);
+    // Each allowed item carries the raw types of the item it names (the ammunition flag source), `[]` for an id the items document lacks.
+    L.eq('item types', allowed.map(x => x.types), slot.allowedItemIds.map(id => world.items.get(id)?.types ?? []), `${ctx} slot ${i} allowed item types`);
   });
   if (raw.types.includes('gun')) {
     const presets: Loose[] = props?.presets ?? [];
@@ -261,9 +267,10 @@ const TRANSFORMATIONS: Array<[string, string]> = [
   ['dereference', 'preset/defaultPreset/containsItems/conflictingItems/allowedItems IDs rewrapped; slot ids, nameId, required'],
   ['preset components', 'preset containsItems ids and validated counts passed through unchanged (no count default)'],
   ['categories', 'bsgCategory parent chain rebuilt from categories[0]'],
+  ['item types', 'raw item `types` on every converted gun/mod and `{ id, types }` on every allowed item (ammunition flag source)'],
   ['trader offers', 'buyFromTrader mapped to buyFor (source/vendor/price/priceRUB/minTraderLevel/buyLimit)'],
   ['flea offer', 'synthesized flea offer (rule, price, vendor descriptor)'],
-  ['barter offers', 'bartersFor index by offered item; level = minTraderLevel; requirement ids/counts/prices'],
+  ['barter offers', 'bartersFor index by offered item; level = minTraderLevel; requirement ids/counts/prices; rewardItems = offeredItem.count (lot size)'],
   ['scalars', 'weights, prices, modifiers and properties passed through exactly'],
 ];
 
@@ -333,6 +340,9 @@ test('the comparison can fail: each transformation check flags a deliberately co
     ['trader offers', rawMod, adapterMod, item => { item.buyFor[0].priceRUB += 1; }],
     ['flea offer', rawMod, adapterMod, item => { item.buyFor[item.buyFor.length - 1].priceRUB += 1; }],
     ['barter offers', rawMod, adapterMod, item => { item.bartersFor[0].level += 1; }],
+    ['barter offers', rawMod, adapterMod, item => { item.bartersFor[0].rewardItems[0].count += 1; }],
+    ['item types', rawMod, adapterMod, item => { item.types = [...item.types, 'noSuchType']; }],
+    ['item types', rawMod, adapterMod, item => { const slot = item.properties.slots.find((s: Loose) => s.filters.allowedItems.length > 0); if (!slot) throw new Error('the fixture mod has no allowed item'); slot.filters.allowedItems[0].types = [...slot.filters.allowedItems[0].types, 'noSuchType']; }],
     ['categories', rawMod, adapterMod, item => { item.bsgCategory.id = 'not-a-category'; }],
     ['dereference', rawMod, adapterMod, item => { item.properties.slots[0].required = !item.properties.slots[0].required; }],
     ['preset components', rawGun, adapterGun, item => { item.properties.presets[0].containsItems[0].count += 1; }],
@@ -372,8 +382,8 @@ test('trusted vs untrusted adapter transformations (recorded from this compariso
     `(repaired) containsItems[].count and barter req.count are no longer defaulted: an absent/null/malformed count is a SourceDataError (0 absent of ${auditContainsCounts(loadPinnedWorld('en').docs.itemsData).entries} entries here).`,
     'slot.filters is projected to allowedItems only: allowedCategories/excludedCategories/excludedItems are dropped. ' +
       'Never non-empty in the pinned capture, so nothing is lost here, but the source schema does not promise that.',
-    `barter offeredItem.count is ignored: ${world.barters.filter(b => b.offered.count !== 1).length} barters offer >1 unit ` +
-      `(all ammo here; ${offersGunModPreset.filter(b => b.offered.count !== 1).length} for gun/mod/preset targets).`,
+    `(repaired) barter offeredItem.count is carried as GraphQL rewardItems (the lot size, validated as an integer >= 1): ${world.barters.filter(b => b.offered.count !== 1).length} barters offer >1 unit ` +
+      `(all ammo here, which the adapter never converts; ${offersGunModPreset.filter(b => b.offered.count !== 1).length} for gun/mod/preset targets).`,
     `barter taskUnlock is ignored: ${offersGunModPreset.filter(b => b.taskUnlock !== null).length} barters for gun/mod/preset ` +
       'targets are task-gated, yet are mapped like any other barter.',
     'flea `||` rule (avg24hPrice || lastLowPrice): zero avg24hPrice never occurs in the pinned capture, so `||` vs `??` is not distinguished by data (the reference unit test pins the rule).',

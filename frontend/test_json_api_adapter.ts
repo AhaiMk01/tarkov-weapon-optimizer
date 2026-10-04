@@ -48,7 +48,7 @@ const rawItem = (id: string, over: Record<string, unknown> = {}) => ({
 });
 
 /** One gun, one rail mod and one preset on the gun, whose `containsItems` is supplied by the caller. */
-function syntheticDocs(containsItems: unknown[], barter?: { count?: unknown }): Record<string, unknown> {
+function syntheticDocs(containsItems: unknown[], barter?: { count?: unknown; offeredCount?: unknown }): Record<string, unknown> {
   const items: Record<string, unknown> = {
     gun: rawItem('gun', { types: ['gun'], properties: { slots: [], presets: ['pre'], defaultPreset: 'pre' } }),
     rail: rawItem('rail', { types: ['mods'], buyFromTrader: [{ trader: 't1', price: 50, priceRUB: 50, currency: 'RUB', minTraderLevel: 1 }] }),
@@ -66,7 +66,9 @@ function syntheticDocs(containsItems: unknown[], barter?: { count?: unknown }): 
     items: { items, itemCategories: {}, handbookCategories: {}, fleaMarket: { name: 'FleaMarket', normalizedName: 'flea-market' } },
     items_en: { ...names, FleaMarket: 'Flea Market' },
     barters: barter ? [{
-      trader: 't1', minTraderLevel: 1, offeredItem: { item: 'rail', count: 1 },
+      trader: 't1', minTraderLevel: 1,
+      // `offeredCount` absent keeps the usual one-unit lot; an explicit undefined drops the field (the source error case).
+      offeredItem: { item: 'rail', ...('offeredCount' in barter ? (barter.offeredCount === undefined ? {} : { count: barter.offeredCount }) : { count: 1 }) },
       requiredItems: [{ item: 'rail', ...('count' in barter ? { count: barter.count } : {}) }],
     }] : [],
     traders: { t1: { id: 't1', name: 't1 Nickname', normalizedName: 'prapor' } },
@@ -127,8 +129,66 @@ async function offlinePresetQuantityChecks() {
   check('a fractional barter ingredient count is kept exactly', fractional.mods[0].bartersFor[0].requiredItems[0].count === 155.1);
 }
 
+// --------------------------------------------------------------------------------------------
+// Offline: barter lot sizes, item types and ammunition flags, unpriced mods, on the same synthetic world
+// --------------------------------------------------------------------------------------------
+
+async function offlineLotAndTypeChecks() {
+  console.log('=== Barter lot sizes, item types, ammunition flags, unpriced mods (offline, synthetic JSON API world) ===');
+
+  const world = (offeredCount?: unknown): Record<string, unknown> => {
+    const docs = syntheticDocs([component('gun', 1)], { count: 2, offeredCount });
+    const items = (docs.items as any).items;
+    items.gun.properties.slots = [
+      { id: 'grip', name: 'grip Slot', nameId: 'grip', required: false, filters: { allowedItems: ['rail', 'ghost'] } },
+      { id: 'chamber', name: 'chamber Slot', nameId: 'chamber', required: true, filters: { allowedItems: ['round'] } },
+    ];
+    items.round = rawItem('round', { types: ['ammo'], basePrice: 5 });
+    items.free = rawItem('free', { types: ['mods'], basePrice: 0 }); // no offer, no reference price: unpriced
+    const names = docs.items_en as Record<string, string>;
+    for (const id of ['round', 'free']) { names[items[id].name] = `EN ${id}`; names[items[id].shortName] = `EN short ${id}`; }
+    return docs;
+  };
+
+  // Lot size: offeredItem.count -> rewardItems -> OfferInfo.lot_size (the price stays the price of one whole lot).
+  const lotted = await withStubbedJsonApi(world(30), () => fetchAllDataFromJsonApi('en', 'regular'));
+  const rail = lotted.mods.find((m: any) => m.id === 'rail');
+  check('adapter carries offeredItem.count as rewardItems (GraphQL Barter.rewardItems)',
+    JSON.stringify(rail.bartersFor[0].rewardItems) === JSON.stringify([{ item: { id: 'rail' }, count: 30 }]), JSON.stringify(rail.bartersFor[0].rewardItems));
+  const lotLookup = buildItemLookup(lotted.guns, lotted.mods);
+  const barterOffer = (lotLookup.rail as any).stats.offers.find((o: any) => o.source.startsWith('barter:'));
+  check('the barter offer carries lot_size and a whole-lot price', barterOffer?.lot_size === 30 && barterOffer?.price === 200, JSON.stringify(barterOffer));
+  const cashOffer = (lotLookup.rail as any).stats.offers.find((o: any) => !o.source.startsWith('barter:'));
+  check('a cash offer carries no lot size', cashOffer && !('lot_size' in cashOffer));
+  for (const [label, offeredCount] of [['absent', undefined], ['null', null], ['zero', 0], ['fractional', 1.5], ['string', '30']] as const) {
+    let error: unknown;
+    try { await withStubbedJsonApi(world(offeredCount), () => fetchAllDataFromJsonApi('en', 'regular')); } catch (e) { error = e; }
+    check(`adapter rejects an ${label} barter offeredItem.count with a SourceDataError naming the offered item`,
+      error instanceof SourceDataError && error.kind === 'barter_lot_size' && error.subjectId === 'rail' && error.message.includes('rail'),
+      error instanceof Error ? error.message : String(error));
+  }
+
+  // Item types and ammunition flags.
+  const typed = await withStubbedJsonApi(world(1), () => fetchAllDataFromJsonApi('en', 'regular'));
+  const gun = typed.guns[0];
+  check('converted items carry their raw types', JSON.stringify(gun.types) === JSON.stringify(['gun']) && JSON.stringify(rail.types) === JSON.stringify(['mods']));
+  const allowed = gun.properties.slots.map((s: any) => s.filters.allowedItems);
+  check('allowedItems entries are { id, types } (the types of an unknown id are empty)',
+    JSON.stringify(allowed) === JSON.stringify([[{ id: 'rail', types: ['mods'] }, { id: 'ghost', types: [] }], [{ id: 'round', types: ['ammo'] }]]), JSON.stringify(allowed));
+  const typedLookup = buildItemLookup(typed.guns, typed.mods);
+  const slots = (typedLookup.gun as any).slots;
+  check('the extractor flags only ammunition, per slot (ammoItems), and keeps allowedItems as plain ids',
+    JSON.stringify(slots.map((s: any) => [s.allowedItems, s.ammoItems ?? null])) === JSON.stringify([[['rail', 'ghost'], null], [['round'], ['round']]]), JSON.stringify(slots));
+
+  // Unpriced mods stay in the lookup, with no offers and no stand-in price.
+  const free = typedLookup.free as any;
+  check('an unpriced mod (no offer, no reference price) stays in the lookup with an empty offer list',
+    free?.type === 'mod' && free.stats.offers.length === 0 && free.stats.purchasable === false && free.stats.price === 0, JSON.stringify(free?.stats));
+}
+
 async function main() {
   await offlinePresetQuantityChecks();
+  await offlineLotAndTypeChecks();
 
   console.log('=== Fetching en/regular via fetchAllData (JSON API path) ===');
   const t0 = Date.now();
@@ -185,6 +245,16 @@ async function main() {
   check('barter level is a number', typeof barter?.level === 'number', `${barter?.level}`);
   check('barter requiredItems resolved with names',
     (barter?.requiredItems ?? []).every((r: any) => r.item?.id && typeof r.item?.name === 'string' && r.item.name.length > 0));
+
+  // --- Item types, ammunition flags and lot sizes on the live data ---
+  check('every gun and mod carries its raw item types',
+    guns.every((g: any) => Array.isArray(g.types) && g.types.includes('gun')) && mods.every((m: any) => Array.isArray(m.types) && m.types.includes('mods')));
+  const allowedEntries = [...guns, ...mods].flatMap((it: any) => (it.properties?.slots ?? []).flatMap((s: any) => s.filters?.allowedItems ?? []));
+  check('every allowed item is { id, types }', allowedEntries.length > 1000 && allowedEntries.every((a: any) => typeof a.id === 'string' && Array.isArray(a.types)), `${allowedEntries.length} entries`);
+  check('some allowed items are ammunition (camora slots)', allowedEntries.some((a: any) => a.types.includes('ammo')));
+  const liveBarters = [...guns, ...mods].flatMap((it: any) => it.bartersFor ?? []);
+  check('every converted barter carries rewardItems with an integer lot size >= 1',
+    liveBarters.length > 0 && liveBarters.every((b: any) => Array.isArray(b.rewardItems) && b.rewardItems.length === 1 && Number.isSafeInteger(b.rewardItems[0].count) && b.rewardItems[0].count >= 1), `${liveBarters.length} barters`);
 
   // --- Presets dereferenced ---
   const presets = m4.properties?.presets ?? [];
@@ -249,6 +319,8 @@ async function main() {
   check('multi-copy preset entries are kept (not collapsed to one)', multiCopy > 0, `${multiCopy}`);
 
   const modEntries = Object.values(lookup).filter((e: any) => e.type === 'mod') as any[];
+  check('no mod is dropped from the lookup, priced or not', modEntries.length === mods.length, `${modEntries.length}/${mods.length}`);
+  check('every barter offer carries a lot_size >= 1', modEntries.every(e => e.stats.offers.filter((o: any) => o.source.startsWith('barter:')).every((o: any) => Number.isSafeInteger(o.lot_size) && o.lot_size >= 1)));
   const purchasable = modEntries.filter(e => e.stats.purchasable);
   check('most mods purchasable', purchasable.length > 500, `${purchasable.length}/${modEntries.length}`);
   check('mod categories populated',

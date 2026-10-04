@@ -7,7 +7,7 @@
 //   2. the same for the blueprint alone (structural viability) against the oracle's unfiltered trees minus receiver-banned items;
 //   3. an occurrence is active exactly when it appears in some admissible oracle tree (identity by path-derived instance id);
 //   4. the domain is empty exactly when the oracle has no accessible base or no admissible tree;
-//   5. accessible bases, legal standalone offers (count and cheapest price), owned stock and preset supply agree;
+//   5. accessible bases, legal standalone offers (count, cheapest price and lot sizes), owned stock and preset supply agree;
 //   6. instance ids follow the reference's `parent/slot:item` scheme.
 //
 // Cases whose fixtures the production inputs cannot carry (flea gates per base or per offer, non-canonical trader names) are
@@ -163,6 +163,8 @@ test('5. accessible bases, legal offers, owned stock and preset supply agree wit
       if (acquisition.standaloneOffers.length !== expected.standalone || !cheapestMatches || acquisition.owned !== expected.owned || JSON.stringify(presets) !== JSON.stringify(expected.presets)) {
         mismatches.push(`${r.id}: ${id} standalone ${acquisition.standaloneOffers.length}/${acquisition.cheapestPrice} owned ${acquisition.owned} presets ${JSON.stringify(presets)} vs oracle ${JSON.stringify(expected)}`);
       }
+      const lotSizes = acquisition.standaloneLots.map(o => o.lotSize).sort((a, b) => a - b);
+      if (JSON.stringify(lotSizes) !== JSON.stringify(expected.lotSizes)) mismatches.push(`${r.id}: ${id} lot sizes ${JSON.stringify(lotSizes)} vs oracle ${JSON.stringify(expected.lotSizes)}`);
       const supply = expected.standalone > 0 ? 'standalone' : expected.owned > 0 || expected.presets.length > 0 ? 'capped' : 'none';
       if (acquisition.supply !== supply) mismatches.push(`${r.id}: ${id} supply ${acquisition.supply} vs oracle ${supply}`);
     }
@@ -217,12 +219,15 @@ test('7. real pinned guns: occurrence counts and raw ranges equal an independent
     throw e;
   }
   const lookup = buildItemLookup(snapshot.guns, snapshot.mods);
+  // The normalized snapshot predates item types, so its slots carry no ammunition flags; the raw documents do. The classifier is the
+  // raw item type, not "absent from the lookup" (the data-layer flags are checked end to end in tests/data/ammoSource.test.ts).
+  const isAmmo = (id: string): boolean => world.items.get(id)?.types.includes('ammo') === true;
   const mismatches: string[] = [];
   let compared = 0;
   let total = 0;
   const tol = 1e-9;
   for (const gun of snapshot.guns) {
-    const blueprint = preparePhysicalWeapon(lookup, gun.id);
+    const blueprint = preparePhysicalWeapon(lookup, gun.id, { isAmmo });
     const walk = independentWalk(fixtureForWeapon(world, gun.id).fixture, gun.id);
     compared++;
     total += walk.occurrences;
