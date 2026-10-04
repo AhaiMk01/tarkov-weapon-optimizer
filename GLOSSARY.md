@@ -29,7 +29,7 @@ The explicit level of authoritative proof provided by a solve response:
 - `none`: No verified physical build exists.
 
 ### Independent Physical Oracle
-A brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly in exact rational arithmetic ($\mathbb{Q}$) with direct IEEE binary64 input decoding on unpruned raw `ItemLookup` data within the versioned adopted software domain. Evaluates normative weighted scoring ($(e/10)fE - r \cdot fR - (p/1000)fP$) and un-clamped augmented Tchebycheff ($0.01(c_e fE - c_r fR - c_p fP) - \max(d_a)$), establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites under the accepted status and provisional MOA authority fences.
+A decoupled brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly in exact rational arithmetic ($\mathbb{Q}$) with direct IEEE binary64 input decoding on unpruned raw `ItemLookup` data within the versioned adopted software domain. Evaluates normative weighted scoring ($(e/10)fE - r \cdot fR - (p/1000)fP$) and un-clamped augmented Tchebycheff ($0.01(c_e fE - c_r fR - c_p fP) - \max(d_a)$), establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites under the accepted status and provisional MOA authority fences.
 
 ### Behavioral Regression Matrix
 The canonical 14-scenario physical edge-case suite (covering empty required routes, disconnected cycles, one item / two required slots with standalone-inaccessibility, inaccessible base fallback, zero price weight phantom spend, MOA boundaries, and fixed-build spend/score monotonicity) required to accept any solver modification.

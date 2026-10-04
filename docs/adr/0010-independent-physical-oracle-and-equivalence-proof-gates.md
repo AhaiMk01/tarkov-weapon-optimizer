@@ -1,7 +1,7 @@
 # ADR 0010: Independent Physical-Oracle and Equivalence Proof Gates
 
 ## Status
-Proposed (Refs #36). Canonical Resolution v4 2026-10-03.
+Accepted (Refs #36). 2026-10-03.
 
 ## Context
 During the frontend solver audit, existing verification entrypoints passed cleanly despite targeted counterexamples exhibiting severe mathematical bugs (e.g. single-item satisfaction of multiple required slots, inverted Big-M rows, phantom spend under zero price weight, and missing fallbacks in zero-intrinsic MOA). Tests passed because they were written against the solver's internal compatibility maps and LP abstractions rather than raw physical reality. Furthermore, mathematical reductions require formal equivalence gates to guarantee that no valid physical builds or optimizing ties are lost.
@@ -28,6 +28,7 @@ We establish six core principles governing physical verification, behavioral reg
      - Proved Infeasible on Fast Model: Cannot claim physical infeasibility! (Returns `status: 'incomplete'`, `reason: 'Fast model infeasible'`).
      - Proved Infeasible on Precise Model (MOA-dependent under ADR 0006): `status: 'incomplete'`, `reason: 'Provisional MOA model infeasible'`, `physical_certificate: 'none'`, with internal `model_infeasible` retained.
      - Deadline / cancellation after already-proved optimum: **Must preserve already-proved optimum status**; late cancel/deadline never downgrades.
+     - Deadline / cancellation after already-proved infeasibility: **Must preserve already-proved infeasibility** (`infeasible` on precise, or `incomplete` with `reason: 'Provisional MOA model infeasible'`).
      - Deadline / cancellation with unproved incumbent: `status: 'feasible'`, `physical_certificate: 'feasible'`, `lower_bound: incumbent.objective`, `upper_bound: global_upper_bound`.
      - Deadline / cancellation with NO incumbent: `status: 'incomplete'`, `physical_certificate: 'none'`, `lower_bound: null`, `upper_bound: global_upper_bound` (finite if proved, else null).
      - Every returned build must pass independent validation (`validateBuild` errors = 0).
@@ -82,7 +83,7 @@ We establish six core principles governing physical verification, behavioral reg
      - Gate 1 (Hard Fail): Any physical validation failure (`validateBuild` errors > 0) or oracle violation $\implies$ `FAIL`.
      - Gate 2 (Hard Fail): Any primary on-time success rate drop, tail regression ($P95 > 1.05 \times$), or bootstrap 95% BCa CI lower bound $> 1.0 \implies$ `FAIL`.
      - Gate 3 (Pass): Zero correctness failures, rate/tail non-regression, $N_{\text{both}} \ge 5$, and bootstrap 95% BCa CI non-degenerate with upper bound strictly $< 0.95$ ($\ge 5\%$ practical speedup) $\implies$ `PASS`.
-     - Gate 4 (Inconclusive): All other outcomes (speedup unproven, zero variance, or CI spans across 1.0) $\implies$ `INCONCLUSIVE` (rejected for production adoption).
+     - Gate 4 (Inconclusive)**: All other outcomes (speedup unproven, zero variance, or CI spans across 1.0) $\implies$ `INCONCLUSIVE` (rejected for production adoption).
 
 ## Consequences & Downstream Handoff
 
