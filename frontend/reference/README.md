@@ -24,8 +24,10 @@ only checks it. Never update an expected value to match oracle output without re
 ## Independence rule
 
 Reference code must not load production code (`frontend/src/**`, `frontend/benchmarks/**`) or anything
-outside `frontend/reference/`. Only files named `*.differential.test.ts` may, and only as the system under test
-that is compared against the reference. `independence.test.ts` enforces this with a TypeScript-parser scan of
+outside `frontend/reference/`. Only differential files may: tests named `*.differential.test.ts` and helpers
+named `*.differential.ts` (the Stage 2 harness in `harness/`), and only as the system under test that is compared
+against the reference. No non-differential file may import a differential file, so the oracle can never reach
+production through a helper. `independence.test.ts` enforces this with a TypeScript-parser scan of
 every `.ts/.mts/.cts/.tsx/.js/.mjs/.cjs/.jsx` file:
 
 * any relative, absolute or `file:` specifier (static `import`, side-effect `import '...'`, `import type`,

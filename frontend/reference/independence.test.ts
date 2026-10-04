@@ -3,8 +3,10 @@
 // The reference oracle, validator and raw reader are the source of truth for later
 // stages, so they must never load production extraction, compatibility maps, LP,
 // HiGHS, decoding, scoring/pricing helpers or the production validator. Only files
-// named `*.differential.test.ts` may load production code, and only as the system
-// under test that is compared against the reference.
+// named `*.differential.test.ts` (tests) or `*.differential.ts` (helpers shared by
+// those tests) may load production code, and only as the system under test that is
+// compared against the reference. No other reference file may import a differential
+// file, so the oracle can never reach production through a helper.
 //
 // The scanner itself lives in independenceScan.ts (a pure function over source text).
 // This file runs it over the real tree and proves, on in-memory samples, that it
@@ -15,7 +17,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
-  isDifferentialTest, isScannedFile, scanSource, SCANNED_EXTENSIONS,
+  guardViolations, isDifferentialFile, isDifferentialHelper, isDifferentialTest, isScannedFile, scanSource, SCANNED_EXTENSIONS,
   type IndependenceViolation, type ScanContext, type ViolationRule,
 } from './independenceScan';
 
@@ -37,13 +39,12 @@ function listSources(dir: string): string[] {
 
 // --- 1. the real tree ---------------------------------------------------------------------------------------------
 
-test('reference code never loads production modules outside differential tests', () => {
+test('reference code never loads production modules outside differential tests and helpers', () => {
   const files = listSources(referenceRoot);
   assert.ok(files.length > 50, `the scan must actually find the reference files, found ${files.length}`);
   const violations: string[] = [];
   for (const file of files) {
-    if (isDifferentialTest(file)) continue;
-    for (const v of scanSource(readFileSync(file, 'utf8'), file, context)) {
+    for (const v of guardViolations(readFileSync(file, 'utf8'), file, context)) {
       violations.push(`${relative(frontendRoot, file)}:${v.line} ${v.rule} ${v.specifier ?? ''} (${v.detail})`);
     }
   }
@@ -56,10 +57,43 @@ test('the scan covers every extension that can carry an import, not only .ts', (
   assert.ok(SCANNED_EXTENSIONS.length >= 8);
 });
 
-test('only *.differential.test.ts files are exempt from the guard', () => {
+test('no non-differential file imports a differential file, and differential helpers exist so the rule is exercised', () => {
+  const files = listSources(referenceRoot);
+  const helpers = files.filter(isDifferentialHelper);
+  assert.ok(helpers.length >= 2, `expected the harness helpers (*.differential.ts), found ${helpers.length}`);
+  const importers: string[] = [];
+  for (const file of files) {
+    if (isDifferentialFile(file)) continue;
+    for (const v of scanSource(readFileSync(file, 'utf8'), file, context)) {
+      if (v.rule === 'differential-import') importers.push(`${relative(frontendRoot, file)}:${v.line} ${v.specifier ?? ''}`);
+    }
+  }
+  assert.deepEqual(importers, []);
+});
+
+test('only *.differential.test.ts files are differential tests', () => {
   assert.equal(isDifferentialTest(join(referenceRoot, 'source', 'adapter.differential.test.ts')), true);
   for (const name of ['source/adapter.test.ts', 'source/adapter.differential.ts', 'source/differential.test.ts', 'source/adapter.differential.test.mts']) {
     assert.equal(isDifferentialTest(join(referenceRoot, name)), false, name);
+  }
+});
+
+test('only *.differential.ts files are differential helpers', () => {
+  assert.equal(isDifferentialHelper(join(referenceRoot, 'harness', 'toProduction.differential.ts')), true);
+  for (const name of [
+    'harness/toProduction.ts', 'harness/differential.ts', 'harness/toProduction.differential.test.ts', 'harness/toProduction.differential.mts',
+    'harness/toProduction.differentials.ts', 'harness/toProduction-differential.ts', 'harness/toProduction.differential.json',
+  ]) {
+    assert.equal(isDifferentialHelper(join(referenceRoot, name)), false, name);
+  }
+});
+
+test('the exemption covers differential tests and differential helpers, nothing else', () => {
+  for (const name of ['source/adapter.differential.test.ts', 'harness/toProduction.differential.ts']) {
+    assert.equal(isDifferentialFile(join(referenceRoot, name)), true, name);
+  }
+  for (const name of ['oracle/oracle.ts', 'oracle/oracle.test.ts', 'harness/scoreboard.ts', 'source/adapter.differential.test.mts', 'harness/x.differential.mts']) {
+    assert.equal(isDifferentialFile(join(referenceRoot, name)), false, name);
   }
 });
 
@@ -118,11 +152,28 @@ const VIOLATING: Sample[] = [
   { name: 'escape from a deeper directory', file: at('bridge/deep/s.ts'), source: `import x from '../../../src/solver/solver';`, rules: ['outside-reference'] },
   { name: 'escape that first descends inside reference/', file: at('oracle/s.ts'), source: `import x from '../oracle/../../src/solver/solver';`, rules: ['outside-reference'] },
   { name: 'a sibling directory that merely shares the prefix', file: at('oracle/s.ts'), source: `import x from '../../reference-extra/x';`, rules: ['outside-reference'] },
+  { name: 'static import of a differential helper', file: at('oracle/s.ts'), source: `import { toProduction } from '../harness/toProduction.differential';`, rules: ['differential-import'] },
+  { name: 'static import of a differential helper with its .ts extension', file: at('oracle/s.ts'), source: `import { x } from '../harness/compare.differential.ts';`, rules: ['differential-import'] },
+  { name: 'static import of a differential helper with a .js extension', file: at('oracle/s.ts'), source: `import { x } from '../harness/compare.differential.js';`, rules: ['differential-import'] },
+  { name: 'static import of a differential test file', file: at('oracle/s.ts'), source: `import '../source/adapter.differential.test';`, rules: ['differential-import'] },
+  { name: 'type-only import of a differential helper', file: at('bridge/s.ts'), source: `import type { ProductionInputs } from '../harness/toProduction.differential';`, rules: ['differential-import'] },
+  { name: 're-export of a differential helper', file: at('oracle/s.ts'), source: `export { gradeCase } from '../harness/compare.differential';`, rules: ['differential-import'] },
+  { name: 'export star of a differential helper', file: at('oracle/s.ts'), source: `export * from '../harness/compare.differential';`, rules: ['differential-import'] },
+  { name: 'type position import("...") of a differential helper', file: at('oracle/s.ts'), source: `type T = import('../harness/compare.differential').CaseGrade;`, rules: ['differential-import'] },
+  { name: 'dynamic import of a differential helper by literal', file: at('oracle/s.ts'), source: `const m = await import('../harness/compare.differential');`, rules: ['differential-import'] },
+  { name: 'sibling import of a differential helper from a non-differential file in the same directory', file: at('harness/scoreboard.ts'), source: `import { gradeCase } from './compare.differential';`, rules: ['differential-import'] },
+  { name: 'import of a differential helper through a path that first leaves and re-enters reference/', file: at('oracle/s.ts'), source: `import x from '../../reference/harness/compare.differential';`, rules: ['differential-import'] },
+  { name: 'absolute path to a differential helper', file: at('oracle/s.ts'), source: `import x from ${JSON.stringify(join(referenceRoot, 'harness', 'compare.differential.ts'))};`, rules: ['differential-import'] },
+  { name: 'file: URL to a differential helper', file: at('oracle/s.ts'), source: `import x from ${JSON.stringify(pathToFileURL(join(referenceRoot, 'harness', 'compare.differential.ts')).href)};`, rules: ['differential-import'] },
+  { name: '.mts file importing a differential helper', file: at('oracle/s.mts'), source: `import x from '../harness/compare.differential.ts';`, rules: ['differential-import'] },
   {
     name: 'several violations are all reported, in source order',
     file: at('oracle/s.ts'),
-    source: lines(`import a from './q';`, `import b from '../../src/a';`, 'const c = await import(`./${x}`);', `const d = require('./q');`, `import e from '${packageName}/x';`),
-    rules: ['outside-reference', 'dynamic-import', 'require', 'package-self'],
+    source: lines(
+      `import a from './q';`, `import b from '../../src/a';`, 'const c = await import(`./${x}`);', `const d = require('./q');`,
+      `import e from '${packageName}/x';`, `import f from '../harness/compare.differential';`,
+    ),
+    rules: ['outside-reference', 'dynamic-import', 'require', 'package-self', 'differential-import'],
   },
 ];
 
@@ -168,6 +219,26 @@ const ALLOWED: Sample[] = [
     rules: [],
   },
   {
+    name: 'near-miss names that are not differential files',
+    file: at('harness/s.ts'),
+    source: lines(
+      `import a from './differential';`,
+      `import b from './toProduction.differentials';`,
+      `import c from './toProduction-differential';`,
+      `import d from './notdifferential';`,
+      `import e from './toProduction.differential.json' with { type: 'json' };`,
+      `import f from './differential.test';`,
+      `import g from './toProduction';`,
+    ),
+    rules: [],
+  },
+  {
+    name: 'comments and strings that merely mention a differential import',
+    file: at('oracle/s.ts'),
+    source: lines(`// import x from '../harness/compare.differential';`, `const note = "import x from '../harness/compare.differential'";`, `export const ok = note;`),
+    rules: [],
+  },
+  {
     name: 'comments, strings, regex literals and member names that merely mention the forbidden words',
     file: at('oracle/s.ts'),
     source: lines(
@@ -202,6 +273,36 @@ for (const sample of ALLOWED) {
   });
 }
 
+// --- 3. the policy: who is exempt (differential tests and helpers), who is scanned (everyone else) ---------------------
+
+interface PolicySample {
+  name: string;
+  file: string;
+  source: string;
+  rules: ViolationRule[];
+}
+
+const POLICY: PolicySample[] = [
+  { name: 'a differential helper may import production code', file: at('harness/toProduction.differential.ts'), source: `import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';`, rules: [] },
+  { name: 'a differential helper may import a production type', file: at('harness/toProduction.differential.ts'), source: `import type { SolveParams } from '../../src/solver/types';`, rules: [] },
+  { name: 'a differential helper may load production through a non-literal dynamic import', file: at('harness/compare.differential.ts'), source: lines(`const SPEC = '../../src/solver/solver.ts';`, 'const m = await import(SPEC);'), rules: [] },
+  { name: 'a differential helper may import another differential helper', file: at('harness/compare.differential.ts'), source: `import { toProduction } from './toProduction.differential';`, rules: [] },
+  { name: 'a differential test may import a differential helper', file: at('harness/ledger.differential.test.ts'), source: lines(`import { gradeCase } from './compare.differential';`, `import { solve } from '../../src/solver/solver';`), rules: [] },
+  { name: 'a differential test may still import production code', file: at('source/adapter.differential.test.ts'), source: `import { fetchAllDataFromJsonApi } from '../../src/solver/jsonApiAdapter';`, rules: [] },
+  { name: 'a plain test file may not import production code', file: at('harness/scoreboard.test.ts'), source: `import { solve } from '../../src/solver/solver';`, rules: ['outside-reference'] },
+  { name: 'a plain reference file may not import a differential helper', file: at('harness/scoreboard.ts'), source: `import { gradeCase } from './compare.differential';`, rules: ['differential-import'] },
+  { name: 'a plain test file may not import a differential test', file: at('oracle/oracle.test.ts'), source: `import '../source/adapter.differential.test';`, rules: ['differential-import'] },
+  { name: 'a plain file named near a differential one is scanned like any other', file: at('harness/toProduction.differentials.ts'), source: `import { x } from '../../src/solver/solver';`, rules: ['outside-reference'] },
+  { name: 'a .mts file named like a differential helper is not exempt', file: at('harness/toProduction.differential.mts'), source: `import { x } from '../../src/solver/solver';`, rules: ['outside-reference'] },
+];
+
+for (const sample of POLICY) {
+  test(`guard policy: ${sample.name}`, () => {
+    const violations = guardViolations(sample.source, sample.file, context);
+    assert.deepEqual(rulesOf(violations), sample.rules, describeAll(violations));
+  });
+}
+
 test('scanner reports the line and the specifier of each violation', () => {
   const source = lines(`import ok from './q';`, '', `import {`, '  a,', `} from '../../src/solver/solver';`, '', `const m = await import(name);`);
   const violations = scanSource(source, at('oracle/s.ts'), context);
@@ -221,7 +322,7 @@ test('the guard fails on a violation planted in a copy of a real reference file'
 });
 
 test('the sample tables are not trivially small and every rule is exercised', () => {
-  assert.ok(VIOLATING.length >= 30 && ALLOWED.length >= 6);
+  assert.ok(VIOLATING.length >= 30 && ALLOWED.length >= 6 && POLICY.length >= 8);
   const seen = new Set(VIOLATING.flatMap(s => s.rules));
-  for (const rule of ['outside-reference', 'require', 'dynamic-import', 'package-self'] as const) assert.ok(seen.has(rule), rule);
+  for (const rule of ['outside-reference', 'require', 'dynamic-import', 'package-self', 'differential-import'] as const) assert.ok(seen.has(rule), rule);
 });

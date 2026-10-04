@@ -2,8 +2,11 @@
 //
 // The reference oracle, validator and raw reader are the source of truth for later stages, so they must
 // never load production extraction, compatibility maps, LP, HiGHS, decoding, scoring/pricing helpers or the
-// production validator. Only files named `*.differential.test.ts` may load production code, and only as the
-// system under test that is compared against the reference.
+// production validator. Only files named `*.differential.test.ts` (tests) or `*.differential.ts` (helpers
+// shared by those tests, e.g. the ledger-to-production harness) may load production code, and only as the
+// system under test that is compared against the reference. The converse rule keeps the exemption from
+// leaking: no file outside that set may import a differential file (static, type-only, re-export or literal
+// dynamic import), so the oracle can never reach production through a helper.
 //
 // The scanner parses a file with the TypeScript parser (so comments, strings and regex literals can never
 // trigger or hide a finding) and reports every way a module can be pulled in:
@@ -33,7 +36,9 @@ export type ViolationRule =
   /** A dynamic `import(...)` whose argument is not a single string literal. */
   | 'dynamic-import'
   /** A bare specifier that names the frontend package itself. */
-  | 'package-self';
+  | 'package-self'
+  /** A specifier that resolves to a differential file (`*.differential.ts` or `*.differential.test.ts`). */
+  | 'differential-import';
 
 export interface IndependenceViolation {
   rule: ViolationRule;
@@ -58,9 +63,24 @@ export function isScannedFile(name: string): boolean {
   return SCANNED_EXTENSIONS.some(ext => name.endsWith(ext));
 }
 
-/** Differential tests are the only files allowed to load production code. */
+/** A differential test: `*.differential.test.ts`. */
 export function isDifferentialTest(file: string): boolean {
   return file.endsWith('.differential.test.ts');
+}
+
+/** A differential helper shared by differential tests: `*.differential.ts` (never a `.test.ts`). */
+export function isDifferentialHelper(file: string): boolean {
+  return file.endsWith('.differential.ts');
+}
+
+/** Differential tests and differential helpers are the only files allowed to load production code. */
+export function isDifferentialFile(file: string): boolean {
+  return isDifferentialTest(file) || isDifferentialHelper(file);
+}
+
+/** True when a resolved import target (any extension or none) names a differential module. */
+function namesDifferentialModule(target: string): boolean {
+  return /\.differential(\.test)?$/.test(target.replace(/\.[cm]?[jt]sx?$/, ''));
 }
 
 function isInside(root: string, target: string): boolean {
@@ -73,6 +93,14 @@ function isInside(root: string, target: string): boolean {
 /** Classify one static module specifier written in `file`. Null means allowed. */
 function checkSpecifier(spec: string, file: string, context: ScanContext): { rule: ViolationRule; detail: string } | null {
   const outside = (detail: string) => ({ rule: 'outside-reference' as const, detail });
+  // A target inside reference/ is fine unless it is a differential module: only differential files may import those.
+  const inside = (target: string, outsideDetail: string) => {
+    if (!isInside(context.referenceRoot, target)) return outside(outsideDetail);
+    if (namesDifferentialModule(target)) {
+      return { rule: 'differential-import' as const, detail: `imports the differential module ${target}; only differential files may` };
+    }
+    return null;
+  };
   if (spec.startsWith('node:')) return null;
   if (spec.startsWith('file:')) {
     let target: string;
@@ -81,14 +109,14 @@ function checkSpecifier(spec: string, file: string, context: ScanContext): { rul
     } catch {
       return outside('file: URL cannot be converted to a path');
     }
-    return isInside(context.referenceRoot, target) ? null : outside(`resolves to ${target}`);
+    return inside(target, `resolves to ${target}`);
   }
   if (spec === '.' || spec === '..' || spec.startsWith('./') || spec.startsWith('../')) {
     const target = resolve(dirname(file), spec);
-    return isInside(context.referenceRoot, target) ? null : outside(`resolves to ${target}`);
+    return inside(target, `resolves to ${target}`);
   }
   if (isAbsolute(spec)) {
-    return isInside(context.referenceRoot, resolve(spec)) ? null : outside('absolute path outside reference/');
+    return inside(resolve(spec), 'absolute path outside reference/');
   }
   // A drive-letter or backslash-rooted path that this platform does not treat as absolute cannot be proved inside.
   if (/^[A-Za-z]:[\\/]/.test(spec) || spec.startsWith('\\')) return outside('absolute path that cannot be resolved on this platform');
@@ -147,4 +175,12 @@ export function scanSource(source: string, file: string, context: ScanContext): 
   };
   visit(sourceFile);
   return violations;
+}
+
+/**
+ * The guard's policy for one file: differential tests and helpers are exempt (they may load production code and
+ * each other); every other file is scanned, and importing a differential file counts as a violation there.
+ */
+export function guardViolations(source: string, file: string, context: ScanContext): IndependenceViolation[] {
+  return isDifferentialFile(file) ? [] : scanSource(source, file, context);
 }
