@@ -28,6 +28,9 @@ The explicit level of authoritative proof provided by a solve response:
 - `certified_infeasible`: Mathematically or physically impossible within the domain, certified strictly on the precise model and conditional on Issue #36 domain equivalence.
 - `none`: No verified physical build exists.
 
+### Binary Placement Invariant
+The definitive architectural invariant establishing that physical placement variables $p_{i,s}$ in the precise model are formulated strictly as binary decision variables ($p_{i,s} \in \{0, 1\}$). Continuous placement relaxations ($p_{i,s} \in [0, 1]$) with post-solve matching reconstruction are decisively rejected due to the breakdown of Total Unimodularity ($\det = 2$) under cross-slot physical conflicts, the NP-completeness of conflict-aware matching, and empirical simplex degeneracy causing timeouts in HiGHS.
+
 ### Independent Physical Oracle
 A decoupled brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly in exact rational arithmetic ($\mathbb{Q}$) with direct IEEE binary64 input decoding on unpruned raw `ItemLookup` data within the versioned adopted software domain. Evaluates normative weighted scoring ($(e/10)fE - r \cdot fR - (p/1000)fP$) and un-clamped augmented Tchebycheff ($0.01(c_e fE - c_r fR - c_p fP) - \max(d_a)$), establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites under the accepted status and provisional MOA authority fences.
 
