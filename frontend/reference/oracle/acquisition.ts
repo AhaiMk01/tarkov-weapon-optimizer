@@ -32,7 +32,10 @@ export interface LegalOffer {
   requiresDogtag: boolean;
 }
 
-/** Unrounded barter ingredient total: sum count x (avg24hPrice ?? basePrice ?? 0). */
+/**
+ * Unrounded barter ingredient total: sum count x (avg24hPrice ?? basePrice ?? 0), exact in Q.
+ * Counts may be fractional; resolve.ts decodes each leaf with fromBinary64, so no float multiplication occurs here.
+ */
 export function barterRequirementTotal(offer: Extract<ResolvedOffer, { kind: 'barter' }>): Q {
   return sum(offer.requirements.map(r => mul(r.count, r.avg24hPrice ?? r.basePrice ?? ZERO)));
 }

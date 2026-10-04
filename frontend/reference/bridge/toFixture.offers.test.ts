@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  legalOffers, q, resolveFixture, resolveRequest,
+  barterRequirementTotal, fromBinary64, legalOffers, q, resolveFixture, resolveRequest, sub,
   type ReferenceFixture, type ReferenceItem, type ReferenceRequest,
 } from '../oracle/index';
 import { loadPinnedWorld } from '../source/pinnedWorld';
@@ -21,6 +21,7 @@ const AK74N = '5644bd2b4bdc2d3b4c8b4572';
 const MOUNT_0155 = '688b54a11cef2a61d005273b';
 const BRAVO4 = '57adff4f24597737f373b6e6'; // SIG Sauer Bravo4 4x30 scope
 const PMAG_D60 = '59c1383d86f774290a37e0ca'; // noFlea, no trader offer, one fractional (25.02) ref barter
+const EOTECH_EXPS3_TAN = '558022b54bdc2dac148b458d'; // EOTech EXPS3-0 tan: one fractional (7.52) ref barter, no integer one
 const HENSOLDT = '56ea70acd2720b844b8b4594'; // Hensoldt FF 4-16x56 scope: skier L3 barter for 5 USEC dogtags
 const DOGTAG_USEC = '59f32c3b86f77472a31742f0';
 const MTS255 = '60db29ce99594040e04c4a27'; // MTS-255-12 shotgun; its revolver cylinder reaches 12/70 RIP ammunition
@@ -101,7 +102,7 @@ test('offeredCount > 1 survives and the oracle prices per unit as the rounded lo
   assert.deepEqual(fromBarter?.unitPrice, q(23962, 5));
 });
 
-test('every mapped barter prices exactly like the reference reader says (lot = floor(total + 1/2)), offeredCount carried', () => {
+test('every mapped barter, fractional counts included, prices exactly like the reference reader says (lot = floor(total + 1/2)), offeredCount carried', () => {
   for (const gunId of [M4A1, MTS255, AK74N]) {
     const { fixture } = fixtureForWeapon(world, gunId);
     const request = resolveRequest(fixture, {
@@ -109,11 +110,12 @@ test('every mapped barter prices exactly like the reference reader says (lot = f
       trader_levels: { prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4, ref: 4 },
     });
     let checked = 0;
+    let fractionalChecked = 0;
     for (const item of fixture.items) {
       const expected = (bartersByItem.get(item.id) ?? [])
-        .filter(b => b.requirements.every(r => Number.isInteger(r.count)))
         .map(b => ({ b, offer: referenceBarterOffer(world, b) }))
         .filter(x => x.offer !== null);
+      fractionalChecked += expected.filter(x => x.b.requirements.some(r => !Number.isInteger(r.count))).length;
       const lots = legalOffers(offersOf(fixture, item.id), request).filter(o => o.kind === 'barter');
       assert.deepEqual(
         lots.map(o => o.lotPrice),
@@ -124,6 +126,7 @@ test('every mapped barter prices exactly like the reference reader says (lot = f
       checked += lots.length;
     }
     assert.ok(checked > 0, `${gunId}: at least one barter was compared`);
+    if (gunId === M4A1) assert.equal(fractionalChecked, 42, 'the 42 fractional-count barters of the M4A1 closure items are compared too');
   }
 });
 
@@ -140,32 +143,79 @@ test('dogtag flags agree with the English-name rule over every barter of the pin
   assert.equal(flagged?.length, 1);
 });
 
-test('fractional-count barters are omitted by default with a provenance record, and kept verbatim with the include option', () => {
+test('fractional-count barters are mapped verbatim by default; no barter is omitted and nothing is recorded as omitted', () => {
   // barters.json lists two barters for the PMAG D-60 magazine, in this order:
   //   6abb6df4...: ref L4, 25.02 x gp-coin (avg24hPrice null, basePrice 7500)  <- fractional count
   //   6abb6e34...: peacekeeper L4, 3 x gas-mask-air-filter (avg 45322, base 10039), task-gated  <- integer count
-  const omitted = fixtureForWeapon(world, M4A1);
-  const kept = fixtureForWeapon(world, M4A1, { fractionalBarters: 'include' });
+  const { fixture, provenance } = fixtureForWeapon(world, M4A1);
   const fractional = (bartersByItem.get(PMAG_D60) ?? []).filter(b => b.requirements.some(r => !Number.isInteger(r.count)));
   assert.deepEqual(fractional.map(b => b.id), ['6abb6df4ba8a04ed5c06ac893']);
-  assert.deepEqual(
-    itemOf(omitted.fixture, PMAG_D60).offers,
-    [{
+  const barters = itemOf(fixture, PMAG_D60).offers?.filter(o => o.kind === 'barter');
+  assert.deepEqual(barters, [
+    {
+      kind: 'barter', trader: 'ref', level: 4, offeredCount: 1,
+      requirements: [{ itemId: '5d235b4d86f7742e017bc88a', count: 25.02, basePrice: 7500 }],
+    },
+    {
       kind: 'barter', trader: 'peacekeeper', level: 4, offeredCount: 1,
       requirements: [{ itemId: '590c595c86f7747884343ad7', count: 3, avg24hPrice: 45322, basePrice: 10039 }],
-    }],
-  );
-  assert.deepEqual(
-    omitted.provenance.omitted.filter(o => o.subjectId === PMAG_D60),
-    [{ kind: 'barter', barterId: '6abb6df4ba8a04ed5c06ac893', subjectId: PMAG_D60, reason: 'fractional-ingredient-count', ingredientCounts: [25.02] }],
-  );
-  const barters = itemOf(kept.fixture, PMAG_D60).offers?.filter(o => o.kind === 'barter');
-  assert.equal(barters?.length, 2);
-  assert.deepEqual(barters?.[0], {
-    kind: 'barter', trader: 'ref', level: 4, offeredCount: 1,
-    requirements: [{ itemId: '5d235b4d86f7742e017bc88a', count: 25.02, basePrice: 7500 }],
-  });
-  assert.equal(kept.provenance.omitted.length, 0);
+    },
+  ]);
+  assert.equal('omitted' in provenance, false, 'the bridge no longer has an omission channel');
+});
+
+test('every raw barter of every mapped subject is mapped: nothing is left out, fractional counts included', () => {
+  const { fixture } = fixtureForWeapon(world, M4A1);
+  const subjects = [...fixture.items, ...(fixture.presets ?? [])];
+  let rawFractional = 0;
+  for (const subject of subjects) {
+    const raw = bartersByItem.get(subject.id) ?? [];
+    assert.equal(subject.offers?.filter(o => o.kind === 'barter').length ?? 0, raw.length, `barter count of ${subject.id}`);
+    rawFractional += raw.filter(b => b.requirements.some(r => !Number.isInteger(r.count))).length;
+  }
+  assert.equal(rawFractional, 45, '42 fractional-count barters offer M4A1 closure items and 3 offer its presets');
+});
+
+test('a real fractional Ref barter maps its count verbatim and the oracle values it exactly (25.02 x gp-coin)', () => {
+  // barters.json 6abb6df4...: ref L4, 25.02 x gp-coin for 1 x PMAG D-60. items.json: gp-coin avg24hPrice null, basePrice 7500.
+  // Fraction(25.02) = 7042503917300613 / 2^48 (2^48 = 281474976710656); the double is slightly BELOW the decimal 25.02.
+  //   total = 7500 x 7042503917300613 / 2^48 = 13204694844938649375 / 2^46 (7500 = 4 x 1875 cancels 2^2)
+  //         = 187650 - 225 / 2^46 = 187650 - 225 / 70368744177664   (hand: 25.02 x 7500 = 187650 in decimal)
+  //   lot = floor(total + 1/2) = 187650 and, with offeredCount 1, the unit price is 187650.
+  const { fixture } = fixtureForWeapon(world, M4A1);
+  const barter = itemOf(fixture, PMAG_D60).offers?.find(o => o.kind === 'barter' && o.trader === 'ref');
+  assert.ok(barter && barter.kind === 'barter');
+  assert.equal(barter.requirements[0].count, 25.02);
+  assert.deepEqual(fromBinary64(barter.requirements[0].count), q(7042503917300613n, 281474976710656n));
+  const resolved = offersOf(fixture, PMAG_D60).find(o => o.kind === 'barter' && o.trader === 'ref');
+  assert.ok(resolved && resolved.kind === 'barter');
+  assert.deepEqual(barterRequirementTotal(resolved), q(13204694844938649375n, 70368744177664n));
+  assert.deepEqual(sub(q(187650), barterRequirementTotal(resolved)), q(225n, 70368744177664n));
+  const request: ReferenceRequest = { weapon_id: M4A1, barter_available: true, flea_available: false, trader_levels: { ref: 4 } };
+  const lot = legalOffers(offersOf(fixture, PMAG_D60), resolveRequest(fixture, request)).find(o => o.kind === 'barter' && o.trader === 'ref');
+  assert.deepEqual(lot?.lotPrice, q(187650));
+  assert.deepEqual(lot?.unitPrice, q(187650));
+  // the loyalty gate still applies to it: Ref level 3 does not unlock a level 4 barter
+  const gated = resolveRequest(fixture, { ...request, trader_levels: { ref: 3 } });
+  assert.equal(legalOffers(offersOf(fixture, PMAG_D60), gated).some(o => o.trader === 'ref'), false);
+});
+
+test('a second real fractional Ref barter, the only barter of its item: 7.52 x gp-coin for the EOTech EXPS3-0', () => {
+  // barters.json 6abb6df8...: ref L3, 7.52 x gp-coin (basePrice 7500) for 1 x EOTech EXPS3-0 (tan).
+  // Fraction(7.52) = 2116691824864133 / 2^48; total = 7500 x that = 3968797171620249375 / 2^46 = 56400 - 225 / 2^46; lot 56400.
+  const { fixture } = fixtureForWeapon(world, M4A1);
+  const item = itemOf(fixture, EOTECH_EXPS3_TAN);
+  const barters = item.offers?.filter(o => o.kind === 'barter');
+  assert.deepEqual(barters, [{
+    kind: 'barter', trader: 'ref', level: 3, offeredCount: 1,
+    requirements: [{ itemId: '5d235b4d86f7742e017bc88a', count: 7.52, basePrice: 7500 }],
+  }]);
+  const request = resolveRequest(fixture, { weapon_id: M4A1, barter_available: true, flea_available: false, trader_levels: { ref: 3 } });
+  const resolved = offersOf(fixture, EOTECH_EXPS3_TAN).find(o => o.kind === 'barter');
+  assert.ok(resolved && resolved.kind === 'barter');
+  assert.deepEqual(barterRequirementTotal(resolved), q(3968797171620249375n, 70368744177664n));
+  const lots = legalOffers(offersOf(fixture, EOTECH_EXPS3_TAN), request).filter(o => o.kind === 'barter');
+  assert.deepEqual(lots.map(o => o.lotPrice), [q(56400)]);
 });
 
 test('task-gated offers are mapped as available and counted in provenance', () => {
@@ -173,7 +223,7 @@ test('task-gated offers are mapped as available and counted in provenance', () =
   let rawGatedBarters = 0;
   let rawGatedTrader = 0;
   for (const item of fixture.items) {
-    rawGatedBarters += (bartersByItem.get(item.id) ?? []).filter(b => b.taskUnlock !== null && b.requirements.every(r => Number.isInteger(r.count))).length;
+    rawGatedBarters += (bartersByItem.get(item.id) ?? []).filter(b => b.taskUnlock !== null).length;
     rawGatedTrader += (world.items.get(item.id)?.buyFromTrader ?? []).filter(o => o.taskUnlock !== null).length;
   }
   assert.ok(rawGatedBarters > 0);

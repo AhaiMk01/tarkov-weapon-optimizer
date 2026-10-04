@@ -4,7 +4,7 @@ import type { ReferenceFixture, ReferenceRequest } from './domain';
 import type { ReferenceBuild } from './build';
 import { resolveFixture, resolveRequest } from './resolve';
 import { acquire, accessibleBases, barterRequirementTotal, cheapestLegalOffer, legalOffers, standaloneOffer } from './acquisition';
-import { q, toString } from './q';
+import { fromBinary64, q, sub, toString } from './q';
 
 const fixture: ReferenceFixture = {
   schemaVersion: 1,
@@ -120,6 +120,48 @@ test('exact barter rounding: 0.1 + 2 x 0.7 is below 1.5 in exact binary64 arithm
   const total = barterRequirementTotal(offer);
   assert.ok(total.n * 2n < 3n * total.d, 'exact total is strictly below 3/2');
   assert.equal(toString(cheapestLegalOffer([offer], request)!.lotPrice), '1');
+});
+
+test('a fractional ingredient count is decoded exactly: 155.1 x 3 + 2 x 100', () => {
+  // Fraction(155.1) in exact binary64 is 5457096110977843 / 2^45 (2^45 = 35184372088832), which is NOT the decimal 155.1:
+  // 155.1 x 2^45 = 5457096110977843.2, so the nearest double sits slightly below 155.1.
+  //   155.1 x 3          = 3 x 5457096110977843 / 2^45 = 16371288332933529 / 2^45
+  //   2 x 100            = 200 = 200 x 2^45 / 2^45     = 7036874417766400 / 2^45
+  //   total              = (16371288332933529 + 7036874417766400) / 2^45 = 23408162750699929 / 35184372088832 (odd numerator, so irreducible)
+  //   total ~ 665.2999999999999..., so the lot rounds half up to floor(665.8) -> floor(total + 1/2) = 665.
+  const { offer, request } = barterFixture([{ count: 155.1, avg24hPrice: 3 }, { count: 2, basePrice: 100 }]);
+  if (offer.kind !== 'barter') throw new Error('fixture');
+  assert.deepEqual(offer.requirements[0].count, fromBinary64(155.1));
+  assert.deepEqual(offer.requirements[0].count, q(5457096110977843n, 35184372088832n));
+  assert.deepEqual(barterRequirementTotal(offer), q(23408162750699929n, 35184372088832n));
+  assert.deepEqual(cheapestLegalOffer([offer], request)!.lotPrice, q(665));
+});
+
+test('exact barter rounding with a fractional count: 155.1 x 5 is just below 775.5 and rounds down although doubles give 775.5', () => {
+  // exact: 5 x 5457096110977843 / 2^45 = 27285480554889215 / 35184372088832, while 775.5 = 1551 x 2^44 / 2^45 = 27285480554889216 / 2^45.
+  // The exact total is therefore 775.5 - 2^-45, strictly below the half, so floor(total + 1/2) = 775.
+  // binary64 multiplication rounds that product up to exactly 775.5 and Math.round(775.5) = 776 (the wrong lot price).
+  assert.equal(155.1 * 5, 775.5);
+  assert.equal(Math.round(155.1 * 5), 776);
+  const { offer, request } = barterFixture([{ count: 155.1, avg24hPrice: 5 }]);
+  if (offer.kind !== 'barter') throw new Error('fixture');
+  assert.deepEqual(barterRequirementTotal(offer), q(27285480554889215n, 35184372088832n));
+  assert.deepEqual(sub(q(1551n, 2n), barterRequirementTotal(offer)), q(1n, 35184372088832n));
+  const legal = cheapestLegalOffer([offer], request)!;
+  assert.deepEqual(legal.lotPrice, q(775));
+  assert.deepEqual(legal.unitPrice, q(775));
+});
+
+test('an exactly representable fractional total of exactly one half still rounds up (0.5 x 5 = 5/2 -> 3)', () => {
+  const { offer, request } = barterFixture([{ count: 0.5, avg24hPrice: 5 }]);
+  if (offer.kind !== 'barter') throw new Error('fixture');
+  assert.deepEqual(barterRequirementTotal(offer), q(5, 2));
+  assert.deepEqual(cheapestLegalOffer([offer], request)!.lotPrice, q(3));
+});
+
+test('a fractional count with offeredCount keeps the exact per-unit price: round(155.1 x 5) / 4', () => {
+  const { offer, request } = barterFixture([{ count: 155.1, avg24hPrice: 5 }], 4);
+  assert.deepEqual(cheapestLegalOffer([offer], request)!.unitPrice, q(775, 4));
 });
 
 test('exact half rounds up; a positive total that rounds to zero is a legal zero-cost barter; a zero total is no offer', () => {

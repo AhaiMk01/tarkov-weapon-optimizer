@@ -1,9 +1,10 @@
 // Seam: toFixture.ts over the whole pinned capture -- every gun maps to a structurally valid oracle fixture.
-// Also pins the one oracle limitation the bridge has to route around (fractional barter ingredient counts).
+// Also pins that fractional barter ingredient counts (every Ref barter, 377 of the 1128 entries) are mapped, not omitted.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { checkFixture, type InputIssue, type ReferenceFixture } from '../oracle/index';
+import { checkFixture } from '../oracle/index';
 import { loadPinnedWorld } from '../source/pinnedWorld';
+import { indexBartersByOfferedItem, type RefBarter } from '../source/rawReader';
 import { fixtureForWeapon } from './toFixture';
 
 const { world } = loadPinnedWorld('en');
@@ -57,37 +58,65 @@ test('every self-conflicting item of the capture keeps its own id in conflicting
 });
 
 // ---------------------------------------------------------------------------------------------
-// Oracle limitation: ReferenceBarterRequirement.count must be a nonnegative INTEGER (domain.ts checkOffers),
-// but 377 of the 1128 ingredient entries of the pinned barters are fractional (e.g. 7.52, 25.02, 155.1).
-// The oracle's exact decoding (fromBinary64) would handle them; only the structural check refuses them.
+// Fractional barter ingredient counts: 377 of the 1128 ingredient entries of the pinned barters are fractional
+// (7.52, 25.02, 155.1; every one a Ref barter). The oracle accepts any finite nonnegative count and decodes it
+// exactly, so the bridge maps every barter and the barter domain is not silently shrunk.
 // ---------------------------------------------------------------------------------------------
 
-const M4A1 = '5447a9cd4bdc2dbd208b4567';
+const bartersByItem = indexBartersByOfferedItem(world.barters);
+const isFractional = (barter: RefBarter): boolean => barter.requirements.some(r => !Number.isInteger(r.count));
 
-function fractionalRequirementCount(fixture: ReferenceFixture): number {
-  let n = 0;
-  for (const subject of [...fixture.items, ...fixture.weapons, ...(fixture.presets ?? [])]) {
-    for (const offer of subject.offers ?? []) {
-      if (offer.kind === 'barter') n += offer.requirements.filter(r => !Number.isInteger(r.count)).length;
-    }
-  }
-  return n;
-}
-
-test('KNOWN ORACLE LIMITATION PRESENT: checkFixture refuses exactly the fractional barter ingredient counts', () => {
-  const { fixture } = fixtureForWeapon(world, M4A1, { fractionalBarters: 'include' });
-  const fractional = fractionalRequirementCount(fixture);
-  assert.ok(fractional > 0);
-  const issues: InputIssue[] = checkFixture(fixture);
-  assert.equal(issues.length, fractional);
-  assert.ok(issues.every(i => i.code === 'BAD_OFFER' && /requirements\[\d+\]\.count must be a nonnegative integer/.test(i.detail)));
-  // and the default option leaves none of them in the fixture
-  assert.equal(fractionalRequirementCount(fixtureForWeapon(world, M4A1).fixture), 0);
+test('the pinned capture holds 377 fractional-count barters, all offered by Ref, each with exactly one fractional entry', () => {
+  const fractional = world.barters.filter(isFractional);
+  assert.equal(fractional.length, 377);
+  assert.equal(world.barters.reduce((n, b) => n + b.requirements.length, 0), 1128);
+  assert.equal(world.barters.flatMap(b => b.requirements).filter(r => !Number.isInteger(r.count)).length, 377);
+  assert.deepEqual([...new Set(fractional.map(b => world.traders.get(b.traderId)?.normalizedName))], ['ref']);
 });
 
-test('checkFixture accepts a fixture with fractional barter ingredient counts', {
-  todo: 'oracle bug: domain.ts checkOffers requires integer ingredient counts but real barters have fractional ones (377 of 1128); relax to a finite nonnegative number, then flip the bridge default to include',
-}, () => {
-  const { fixture } = fixtureForWeapon(world, M4A1, { fractionalBarters: 'include' });
-  assert.deepEqual(checkFixture(fixture), []);
+test('over the 172 closures no barter of an item or preset is dropped: 88 distinct fractional-count barters are mapped', () => {
+  const mappedFractional = new Set<string>();
+  const expectedFractional = new Set<string>();
+  for (const gunId of gunIds) {
+    const { fixture } = fixtureForWeapon(world, gunId);
+    for (const subject of [...fixture.items, ...(fixture.presets ?? [])]) {
+      const raw = bartersByItem.get(subject.id) ?? [];
+      const mapped = subject.offers?.filter(o => o.kind === 'barter') ?? [];
+      // the bridge keeps every raw barter, in raw order (counts verbatim)
+      assert.deepEqual(
+        mapped.map(o => (o.kind === 'barter' ? o.requirements.map(r => r.count) : [])),
+        raw.map(b => b.requirements.map(r => r.count)),
+        `${gunId}/${subject.id}`,
+      );
+      for (const b of raw.filter(isFractional)) expectedFractional.add(b.id);
+      if (mapped.some(o => o.kind === 'barter' && o.requirements.some(r => !Number.isInteger(r.count)))) {
+        for (const b of raw.filter(isFractional)) mappedFractional.add(b.id);
+      }
+    }
+  }
+  assert.equal(expectedFractional.size, 88);
+  assert.deepEqual([...mappedFractional].sort(), [...expectedFractional].sort());
+});
+
+// ---------------------------------------------------------------------------------------------
+// Observation only (no behaviour is pinned): the oracle's SLOT_CONFLICT rule blocks every occupied physical slot whose
+// template slot id is in an installed item's conflictingSlotIds, including the slot the item itself occupies. An item
+// that listed its own host slot id could therefore never be installed there. The pinned capture has no such item.
+// ---------------------------------------------------------------------------------------------
+
+test('observation: no real item lists in conflictingSlotIds a slot id whose allowlist contains that same item', () => {
+  const withConflicts = [...world.items.values()].filter(i => i.conflictingSlotIds.length > 0);
+  // the scan input is not vacuous: 9 items list 32 slot ids, 2 of them mods (VOMZ Pilad scope, AR-15 Aeroknox AX-15 handguard)
+  assert.equal(withConflicts.length, 9);
+  assert.equal(withConflicts.reduce((n, i) => n + i.conflictingSlotIds.length, 0), 32);
+  assert.equal(withConflicts.filter(i => i.types.includes('mods')).length, 2);
+  const selfBlocked: string[] = [];
+  for (const host of world.items.values()) {
+    for (const slot of host.slots) {
+      for (const allowed of slot.allowedItemIds) {
+        if (world.items.get(allowed)?.conflictingSlotIds.includes(slot.id)) selfBlocked.push(`${allowed} in ${host.id}/${slot.id}`);
+      }
+    }
+  }
+  assert.deepEqual(selfBlocked, []);
 });

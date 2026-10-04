@@ -33,7 +33,7 @@ export const REQUIRED_SUBCASES: Readonly<Record<Family, readonly string[]>> = {
   6: ['preset_count_gt_one', 'multiple_copies', 'stripping', 'retention', 'base_cost_once', 'no_preset_monopoly'],
   7: ['monotonicity_baseline', 'spend_nonincrease', 'feasible_set_expansion', 'max_score_nondecrease', 'optimum_spend_may_rise'],
   8: ['positive_replacement_barrel', 'optional_fallback', 'required_fallback', 'missing_coi', 'nonpositive_coi', 'zero_intrinsic_coi', 'signed_accuracy', 'negative_suppressor', 'constant_moa_exceeds_cap', 'high_divergence'],
-  9: ['one_item_two_required_slots', 'required_copies_insufficient_stock', 'required_copies_sufficient_stock', 'mixed_supply', 'standalone_inaccessible_cap', 'zero_stored_price_not_an_offer', 'zero_cost_legal_offer', 'allocation_order', 'barter_valuation'],
+  9: ['one_item_two_required_slots', 'required_copies_insufficient_stock', 'required_copies_sufficient_stock', 'mixed_supply', 'standalone_inaccessible_cap', 'zero_stored_price_not_an_offer', 'zero_cost_legal_offer', 'allocation_order', 'barter_valuation', 'fractional_barter_count'],
   10: ['no_disconnected_assembly', 'conditional_owner_deactivation', 'retained_alternate_path'],
   11: ['clamp_raw_above_100', 'clamp_raw_below_zero', 'clamp_exact_bounds', 'effective_clamp', 'identity_gear', 'gear_below_one', 'gear_above_one', 'zero_gear', 'all_zero_weights', 'inactive_axes', 'tchebycheff_basic', 'tchebycheff_signed_deviation', 'normalization_floor', 'exact_tie', 'negative_weight_resolves_zero', 'decimal_weight_exactness'],
   12: ['weight_below_3kg', 'weight_at_3kg', 'weight_above_3kg', 'concave_penalty', 'narrow_interval', 'singleton_interval', 'overswing_nonzero_iff_ted_negative', 'prevent_overswing', 'ted_objective'],

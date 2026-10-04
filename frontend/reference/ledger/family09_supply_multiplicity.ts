@@ -40,6 +40,22 @@ const barterFixture = fix({
   weapon: { slots: [slot('s', ['bt'])] },
 });
 
+/**
+ * fb(+2): 776 cash (Prapor L1, listed first) or a Prapor L1 barter of 155.1 x (avg24hPrice 5). The count is a fractional
+ * value real Ref barters carry; its exact binary64 value sits slightly below the decimal 155.1 (derivation in the case).
+ */
+const fractionalBarterFixture = fix({
+  items: [{
+    id: 'fb',
+    ergonomics: 2,
+    offers: [
+      traderOffer(776),
+      { kind: 'barter', trader: 'prapor', level: 1, requirements: [{ itemId: 'i5', count: 155.1, avg24hPrice: 5 }] },
+    ],
+  }],
+  weapon: { slots: [slot('s', ['fb'])] },
+});
+
 const bothSlots = (base: 'naked' | 'pre') =>
   base === 'naked'
     ? nakedBuild([ROOT, 's1', 'T'], [ROOT, 's2', 'T'])
@@ -274,6 +290,30 @@ Feasible: none, bt; best bt = 2.`,
       { label: 'bt via cash', build: nakedBuild([ROOT, 's', 'bt']), occurrences: [{ instanceId: iid(['s', 'bt']), source: 'offer', via: 'trader', unitPrice: '3000' }] },
     ],
     derivation: `Barters are off, so only the 3000 cash offer is legal: spend 1000 + 3000 = 4000, source trader. Feasible: none, bt; best bt = 2.`,
+  }),
+
+  defineCase({
+    id: 'F09-fractional-barter-count-is-decoded-exactly',
+    family: 9,
+    subcases: ['barter_valuation', 'fractional_barter_count'],
+    title: 'A fractional barter ingredient count is valued exactly: 155.1 x 5 falls just below a half and rounds down, undercutting a 776 cash offer',
+    adrRefs: [...ADR, 'ADR 0009 principle 3 (barter valuation)', 'ADR 0010 section 2 (exact binary64 leaves, rounding after the exact total)'],
+    prerequisites: 'barter_available true. Real barters carry fractional counts (every Ref barter: 7.52, 25.02, 155.1); the count is a binary64 leaf decoded exactly, never a decimal. Offers tie-break by list order, so the 776 cash offer listed first would win a tie.',
+    source: 'Slot s:[fb]; fb(+2) is sold for 776 cash (Prapor L1, listed first) or by a Prapor L1 barter of 155.1 x (avg24hPrice 5). Default 1000 cash receiver.',
+    fixture: fractionalBarterFixture,
+    request: { ...ERGO_ONLY, barter_available: true },
+    feasible: [nk(), nk('fb')],
+    maxScore: '2',
+    maximizers: [nk('fb')],
+    statChecks: [{ label: 'fb via the barter', build: nakedBuild([ROOT, 's', 'fb']), values: { spend: '1775' } }],
+    provenance: [
+      { label: 'fb via the barter', build: nakedBuild([ROOT, 's', 'fb']), occurrences: [{ instanceId: iid(['s', 'fb']), source: 'offer', via: 'barter', unitPrice: '775' }] },
+    ],
+    derivation: `Exact value of the count: Fraction(155.1) = 5457096110977843 / 2^45 (2^45 = 35184372088832), because 155.1 x 2^45 = 5457096110977843.2 and the nearest integer is ...843; the double is just BELOW the decimal 155.1.
+Barter total = 5 x 5457096110977843 / 2^45 = 27285480554889215 / 2^45. The decimal reading gives 155.1 x 5 = 775.5, and 775.5 = 1551 x 2^44 / 2^45 = 27285480554889216 / 2^45, so the exact total is 775.5 - 2^-45, strictly below the half (binary64 multiplication rounds it up to exactly 775.5, which would round to 776).
+Rounded half up: floor(total + 1/2) = floor(776 - 2^-45) = 775. With offeredCount 1 the barter costs 775 per unit and the cash offer 776, so the barter is strictly cheaper and wins (an implementation that reads 775.5 would round to 776, tie with the earlier-listed cash offer, and report a trader source at 776). The build costs 1000 + 775 = 1775 with the barter as the recorded source.
+Feasible: none, fb; best fb = 2.`,
+    notes: ['Relies on ADR 0010 section 2: legal nonnegative barter totals round floor(total + 1/2) on the exact rational total of the decoded binary64 leaves.'],
   }),
 
   defineCase({

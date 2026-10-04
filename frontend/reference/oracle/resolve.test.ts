@@ -66,6 +66,56 @@ test('checkFixture reports structural problems with stable codes', () => {
   assert.equal(checkFixture({ ...base, schemaVersion: 2 as unknown as 1 })[0].code, 'BAD_SCHEMA_VERSION');
 });
 
+/** A one-barter fixture used to probe the barter requirement count check. */
+function withRequirementCount(count: unknown): ReferenceFixture {
+  return {
+    ...base,
+    items: [
+      ...base.items,
+      { id: 'trade', offers: [{ kind: 'barter', trader: 't', level: 1, requirements: [{ count: count as number, basePrice: 10 }] }] },
+    ],
+  };
+}
+
+test('barter requirement counts may be fractional: any finite nonnegative number passes checkFixture', () => {
+  for (const count of [0, 1, 7.52, 25.02, 155.1, 0.0155, 1e-9, 123456.789]) {
+    assert.deepEqual(checkFixture(withRequirementCount(count)), [], `count ${count}`);
+  }
+  // and the fractional count survives resolution as its exact binary64 value
+  const resolved = resolveFixture(withRequirementCount(155.1)).items.get('trade')!.offers[0];
+  assert.equal(resolved.kind, 'barter');
+  assert.deepEqual(resolved.kind === 'barter' && resolved.requirements[0].count, fromBinary64(155.1));
+});
+
+test('barter requirement counts that are absent, NaN, infinite, negative or not numbers stay input errors', () => {
+  const bad: [string, unknown][] = [
+    ['undefined', undefined], ['null', null], ['NaN', Number.NaN], ['Infinity', Number.POSITIVE_INFINITY],
+    ['-Infinity', Number.NEGATIVE_INFINITY], ['-1', -1], ['-0.5', -0.5], ['a string', '2'], ['a bigint', 2n],
+  ];
+  for (const [label, count] of bad) {
+    const fixture = withRequirementCount(count);
+    const issues = checkFixture(fixture);
+    assert.equal(issues.length, 1, `${label}: ${JSON.stringify(issues)}`);
+    assert.equal(issues[0].code, 'BAD_OFFER', label);
+    assert.match(issues[0].detail, /requirements\[0\]\.count must be a finite nonnegative number/, label);
+    assert.throws(() => resolveFixture(fixture), ReferenceInputError, label);
+  }
+});
+
+test('relaxing the requirement count does not relax the other integer rules: offeredCount and loyalty level stay integers', () => {
+  const fixture: ReferenceFixture = {
+    ...base,
+    items: [
+      ...base.items,
+      { id: 'trade', offers: [{ kind: 'barter', trader: 't', level: 1.5, offeredCount: 1.5, requirements: [{ count: 2.5, basePrice: 10 }] }] },
+    ],
+  };
+  const details = checkFixture(fixture).map(i => i.detail);
+  assert.equal(details.length, 2);
+  assert.ok(details.some(d => /level must be a nonnegative integer/.test(d)));
+  assert.ok(details.some(d => /offeredCount must be a positive integer/.test(d)));
+});
+
 test('request defaults: weights 1,1,0, flea on, barter off, no caps, empty stock', () => {
   const rr = resolveRequest(base, { weapon_id: 'gun' });
   assert.deepEqual(rr.objective, { kind: 'weighted', weights: { e: q(1), r: q(1), p: q(0) } });

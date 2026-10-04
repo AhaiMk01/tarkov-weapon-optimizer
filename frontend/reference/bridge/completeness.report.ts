@@ -93,11 +93,9 @@ const guns = [...world.items.values()].filter(i => i.types.includes('gun'));
 const full: Row[] = [];
 const slices: (Row & { presetId: string })[] = [];
 let disagreements = 0;
-const omittedBarterIds = new Set<string>();
 let fixtureItems = 0;
 for (const gun of guns) {
   const { fixture, provenance } = fixtureForWeapon(world, gun.id);
-  for (const omitted of provenance.omitted) omittedBarterIds.add(omitted.barterId);
   fixtureItems += fixture.items.length;
   const row = attempt(fixture, gun.id, gun.normalizedName, provenance.closure.presets);
   full.push(row);
@@ -126,7 +124,7 @@ if (asJson) {
   console.log('Bridge completeness report: pinned capture 2026-10-04 (regular), English');
   console.log(`caps: maxNodes=${maxNodes}, maxTrees=${maxTrees}; elapsed ${seconds} s`);
   console.log('');
-  console.log(`guns: ${guns.length}; fixture item records over all guns: ${fixtureItems}; distinct fractional-count barters omitted (see README): ${omittedBarterIds.size}`);
+  console.log(`guns: ${guns.length}; fixture item records over all guns: ${fixtureItems}`);
   console.log(`closure items per gun: min ${Math.min(...full.map(r => r.items))}, median ${median(full.map(r => r.items))}, max ${Math.max(...full.map(r => r.items))}`);
   console.log(`closure template slots per gun: min ${Math.min(...full.map(r => r.slots))}, median ${median(full.map(r => r.slots))}, max ${Math.max(...full.map(r => r.slots))}`);
   console.log(`closures that are not a DAG (DP is only a bound): ${full.filter(r => !r.dagExact).length}`);

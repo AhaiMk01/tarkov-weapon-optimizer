@@ -18,7 +18,7 @@ The bridge maps the independent raw reader's world (`reference/source`) into the
 | `toFixture.offers.test.ts` | Trader, flea and barter offers, checked against the reference reader's own barter valuation. |
 | `toFixture.presets.test.ts` | Count-bearing preset supply, supply-only items, preset offers. |
 | `toFixture.provenance.test.ts` | Recorded defaults, JSON round trip, language independence, defensive source checks. |
-| `toFixture.allGuns.test.ts` | Every gun of the pinned capture passes `checkFixture`; pins the one oracle limitation. |
+| `toFixture.allGuns.test.ts` | Every gun of the pinned capture passes `checkFixture`; no barter is dropped, fractional-count ones included. |
 | `slice.test.ts` | Slicing semantics on hand-built fixtures plus one real SV-98 slice. |
 | `realCases.test.ts` | Four real-data oracle cases with hand-derived expectations. |
 
@@ -47,7 +47,6 @@ Options (`FixtureOptions`):
 
 | Option | Default | Meaning |
 | :--- | :--- | :--- |
-| `fractionalBarters` | `'omit'` | Barters with a non-integer ingredient count cannot pass `checkFixture` (see "Oracle limitation"). `'omit'` skips and records each in `provenance.omitted`; `'include'` maps them verbatim. |
 | `weaponOfferKinds` | `['trader']` | Offer kinds attached to the naked receiver. Mods and presets always get trader, flea and barter. |
 
 ### Field mapping
@@ -88,12 +87,13 @@ carry a top-level modifier is rejected: no rule maps it.
 * **Barters** (`bartersFor` is not in the raw data; barters are indexed by `offeredItem`): `{ kind: 'barter', trader,
   level: minTraderLevel, requirements, offeredCount, requiresDogtag? }`. Each requirement keeps `itemId`, `count` and the
   ingredient's raw `avg24hPrice` / `basePrice` (an absent value is omitted; the oracle values `avg24hPrice ?? basePrice ?? 0`).
-  `offeredCount` must be a positive integer (else `BridgeError`). `requiresDogtag` is true when an ingredient's
+  Counts pass through verbatim, fractional ones included (see "Fractional barter ingredient counts"). `offeredCount`
+  must be a positive integer (else `BridgeError`). `requiresDogtag` is true when an ingredient's
   `normalizedName` contains `dogtag` (language independent; production tests the translated name, which only works in
   English). The mapped lots were checked against `referenceBarterOffer` for several guns, and the dogtag flag against the
   English-name rule over all 855 barters.
 * **Task gating** (`taskUnlock`) is ignored by the adopted domain: a gated offer is mapped as available and counted in
-  `provenance.taskGated` (1121 trader offers and 511 barters over the 172 gun closures, counted per gun).
+  `provenance.taskGated` (1121 trader offers and 514 barters over the 172 gun closures, counted per gun).
 * **Naked receiver**: trader offers only by default. The gun template's flea price and barters price its factory
   configuration, not a bare receiver, and production's base model likewise lets the naked receiver be bought from
   traders only. Use `weaponOfferKinds` to opt in. 18 of the 172 guns have a naked trader offer; the rest are reachable
@@ -127,15 +127,20 @@ own-then-ancestors chain; a preset whose `baseItem` names another gun, whose typ
 gun other than its receiver; a trader offer without `priceRUB` or with a bad loyalty level; a barter with a bad
 `offeredCount`; a non-canonical trader key.
 
-### Oracle limitation: fractional barter ingredient counts
+### Fractional barter ingredient counts
 
-`ReferenceBarterRequirement.count` must be a nonnegative **integer** (`checkOffers` in `oracle/domain.ts`), but 377 of the
-1128 ingredient entries of the pinned barters are fractional (7.52, 25.02, 155.1; every Ref barter, among others). The
-oracle's exact decoding (`fromBinary64`) would handle them; only the structural check refuses them. The bridge therefore
-omits such barters by default and records every one: 88 distinct barters over all 172 gun closures (and, as a separate
-number, 42 of the 88 barters that appear in the M4A1 closure alone). `barter_available` is off by default in requests, and the real cases below use none, but a barter-on
-real-data run misses these offers. A `todo` test in `toFixture.allGuns.test.ts` states the repair (relax the check to a
-finite nonnegative number); a companion test pins the current refusal. After the oracle is fixed, flip the default to `'include'`.
+377 of the 1128 ingredient entries of the pinned barters are fractional (7.52, 25.02, 155.1; every one a Ref barter, each
+the only fractional entry of its barter). The oracle accepts any finite nonnegative requirement count
+(`checkOffers` in `oracle/domain.ts`), decodes it with `fromBinary64` and values the lot as the exact rational
+`sum(count x unit value)`, rounded `floor(total + 1/2)`. The bridge therefore maps every barter verbatim and drops none:
+88 distinct fractional-count barters over the 172 gun closures (45 in the M4A1 closure: 42 for mods, 3 for presets), and
+all 172 fixtures pass `checkFixture`. There is no omission option and no `provenance.omitted` any more.
+
+The decimal and the double differ, so exactness matters: `Fraction(25.02)` is `7042503917300613 / 2^48`, slightly below
+25.02, and the PMAG D-60 Ref barter (25.02 x gp-coin at 7500) totals `187650 - 225 / 2^46`, lot 187650. On the pinned data
+the exact lot never differs from naive double arithmetic (checked over all 855 barters), so the discriminating boundary
+cases live in `oracle/acquisition.test.ts` (155.1 x 5 is `775.5 - 2^-45` exactly and rounds to 775, while doubles give
+775.5 and `Math.round` 776). `barter_available` is off by default in requests, and the real cases below use none.
 
 ## `sliceFixture`
 
@@ -204,7 +209,11 @@ hand-picked slice, which is what the cases above use.
 
 ## Findings
 
-* **Oracle limitation** (above): fractional barter ingredient counts fail `checkFixture`.
+* **Fractional barter ingredient counts** (above) are mapped and valued exactly; the earlier omission workaround is gone.
+* **Self-blocking slot ids**: the oracle's `SLOT_CONFLICT` rule also blocks the slot an item itself occupies, so an item listing
+  its own host slot id in `conflictingSlotIds` could never be installed there. The pinned capture has none: only 9 of 5442
+  items list slot ids (32 entries, 18 of them match no template slot), 2 are mods, and none is allowed by a slot it blocks
+  (observational test in `toFixture.allGuns.test.ts`).
 * **Camora ammunition**: 28 slots on 5 revolver magazines allow ammunition (39 templates); the full closure includes
   them as installable items (`provenance.nonModItemIds`) although production only models `mods`-typed items. Slice them
   away (or keep them out of `keepItemIds`) when comparing with production.

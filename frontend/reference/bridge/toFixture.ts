@@ -34,12 +34,6 @@ export type OfferKind = 'trader' | 'flea' | 'barter';
 
 export interface FixtureOptions {
   /**
-   * Barters with a non-integer ingredient count (377 of 1128 ingredient entries in the pinned capture are
-   * fractional) cannot pass the oracle's `checkFixture` today (it requires integer counts). 'omit' (default)
-   * leaves such barters out and records each one in provenance.omitted; 'include' maps them verbatim.
-   */
-  fractionalBarters?: 'omit' | 'include';
-  /**
    * Offer kinds attached to the NAKED receiver. Default ['trader']: a gun template's flea price and barters
    * price its factory configuration, not a bare receiver, and the production base model likewise lets the
    * naked receiver be bought from traders only. Presets and mods always get all three kinds.
@@ -59,14 +53,6 @@ export interface AppliedDefault {
   ids: string[];
 }
 
-export interface OmittedBarter {
-  kind: 'barter';
-  barterId: string;
-  subjectId: string;
-  reason: 'fractional-ingredient-count';
-  ingredientCounts: number[];
-}
-
 export interface TaskGatedOffer {
   kind: 'trader' | 'barter';
   subjectId: string;
@@ -80,7 +66,7 @@ export interface FixtureProvenance {
   weaponId: string;
   weaponName: string;
   lang: string;
-  options: { fractionalBarters: 'omit' | 'include'; weaponOfferKinds: OfferKind[] };
+  options: { weaponOfferKinds: OfferKind[] };
   closure: {
     /** Items in fixture.items (installable closure plus supply-only items). */
     items: number;
@@ -94,7 +80,6 @@ export interface FixtureProvenance {
   /** Closure items whose raw `types` lack 'mods' (ammunition reached through revolver camora slots). */
   nonModItemIds: string[];
   defaults: AppliedDefault[];
-  omitted: OmittedBarter[];
   taskGated: TaskGatedOffer[];
 }
 
@@ -258,9 +243,8 @@ function accuracyPercentOf(item: RefItem): number | null {
 
 interface Context {
   readonly world: RawWorld;
-  readonly options: { fractionalBarters: 'omit' | 'include'; weaponOfferKinds: OfferKind[] };
+  readonly options: { weaponOfferKinds: OfferKind[] };
   readonly defaults: DefaultLog;
-  readonly omitted: OmittedBarter[];
   readonly taskGated: TaskGatedOffer[];
 }
 
@@ -315,6 +299,10 @@ function fleaOffersOf(ctx: Context, subject: RefItem, scope: DefaultScope): Refe
   return [{ kind: 'flea', price: flea.priceRUB, minPlayerLevel: subject.minLevelForFlea }];
 }
 
+/**
+ * Every barter that offers the subject, in raw order. Ingredient counts pass through verbatim, fractional ones
+ * included (377 of 1128 entries, all Ref barters: 7.52, 25.02, 155.1); the oracle decodes them exactly.
+ */
 function barterOffersOf(ctx: Context, subject: RefItem): ReferenceBarterOffer[] {
   const out: ReferenceBarterOffer[] = [];
   for (const barter of bartersOffering(ctx.world, subject.id)) {
@@ -323,13 +311,6 @@ function barterOffersOf(ctx: Context, subject: RefItem): ReferenceBarterOffer[] 
     const level = loyaltyLevel(barter.minTraderLevel, where, 'barter');
     if (!Number.isInteger(barter.offered.count) || barter.offered.count < 1) {
       throw new BridgeError(where, `offered count must be a positive integer, got ${barter.offered.count}`);
-    }
-    if (ctx.options.fractionalBarters === 'omit' && barter.requirements.some(r => !Number.isInteger(r.count))) {
-      ctx.omitted.push({
-        kind: 'barter', barterId: barter.id, subjectId: subject.id,
-        reason: 'fractional-ingredient-count', ingredientCounts: barter.requirements.map(r => r.count),
-      });
-      continue;
     }
     let requiresDogtag = false;
     const requirements = barter.requirements.map(requirement => {
@@ -386,7 +367,6 @@ function reachableFrom(world: RawWorld, roots: Iterable<string>, skip: ReadonlyS
 
 export function fixtureForWeapon(world: RawWorld, weaponId: string, options: FixtureOptions = {}): BridgeResult {
   const resolvedOptions = {
-    fractionalBarters: options.fractionalBarters ?? 'omit',
     weaponOfferKinds: [...(options.weaponOfferKinds ?? (['trader'] as const))],
   };
   const gun = world.items.get(weaponId);
@@ -395,7 +375,7 @@ export function fixtureForWeapon(world: RawWorld, weaponId: string, options: Fix
   if (gun.properties === null) throw new BridgeError(weaponId, 'gun has no properties object');
 
   const defaults = new DefaultLog();
-  const ctx: Context = { world, options: resolvedOptions, defaults, omitted: [], taskGated: [] };
+  const ctx: Context = { world, options: resolvedOptions, defaults, taskGated: [] };
 
   const installable = reachableFrom(world, gun.slots.flatMap(slot => slot.allowedItemIds), new Set());
   if (installable.has(weaponId)) {
@@ -443,7 +423,6 @@ export function fixtureForWeapon(world: RawWorld, weaponId: string, options: Fix
     supplyOnlyItemIds: [...supplyOnly].sort(codeUnitCompare),
     nonModItemIds: [...installable].filter(id => !isMod(world.items.get(id) as RefItem)).sort(codeUnitCompare),
     defaults: defaults.list(),
-    omitted: ctx.omitted,
     taskGated: ctx.taskGated,
   };
   return { fixture, provenance };

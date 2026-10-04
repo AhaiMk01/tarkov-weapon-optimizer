@@ -26,7 +26,10 @@ export interface ReferenceSlot {
 export interface ReferenceBarterRequirement {
   /** Informational ingredient id. */
   itemId?: string;
-  /** Nonnegative integer ingredient quantity. */
+  /**
+   * Finite nonnegative ingredient quantity. Fractional counts are real data (7.52, 25.02, 155.1 occur in the
+   * pinned barters); the oracle decodes the binary64 leaf exactly and values the lot as sum count x unit value.
+   */
   count: number;
   /** RUB per unit; null/absent falls back to basePrice. */
   avg24hPrice?: number | null;
@@ -236,6 +239,7 @@ export class ReferenceInputError extends Error {
 
 const isFiniteNumber = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNonNegInt = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
+const isNonNegFinite = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
 
 function checkOffers(subject: string, offers: ReferenceOffer[] | undefined, issues: InputIssue[]): void {
   (offers ?? []).forEach((offer, i) => {
@@ -257,7 +261,7 @@ function checkOffers(subject: string, offers: ReferenceOffer[] | undefined, issu
       if (!Array.isArray(offer.requirements)) bad('requirements must be an array');
       else {
         offer.requirements.forEach((r, j) => {
-          if (!isNonNegInt(r.count)) bad(`requirements[${j}].count must be a nonnegative integer`);
+          if (!isNonNegFinite(r.count)) bad(`requirements[${j}].count must be a finite nonnegative number`);
           for (const field of ['avg24hPrice', 'basePrice'] as const) {
             const v = r[field];
             if (v !== undefined && v !== null && !isFiniteNumber(v)) bad(`requirements[${j}].${field} must be finite`);
