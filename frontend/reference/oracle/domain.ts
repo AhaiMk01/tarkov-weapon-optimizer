@@ -37,7 +37,7 @@ export interface ReferenceBarterRequirement {
   basePrice?: number | null;
 }
 
-/** A trader cash offer. A stored price <= 0 is not an offer. */
+/** A trader cash offer: a lot of one unit. A stored price <= 0 is not an offer. */
 export interface ReferenceTraderOffer {
   kind: 'trader';
   /** Normalized trader name; looked up verbatim in request.trader_levels. */
@@ -48,7 +48,7 @@ export interface ReferenceTraderOffer {
   price: number;
 }
 
-/** A flea market offer. A stored price <= 0 is not an offer. */
+/** A flea market offer: a lot of one unit. A stored price <= 0 is not an offer. */
 export interface ReferenceFleaOffer {
   kind: 'flea';
   /** Player level needed to buy this item on the flea market. Default 0. */
@@ -64,7 +64,10 @@ export interface ReferenceBarterOffer {
   /** Loyalty level required, integer >= 1. */
   level: number;
   requirements: ReferenceBarterRequirement[];
-  /** Units delivered by one barter, positive integer. Default 1. Per-unit price is lotPrice / offeredCount. */
+  /**
+   * Units delivered by one barter lot, positive integer. Default 1. The lot price is the rounded total of the requirements;
+   * a lot is bought whole, so there is no per-unit price (interpretation 1, INTERPRETATIONS.md).
+   */
   offeredCount?: number;
   /** True when an ingredient is a dogtag; excluded by request.barter_exclude_dogtags. Default false. */
   requiresDogtag?: boolean;
@@ -359,6 +362,7 @@ export function checkRequest(fixture: ReferenceFixture, request: ReferenceReques
     player_level: request.player_level ?? undefined,
   }, issues);
   if (request.use_tchebycheff) {
+    // Interpretation 9: the reference cannot derive an ideal point, so its absence is an input error.
     if (!request.ideal_point) issues.push({ code: 'MISSING_IDEAL_POINT', detail: 'use_tchebycheff requires ideal_point' });
     else checkNumbers('ideal_point', { ...request.ideal_point }, issues);
   }

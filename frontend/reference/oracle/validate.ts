@@ -199,6 +199,8 @@ export function inspectBuild(fixture: ResolvedFixture, request: ResolvedRequest,
     const item = fixture.items.get(itemId);
     if (item) checkTemplateConflicts(itemId, item.conflictingItemIds);
   }
+  // A blocker blocks every occupied physical slot with a listed template slot id, its own host slot included
+  // (interpretation 11); against a required slot this bans the blocker outright (interpretation 14).
   for (const p of build.placements) {
     const item = templateOf.get(p.childInstanceId);
     if (!item) continue;
@@ -219,6 +221,7 @@ export function inspectBuild(fixture: ResolvedFixture, request: ResolvedRequest,
       }
     }
   }
+  // A repeated include_items entry still means "at least once" (interpretation 12).
   for (const id of new Set(request.includeItems)) {
     if (!copies.has(id)) push('MISSING_INCLUDE_ITEM', id);
   }
@@ -240,6 +243,7 @@ export function inspectBuild(fixture: ResolvedFixture, request: ResolvedRequest,
     if (request.maxPrice !== null && !le(stats.spend, request.maxPrice)) {
       push('MAX_PRICE_EXCEEDED', `${toString(stats.spend)} > ${toString(request.maxPrice)}`);
     }
+    // min_ergonomics reads the displayed first-clamp ergonomics, before the gear factor (interpretation 8).
     if (request.minErgonomics !== null && !ge(stats.ergonomics, request.minErgonomics)) {
       push('MIN_ERGONOMICS_NOT_MET', `${toString(stats.ergonomics)} < ${toString(request.minErgonomics)}`);
     }

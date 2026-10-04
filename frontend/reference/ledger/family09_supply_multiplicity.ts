@@ -56,6 +56,32 @@ const fractionalBarterFixture = fix({
   weapon: { slots: [slot('s', ['fb'])] },
 });
 
+/**
+ * lm(+2): 100 cash (Prapor L1, listed first) or a Prapor L1 barter that delivers a LOT of 3 for 2 x avg 80 + 1 x (avg null, base 30) = 190.
+ * Four optional receiver slots hold it, so 0..4 copies are installable.
+ */
+const lotFixture = fix({
+  items: [{
+    id: 'lm',
+    ergonomics: 2,
+    offers: [
+      traderOffer(100),
+      {
+        kind: 'barter',
+        trader: 'prapor',
+        level: 1,
+        offeredCount: 3,
+        requirements: [
+          { itemId: 'i6', count: 2, avg24hPrice: 80, basePrice: 1 },
+          { itemId: 'i7', count: 1, avg24hPrice: null, basePrice: 30 },
+        ],
+      },
+    ],
+  }],
+  weapon: { slots: [slot('s1', ['lm']), slot('s2', ['lm']), slot('s3', ['lm']), slot('s4', ['lm'])] },
+});
+const lmBuild = (n: number) => nakedBuild(...['s1', 's2', 's3', 's4'].slice(0, n).map(s => [ROOT, s, 'lm'] as [string, string, string]));
+
 const bothSlots = (base: 'naked' | 'pre') =>
   base === 'naked'
     ? nakedBuild([ROOT, 's1', 'T'], [ROOT, 's2', 'T'])
@@ -172,10 +198,10 @@ Feasible: pre+TT, score 8.`,
         label: 'preset: one preset, one owned, two paid',
         build: presetBuild('pre', [ROOT, 's1', 'M'], [ROOT, 's2', 'M'], [ROOT, 's3', 'M'], [ROOT, 's4', 'M']),
         occurrences: [
-          { instanceId: iid(['s1', 'M']), source: 'preset', unitPrice: '0' },
-          { instanceId: iid(['s2', 'M']), source: 'owned', unitPrice: '0' },
-          { instanceId: iid(['s3', 'M']), source: 'offer', via: 'trader', unitPrice: '100' },
-          { instanceId: iid(['s4', 'M']), source: 'offer', via: 'trader', unitPrice: '100' },
+          { instanceId: iid(['s1', 'M']), source: 'preset', charged: '0' },
+          { instanceId: iid(['s2', 'M']), source: 'owned', charged: '0' },
+          { instanceId: iid(['s3', 'M']), source: 'offer', via: 'trader', charged: '100' },
+          { instanceId: iid(['s4', 'M']), source: 'offer', via: 'trader', charged: '100' },
         ],
       },
     ],
@@ -240,9 +266,9 @@ Score = 2 x copies: pre+RRR = 6 is the unique maximum (naked+RR = 4).`,
         label: 'preset base with M in s1, s2 and s10',
         build: presetBuild('pre', [ROOT, 's1', 'M'], [ROOT, 's2', 'M'], [ROOT, 's10', 'M']),
         occurrences: [
-          { instanceId: iid(['s10', 'M']), source: 'preset', unitPrice: '0' },
-          { instanceId: iid(['s1', 'M']), source: 'owned', unitPrice: '0' },
-          { instanceId: iid(['s2', 'M']), source: 'offer', via: 'trader', unitPrice: '100' },
+          { instanceId: iid(['s10', 'M']), source: 'preset', charged: '0' },
+          { instanceId: iid(['s1', 'M']), source: 'owned', charged: '0' },
+          { instanceId: iid(['s2', 'M']), source: 'offer', via: 'trader', charged: '100' },
         ],
       },
     ],
@@ -266,7 +292,7 @@ Provenance of the preset build with three M: the instance ids sort as weapon_0/s
     maximizers: [nk('bt')],
     statChecks: [{ label: 'bt via the barter', build: nakedBuild([ROOT, 's', 'bt']), values: { spend: '3251' } }],
     provenance: [
-      { label: 'bt via the barter', build: nakedBuild([ROOT, 's', 'bt']), occurrences: [{ instanceId: iid(['s', 'bt']), source: 'offer', via: 'barter', unitPrice: '2251' }] },
+      { label: 'bt via the barter', build: nakedBuild([ROOT, 's', 'bt']), occurrences: [{ instanceId: iid(['s', 'bt']), source: 'offer', via: 'barter', charged: '2251' }] },
     ],
     derivation: `Barter total = 2 x 1000 + 1 x 250 (average absent, base used) + 3 x 0 (average 0 is kept, base 999 ignored) + 1 x 0.5 = 2250.5; rounded half up: 2251. The cheaper legal offer is the barter (2251 < 3000), so bt costs 2251 on top of the 1000 receiver: 3251, with the barter as the recorded source.
 Feasible: none, bt; best bt = 2.`,
@@ -287,7 +313,7 @@ Feasible: none, bt; best bt = 2.`,
     maximizers: [nk('bt')],
     statChecks: [{ label: 'bt via cash', build: nakedBuild([ROOT, 's', 'bt']), values: { spend: '4000' } }],
     provenance: [
-      { label: 'bt via cash', build: nakedBuild([ROOT, 's', 'bt']), occurrences: [{ instanceId: iid(['s', 'bt']), source: 'offer', via: 'trader', unitPrice: '3000' }] },
+      { label: 'bt via cash', build: nakedBuild([ROOT, 's', 'bt']), occurrences: [{ instanceId: iid(['s', 'bt']), source: 'offer', via: 'trader', charged: '3000' }] },
     ],
     derivation: `Barters are off, so only the 3000 cash offer is legal: spend 1000 + 3000 = 4000, source trader. Feasible: none, bt; best bt = 2.`,
   }),
@@ -307,11 +333,11 @@ Feasible: none, bt; best bt = 2.`,
     maximizers: [nk('fb')],
     statChecks: [{ label: 'fb via the barter', build: nakedBuild([ROOT, 's', 'fb']), values: { spend: '1775' } }],
     provenance: [
-      { label: 'fb via the barter', build: nakedBuild([ROOT, 's', 'fb']), occurrences: [{ instanceId: iid(['s', 'fb']), source: 'offer', via: 'barter', unitPrice: '775' }] },
+      { label: 'fb via the barter', build: nakedBuild([ROOT, 's', 'fb']), occurrences: [{ instanceId: iid(['s', 'fb']), source: 'offer', via: 'barter', charged: '775' }] },
     ],
     derivation: `Exact value of the count: Fraction(155.1) = 5457096110977843 / 2^45 (2^45 = 35184372088832), because 155.1 x 2^45 = 5457096110977843.2 and the nearest integer is ...843; the double is just BELOW the decimal 155.1.
 Barter total = 5 x 5457096110977843 / 2^45 = 27285480554889215 / 2^45. The decimal reading gives 155.1 x 5 = 775.5, and 775.5 = 1551 x 2^44 / 2^45 = 27285480554889216 / 2^45, so the exact total is 775.5 - 2^-45, strictly below the half (binary64 multiplication rounds it up to exactly 775.5, which would round to 776).
-Rounded half up: floor(total + 1/2) = floor(776 - 2^-45) = 775. With offeredCount 1 the barter costs 775 per unit and the cash offer 776, so the barter is strictly cheaper and wins (an implementation that reads 775.5 would round to 776, tie with the earlier-listed cash offer, and report a trader source at 776). The build costs 1000 + 775 = 1775 with the barter as the recorded source.
+Rounded half up: floor(total + 1/2) = floor(776 - 2^-45) = 775. With offeredCount 1 the barter lot costs 775 and the cash offer 776, so the barter is strictly cheaper and wins (an implementation that reads 775.5 would round to 776, tie with the earlier-listed cash offer, and report a trader source at 776). The build costs 1000 + 775 = 1775 with the barter as the recorded source.
 Feasible: none, fb; best fb = 2.`,
     notes: ['Relies on ADR 0010 section 2: legal nonnegative barter totals round floor(total + 1/2) on the exact rational total of the decoded binary64 leaves.'],
   }),
@@ -368,5 +394,56 @@ Feasible: none, fb; best fb = 2.`,
     derivation: `zb: total 1 x 0.25 = 1/4 > 0, a real barter; rounded half up floor(1/4 + 1/2) = 0, so it is a legal offer at 0 RUB (spend stays 1000). zn: total 0 is not an offer, so zn is capped at 0 copies.
 Feasible: none, zb (+2).`,
     notes: ['Relies on interpretation 2 (a positive barter total that rounds to 0 is legal; a zero total is not an offer).'],
+  }),
+
+  defineCase({
+    id: 'F09-barter-lot-is-bought-whole',
+    family: 9,
+    subcases: ['barter_lot_granularity'],
+    title: 'A barter delivering a lot of 3 is bought whole: the cheapest cover mixes the lot with single cash units and surplus units are unused',
+    adrRefs: [...ADR, 'ADR 0009 principle 3 (barter valuation; the lot granularity is interpretation 1)', 'ADR 0002 (the hard budget counts out-of-pocket spend)'],
+    prerequisites: 'Interpretation 1 of the oracle: offers are bought in whole lots (a trader or flea offer is a lot of 1, a barter delivers offeredCount units for its rounded total) and the cost of a paid deficit d is the exact minimum over lot counts of the total lot price subject to total units >= d. barter_available true; max_price 1260.',
+    source: 'Optional slots s1..s4:[lm]; lm(+2) is sold for 100 cash (Prapor L1, listed first) or by a Prapor L1 barter delivering 3 units for 2 x avg 80 + 1 x (avg null, base 30). Receiver 1000. Score = 1000 x ergonomics - spend; spend capped at 1260.',
+    fixture: lotFixture,
+    request: { ...ERGO_MINUS_SPEND, barter_available: true, max_price: 1260 },
+    feasible: [nk(), nk('lm'), nk('lm', 'lm'), nk('lm', 'lm', 'lm')],
+    maxScore: '4810',
+    maximizers: [nk('lm', 'lm', 'lm')],
+    scores: [[nk(), '-1000'], [nk('lm'), '900'], [nk('lm', 'lm'), '2810'], [nk('lm', 'lm', 'lm'), '4810']],
+    physicalBuildCount: 15,
+    rejections: [{ label: 'four lm (spend 1290 > 1260)', build: lmBuild(4), codes: ['MAX_PRICE_EXCEEDED'] }],
+    statChecks: [
+      { label: 'one lm', build: lmBuild(1), values: { spend: '1100' } },
+      { label: 'two lm (surplus unit unused)', build: lmBuild(2), values: { spend: '1190' } },
+      { label: 'three lm (one whole lot)', build: lmBuild(3), values: { spend: '1190' } },
+      { label: 'four lm (lot plus one single)', build: lmBuild(4), values: { spend: '1290' } },
+    ],
+    provenance: [
+      {
+        label: 'two lm: one lot of 3 with one unit unused',
+        build: lmBuild(2),
+        occurrences: [
+          { instanceId: iid(['s1', 'lm']), source: 'offer', via: 'barter', charged: '190' },
+          { instanceId: iid(['s2', 'lm']), source: 'offer', via: 'barter', charged: '0' },
+        ],
+      },
+      {
+        label: 'four lm: a single cash unit (listed first) then one lot of 3',
+        build: lmBuild(4),
+        occurrences: [
+          { instanceId: iid(['s1', 'lm']), source: 'offer', via: 'trader', charged: '100' },
+          { instanceId: iid(['s2', 'lm']), source: 'offer', via: 'barter', charged: '190' },
+          { instanceId: iid(['s3', 'lm']), source: 'offer', via: 'barter', charged: '0' },
+          { instanceId: iid(['s4', 'lm']), source: 'offer', via: 'barter', charged: '0' },
+        ],
+      },
+    ],
+    derivation: `Lot price of the barter: 2 x 80 + 1 x 30 (average absent, base used) = 190, a lot of 3 units; the single cash offer is a lot of 1 at 100. The cost of k copies is cover(k) = min over lot counts of (100 c + 190 b) with c + 3b >= k:
+k = 0: 0.  k = 1: 100 (one cash; one lot is 190).  k = 2: min(2 x 100 = 200, one lot 190 with one unit unused) = 190.  k = 3: min(300, one lot 190) = 190.
+k = 4: min(4 x 100 = 400, one lot + one cash = 290, two lots = 380 with two units unused) = 290.
+Spend = 1000 + cover(k) = 1000, 1100, 1190, 1190, 1290; the cap 1260 rejects k = 4 only. Score = 2000 k - spend: k = 0: -1000; k = 1: 2000 - 1100 = 900; k = 2: 4000 - 1190 = 2810; k = 3: 6000 - 1190 = 4810. k = 3 is the unique maximum.
+Physical builds with k <= 3 copies in four slots: C(4,0) + C(4,1) + C(4,2) + C(4,3) = 1 + 4 + 6 + 4 = 15.
+Charging a fractional share (190/3 per unit, 63.33 each) would price k = 4 at 1000 + 4 x 190/3 = 1253.33 and wrongly admit it under the cap, and would price k = 1 at 1063.33 instead of the true 1100. Provenance: with two copies the lot of 3 is the cheapest cover (190); the first paid occurrence is charged the lot price and the second rides on it. With four copies the cover is {cash, lot}: lots are taken in offer-list order (cash is listed first), so s1 takes the cash unit (100), s2 opens the lot (190) and s3, s4 ride on it.`,
+    notes: ['Relies on interpretation 1 (whole-lot purchasing): the ADRs state the barter valuation but not the lot granularity.'],
   }),
 ];

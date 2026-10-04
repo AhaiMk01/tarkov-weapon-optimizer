@@ -82,11 +82,6 @@ export interface ResolvedFixture {
   readonly presets: ReadonlyMap<string, ResolvedPreset>;
 }
 
-/** UTF-16 code-unit order, the order ADR 0008 uses for instanceId allocation. */
-export function codeUnitCompare(a: string, b: string): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 function resolveSlots(slots: ReferenceSlot[] | undefined): ResolvedSlot[] {
   return (slots ?? []).map(s => ({ id: s.id, required: s.required === true, allowedItemIds: [...s.allowedItemIds] }));
 }
@@ -228,6 +223,7 @@ function capQ(v: number | null | undefined): Q | null {
   return v === undefined || v === null ? null : fromBinary64(v);
 }
 
+/** A resolved objective weight is nonnegative: a negative request weight resolves to 0 (interpretation 12). */
 function weight(v: number | null | undefined, fallback: Q): Q {
   const x = v === undefined || v === null ? fallback : fromBinary64(v);
   return x.n < 0n ? ZERO : x;
@@ -284,7 +280,7 @@ export function resolveRequest(fixture: ReferenceFixture, request: ReferenceRequ
   };
 }
 
-/** A category id matches an item whose own-or-ancestor category chain contains it. */
+/** A category id matches an item whose own-or-ancestor category chain contains it (interpretation 5, INTERPRETATIONS.md). */
 export function matchesCategory(item: ResolvedTemplate, categoryId: string): boolean {
   return item.categories.includes(categoryId);
 }
@@ -296,7 +292,7 @@ export function isExcludedByRequest(request: ResolvedRequest, item: ResolvedTemp
   return false;
 }
 
-/** Unlocked level for a trader; absent traders get DEFAULT_TRADER_LEVEL. */
+/** Unlocked level for a trader; absent traders get DEFAULT_TRADER_LEVEL (interpretation 10). */
 export function traderLevelOf(request: ResolvedRequest, trader: string): number {
   return request.traderLevels.get(trader) ?? DEFAULT_TRADER_LEVEL;
 }

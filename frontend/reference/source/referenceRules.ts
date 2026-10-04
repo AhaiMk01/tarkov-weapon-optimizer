@@ -1,6 +1,12 @@
 // Documented source-to-offer rules, written independently of the production adapter and
 // extractors. They are the reference side of the differential checks.
 //
+// This file keeps its OWN rational arithmetic (Rational, gcd, ratAdd, ratMul, decodeBinary64) on
+// purpose. It is a second, independent implementation of the barter valuation: the oracle values
+// the same barters with oracle/q.ts, and bridge/toFixture.offers.test.ts cross-checks the two on
+// every mapped barter of the pinned capture. Merging them would turn that cross-check into a
+// self-comparison, so do not "deduplicate" this module against oracle/q.ts.
+//
 //  * Synthesized flea offer (CLAUDE.md "Data Source", mirroring tarkov-api's items datasource):
 //    skipped for `noFlea` items or when `lastLowPrice` is absent/zero; priced
 //    `avg24hPrice || lastLowPrice`. (`||`, so a zero or absent average falls back.)

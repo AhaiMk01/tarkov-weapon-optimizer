@@ -17,7 +17,7 @@ that reader. Nothing here is imported by production code, and reference files (e
 | `pins.ts` | Loads pinned documents / the normalized snapshot and verifies SHA-256 first. |
 | `rawReader.ts` | Independent parser of the raw documents into reference structures. |
 | `pinnedWorld.ts` | The reference world built from the pins (English, plus Chinese). |
-| `referenceRules.ts` | Documented flea / barter rules, exact over Q (BigInt rationals). |
+| `referenceRules.ts` | Documented flea / barter rules, exact over Q (BigInt rationals). Keeps its **own** rational arithmetic on purpose (see below). |
 | `sourceChecks.ts` | Reusable source-evidence checks (references, slot ids, counts, weights, snapshot). |
 | `pinnedFetchStub.ts` | Serves the pins through `globalThis.fetch`; refuses any other URL. |
 | `syntheticDocs.ts` | Hand-built tiny raw documents for unit tests (never evidence). |
@@ -59,6 +59,15 @@ npm run test:reference                                # hash-verifies every pin 
 | `traders_zh` (supplementary) | 3,260 | `97ee70d26787648c185228822d7cbca266235a1a5e79b68c2f4db9763bdfe908` |
 
 `raw/manifest.json` is the source of truth; this table only mirrors it.
+
+## Why `referenceRules.ts` does not share `oracle/q.ts`
+
+`referenceRules.ts` implements its own rational arithmetic (`Rational`, `ratAdd`, `ratMul`, `decodeBinary64`) instead
+of importing `oracle/q.ts`. That duplication is intended: it is a second, independent implementation of the
+flea and barter valuation. The oracle values the same barters through `oracle/q.ts`, and
+`bridge/toFixture.offers.test.ts` cross-checks the two on every mapped barter of the pinned capture. Merging them
+would turn that cross-check into a comparison of a module with itself. The header comment of `referenceRules.ts`
+says the same; do not deduplicate it against the oracle.
 
 ## Reader rules (`rawReader.ts`)
 
@@ -138,7 +147,7 @@ transformation.
 | `containsItems[].count ?? 1` | Unproved default (ADR 0013 §4A). Never exercised here, but the adapter would hide an absent count. Stage 2 must reject it. |
 | barter `req.count ?? 1` | Same unproved default; never exercised. |
 | slot `filters` projected to `allowedItems` | Drops three source fields; nothing lost in this capture, but no source contract promises that. |
-| barter `offeredItem.count` | Ignored; matters only for ammo here, but the price is per craft, not per unit. |
+| barter `offeredItem.count` | Ignored. The reference buys a barter in whole lots (`INTERPRETATIONS.md` choice 1): a lot of n units costs its rounded total once, so a deficit of one unit costs the whole lot and a deficit above n needs another lot. Production prices every unit at the full lot price, which over-charges any deficit of two or more units from such a lot. Matters only for ammunition here (29 barters). |
 | barter `taskUnlock` | Ignored; 34 gun/mod/preset barters are task-gated yet treated as available. |
 | flea `avg24hPrice \|\| lastLowPrice` | Zero `avg24hPrice` never occurs, so the data cannot tell `\|\|` from `??`; only the reference unit test pins the rule. |
 | display-only fields (`iconLink`, image links) | Not compared. |

@@ -94,13 +94,16 @@ export interface RuntimeTolerance {
 /**
  * Hand-derived per-occurrence acquisition provenance of one build (ADR 0008 principle 5): for an item
  * installed K times, instances in code-unit order of instanceId take preset supply first, owned stock
- * second and the paid remainder last, carrying the actual offer kind and unit price.
+ * second and the paid remainder last, carrying the actual offer kind. Offers are whole lots
+ * (interpretation 1): the paid occurrences take the units of the cheapest lot cover in offer-index
+ * order, and `charged` is the RUB charged to the occurrence: the full lot price on the first unit
+ * taken from a lot, 0 on the other units of the same lot and on preset, owned and unavailable units.
  */
 export interface ProvenanceCheck {
   label: string;
   build: ReferenceBuild;
   /** One record per installed occurrence, in instanceId code-unit order. */
-  occurrences: { instanceId: string; source: 'preset' | 'owned' | 'offer' | 'unavailable'; via?: 'trader' | 'flea' | 'barter'; unitPrice: string }[];
+  occurrences: { instanceId: string; source: 'preset' | 'owned' | 'offer' | 'unavailable'; via?: 'trader' | 'flea' | 'barter'; charged: string }[];
 }
 
 export interface Rejection {
@@ -150,7 +153,7 @@ export interface LedgerCase {
   admitted: AdmittedOutcomes;
   /** The hand derivation: which builds exist, why others are illegal, and the arithmetic. */
   derivation: string;
-  /** Interpretation choices of the oracle the case relies on, and other caveats. */
+  /** Interpretation choices of the oracle the case relies on (numbered in ../INTERPRETATIONS.md), and other caveats. */
   notes: string[];
   /** Set only for a documented oracle bug: the case then runs as a node:test `todo`. */
   todo?: string;

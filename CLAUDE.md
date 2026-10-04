@@ -43,7 +43,10 @@ cd frontend && npx tsx test_benchmark_validation.ts           # Independent phys
 cd frontend && npx tsx test_benchmark_oracles.ts              # Deterministic small-graph oracle checks: two-slot A+B, required slot, alternative parents, conflicts, 3kg TED boundary
 cd frontend && npx tsx test_structural_bounds.ts              # Structural DAG weight/ergo bounds vs naive summing, user maxWeight, factory presets
 cd frontend && npx tsx test_structural_bounds_counterexamples.ts # Regression checks for negative weights, cyclic graph memoization, naked ergonomics
+cd frontend && npm run test:reference                          # Stage 1 independent reference (#40): exact-rational oracle, 14-family ledger, pinned raw-source and adapter checks (node:test; see frontend/reference/README.md)
 ```
+
+`frontend/reference/` is the independent oracle used to verify the solver (ADR 0010/0013). It must never import production code (enforced by `reference/independence.test.ts`; only `*.differential.test.ts` may, as the system under test). Its pinned raw JSON API documents under `reference/source/raw/` are gitignored; only `raw/manifest.json` is committed.
 
 ### PyInstaller Executable
 ```bash

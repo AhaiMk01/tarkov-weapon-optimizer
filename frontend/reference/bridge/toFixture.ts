@@ -12,6 +12,7 @@
 //    empty fixture and never infeasibility). A non-empty slot filter list other than allowedItems is
 //    refused rather than dropped.
 
+import { codeUnitCompare } from '../oracle/index';
 import type {
   ReferenceBarterOffer, ReferenceFixture, ReferenceItem, ReferenceOffer, ReferencePreset, ReferenceSlot, ReferenceTraderOffer,
   ReferenceWeapon,
@@ -91,8 +92,6 @@ export interface BridgeResult {
 // ---------------------------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------------------------
-
-const codeUnitCompare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
 
 class DefaultLog {
   private readonly byKey = new Map<string, AppliedDefault>();

@@ -47,7 +47,8 @@ export function overswingPercent(effective: Q, weightKg: Q): Q {
 /**
  * Effective centre of impact. An installed item with COI > 0 replaces the intrinsic value;
  * zero or negative COI (and no barrel at all) falls back to the intrinsic COI. With several
- * positive overriders the largest applies, which matches one replacement row per installed barrel.
+ * positive overriders the largest applies, which matches one replacement row per installed barrel
+ * (interpretation 4, INTERPRETATIONS.md).
  */
 export function effectiveCenterOfImpact(intrinsic: Q, installedItemCois: readonly Q[]): Q {
   let best: Q | null = null;
@@ -65,7 +66,7 @@ export function moaOf(effectiveCoi: Q, accuracyModifierSum: Q): Q {
 export interface BuildStats {
   /** Unclamped receiver ergonomics plus installed ergonomics. */
   rawErgonomics: Q;
-  /** First clamp of rawErgonomics: the displayed ergonomics. */
+  /** First clamp of rawErgonomics: the displayed ergonomics, which min_ergonomics reads (interpretation 8). */
   ergonomics: Q;
   /** After the gear factor and the second clamp. */
   effectiveErgonomics: Q;
@@ -82,9 +83,9 @@ export interface BuildStats {
   accuracyModifierSum: Q;
   effectiveCenterOfImpact: Q;
   moa: Q;
-  /** Largest magazine capacity among the receiver and installed items. */
+  /** Largest magazine capacity among the receiver and installed items (interpretation 7). */
   magazineCapacity: Q;
-  /** Largest sighting range among the receiver and installed items. */
+  /** Largest sighting range among the receiver and installed items (interpretation 7). */
   sightingRange: Q;
   /** Base offer plus paid units; see acquisition.ts. */
   spend: Q;

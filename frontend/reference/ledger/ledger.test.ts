@@ -6,11 +6,17 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   abs, computeStats, eq, ge, lt, parseQ, ReferenceInputError, resolveFixture, resolveRequest, runOracle, sub, toString, validateReference, ZERO,
   type BuildStats, type Q, type ValidationResult,
 } from '../oracle/index';
-import { CROSS_CUTTING_TAGS, LEDGER, MONOTONICITY, REQUIRED_SUBCASES } from './index';
+import {
+  ADR_0013_SECTION_3_SUBCASES, CROSS_CUTTING_TAGS, DEFERRED_SUBCASES, LEDGER, MONOTONICITY, REQUIRED_SUBCASES, STAGE_3_NATIVE_NUMERICAL,
+  type AdrSubcase,
+} from './index';
 import { FAMILIES, type LedgerCase, type StatName } from './types';
 
 const byId = new Map(LEDGER.map(c => [c.id, c] as const));
@@ -52,7 +58,7 @@ for (const c of LEDGER) {
         instanceId: o.instanceId,
         source: o.source.kind,
         ...(o.source.kind === 'offer' ? { via: o.source.offer.kind } : {}),
-        unitPrice: toString(o.unitPrice),
+        charged: toString(o.charged),
       }));
       assert.deepEqual(actual, check.occurrences, `${check.label}: per-occurrence provenance`);
     }
@@ -91,6 +97,106 @@ test('coverage: no case uses a subcase tag outside the catalogue (typos hide gap
     const known = new Set([...REQUIRED_SUBCASES[c.family], ...CROSS_CUTTING_TAGS]);
     for (const tag of c.subcases) assert.ok(known.has(tag), `${c.id}: unknown subcase tag ${tag}`);
     assert.ok(c.subcases.length > 0, `${c.id}: no subcase tag`);
+  }
+});
+
+// --- 2b. ADR 0013 section 3 coverage is checked against the ADR text, not against the ledger's own catalogue --------
+//
+// REQUIRED_SUBCASES is written next to the cases, so "every tag has a case" cannot notice a subcase the ADR names
+// and the catalogue forgot. ADR_0013_SECTION_3_SUBCASES restates the ADR's own wording; these tests read the ADR,
+// check the wording verbatim, flag any ADR text no entry accounts for, and require every named subcase to be covered
+// by a case or explicitly deferred with a reason and an owner stage.
+
+const ADR_0013_PATH = resolve(dirname(fileURLToPath(import.meta.url)), '../../../docs/adr/0013-correctness-first-handoff-and-adoption-sequence.md');
+const normalizeAdr = (text: string) => text.replace(/\*\*|`|\$/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+function adrSection3(): { whole: string; items: Map<number, string> } {
+  const text = readFileSync(ADR_0013_PATH, 'utf8').replace(/\r\n/g, '\n');
+  const start = text.indexOf('### Fourteen-family ledger with required subcases');
+  assert.ok(start >= 0, 'ADR 0013 section 3 (fourteen-family ledger) not found: re-reconcile the ledger catalogue with the ADR');
+  const end = text.indexOf('\n## ', start);
+  const section = text.slice(start, end < 0 ? undefined : end);
+  const items = new Map<number, string>();
+  for (const match of section.matchAll(/^(\d+)\. \*\*[^*]+:\*\* (.*)$/gm)) items.set(Number(match[1]), normalizeAdr(match[2]));
+  return { whole: normalizeAdr(section), items };
+}
+
+/** Gaps in a coverage mapping: a subcase whose tags have no case, or whose deferral is missing or incomplete. */
+function coverageGaps(entries: readonly AdrSubcase[], cases: readonly LedgerCase[]): string[] {
+  const gaps: string[] = [];
+  const used = new Set<string>();
+  for (const entry of entries) {
+    const label = `${entry.family === 'cross-cutting' ? 'cross-cutting' : `family ${entry.family}`}: ${entry.wording}`;
+    const d = entry.disposition;
+    if ('covers' in d) {
+      const known = entry.family === 'cross-cutting' ? CROSS_CUTTING_TAGS : REQUIRED_SUBCASES[entry.family];
+      if (d.covers.length === 0) gaps.push(`${label}: covers nothing`);
+      for (const tag of d.covers) {
+        if (!known.includes(tag)) gaps.push(`${label}: tag ${tag} is not in the catalogue`);
+        else if (!cases.some(c => (entry.family === 'cross-cutting' || c.family === entry.family) && c.subcases.includes(tag))) gaps.push(`${label}: no case carries ${tag}`);
+      }
+    } else {
+      used.add(d.deferred);
+      const deferral = DEFERRED_SUBCASES.find(x => x.id === d.deferred);
+      if (!deferral) gaps.push(`${label}: deferral ${d.deferred} is not declared`);
+      else {
+        if (deferral.family !== entry.family) gaps.push(`${label}: deferral names another family`);
+        if (normalizeAdr(deferral.adrWording) !== normalizeAdr(entry.wording)) gaps.push(`${label}: deferral quotes other ADR wording`);
+        if (deferral.reason.trim().length < 80) gaps.push(`${label}: deferral has no real reason`);
+        if (!deferral.ownerStage.startsWith('Stage ')) gaps.push(`${label}: deferral names no owner stage`);
+      }
+    }
+  }
+  for (const deferral of DEFERRED_SUBCASES) if (!used.has(deferral.id)) gaps.push(`deferral ${deferral.id} is not referenced by any ADR subcase`);
+  return gaps;
+}
+
+test('ADR 0013 section 3 names fourteen families and the ledger catalogue quotes each family item verbatim', () => {
+  const { whole, items } = adrSection3();
+  assert.deepEqual([...items.keys()], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
+  for (const entry of ADR_0013_SECTION_3_SUBCASES) {
+    const haystack = entry.family === 'cross-cutting' ? whole : items.get(entry.family)!;
+    assert.ok(haystack.includes(normalizeAdr(entry.wording)), `ADR wording not found verbatim: ${entry.family}: ${entry.wording}`);
+  }
+  for (const family of FAMILIES) assert.ok(ADR_0013_SECTION_3_SUBCASES.some(e => e.family === family), `family ${family} has no ADR subcase entry`);
+});
+
+test('ADR 0013 section 3 text that no catalogue entry accounts for is flagged (a new or forgotten subcase cannot slip in)', () => {
+  const { items } = adrSection3();
+  // Remarks of the ADR items that are procedure or caution rather than subcases; anything else left over is an unmapped subcase.
+  const remarks: Record<number, string> = {
+    1: 'do not conflate those relations',
+    2: 'expected rejection is a pass',
+    7: 'as stock expands',
+  };
+  for (const [family, item] of items) {
+    let rest = item;
+    const wordings = ADR_0013_SECTION_3_SUBCASES.filter(e => e.family === family).map(e => normalizeAdr(e.wording)).sort((a, b) => b.length - a.length);
+    for (const wording of wordings) rest = rest.split(wording).join(' ');
+    rest = rest.replace(/[.,;:()]/g, ' ').replace(/\b(and|or)\b/g, ' ').replace(/\s+/g, ' ').trim();
+    assert.equal(rest, remarks[family] ?? '', `family ${family}: ADR text not accounted for by a catalogue entry`);
+  }
+});
+
+test('coverage: every ADR 0013 section 3 subcase is covered by a case or explicitly deferred with a reason and an owner stage', () => {
+  assert.deepEqual(coverageGaps(ADR_0013_SECTION_3_SUBCASES, LEDGER), []);
+});
+
+test('coverage: the gap check can fail (an uncovered tag, an undeclared or hollow deferral are all reported)', () => {
+  const withoutSelfCopy = LEDGER.filter(c => !c.subcases.includes('self_copy_cap'));
+  assert.deepEqual(coverageGaps(ADR_0013_SECTION_3_SUBCASES, withoutSelfCopy), ['family 1: self-copy cap: no case carries self_copy_cap']);
+  const hollow: AdrSubcase[] = [{ family: 12, wording: 'hard secant domains', disposition: { deferred: 'no_such_deferral' } }];
+  assert.ok(coverageGaps(hollow, LEDGER).some(g => g.includes('is not declared')));
+  assert.ok(coverageGaps([], LEDGER).some(g => g.includes('is not referenced')), 'an orphan deferral is flagged');
+});
+
+test('deferred subcases: owned by Stage 3 native/numerical evidence, never also a covered tag, and no case carries them', () => {
+  assert.deepEqual(DEFERRED_SUBCASES.filter(d => d.family === 12).map(d => d.id), ['hard_secant_domains', 'mapping_parser_coefficient_errors']);
+  const catalogueTags = new Set([...Object.values(REQUIRED_SUBCASES).flat(), ...CROSS_CUTTING_TAGS]);
+  for (const deferral of DEFERRED_SUBCASES) {
+    assert.equal(deferral.ownerStage, STAGE_3_NATIVE_NUMERICAL, deferral.id);
+    assert.equal(catalogueTags.has(deferral.id), false, `${deferral.id} is both deferred and a required tag`);
+    assert.equal(LEDGER.some(c => c.subcases.includes(deferral.id)), false, `a case carries the deferred id ${deferral.id}: remove the deferral`);
   }
 });
 
@@ -171,9 +277,9 @@ test('schema: ids, expectations and admitted outcomes are consistent', () => {
       const ids = check.occurrences.map(o => o.instanceId);
       assert.deepEqual([...ids].sort(), ids, `${where}/${check.label}: provenance in code-unit instanceId order`);
       for (const o of check.occurrences) {
-        assert.equal(toString(parseQ(o.unitPrice)), o.unitPrice, `${where}/${check.label}: canonical ${o.unitPrice}`);
+        assert.equal(toString(parseQ(o.charged)), o.charged, `${where}/${check.label}: canonical ${o.charged}`);
         assert.equal(o.source === 'offer', o.via !== undefined, `${where}/${check.label}: only paid occurrences name an offer kind`);
-        if (o.source !== 'offer') assert.equal(o.unitPrice, '0', `${where}/${check.label}: preset, owned and unavailable units cost 0`);
+        if (o.source !== 'offer') assert.equal(o.charged, '0', `${where}/${check.label}: preset, owned and unavailable units are charged 0`);
       }
     }
     assert.equal(c.moaDependent, c.request.max_moa !== undefined && c.request.max_moa !== null, `${where}: MOA dependence follows max_moa`);

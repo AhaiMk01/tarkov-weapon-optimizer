@@ -222,7 +222,7 @@ Factor max(0, 1 + (-2)) = 0, so effective = 0 for every build and all six projec
     statChecks: [{ label: 'c', build: gearBuild('c'), values: { ergonomics: '100', effectiveErgonomics: '50' } }],
     derivation: `${GEAR_DERIVATION_HEAD}
 The score uses the displayed (first-clamp) ergonomics 0, 40, 50, 60, 100, 100 whatever the factor; the effective value (here half of it) only matters for TED and overswing. Maximum 100, a tie of c and d.`,
-    notes: ['Interpretation: the ergonomics axis is the displayed first-clamp value unless use_true_ergo is set.'],
+    notes: ['Relies on interpretation 16 (the ergonomics axis is the displayed first-clamp value unless use_true_ergo is set).'],
   }),
 
   defineCase({

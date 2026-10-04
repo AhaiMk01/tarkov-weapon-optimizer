@@ -1,10 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { ReferenceFixture, ReferenceRequest } from './domain';
+import type { ReferenceFixture, ReferenceOffer, ReferenceRequest } from './domain';
 import type { ReferenceBuild } from './build';
 import { resolveFixture, resolveRequest } from './resolve';
-import { acquire, accessibleBases, barterRequirementTotal, cheapestLegalOffer, legalOffers, standaloneOffer } from './acquisition';
-import { fromBinary64, q, sub, toString } from './q';
+import {
+  acquire, accessibleBases, barterRequirementTotal, cheapestCover, cheapestLegalOffer, legalOffers, standaloneOffers,
+} from './acquisition';
+import { add, fromBinary64, q, sub, toString, ZERO } from './q';
 
 const fixture: ReferenceFixture = {
   schemaVersion: 1,
@@ -68,17 +70,17 @@ test('trader loyalty gating: level below the offer fails, level at the offer pas
 
 test('flea: player level gate, availability flag, and cheapest wins over trader', () => {
   const grip = rf.items.get('grip')!.offers;
-  assert.equal(toString(cheapestLegalOffer(grip, req())!.unitPrice), '400');
+  assert.equal(toString(cheapestLegalOffer(grip, req())!.lotPrice), '400');
   assert.equal(cheapestLegalOffer(grip, req())!.kind, 'flea');
-  assert.equal(toString(cheapestLegalOffer(grip, req({ player_level: 9 }))!.unitPrice), '500');
-  assert.equal(toString(cheapestLegalOffer(grip, req({ player_level: 10 }))!.unitPrice), '400');
-  assert.equal(toString(cheapestLegalOffer(grip, req({ flea_available: false }))!.unitPrice), '500');
+  assert.equal(toString(cheapestLegalOffer(grip, req({ player_level: 9 }))!.lotPrice), '500');
+  assert.equal(toString(cheapestLegalOffer(grip, req({ player_level: 10 }))!.lotPrice), '400');
+  assert.equal(toString(cheapestLegalOffer(grip, req({ flea_available: false }))!.lotPrice), '500');
   assert.equal(cheapestLegalOffer(grip, req({ flea_available: false, trader_levels: { prapor: 0 } })), null);
 });
 
 test('a stored zero price is not an offer', () => {
-  assert.equal(standaloneOffer(rf, req(), 'zero'), null);
-  assert.equal(standaloneOffer(rf, req(), 'rare'), null);
+  assert.deepEqual(standaloneOffers(rf, req(), 'zero'), []);
+  assert.deepEqual(standaloneOffers(rf, req(), 'rare'), []);
 });
 
 test('barter is off by default, needs its trader level, and honours the dogtag exclusion', () => {
@@ -103,7 +105,7 @@ test('barter requirements are valued avg24hPrice ?? basePrice ?? 0', () => {
   if (offer.kind !== 'barter') throw new Error('fixture');
   // 2 x 1000 + 1 x 250 (avg null -> base) = 2250
   assert.equal(toString(barterRequirementTotal(offer)), '2250');
-  assert.equal(toString(cheapestLegalOffer([offer], req({ barter_available: true }))!.unitPrice), '2250');
+  assert.equal(toString(cheapestLegalOffer([offer], req({ barter_available: true }))!.lotPrice), '2250');
 });
 
 test('avg24hPrice of 0 is a value, not a missing price', () => {
@@ -149,7 +151,7 @@ test('exact barter rounding with a fractional count: 155.1 x 5 is just below 775
   assert.deepEqual(sub(q(1551n, 2n), barterRequirementTotal(offer)), q(1n, 35184372088832n));
   const legal = cheapestLegalOffer([offer], request)!;
   assert.deepEqual(legal.lotPrice, q(775));
-  assert.deepEqual(legal.unitPrice, q(775));
+  assert.equal(legal.offeredCount, 1);
 });
 
 test('an exactly representable fractional total of exactly one half still rounds up (0.5 x 5 = 5/2 -> 3)', () => {
@@ -159,9 +161,14 @@ test('an exactly representable fractional total of exactly one half still rounds
   assert.deepEqual(cheapestLegalOffer([offer], request)!.lotPrice, q(3));
 });
 
-test('a fractional count with offeredCount keeps the exact per-unit price: round(155.1 x 5) / 4', () => {
+test('a fractional count with offeredCount prices the whole lot exactly: round(155.1 x 5) = 775 for the lot of 4, and one unit costs 775', () => {
+  // Lot total 5 x 5457096110977843 / 2^45 = 775.5 - 2^-45 rounds to 775 (see above). The lot delivers 4 units for 775;
+  // it is never split into 775/4 per unit: one unit costs 775, four cost 775, five cost 2 x 775 = 1550.
   const { offer, request } = barterFixture([{ count: 155.1, avg24hPrice: 5 }], 4);
-  assert.deepEqual(cheapestLegalOffer([offer], request)!.unitPrice, q(775, 4));
+  const legal = cheapestLegalOffer([offer], request)!;
+  assert.deepEqual(legal.lotPrice, q(775));
+  assert.equal(legal.offeredCount, 4);
+  assert.deepEqual([1, 4, 5].map(d => cheapestCover([legal], d)!.cost), [q(775), q(775), q(1550)]);
 });
 
 test('exact half rounds up; a positive total that rounds to zero is a legal zero-cost barter; a zero total is no offer', () => {
@@ -175,11 +182,13 @@ test('exact half rounds up; a positive total that rounds to zero is a legal zero
   assert.equal(lot(0), null);
 });
 
-test('offered count turns a lot price into an exact per-unit price', () => {
+test('offered count is the number of units one lot delivers; the lot price stays whole', () => {
   const { offer, request } = barterFixture([{ count: 1, avg24hPrice: 100 }], 3);
   const legal = cheapestLegalOffer([offer], request)!;
-  assert.deepEqual(legal.unitPrice, q(100, 3));
+  assert.deepEqual(legal.lotPrice, q(100));
   assert.equal(legal.offeredCount, 3);
+  // ceil(d / 3) lots of 100: d = 1, 2, 3 -> 1 lot; 4, 6 -> 2 lots; 7 -> 3 lots.
+  assert.deepEqual([1, 2, 3, 4, 6, 7].map(d => cheapestCover([legal], d)!.cost), [q(100), q(100), q(100), q(200), q(200), q(300)]);
 });
 
 test('allocation: preset supply first, owned second, paid remainder, in instanceId code-unit order', () => {
@@ -193,6 +202,8 @@ test('allocation: preset supply first, owned second, paid remainder, in instance
   assert.equal(toString(res.modSpend), '400');
   assert.equal(toString(res.spend), '25400');
   assert.deepEqual(res.shortfalls, []);
+  assert.deepEqual(res.purchases.map(p => [p.itemId, p.deficit, toString(p.cost)]), [['grip', 1, '400']]);
+  assert.deepEqual(res.occurrences.map(o => toString(o.charged)), ['0', '0', '0', '400']);
 });
 
 test('mixed stock never over-allocates: authoritative deficit is max(0, installed - preset - owned)', () => {
@@ -238,8 +249,162 @@ test('inaccessible base is reported with null price and does not invent a free r
   assert.equal(res.base.price, null);
 });
 
-test('fractional per-unit prices stay exact in total spend', () => {
+test('a lot of 3 at 100 covers three occurrences for 100 and a fourth needs a second lot: 200 (not 400/3)', () => {
   const { resolved, request } = barterFixture([{ count: 1, avg24hPrice: 100 }], 3);
-  const res = acquire(resolved, request, items({ kind: 'naked' }, ['b', 'a'], ['b', 'c'], ['b', 'd']));
-  assert.deepEqual(res.modSpend, q(100));
+  const three = acquire(resolved, request, items({ kind: 'naked' }, ['b', 'a'], ['b', 'c'], ['b', 'd']));
+  assert.deepEqual(three.modSpend, q(100));
+  const four = acquire(resolved, request, items({ kind: 'naked' }, ['b', 'a'], ['b', 'c'], ['b', 'd'], ['b', 'e']));
+  assert.deepEqual(four.modSpend, q(200));
+});
+
+// --- lot granularity (interpretation 1 of INTERPRETATIONS.md) ---------------------------------------------------------
+//
+// Offers are bought in whole lots. A trader or flea offer is a lot of one unit at its stored price; a barter delivers
+// offeredCount units for its rounded lot price. The cost of covering a paid deficit d is the exact minimum, over
+// nonnegative integer lot counts across all legal offers of the item, of sum(lots x lotPrice) subject to
+// sum(lots x units) >= d; surplus units are unused. The base is one unit, so it costs the cheapest lot.
+
+const cash = (price: number): ReferenceOffer => ({ kind: 'trader', trader: 'prapor', level: 1, price });
+const lotOf = (price: number, offeredCount: number): ReferenceOffer => ({
+  kind: 'barter', trader: 'prapor', level: 1, requirements: [{ count: 1, avg24hPrice: price }], offeredCount,
+});
+
+/** Item `b` sold only through `offers`; a request with barters on (flea off) so every listed offer is legal. */
+function lotWorld(offers: ReferenceOffer[]) {
+  const f: ReferenceFixture = { ...fixture, presets: [], items: [{ id: 'b', offers }] };
+  const resolved = resolveFixture(f);
+  const request = resolveRequest(f, { weapon_id: 'gun', barter_available: true, flea_available: false });
+  return { f, resolved, request, legal: legalOffers(resolved.items.get('b')!.offers, request) };
+}
+
+/** n installed copies of `b` with instance ids i00 < i01 < ... in code-unit order. */
+const copies = (n: number) => Array.from({ length: n }, (_, k) => ['b', `i${String(k).padStart(2, '0')}`] as [string, string]);
+
+test('lot granularity: one unit out of a lot of 30 at P costs the whole lot P, not P/30', () => {
+  const P = 3000;
+  const { resolved, request, legal } = lotWorld([lotOf(P, 30)]);
+  assert.deepEqual(legal.map(o => [o.lotPrice, o.offeredCount]), [[q(P), 30]]);
+  assert.deepEqual(cheapestCover(legal, 1)!.cost, q(P));
+  const res = acquire(resolved, request, items({ kind: 'naked' }, ...copies(1)));
+  assert.deepEqual(res.modSpend, q(P));
+  assert.equal(toString(res.spend), '13000', '10000 naked receiver + the whole lot');
+  assert.deepEqual(res.purchases.map(p => ({ itemId: p.itemId, deficit: p.deficit, cost: p.cost, lots: p.lots.map(l => [l.offer.index, l.used]) })), [
+    { itemId: 'b', deficit: 1, cost: q(P), lots: [[0, 1]] },
+  ]);
+  assert.deepEqual(res.occurrences[0].charged, q(P));
+});
+
+test('lot granularity: 31 units from lots of 30 cost two lots, 2P; the 29 surplus units are unused', () => {
+  const P = 3000;
+  const { resolved, request, legal } = lotWorld([lotOf(P, 30)]);
+  assert.deepEqual(cheapestCover(legal, 30)!.cost, q(P));
+  assert.deepEqual(cheapestCover(legal, 31)!.cost, q(2 * P));
+  const res = acquire(resolved, request, items({ kind: 'naked' }, ...copies(31)));
+  assert.deepEqual(res.modSpend, q(2 * P));
+  assert.deepEqual(res.purchases[0].lots.map(l => l.used), [30, 1]);
+  assert.equal(res.purchases[0].lots.reduce((n, l) => n + l.offer.offeredCount - l.used, 0), 29, 'surplus units');
+  // The first occurrence taken from a lot is charged the lot price; the other 29 units of lot 1 ride on it.
+  assert.deepEqual(res.occurrences.map(o => toString(o.charged)), Array.from({ length: 31 }, (_, k) => (k === 0 || k === 30 ? '3000' : '0')));
+  assert.ok(res.occurrences.every(o => o.source.kind === 'offer' && o.source.offer.kind === 'barter'));
+});
+
+test('lot granularity: with a single-unit cash offer, 31 units are cheaper as one lot of 30 plus one single (P + 150) than 2P', () => {
+  // Offers in list order: cash 150 (index 0), barter lot of 30 at 3000 (index 1).
+  //   two lots 6000; 31 singles 4650; one lot + one single 3000 + 150 = 3150 (the minimum).
+  const { resolved, request, legal } = lotWorld([cash(150), lotOf(3000, 30)]);
+  const cover = cheapestCover(legal, 31)!;
+  assert.deepEqual(cover.cost, q(3150));
+  assert.deepEqual(cover.lots.map(l => l.kind), ['trader', 'barter']);
+  assert.deepEqual(cheapestCover(legal, 29)!.cost, q(3000), '29 singles cost 4350: one lot of 30 (1 surplus unit) is cheaper');
+  const res = acquire(resolved, request, items({ kind: 'naked' }, ...copies(31)));
+  assert.deepEqual(res.modSpend, q(3150));
+  // Lots are ordered by offer index: the single (index 0) takes the first paid occurrence, the lot of 30 the next 30.
+  assert.deepEqual(res.occurrences.map(o => (o.source.kind === 'offer' ? o.source.offer.kind : o.source.kind)), ['trader', ...Array(30).fill('barter')]);
+  assert.deepEqual(res.occurrences.map(o => toString(o.charged)), ['150', '3000', ...Array(29).fill('0')]);
+});
+
+test('lot granularity: a tie between lots and singles keeps the earlier offer in list order', () => {
+  // 20 singles at 150 = 3000 = one lot of 30 at 3000: equal cost, so the earlier-listed offer is kept.
+  const cashFirst = cheapestCover(lotWorld([cash(150), lotOf(3000, 30)]).legal, 20)!;
+  assert.deepEqual(cashFirst.cost, q(3000));
+  assert.deepEqual(cashFirst.lots.map(l => l.kind), Array(20).fill('trader'));
+  const lotFirst = cheapestCover(lotWorld([lotOf(3000, 30), cash(150)]).legal, 20)!;
+  assert.deepEqual(lotFirst.cost, q(3000));
+  assert.deepEqual(lotFirst.lots.map(l => l.kind), ['barter']);
+});
+
+test('lot granularity: mixing lot sizes beats either pure choice (5 for 500 and 3 for 270, deficit 8)', () => {
+  // pure lots of 5: ceil(8/5) = 2 lots = 1000; pure lots of 3: ceil(8/3) = 3 lots = 810; one of each = 8 units for 770.
+  const { resolved, request, legal } = lotWorld([lotOf(500, 5), lotOf(270, 3)]);
+  const cover = cheapestCover(legal, 8)!;
+  assert.deepEqual(cover.cost, q(770));
+  assert.deepEqual(cover.lots.map(l => [l.index, l.offeredCount]), [[0, 5], [1, 3]]);
+  const res = acquire(resolved, request, items({ kind: 'naked' }, ...copies(8)));
+  assert.deepEqual(res.modSpend, q(770));
+  assert.deepEqual(res.occurrences.map(o => toString(o.charged)), ['500', '0', '0', '0', '0', '270', '0', '0']);
+});
+
+test('lot granularity: the cover equals an exhaustive search over lot counts on 300 deterministic instances', () => {
+  let seed = 20261004;
+  const next = (n: number) => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return Math.floor(seed / 65536) % n;
+  };
+  /** Independent minimum: try every lot count of every offer that could still matter. */
+  const exhaustive = (offers: { price: number; units: number }[], k: number, remaining: number): number => {
+    if (k === offers.length) return remaining <= 0 ? 0 : Infinity;
+    const { price, units } = offers[k];
+    let best = Infinity;
+    for (let c = 0; c <= Math.ceil(Math.max(remaining, 0) / units); c++) best = Math.min(best, c * price + exhaustive(offers, k + 1, remaining - c * units));
+    return best;
+  };
+  for (let t = 0; t < 300; t++) {
+    const offers = Array.from({ length: 1 + next(3) }, () => ({ price: 1 + next(60), units: 1 + next(6) }));
+    const deficit = next(14);
+    const { resolved, request, legal } = lotWorld(offers.map(o => (o.units === 1 && next(2) === 0 ? cash(o.price) : lotOf(o.price, o.units))));
+    const cover = cheapestCover(legal, deficit)!;
+    const where = `${JSON.stringify(offers)} d=${deficit}`;
+    assert.equal(toString(cover.cost), String(exhaustive(offers, 0, deficit)), where);
+    assert.ok(cover.lots.reduce((n, l) => n + l.offeredCount, 0) >= deficit, `${where}: the lots cover the deficit`);
+    assert.deepEqual(cover.cost, cover.lots.reduce((s, l) => add(s, l.lotPrice), ZERO), `${where}: cost is the sum of the lot prices`);
+    // acquire agrees: the spend equals the cover and the per-occurrence charges add up to it.
+    const res = acquire(resolved, request, items({ kind: 'naked' }, ...copies(deficit)));
+    assert.deepEqual(res.modSpend, cover.cost, where);
+    assert.deepEqual(res.occurrences.reduce((s, o) => add(s, o.charged), ZERO), cover.cost, `${where}: charges add up to the spend`);
+    assert.ok(res.occurrences.every(o => o.source.kind === 'offer'), `${where}: every paid occurrence names a real offer`);
+  }
+});
+
+test('lot granularity: no deficit costs nothing, no legal offer cannot cover a deficit, and a bad deficit is a programming error', () => {
+  const { legal } = lotWorld([lotOf(100, 3)]);
+  assert.deepEqual(cheapestCover(legal, 0), { cost: q(0), lots: [] });
+  assert.equal(cheapestCover([], 2), null);
+  assert.deepEqual(cheapestCover([], 0), { cost: q(0), lots: [] });
+  assert.throws(() => cheapestCover(legal, -1), RangeError);
+  assert.throws(() => cheapestCover(legal, 1.5), RangeError);
+});
+
+test('lot granularity: the base is one unit, so the cheapest LOT wins: a lot of 3 at 300 loses to cash at 200 although 300 / 3 < 200', () => {
+  const f: ReferenceFixture = {
+    ...fixture,
+    items: [{ id: 'x' }],
+    weapons: [{ id: 'gun', offers: [] }],
+    presets: [{ id: 'p', weaponId: 'gun', components: [], offers: [lotOf(300, 3), cash(200)] }],
+  };
+  const resolved = resolveFixture(f);
+  const request = resolveRequest(f, { weapon_id: 'gun', barter_available: true });
+  const offer = cheapestLegalOffer(resolved.presets.get('p')!.offers, request)!;
+  assert.equal(offer.kind, 'trader');
+  assert.deepEqual(offer.lotPrice, q(200));
+  const res = acquire(resolved, request, items({ kind: 'preset', presetId: 'p' }));
+  assert.deepEqual(res.base.price, q(200));
+  assert.deepEqual(res.spend, q(200));
+});
+
+test('lot granularity: a free lot (barter total rounding to 0) covers any deficit for nothing and keeps barter provenance', () => {
+  const { resolved, request } = lotWorld([lotOf(0.25, 2)]);
+  const res = acquire(resolved, request, items({ kind: 'naked' }, ...copies(5)));
+  assert.deepEqual(res.modSpend, q(0));
+  assert.deepEqual(res.purchases[0].lots.map(l => l.used), [2, 2, 1]);
+  assert.ok(res.occurrences.every(o => o.source.kind === 'offer' && o.source.offer.kind === 'barter' && toString(o.charged) === '0'));
 });

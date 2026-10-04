@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  barterRequirementTotal, fromBinary64, legalOffers, q, resolveFixture, resolveRequest, sub,
+  barterRequirementTotal, cheapestCover, fromBinary64, legalOffers, q, resolveFixture, resolveRequest, sub,
   type ReferenceFixture, type ReferenceItem, type ReferenceRequest,
 } from '../oracle/index';
 import { loadPinnedWorld } from '../source/pinnedWorld';
@@ -88,9 +88,10 @@ test('a barter keeps trader, level, ingredient valuation inputs, offeredCount an
   });
 });
 
-test('offeredCount > 1 survives and the oracle prices per unit as the rounded lot / offeredCount', () => {
+test('offeredCount > 1 survives and the oracle buys the lot whole: one unit costs the whole lot, six units two lots', () => {
   // barters.json: skier L2 (task-gated) gives 5 x 12/70 RIP for 1 x T-Shaped Plug.
-  // T-Shaped Plug: avg24hPrice 23962 (basePrice 2481) -> lot total 23962 (avg ?? base), lot price 23962, unit 23962/5.
+  // T-Shaped Plug: avg24hPrice 23962 (basePrice 2481) -> lot total 23962 (avg ?? base), lot price 23962 for 5 units.
+  // Whole-lot rule (interpretation 1): a deficit of 1 or 5 costs one lot, 23962; a deficit of 6 needs ceil(6/5) = 2 lots, 47924.
   const { fixture } = fixtureForWeapon(world, MTS255);
   const barter = itemOf(fixture, RIP_AMMO).offers?.find(o => o.kind === 'barter');
   assert.ok(barter && barter.kind === 'barter');
@@ -99,7 +100,9 @@ test('offeredCount > 1 survives and the oracle prices per unit as the rounded lo
   const request: ReferenceRequest = { weapon_id: MTS255, barter_available: true, flea_available: false, trader_levels: { skier: 4, jaeger: 0 } };
   const fromBarter = legalOffers(offersOf(fixture, RIP_AMMO), resolveRequest(fixture, request)).find(o => o.kind === 'barter');
   assert.deepEqual(fromBarter?.lotPrice, q(23962));
-  assert.deepEqual(fromBarter?.unitPrice, q(23962, 5));
+  assert.equal(fromBarter?.offeredCount, 5);
+  assert.ok(fromBarter);
+  assert.deepEqual([1, 5, 6].map(d => cheapestCover([fromBarter], d)?.cost), [q(23962), q(23962), q(47924)]);
 });
 
 test('every mapped barter, fractional counts included, prices exactly like the reference reader says (lot = floor(total + 1/2)), offeredCount carried', () => {
@@ -181,7 +184,7 @@ test('a real fractional Ref barter maps its count verbatim and the oracle values
   // Fraction(25.02) = 7042503917300613 / 2^48 (2^48 = 281474976710656); the double is slightly BELOW the decimal 25.02.
   //   total = 7500 x 7042503917300613 / 2^48 = 13204694844938649375 / 2^46 (7500 = 4 x 1875 cancels 2^2)
   //         = 187650 - 225 / 2^46 = 187650 - 225 / 70368744177664   (hand: 25.02 x 7500 = 187650 in decimal)
-  //   lot = floor(total + 1/2) = 187650 and, with offeredCount 1, the unit price is 187650.
+  //   lot = floor(total + 1/2) = 187650; with offeredCount 1 one unit costs the whole lot, 187650.
   const { fixture } = fixtureForWeapon(world, M4A1);
   const barter = itemOf(fixture, PMAG_D60).offers?.find(o => o.kind === 'barter' && o.trader === 'ref');
   assert.ok(barter && barter.kind === 'barter');
@@ -194,7 +197,7 @@ test('a real fractional Ref barter maps its count verbatim and the oracle values
   const request: ReferenceRequest = { weapon_id: M4A1, barter_available: true, flea_available: false, trader_levels: { ref: 4 } };
   const lot = legalOffers(offersOf(fixture, PMAG_D60), resolveRequest(fixture, request)).find(o => o.kind === 'barter' && o.trader === 'ref');
   assert.deepEqual(lot?.lotPrice, q(187650));
-  assert.deepEqual(lot?.unitPrice, q(187650));
+  assert.equal(lot?.offeredCount, 1);
   // the loyalty gate still applies to it: Ref level 3 does not unlock a level 4 barter
   const gated = resolveRequest(fixture, { ...request, trader_levels: { ref: 3 } });
   assert.equal(legalOffers(offersOf(fixture, PMAG_D60), gated).some(o => o.trader === 'ref'), false);

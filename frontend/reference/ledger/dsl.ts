@@ -20,8 +20,11 @@ import {
 import { admittedFor } from './outcomes';
 import type { Family, LedgerCase, Expected, ProvenanceCheck, Rejection, RuntimeTolerance, StatCheck, StatName } from './types';
 
+/** Instance id of the receiver in every build (`weapon_0`). */
 export const ROOT = ROOT_INSTANCE_ID;
+/** The base choice "buy the naked receiver" (no preset supply). */
 export const NAKED: BaseChoice = { kind: 'naked' };
+/** The base choice "buy preset `presetId`": its offer is the base price and its components are free supply. */
 export const PRESET = (presetId: string): BaseChoice => ({ kind: 'preset', presetId });
 
 // --- fixtures --------------------------------------------------------------------------------------
@@ -29,9 +32,12 @@ export const PRESET = (presetId: string): BaseChoice => ({ kind: 'preset', prese
 export const slot = (id: string, allowedItemIds: string[], required = false): ReferenceSlot => ({ id, allowedItemIds, required });
 export const reqSlot = (id: string, allowedItemIds: string[]): ReferenceSlot => slot(id, allowedItemIds, true);
 
+/** An `offers` list holding one cash trader offer (default Prapor, loyalty level 1): `offers: trader(100)`. */
 export const trader = (price: number, name = 'prapor', level = 1): ReferenceOffer[] => [{ kind: 'trader', trader: name, level, price }];
+/** One flea-market offer (a single `ReferenceOffer`, for building a longer `offers` list); the player-level gate defaults to none. */
 export const flea = (price: number, minPlayerLevel?: number): ReferenceOffer =>
   minPlayerLevel === undefined ? { kind: 'flea', price } : { kind: 'flea', price, minPlayerLevel };
+/** One cash trader offer as a single `ReferenceOffer` (same fields as `trader`, unwrapped, for mixing with flea or barter offers). */
 export const traderOffer = (price: number, name = 'prapor', level = 1): ReferenceOffer => ({ kind: 'trader', trader: name, level, price });
 
 export interface FixtureParts {
@@ -43,6 +49,11 @@ export interface FixtureParts {
   description?: string;
 }
 
+/**
+ * Builds a complete fixture from the parts a case cares about: an item without an `offers` field gets the default
+ * Prapor L1 100 RUB cash offer, the receiver `gun` gets a Prapor L1 1000 RUB offer (both overridable), and the
+ * `weapon` fields are merged over the receiver defaults.
+ */
 export function fix(parts: FixtureParts): ReferenceFixture {
   return {
     schemaVersion: 1,
@@ -62,16 +73,18 @@ function keyOf(base: BaseChoice, items: string[]): string {
   return projectionKey({ base, items: entries });
 }
 
-/** Projection key of the naked receiver with these installed items (repeat an id for a copy). */
+/** Projection key (base + installed multiset) of the naked receiver with these installed items; repeat an id for a copy. */
 export const nk = (...items: string[]): string => keyOf(NAKED, items);
-/** Projection key of a preset base with these installed items. */
+/** Projection key of preset base `presetId` with these installed items; repeat an id for a copy. */
 export const ps = (presetId: string, ...items: string[]): string => keyOf(PRESET(presetId), items);
 
-export const bld = (base: BaseChoice, ...edges: PlacementEdge[]): ReferenceBuild => makeBuild(base, ...edges);
 export const nakedBuild = (...edges: PlacementEdge[]): ReferenceBuild => makeBuild(NAKED, ...edges);
 export const presetBuild = (presetId: string, ...edges: PlacementEdge[]): ReferenceBuild => makeBuild(PRESET(presetId), ...edges);
 
-/** Path-derived instance id of a placement chain: iid(['s','a'], ['t','b']) = weapon_0/s:a/t:b. */
+/**
+ * Path-derived instance id of a placement chain below the receiver, one `[slotId, itemId]` pair per hop:
+ * iid(['s','a'], ['t','b']) = weapon_0/s:a/t:b. Provenance expectations name occurrences by these ids.
+ */
 export function iid(...chain: [slotId: string, itemId: string][]): string {
   let id = ROOT;
   for (const [slotId, itemId] of chain) id = childInstanceId(id, slotId, itemId);

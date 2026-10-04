@@ -15,10 +15,10 @@
 //
 // It refuses to overwrite an existing manifest unless --force is given: a re-pin changes
 // the pinned bytes, so it must be a deliberate act, never a silent refetch.
-import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { SNAPSHOT_SHA256, sha256Hex } from './pins';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const rawDir = join(here, 'raw');
@@ -26,7 +26,6 @@ const manifestPath = join(rawDir, 'manifest.json');
 
 const BASE_URL = 'https://json.tarkov.dev';
 const GAME_MODE = 'regular';
-const SNAPSHOT_SHA256 = '219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c';
 
 interface DocSpec {
   doc: string;
@@ -49,10 +48,6 @@ const DOCS: DocSpec[] = [
 ];
 
 const force = process.argv.includes('--force');
-
-function sha256Hex(bytes: Uint8Array): string {
-  return createHash('sha256').update(bytes).digest('hex');
-}
 
 async function fetchBytes(url: string) {
   let lastError: unknown;

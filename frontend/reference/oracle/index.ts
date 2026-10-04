@@ -4,7 +4,8 @@
 export * from './q';
 export * from './constants';
 export * from './domain';
-export { resolveFixture, resolveRequest, traderLevelOf, matchesCategory, isExcludedByRequest, codeUnitCompare } from './resolve';
+export { codeUnitCompare } from './order';
+export { resolveFixture, resolveRequest, traderLevelOf, matchesCategory, isExcludedByRequest } from './resolve';
 export type {
   ResolvedFixture, ResolvedRequest, ResolvedTemplate, ResolvedWeapon, ResolvedPreset, ResolvedSlot, ResolvedOffer,
   ResolvedObjective, ResolvedWeights, ResolvedIdealPoint, ResolvedBarterRequirement,

@@ -4,7 +4,7 @@
 // projection pi_sel(B) = (base, multiset of installed item ids with counts) is ADR 0010
 // section 3; several physical placements may share one projection.
 
-import { codeUnitCompare } from './resolve';
+import { codeUnitCompare } from './order';
 
 /** One installed occurrence: a child instance attached to a physical slot of its parent. */
 export interface Placement {

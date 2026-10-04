@@ -88,7 +88,8 @@ carry a top-level modifier is rejected: no rule maps it.
   level: minTraderLevel, requirements, offeredCount, requiresDogtag? }`. Each requirement keeps `itemId`, `count` and the
   ingredient's raw `avg24hPrice` / `basePrice` (an absent value is omitted; the oracle values `avg24hPrice ?? basePrice ?? 0`).
   Counts pass through verbatim, fractional ones included (see "Fractional barter ingredient counts"). `offeredCount`
-  must be a positive integer (else `BridgeError`). `requiresDogtag` is true when an ingredient's
+  must be a positive integer (else `BridgeError`); it is the lot size, and the oracle buys a barter in whole lots
+  (`../INTERPRETATIONS.md` choice 1: one unit costs the whole lot, never a fractional share). `requiresDogtag` is true when an ingredient's
   `normalizedName` contains `dogtag` (language independent; production tests the translated name, which only works in
   English). The mapped lots were checked against `referenceBarterOffer` for several guns, and the dogtag flag against the
   English-name rule over all 855 barters.

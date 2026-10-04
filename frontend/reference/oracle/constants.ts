@@ -26,14 +26,15 @@ export const TED_PENALTY_NUMERATOR: Q = q(300);
 /**
  * Overswing strength display: 0 at W(1 - E/100) <= 3 kg, 100 at >= 7 kg, linear between.
  * Nonzero exactly when TED < 0. The 3 kg start is ADR 0007; the 7 kg full-strength point is
- * taken from the production display (trueErgo.ts SWAY_FULL_KG), the ADRs being silent on it.
+ * taken from the production display (trueErgo.ts SWAY_FULL_KG), the ADRs being silent on it
+ * (interpretation 6, INTERPRETATIONS.md).
  */
 export const OVERSWING_START_KG: Q = q(3);
 export const OVERSWING_FULL_KG: Q = q(7);
 
-/** Trader level meaning "this trader is disabled". Every trader offer needs level >= 1. */
+/** Trader level meaning "this trader is disabled" (interpretation 10). Every trader offer needs level >= 1. */
 export const TRADER_DISABLED = 0;
-/** Level assumed for a trader absent from request.trader_levels (production default). */
+/** Level assumed for a trader absent from request.trader_levels (production default; interpretation 10). */
 export const DEFAULT_TRADER_LEVEL = 4;
 
 /** Upper bound on owned_items entries. ADR 0008 section 1. */

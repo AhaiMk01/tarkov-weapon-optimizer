@@ -3,7 +3,9 @@
 //   TED = effective ergonomics - q(W),   q(W) = max(0, 100 - 300/W)  (free at or below 3 kg; concave above)
 //   TED >= 0  <=>  W (1 - E/100) <= 3 kg  <=>  no overswing; overswing strength is nonzero exactly when TED < 0.
 // Only the exact-arithmetic side of ADR 0007 is expressible in a finite ledger. Secant domains, outward
-// allowances and mapping/parser/coefficient errors are native/numerical obligations of Stage 3.
+// allowances and mapping/parser/coefficient errors are native/numerical obligations of Stage 3: they are
+// listed in DEFERRED_SUBCASES (ledger/index.ts) with their reasons, and the coverage test requires every
+// ADR 0013 section 3 subcase to be either covered by a case here or deferred there.
 
 import { defineCase, fix, nk, nakedBuild, ROOT, slot } from './dsl';
 import type { LedgerCase } from './types';

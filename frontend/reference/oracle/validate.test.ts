@@ -177,6 +177,13 @@ test('slot conflicts force every matching physical slot empty, wherever it is, a
   accepts(f, {}, naked([R, 's1', 'blocker'])); // blocker alone is fine: an unblocked alternative is used
 });
 
+test('interpretation 11: a blocker blocks every occupied slot with a listed id, including the slot it occupies itself', () => {
+  // `x` lists its own host slot `s`: installing it there is a slot conflict, leaving `s` empty is fine.
+  const f = fixtureOf([{ id: 'x', conflictingSlotIds: ['s'] }], { slots: [slot('s', ['x'])] });
+  rejects(f, {}, naked([R, 's', 'x']), 'SLOT_CONFLICT');
+  accepts(f, {}, naked());
+});
+
 // --- includes / excludes --------------------------------------------------------------------------
 
 test('item and category excludes reject installed matches', () => {

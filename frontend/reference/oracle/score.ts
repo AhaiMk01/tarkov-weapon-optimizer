@@ -24,6 +24,7 @@ export interface Coordinates {
 }
 
 export function coordinatesOf(stats: BuildStats, request: ResolvedRequest): Coordinates {
+  // Interpretation 16 (INTERPRETATIONS.md): the displayed first-clamp ergonomics, or TED under use_true_ergo.
   const ergo = request.useTrueErgo ? stats.ted : stats.ergonomics;
   return {
     fE: mul(ERGO_SCALE, ergo),
