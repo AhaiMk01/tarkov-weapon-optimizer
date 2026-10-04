@@ -1,7 +1,7 @@
 # ADR 0002: Authoritative Physical-Build and Acquisition Domain Contract
 
 ## Status
-Accepted (Refs #31). Amended 2026-10-02.
+Accepted planning decision (Refs #31). Reconciled 2026-10-04; not an implemented solver repair or game-authority proof.
 
 ## Context
 The frontend solver's optimization models and independent validation oracle (`validateBuild`) must preserve the authoritative physical and economic reality of Escape from Tarkov. Audits of `compatibilityMap.ts`, `lpBuilder.ts`, and upstream data extraction revealed critical domain defects:
@@ -20,6 +20,7 @@ We establish the authoritative physical and acquisition domain contract across n
    - Each installed parent instance activates its own independent physical child slots with independent capacity constraints ($\le 1$). Every installed mod instance must trace an unbroken physical instance path to the weapon root.
 2. **Multi-Copy Preset Quantities ($q_{b,i}$)**:
    - Factory presets supply integer quantities $q_{b,i} \in \mathbb{Z}_{\ge 0}$ of component $i$. Upstream data extraction and preparation must preserve `containsItems[].count`.
+   - Repair `extractAllPresets` and request `count` in its GraphQL fallback. The JSON adapter must preserve explicit raw finite nonnegative integer `containsItems[].count`; remove its unproved `contained.count ?? 1` default. Missing/null/malformed raw counts are source/input errors unless a pinned source-schema contract explicitly establishes a default (none is adopted here). Repeated entries sum their counts. One pushed ID per entry, default-filled normalized counts without raw provenance, or a `Set` cannot establish original quantities. Carry the count-bearing representation through `PresetInfo.items`, LP supply, reconstruction, details/manifest and `structuralBounds.ts`; migrate `test_json_api_adapter` and independent raw-count checks.
    - Free inventory supplied by presets is $\sum_b q_{b,i} \cdot \text{base}_b$.
    - Base selection is independent ($\sum \text{base}_b = 1$). If a preset is chosen, its components are supplied at ₽0 marginal cost; unused preset parts are stripped at ₽0 with no penalty. An accessible preset containing component $i$ never forces purchasing that preset if component $i$ can be legally supplied via owned inventory or standalone purchase.
 3. **Out-of-Pocket Expenditure & Market Accessibility**:
@@ -57,3 +58,9 @@ We establish the authoritative physical and acquisition domain contract across n
 - **Issue #33**: Formulate integer purchase quantities $\text{buy}_i$ and multi-copy preset offsetting $q_{b,i}$.
 - **Issue #36**: Update `validateBuild` and benchmark oracles to verify physical slot instance uniqueness and multi-copy stat summation.
 - **Issue #42**: Define `owned_items?: string[]` API schema, validation, and solver integration follow-up.
+
+## Authority and Reconciliation
+
+- The [canonical #31 resolution](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/31#issuecomment-5945998692), [#32 occurrence contract](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/32#issuecomment-5955673941), and [post-acceptance #40 review](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/40#issuecomment-5977261158) control over stale extraction claims. The adopted finite software domain is not a universal assertion of game-engine behavior.
+- Empty-root impossibility is a physical infeasibility claim only after exact-domain/native/numerical proof gates. Fast and provisional-MOA model impossibility retain qualified internal proof but return `incomplete`, not a physical certificate. `termination` is independent search completion: every completed model search (including Fast emptiness) uses `optimal`; unfinished/unstarted search uses `limit`. Withheld proof or failed validation does not rewrite a completed search to `limit`; status, certificate, qualifications and factual reason describe its authority. Invalid inventory starts no search.
+- Market accessibility is request-specific (trader levels, player level, flea/barter enablement and filters). Owned stock is explicit validated mod inventory, not inferred from FiR labels or a missing/large price. No accessible base means an impossible base-choice row, never a fabricated free receiver.
