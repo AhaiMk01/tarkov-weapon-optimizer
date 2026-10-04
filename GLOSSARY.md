@@ -31,6 +31,15 @@ The explicit level of authoritative proof provided by a solve response:
 ### Binary Placement Invariant
 The definitive architectural invariant establishing that physical placement variables $p_{i,s}$ in the repaired precise model are formulated strictly as binary decision variables ($p_{i,s} \in \{0, 1\}$). Continuous placement relaxations ($p_{i,s} \in [0, 1]$) with post-solve matching reconstruction are not admitted due to lifting failures on declared-domain physical conflict graphs (where fractional solutions have zero integer witnesses, violating Gate A).
 
+### Three-Tier Model Preparation
+The architectural partitioning of solver model preparation into three strictly bounded lifecycle tiers:
+- **Tier 1 (Session-Scoped)**: Immutable physical weapon blueprint and standalone structural bounds $[W_{\text{phys\_min}}, W_{\text{phys\_max}}]$ evaluated directly without LP serialization, cached per worker session.
+- **Tier 2 (Request-Scoped)**: Pre-compiled constraint body and acquisition state (market access, stash stock, inclusions/exclusions, hard caps), reused in-memory across ideal-point solves and spatial branch-and-bound nodes of a single request, with zero new cache tiers.
+- **Tier 3 (Ephemeral)**: Per-node specialization of objective function, spatial weight bounds ($W_1 \le \text{total\_weight} \le W_2$), and outward lower secant rows, assembled in $< 0.5\text{ ms}$.
+
+### Invalidation Ledger
+The comprehensive set of request parameters whose modification strictly invalidates Tier 2 preparation: `snapshot_sha`, `weapon_id`, `trader_levels`, `flea_available`, `barter_available`, `player_level`, `owned_items`, `include_items`, `exclude_items`, categories, hard physical caps, and `precise_mode`. Prohibits reusing filtered structures under a weapon-only key.
+
 ### Independent Physical Oracle
 A decoupled brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly in exact rational arithmetic ($\mathbb{Q}$) with direct IEEE binary64 input decoding on unpruned raw `ItemLookup` data within the versioned adopted software domain. Evaluates normative weighted scoring ($(e/10)fE - r \cdot fR - (p/1000)fP$) and un-clamped augmented Tchebycheff ($0.01(c_e fE - c_r fR - c_p fP) - \max(d_a)$), establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites under the accepted status and provisional MOA authority fences.
 
