@@ -57,6 +57,12 @@ is approximate. Decisions:
 2. **No progressive "Fast first, then exact" result.** Rejected by the owner: a Precise request returns only its
    own Precise result (optimal, feasible with honest bounds at the deadline, or incomplete). No early Fast witness
    is streamed or shown for it.
+2a. **Auto stays size-based after the Fast rebuild (owner, 2026-10-05).** Even though the 2.4c Fast model matched
+   the certified exact optimum on all 384 pinned-gun builds (median 30 ms), Fast remains `approximate` without a
+   certificate. **First Stage 4 candidate:** prove that the Fast count/edge model is an exact reformulation on
+   acyclic template graphs (all 172 pinned guns are acyclic) with a lifting/projection proof plus Gates A–C and
+   the comparative gates; ADR 0011's cyclic counterexamples bound its scope. If adopted, acyclic weapons get
+   certified answers at Fast speed.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.
