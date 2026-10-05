@@ -98,8 +98,16 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
 
           <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.moa_title')}</Text>}>
             <Paragraph>{t('methodology.moa_desc')}</Paragraph>
-            <MathBlock math="\text{MOA} = \text{effectiveBaseCOI} \cdot \left(1 - \frac{\sum \text{accuracy\_mod}}{100}\right) \cdot 34.3" />
+            <MathBlock math="\text{MOA} = \text{effectiveBaseCOI} \cdot \left(1 - \frac{\sum \text{accuracy\_mod}}{100}\right) \cdot \frac{100}{2.9089}" />
             <Paragraph style={{ marginBottom: 0 }}>{t('methodology.moa_barrel_note')}</Paragraph>
+          </Card>
+
+          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.moa_provisional_title')}</Text>}>
+            <Paragraph style={{ marginBottom: 0 }}>{t('methodology.moa_provisional_desc')}</Paragraph>
+          </Card>
+
+          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.moa_floor_title')}</Text>}>
+            <Paragraph style={{ marginBottom: 0 }}>{t('methodology.moa_floor_desc')}</Paragraph>
           </Card>
         </div>
       ),
@@ -144,6 +152,16 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
               <li>{t('methodology.precision_fast')}</li>
               <li>{t('methodology.precision_precise')}</li>
               <li>{t('methodology.precision_auto')}</li>
+            </ul>
+          </Card>
+
+          <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.status_title')}</Text>}>
+            <Paragraph>{t('methodology.status_intro')}</Paragraph>
+            <ul style={{ paddingLeft: 20, marginBottom: 0 }}>
+              <li>{t('methodology.status_certified')}</li>
+              <li>{t('methodology.status_approximate')}</li>
+              <li>{t('methodology.status_feasible')}</li>
+              <li>{t('methodology.status_incomplete')}</li>
             </ul>
           </Card>
         </div>
@@ -192,7 +210,7 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
       ),
       children: (
         <div style={{ padding: '8px 4px' }}>
-          <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Space orientation="vertical" style={{ width: '100%' }} size="middle">
             <Card size="small" style={cardStyle}>
               <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_ted_title')}</Text>
               <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{t('methodology.glossary_ted_desc')}</Paragraph>
@@ -217,6 +235,11 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
             <Card size="small" style={cardStyle}>
               <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_precision_title')}</Text>
               <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{t('methodology.glossary_precision_desc')}</Paragraph>
+            </Card>
+
+            <Card size="small" style={cardStyle}>
+              <Text strong style={{ color: token.colorPrimary }}>{t('methodology.glossary_status_title')}</Text>
+              <Paragraph style={{ marginTop: 4, marginBottom: 0 }}>{t('methodology.glossary_status_desc')}</Paragraph>
             </Card>
           </Space>
         </div>

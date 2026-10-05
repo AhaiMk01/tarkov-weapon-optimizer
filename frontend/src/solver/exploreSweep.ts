@@ -24,7 +24,7 @@
  * (`optimize(params, guard)`), and receives the guard so it can derive a positive native allowance from the one shared request deadline.
  */
 
-import type { ExplorePoint, ExploreResponse, ExploreStepOutcome, OptimizationMetadata, OptimizeResponse } from '../api/client';
+import type { ExplorePoint, ExploreResponse, ExploreSnapshot, ExploreStepOutcome, OptimizationMetadata, OptimizeResponse } from '../api/client';
 import { PUBLIC_REASONS } from './physical/reasons';
 import { resolveTolerance } from './physical/solvePrecise';
 import { guardStop } from './runtimeGuard';
@@ -79,6 +79,13 @@ export interface ExploreRunRequest {
 }
 
 export type OptimizeFn = (params: SolveParams, guard: RuntimeGuard) => Promise<OptimizeResponse>;
+
+/**
+ * Per-step observer (Phase 2.8): called after each launched target is recorded and classified, with the verified partial result so far (an
+ * `ExploreSnapshot`). The worker publishes it, so a hard termination keeps the points published so far (ADR 0013 section 4D). Synchronous; a
+ * throwing observer never changes the sweep.
+ */
+export type ExploreStepObserver = (snapshot: ExploreSnapshot) => void;
 
 // ---------------------------------------------------------------------------------------------
 // Classification
@@ -305,10 +312,55 @@ function envelope(request: ExploreRunRequest, started: number, guard: RuntimeGua
 }
 
 /**
+ * The response of a sweep as it stands: the launched rows, every scheduled target not launched as U (with the factual stop cause, when there is
+ * one), the displayed frontier of the witnesses and the aggregates. The final response and every per-step snapshot are this function, so a
+ * snapshot is exactly what the sweep would return if it stopped now. It never mutates its inputs.
+ */
+function buildResponse(
+  request: ExploreRunRequest, targets: readonly SweepTarget[], launchedRows: readonly ExploreStepOutcome[],
+  witnessResponses: ReadonlyMap<number, OptimizeResponse>, stopCause: 'cancelled' | 'deadline' | null, started: number, guard: RuntimeGuard,
+): ExploreResponse {
+  const rows: ExploreStepOutcome[] = [...launchedRows];
+  // Targets never launched: U with the factual stop cause.
+  for (let i = launchedRows.length; i < targets.length; i++) {
+    rows.push(rowWithoutResponse(targets[i].target_index, 'U', request, stopCause === null ? undefined : stopReasonOf(stopCause)));
+  }
+
+  // Points: the displayed frontier of the witnesses; a dropped build keeps its V record with no point index.
+  const candidates: Candidate[] = [];
+  for (const [targetIndex, response] of witnessResponses) candidates.push({ targetIndex, point: explorePointOf(response, request.nakedRecoilV) });
+  const frontier = displayFrontier(request.ignore, candidates);
+  frontier.forEach((c, index) => { rows[c.targetIndex] = { ...rows[c.targetIndex], point_index: index }; });
+
+  const counts = countOutcomes(rows.map(r => r.outcome));
+  const curve = classifyCurve(counts);
+  const precision_resolved = aggregateMode(rows, request);
+  let reason: string | undefined;
+  if (stopCause !== null) reason = stopReasonOf(stopCause);
+  else if (curve === 'partial' || curve === 'invalid') reason = rows.find(r => r.outcome !== 'V' && r.reason !== undefined)?.reason;
+
+  return {
+    curve_status: curve,
+    points: frontier.map(c => c.point),
+    sweep_schedule: targets.map(t => ({ target_index: t.target_index, target_value: t.target_value })),
+    step_outcomes: rows,
+    total_solve_time_ms: Math.round(guard.now() - started),
+    precision_request: request.precisionRequest,
+    precision_resolved,
+    model_qualification: precision_resolved === 'precise' ? 'exact' : precision_resolved === 'fast' ? 'approximate' : null,
+    moa_qualification: moaQualificationOf(request.base),
+    ...(reason === undefined ? {} : { reason }),
+  };
+}
+
+/**
  * Run the sweep. An empty or malformed schedule is `invalid` with no points and no solve. Otherwise every scheduled target is recorded exactly once;
  * see the file header for the classification and `classifyCurve` for the status. Typed errors of a target are rows (E), not failures of the sweep.
+ * `onStep` (optional) is told the verified partial result after every launched target (see {@link ExploreStepObserver}).
  */
-export async function runExplore(request: ExploreRunRequest, schedule: SweepSchedule, guard: RuntimeGuard, optimize: OptimizeFn): Promise<ExploreResponse> {
+export async function runExplore(
+  request: ExploreRunRequest, schedule: SweepSchedule, guard: RuntimeGuard, optimize: OptimizeFn, onStep?: ExploreStepObserver,
+): Promise<ExploreResponse> {
   const started = guard.now();
   if (scheduleProblem(schedule) !== null) return envelope(request, started, guard, PUBLIC_REASONS.invalidExploreSchedule);
 
@@ -363,38 +415,16 @@ export async function runExplore(request: ExploreRunRequest, schedule: SweepSche
       if (problem !== null) throw new Error(`Explore schedule extension is invalid: ${problem}`);
       targets.push(...appended);
     }
+    if (onStep !== undefined) {
+      try {
+        onStep({ launched: next, scheduled: targets.length, response: buildResponse(request, targets, rows, witnessResponses, null, started, guard) });
+      } catch {
+        // A failing observer must never change the sweep.
+      }
+    }
     // An explicit macrotask yield between steps (a pending cancel message can only be dispatched across one).
     if (next < targets.length) await guard.yieldMacrotask();
   }
 
-  // Targets never launched: U with the factual stop cause.
-  for (let i = next; i < targets.length; i++) {
-    rows.push(rowWithoutResponse(targets[i].target_index, 'U', request, stopCause === null ? undefined : stopReasonOf(stopCause)));
-  }
-
-  // Points: the displayed frontier of the witnesses; a dropped build keeps its V record with no point index.
-  const candidates: Candidate[] = [];
-  for (const [targetIndex, response] of witnessResponses) candidates.push({ targetIndex, point: explorePointOf(response, request.nakedRecoilV) });
-  const frontier = displayFrontier(request.ignore, candidates);
-  frontier.forEach((c, index) => { rows[c.targetIndex] = { ...rows[c.targetIndex], point_index: index }; });
-
-  const counts = countOutcomes(rows.map(r => r.outcome));
-  const curve = classifyCurve(counts);
-  const precision_resolved = aggregateMode(rows, request);
-  let reason: string | undefined;
-  if (stopCause !== null) reason = stopReasonOf(stopCause);
-  else if (curve === 'partial' || curve === 'invalid') reason = rows.find(r => r.outcome !== 'V' && r.reason !== undefined)?.reason;
-
-  return {
-    curve_status: curve,
-    points: frontier.map(c => c.point),
-    sweep_schedule: targets.map(t => ({ target_index: t.target_index, target_value: t.target_value })),
-    step_outcomes: rows,
-    total_solve_time_ms: Math.round(guard.now() - started),
-    precision_request: request.precisionRequest,
-    precision_resolved,
-    model_qualification: precision_resolved === 'precise' ? 'exact' : precision_resolved === 'fast' ? 'approximate' : null,
-    moa_qualification: moaQualificationOf(request.base),
-    ...(reason === undefined ? {} : { reason }),
-  };
+  return buildResponse(request, targets, rows, witnessResponses, stopCause, started, guard);
 }

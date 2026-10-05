@@ -616,10 +616,14 @@ function paretoParamsOf(input: ExploreRunInput): ParetoParams {
   };
 }
 
-/** Explore: the request, a fresh single-use schedule and the total V/I/U/E classification of `runExplore` (ADR 0013 section 6). */
+/**
+ * Explore: the request, a fresh single-use schedule and the total V/I/U/E classification of `runExplore` (ADR 0013 section 6). After every launched
+ * target the verified partial result (an `ExploreSnapshot`) is published, so a hard termination keeps the points found so far (section 4D) and the
+ * client can show live progress.
+ */
 function driveExplore(input: ExploreRunInput): Promise<ExploreResponse> {
   const params = paretoParamsOf(input);
-  return sweepExplore(exploreRunRequest(params), buildSweepSchedule(params), input.guard, input.optimize);
+  return sweepExplore(exploreRunRequest(params), buildSweepSchedule(params), input.guard, input.optimize, snapshot => input.publishSnapshot(snapshot));
 }
 
 /**

@@ -4,6 +4,7 @@ import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
 import type { Gun, ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
+import type { FloorView } from '../common/floorView'
 
 interface OptimizePanelProps {
   guns: Gun[]
@@ -40,6 +41,11 @@ interface OptimizePanelProps {
   equipErgoPenalty: number
   onEquipErgoPenaltyChange: (v: number) => void
   computingMOAFloor: boolean
+  moaFloor: FloorView | null
+  moaFloorError: string | null
+  onCancelMOAFloor: () => void
+  cancellingMOAFloor: boolean
+  onRetryMOAFloor: () => void
   availableMods: ModInfo[]
   modCompat?: ModCompatibility
   loadingMods: boolean
@@ -110,6 +116,11 @@ export function OptimizePanel(props: OptimizePanelProps) {
         useExactMOAFloor={props.useExactMOAFloor}
         onUseExactMOAFloorChange={props.onUseExactMOAFloorChange}
         computingMOAFloor={props.computingMOAFloor}
+        moaFloor={props.moaFloor}
+        moaFloorError={props.moaFloorError}
+        onCancelMOAFloor={props.onCancelMOAFloor}
+        cancellingMOAFloor={props.cancellingMOAFloor}
+        onRetryMOAFloor={props.onRetryMOAFloor}
       />
       <ModFilter
         availableMods={props.availableMods}

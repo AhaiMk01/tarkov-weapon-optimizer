@@ -5,11 +5,21 @@ import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor, clearDataCache } from './api/client'
-import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, PrecisionRequest } from './api/client'
+import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOption, GunsmithTask, GameMode, PrecisionRequest } from './api/client'
+import { exploreRequestOf, floorRequestKey, floorRequestOf, optimizeRequestOf } from './api/requestDomain'
+import type { RequestDomainState } from './api/requestDomain'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
 import { shoppingListLines } from './components/common/shoppingList'
+import { useRequestController } from './components/common/useRequestController'
+import { classifyFailure } from './components/common/failureView'
+import type { Failure } from './components/common/failureView'
+import { authorityOf, qualifierKey, reasonViewOf, resultViewOf, toastOf } from './components/common/resultView'
+import { floorViewOf, moaSliderRange, retainedFloorOf } from './components/common/floorView'
+import type { FloorView } from './components/common/floorView'
+import { asExploreSnapshot, exploreToastOf, retainedExploreOf } from './components/explore/exploreView'
+import type { ExploreWeaponRun } from './components/explore/exploreView'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
 import { ExplorePanel } from './components/explore/ExplorePanel'
@@ -236,6 +246,9 @@ function AppContent({
   const [loading, setLoading] = useState(true)
   const [optimizing, setOptimizing] = useState(false)
   const [result, setResult] = useState<OptimizeResponse | null>(null)
+  /** A rejected Optimize request (a native solver failure or an unexpected error); a plain cancel is not one. */
+  const [optimizeFailure, setOptimizeFailure] = useState<Failure | null>(null)
+  const optimizeCtl = useRequestController()
   const [availableMods, setAvailableMods] = useState<ModInfo[]>([])
   const [modCompat, setModCompat] = useState<ModCompatibility>({ conflicts: {}, slots_by_item: {} })
   const [loadingMods, setLoadingMods] = useState(false)
@@ -254,9 +267,16 @@ function AppContent({
   const [equipErgoPenalty, setEquipErgoPenalty] = useState<number>(() => Number(localStorage.getItem('equipErgoPenalty') ?? 0))
   const [maxMOA, setMaxMOA] = useState(0)
   const [useExactMOAFloor, setUseExactMOAFloor] = useState<boolean>(() => localStorage.getItem('useExactMOAFloor') !== 'false')
-  const [exactMOAFloor, setExactMOAFloor] = useState<number | null>(null)
+  /** The last MOA floor answer: a result of the PROVISIONAL MOA model, never a game-physical minimum. */
+  const [moaFloor, setMoaFloor] = useState<FloorView | null>(null)
+  const [moaFloorError, setMoaFloorError] = useState<string | null>(null)
   const [computingMOAFloor, setComputingMOAFloor] = useState(false)
   const moaFloorRequestSeq = useRef(0)
+  const floorCtl = useRequestController()
+  /** Raised by the Retry button: asks the floor again for an unchanged domain after a cancel or a failure. */
+  const [floorRetry, setFloorRetry] = useState(0)
+  /** Settles when the floor request in flight (if any) has settled: other requests wait for it, so a cancel that escalates never takes them down. */
+  const floorSettled = useRef<Promise<unknown>>(Promise.resolve())
   const [includedModIds, setIncludedModIds] = useState<string[]>([])
   const [excludedModIds, setExcludedModIds] = useState<string[]>([])
   const [modSearch, setModSearch] = useState('')
@@ -283,12 +303,9 @@ function AppContent({
     return 'detailed'
   })
   const [exploring, setExploring] = useState(false)
-  const [exploreResult, setExploreResult] = useState<ExplorePoint[]>([])
-  const [explorePrecisionMeta, setExplorePrecisionMeta] = useState<{
-    request?: PrecisionRequest
-    resolved?: 'fast' | 'precise'
-  }>({})
-  const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
+  /** One sweep per requested weapon: the final response, or the live / retained snapshot of a run that is running or did not finish. */
+  const [exploreRuns, setExploreRuns] = useState<ExploreWeaponRun[]>([])
+  const exploreCtl = useRequestController()
   const [exploreTradeoff, setExploreTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
   /** Sweep granularity per weapon. Costs roughly one solve per step, per weapon,
    *  so it multiplies with the number of weapons being compared. */
@@ -299,18 +316,15 @@ function AppContent({
   const [loadingExploreMods, setLoadingExploreMods] = useState(false)
   const exploreModsRequestSeq = useRef(0)
   const exploreRunSeq = useRef(0)
-  /** Set by the Cancel button. Distinct from exploreRunSeq: a bumped sequence
-   *  means "a newer run owns the results", a raised flag means "this run should
-   *  stop but its finished work is still the current result". */
-  const cancelRequested = useRef(false)
-  const [exploreProgress, setExploreProgress] = useState<{ current: number; total: number; name: string } | null>(null)
   const [useExploreBudget, setUseExploreBudget] = useState(false)
   const [exploreBudgetValue, setExploreBudgetValue] = useState<number>(0)
   const [resultTradeoff, setResultTradeoff] = useState<'price' | 'recoil' | 'ergo'>('price')
   const [gunsmithTasks, setGunsmithTasks] = useState<GunsmithTask[]>([])
   const [selectedTaskName, setSelectedTaskName] = useState<string>('')
   const [gunsmithResult, setGunsmithResult] = useState<OptimizeResponse | null>(null)
+  const [gunsmithFailure, setGunsmithFailure] = useState<Failure | null>(null)
   const [optimizingGunsmith, setOptimizingGunsmith] = useState(false)
+  const gunsmithCtl = useRequestController()
   const modsRequestSeq = useRef(0)
   const [changelogOpen, setChangelogOpen] = useState(false)
   const [methodologyOpen, setMethodologyOpen] = useState(false)
@@ -380,7 +394,9 @@ function AppContent({
   useEffect(() => {
     setLoading(true)
     setResult(null)
+    setOptimizeFailure(null)
     setGunsmithResult(null)
+    setGunsmithFailure(null)
     const lang = i18n.language || 'en'
     const startTime = Date.now()
     const minLoadTime = 500
@@ -413,24 +429,74 @@ function AppContent({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- avoid redundant effect re-runs
   }, [gameMode, i18n.language])
 
+  // The request domain of the current controls, shared by Optimize, Explore and the MOA floor. The floor is asked about the SAME hard constraints and
+  // acquisition settings as Optimize (everything except the MOA cap it searches), not just the weapon id.
+  const domainState = useMemo<RequestDomainState>(() => ({
+    weaponId: selectedGunId,
+    useBudget,
+    maxPrice,
+    minErgo,
+    useMinMag,
+    minMagCapacity,
+    useTrueErgo,
+    preventOverswing,
+    equipErgoPenalty,
+    includedModIds,
+    excludedModIds,
+    includedCategories,
+    excludedCategories,
+    traderLevels,
+    playerLevel,
+    fleaAvailable,
+    barterAvailable,
+    barterExcludeDogtags,
+  }), [selectedGunId, useBudget, maxPrice, minErgo, useMinMag, minMagCapacity, useTrueErgo, preventOverswing, equipErgoPenalty, includedModIds, excludedModIds,
+    includedCategories, excludedCategories, traderLevels, playerLevel, fleaAvailable, barterAvailable, barterExcludeDogtags])
+  const floorRequest = useMemo(() => floorRequestOf(domainState), [domainState])
+  const floorKey = floorRequestKey(floorRequest, gameMode, i18n.language || 'en')
+
+  // The MOA floor only drives the MOA control, so it is asked while that control is on, about the full request domain. A change of the domain asks
+  // again (after a short pause, so dragging a slider does not start a solve per tick) and cancels the answer in flight.
   useEffect(() => {
-    setExactMOAFloor(null)
-    if (!selectedGunId || !useExactMOAFloor) return
+    setMoaFloor(null)
+    setMoaFloorError(null)
+    if (!selectedGunId || !useMOA || !useExactMOAFloor) {
+      setComputingMOAFloor(false)
+      return
+    }
     const seq = ++moaFloorRequestSeq.current
     setComputingMOAFloor(true)
-    // Phase 2.8 passes the full acquisition and feasibility domain and reads the whole MOAFloorResponse (status, bracket, witness).
-    computeMOAFloor({ weapon_id: selectedGunId }, gameMode, i18n.language || 'en')
-      .then(({ floor }) => {
-        if (seq !== moaFloorRequestSeq.current) return
-        setExactMOAFloor(floor !== null && floor > 0 ? floor : null)
-        setComputingMOAFloor(false)
-      })
-      .catch(err => {
-        console.error('Failed to compute MOA floor', err)
-        if (seq !== moaFloorRequestSeq.current) return
-        setComputingMOAFloor(false)
-      })
-  }, [selectedGunId, gameMode, i18n.language, useExactMOAFloor])
+    let controller: AbortController | null = null
+    const timer = setTimeout(() => {
+      const c = floorCtl.begin()
+      controller = c
+      floorSettled.current = computeMOAFloor(floorRequest, gameMode, i18n.language || 'en', { signal: c.signal })
+        .then(response => {
+          if (seq !== moaFloorRequestSeq.current) return
+          setMoaFloor(floorViewOf(response))
+        })
+        .catch(err => {
+          // A hard-terminated or failed floor still carries what it had established (its best witness and proved bound): show that, as an
+          // interrupted result (it does not narrow the MOA control).
+          const failure = classifyFailure(err)
+          if (failure.kind !== 'cancelled') console.error('Failed to compute MOA floor', err)
+          if (seq !== moaFloorRequestSeq.current) return
+          const retained = retainedFloorOf(err)
+          if (retained !== null) setMoaFloor(floorViewOf(retained, { interrupted: true }))
+          if (failure.kind !== 'cancelled') setMoaFloorError(failure.message)
+        })
+        .finally(() => {
+          floorCtl.end(c)
+          if (seq === moaFloorRequestSeq.current) setComputingMOAFloor(false)
+        })
+    }, 400)
+    return () => {
+      clearTimeout(timer)
+      controller?.abort()
+    }
+    // The key covers every input of the request; the request object itself is rebuilt with the state and must not restart the effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floorKey, useMOA, useExactMOAFloor, floorRetry])
 
   useEffect(() => {
     if (!selectedGunId) return
@@ -526,20 +592,18 @@ function AppContent({
     const effMin = hasReplaceableBarrel ? minBarrelMOA : baseMOA
     const effMax = hasReplaceableBarrel ? maxBarrelMOA : baseMOA
     const effBase = hasReplaceableBarrel ? minBarrelMOA : baseMOA
-    // If we've computed the exact achievable floor via solver, use it — it respects slot-graph
-    // reachability, conflicts, and barrel-specific mod compatibility. Otherwise fall back to the
-    // theoretical per-category sum (an upper bound on improvements that may be unreachable).
+    // If the solver answered the floor (a result of the provisional MOA model), its display_floor is the lower end: it respects slot-graph
+    // reachability, conflicts and the caller's constraints, and is already an outward 2-decimal value that is never below the achieved floor, so it
+    // is used as it is. Otherwise fall back to the theoretical per-category sum (an estimate that may be unreachable), rounded up.
     const approxMin = Math.max(0, effMin * (1 - bestMod / 100))
-    const sliderMin = exactMOAFloor != null ? exactMOAFloor : approxMin
-    // Round min UP and max UP so the displayed range always contains feasible solves.
-    // Rounding min DOWN (e.g. 0.4836 → 0.48) would make the slider's leftmost position infeasible
-    // because the true floor is 0.4836. Ceiling preserves feasibility at the cost of +0.005 MOA.
     return {
       base: Math.round(effBase * 100) / 100,
-      min: Math.ceil(sliderMin * 100) / 100,
-      max: Math.ceil(effMax * (1 - worstMod / 100) * 100) / 100,
+      ...moaSliderRange(moaFloor?.sliderMin ?? null, approxMin, effMax * (1 - worstMod / 100)),
     }
-  }, [selectedGun, availableMods, exactMOAFloor])
+  }, [selectedGun, availableMods, moaFloor])
+  // The cap actually used: never below the lower end of the control. A floor that arrives after the user picked a value moves that end up, and a cap
+  // below it could only report "no build under the MOA limit"; the control shows the same value.
+  const effectiveMaxMOA = Math.max(maxMOA, moaRange.min)
   const selectedTask = gunsmithTasks.find(t => t.task_name === selectedTaskName)
 
   // Seed a default pick once data lands, and recover if the current id vanishes
@@ -554,47 +618,47 @@ function AppContent({
     }
   }, [guns, selectedGunId, exploreWeaponIds])
 
+  /** Show the toast of a finished Optimize or Gunsmith request: one message per authority level, never "complete" for an approximate result. */
+  const announce = (spec: ReturnType<typeof toastOf>) => {
+    const reason = spec.reason === null ? null : spec.reason.key !== null ? t(spec.reason.key) : spec.reason.text
+    const text = reason === null ? t(spec.key) : `${t(spec.key)} (${reason})`
+    messageApi[spec.type](text)
+  }
+
+  /** The floor must not hold up another request: cancel it (softly) and wait until it has settled before the next request is sent. */
+  const settleFloor = async () => {
+    floorCtl.cancel()
+    await floorSettled.current
+  }
+
   const handleOptimize = async () => {
     if (!selectedGunId) return
     setOptimizing(true)
+    setOptimizeFailure(null)
+    await settleFloor()
+    const controller = optimizeCtl.begin()
     try {
-      const res = await optimize({
-        weapon_id: selectedGunId,
-        ergo_weight: ergoWeight,
-        recoil_weight: recoilWeight,
-        price_weight: priceWeight,
-        use_true_ergo: useTrueErgo || undefined,
-        use_tchebycheff: useTchebycheff || undefined,
-        max_price: useBudget ? maxPrice : undefined,
-        min_ergonomics: minErgo > 0 ? minErgo : undefined,
-        min_mag_capacity: useMinMag ? minMagCapacity : undefined,
-        max_moa: useMOA ? maxMOA : undefined,
-        prevent_overswing: preventOverswing || undefined,
-        equip_ergo_modifier: useTrueErgo || preventOverswing ? equipErgoPenalty / 100 : undefined,
-        include_items: includedModIds.length > 0 ? includedModIds : undefined,
-        exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
-        include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
-        exclude_categories: excludedCategories.length > 0 ? excludedCategories : undefined,
-        trader_levels: traderLevels,
-        player_level: playerLevel,
-        flea_available: fleaAvailable,
-        barter_available: barterAvailable,
-        barter_exclude_dogtags: barterExcludeDogtags,
-        precise_mode: solverPrecision,
-      }, gameMode, i18n.language || 'en')
+      const res = await optimize(optimizeRequestOf(domainState, {
+        ergoWeight,
+        recoilWeight,
+        priceWeight,
+        useTchebycheff,
+        maxMoa: useMOA ? effectiveMaxMOA : null,
+        precision: solverPrecision,
+      }), gameMode, i18n.language || 'en', { signal: controller.signal })
       setResult(res)
-      if (res.status === 'optimal') {
-        messageApi.success(t('toast.optimize_success'))
-      } else if (res.status === 'infeasible') {
-        const base = t('toast.optimize_infeasible')
-        messageApi.error(res.reason ? `${base} (${res.reason})` : base)
-      } else {
-        messageApi.warning(t('toast.optimize_non_optimal', { status: res.status }))
-      }
+      announce(toastOf(resultViewOf(res), 'optimize'))
     } catch (err) {
-      console.error('Optimization failed', err)
-      messageApi.error(t('toast.optimize_failed'))
+      const failure = classifyFailure(err)
+      if (failure.kind === 'cancelled') {
+        messageApi.info(t('toast.cancelled'))
+      } else {
+        console.error('Optimization failed', err)
+        setOptimizeFailure(failure)
+        messageApi.error(t('toast.optimize_failed'))
+      }
     } finally {
+      optimizeCtl.end(controller)
       setOptimizing(false)
     }
   }
@@ -625,121 +689,78 @@ function AppContent({
   }
 
   /**
-   * Cancels an in-flight Explore run. Raises a flag rather than bumping the run
-   * sequence: bumping cannot be told apart from a newer run starting, and a
-   * superseded run must drop its results while a cancelled one keeps them.
-   *
-   * The solve already dispatched to the worker still finishes -- there is no abort
-   * channel into HiGHS -- so cancellation takes effect after the current weapon,
-   * not instantly. Points already collected stay on screen.
+   * Cancels an in-flight Explore run through the request signal: the worker returns the points found so far (curve status partial or invalid, with
+   * `Cancelled by user`), or, if it does not answer in time, the request is hard-terminated and rejects with the last published snapshot. Either way
+   * the points already found stay on screen, and the weapons not yet started are not run.
    */
   const handleExploreCancel = () => {
-    if (!exploring) return
-    cancelRequested.current = true
-    setExploring(false)
-    setExploreProgress(null)
+    if (exploring) exploreCtl.cancel()
   }
 
   const handleExplore = async () => {
     const weaponIds = [...new Set(exploreWeaponIds)]
     if (weaponIds.length === 0) return
     const runId = ++exploreRunSeq.current
-    cancelRequested.current = false
     const gunName = (id: string) => guns.find(g => g.id === id)?.name ?? id
-    const shared = {
-      ignore: exploreTradeoff,
-      steps: exploreSteps,
-      use_true_ergo: useTrueErgo || undefined,
-      max_price: (useBudget ? maxPrice : undefined) ?? (useExploreBudget && exploreTradeoff === 'price' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
-      min_ergonomics: (minErgo > 0 ? minErgo : undefined) ?? (useExploreBudget && exploreTradeoff === 'ergo' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined),
-      max_recoil_v: useExploreBudget && exploreTradeoff === 'recoil' && exploreBudgetValue > 0 ? exploreBudgetValue : undefined,
-      min_mag_capacity: useMinMag ? minMagCapacity : undefined,
-      max_moa: useMOA ? maxMOA : undefined,
-      prevent_overswing: preventOverswing || undefined,
-      equip_ergo_modifier: useTrueErgo || preventOverswing ? equipErgoPenalty / 100 : undefined,
-      trader_levels: traderLevels,
-      player_level: playerLevel,
-      flea_available: fleaAvailable,
-      barter_available: barterAvailable,
-      barter_exclude_dogtags: barterExcludeDogtags,
-      precise_mode: solverPrecision,
-      include_items: includedModIds.length > 0 ? includedModIds : undefined,
-      exclude_items: excludedModIds.length > 0 ? excludedModIds : undefined,
-      include_categories: includedCategories.length > 0 ? includedCategories.map(c => [c]) : undefined,
-      exclude_categories: excludedCategories.length > 0 ? excludedCategories : undefined,
-    } as const
+    const lang = i18n.language || 'en'
 
     setExploring(true)
     setExploreRunIds(weaponIds)
-    setExploreResult([])
-    setExploreSolveTime(undefined)
+    setExploreRuns([])
     setResultTradeoff(exploreTradeoff)
-    setExploreProgress({ current: 1, total: weaponIds.length, name: gunName(weaponIds[0]) })
+    await settleFloor()
+    if (runId !== exploreRunSeq.current) return
+    const controller = exploreCtl.begin()
 
-    const allPoints: ExplorePoint[] = []
-    let totalTime = 0
-    let errorCount = 0
-    const infeasibleIds: string[] = []
-    let lastPrecision: { request?: PrecisionRequest; resolved?: 'fast' | 'precise' } = {}
+    const runs: ExploreWeaponRun[] = []
+    const publish = () => {
+      if (runId === exploreRunSeq.current) setExploreRuns([...runs])
+    }
+    const update = (index: number, patch: Partial<ExploreWeaponRun>) => {
+      runs[index] = { ...runs[index], ...patch }
+      publish()
+    }
 
     try {
-      for (let i = 0; i < weaponIds.length; i++) {
-        if (runId !== exploreRunSeq.current) return
-        const id = weaponIds[i]
-        setExploreProgress({ current: i + 1, total: weaponIds.length, name: gunName(id) })
+      for (const id of weaponIds) {
+        if (runId !== exploreRunSeq.current || controller.signal.aborted) break
+        const index = runs.length
+        runs.push({ weaponId: id, weaponName: gunName(id), response: null, phase: 'running' })
+        publish()
+        const request = exploreRequestOf({ ...domainState, weaponId: id }, {
+          ignore: exploreTradeoff,
+          steps: exploreSteps,
+          maxMoa: useMOA ? effectiveMaxMOA : null,
+          precision: solverPrecision,
+          axisLimit: useExploreBudget ? exploreBudgetValue : null,
+        })
         try {
-          const res = await explore({
-            ...shared,
-            weapon_id: id,
-          }, gameMode, i18n.language || 'en')
-          // A newer run owns the results now -- drop these rather than write over it.
-          if (runId !== exploreRunSeq.current) return
-          // Cancel is honoured only after committing: HiGHS cannot abort, so
-          // "after the current weapon" includes its points, not just the wait.
-          if (res.points.length === 0) {
-            infeasibleIds.push(id)
-          } else {
-            allPoints.push(...res.points.map(p => ({
-              ...p,
-              weapon_id: id,
-              weapon_name: gunName(id),
-            })))
-          }
-          totalTime += res.total_solve_time_ms ?? 0
-          lastPrecision = {
-            request: res.precision_request,
-            resolved: res.precision_resolved ?? undefined,
-          }
-          setExploreResult([...allPoints])
-          setExploreSolveTime(totalTime)
-          setExplorePrecisionMeta(lastPrecision)
-          if (cancelRequested.current) return
+          const res = await explore(request, gameMode, lang, {
+            signal: controller.signal,
+            // Live progress: the verified partial result after every launched target (points so far, per-target coverage).
+            onSnapshot: raw => {
+              const snapshot = asExploreSnapshot(raw)
+              if (snapshot !== null) update(index, { response: snapshot.response, launched: snapshot.launched, scheduled: snapshot.scheduled })
+            },
+          })
+          const cancelled = reasonViewOf(res.reason)?.cancelled === true
+          update(index, { response: res, phase: cancelled ? 'cancelled' : 'done', launched: undefined, scheduled: undefined })
         } catch (err) {
-          errorCount += 1
-          console.error(`Exploration failed for ${id}`, err)
+          const failure = classifyFailure(err)
+          if (failure.kind !== 'cancelled') console.error(`Exploration failed for ${id}`, err)
+          // A hard-terminated or failed sweep keeps the points published so far: the retained snapshot (or the last live one).
+          const retained = retainedExploreOf(err)
+          const kept = retained?.response ?? runs[index].response
+          if (failure.kind === 'cancelled') update(index, { response: kept, phase: 'cancelled' })
+          else update(index, { response: kept, phase: 'failed', error: failure.message })
         }
       }
-
-      if (runId !== exploreRunSeq.current || cancelRequested.current) return
-      if (errorCount > 0 && allPoints.length > 0) {
-        messageApi.warning(t('toast.explore_compare_partial', { failed: errorCount, total: weaponIds.length }))
-      } else if (allPoints.length > 0) {
-        messageApi.success(t('toast.explore_success'))
-      } else if (errorCount === weaponIds.length) {
-        messageApi.error(t('toast.explore_failed'))
-      } else if (infeasibleIds.length > 0) {
-        messageApi.warning(t('toast.explore_infeasible', { names: infeasibleIds.map(gunName).join(', ') }))
-      } else {
-        messageApi.warning(t('toast.explore_empty'))
-      }
-    } catch (err) {
-      if (runId !== exploreRunSeq.current) return
-      console.error('Exploration failed', err)
-      messageApi.error(t('toast.explore_failed'))
     } finally {
       if (runId === exploreRunSeq.current) {
+        exploreCtl.end(controller)
         setExploring(false)
-        setExploreProgress(null)
+        const toast = exploreToastOf(runs, weaponIds.length)
+        messageApi[toast.type](t(toast.key, toast.params))
       }
     }
   }
@@ -747,6 +768,9 @@ function AppContent({
   const handleGunsmithOptimize = async () => {
     if (!selectedTask) return
     setOptimizingGunsmith(true)
+    setGunsmithFailure(null)
+    await settleFloor()
+    const controller = gunsmithCtl.begin()
     try {
       const res = await optimize({
         weapon_id: selectedTask.weapon_id,
@@ -766,20 +790,20 @@ function AppContent({
         barter_available: barterAvailable,
         barter_exclude_dogtags: barterExcludeDogtags,
         precise_mode: true,
-      }, gameMode, i18n.language || 'en')
+      }, gameMode, i18n.language || 'en', { signal: controller.signal })
       setGunsmithResult(res)
-      if (res.status === 'optimal') {
-        messageApi.success(t('toast.gunsmith_success'))
-      } else if (res.status === 'infeasible') {
-        const base = t('toast.gunsmith_infeasible')
-        messageApi.error(res.reason ? `${base} (${res.reason})` : base)
-      } else {
-        messageApi.warning(t('toast.optimize_non_optimal', { status: res.status }))
-      }
+      announce(toastOf(resultViewOf(res), 'gunsmith'))
     } catch (err) {
-      console.error('Gunsmith optimization failed', err)
-      messageApi.error(t('toast.gunsmith_failed'))
+      const failure = classifyFailure(err)
+      if (failure.kind === 'cancelled') {
+        messageApi.info(t('toast.cancelled'))
+      } else {
+        console.error('Gunsmith optimization failed', err)
+        setGunsmithFailure(failure)
+        messageApi.error(t('toast.gunsmith_failed'))
+      }
     } finally {
+      gunsmithCtl.end(controller)
       setOptimizingGunsmith(false)
     }
   }
@@ -822,15 +846,32 @@ function AppContent({
     }
   }
 
+  /** The words of the copied list. The list keeps the per-occurrence provenance (preset / owned / bought) and the true spend. */
+  const shoppingLabels = {
+    base: t('ui.shopping_base'),
+    preset: t('ui.acq_preset'),
+    owned: t('ui.acq_owned'),
+    barter: t('ui.barter_badge_long'),
+    unknownSource: t('ui.unknown'),
+  }
+
+  /** The status line of a copied build: its authority, and the model it ran on, so a copied approximate or feasible build is not mistaken for a proved one. */
+  const authorityLine = (res: OptimizeResponse) => {
+    const authority = authorityOf(res)
+    const caveats = authority.qualifiers.map(q => t(qualifierKey(q)))
+    return `${t('results.optimization_status')}: ${t(authority.titleKey)}${caveats.length > 0 ? ` (${caveats.join(', ')})` : ''}`
+  }
+
   const copyBuild = () => {
     if (!result || !result.final_stats) return
     const lines = [
       `${selectedGun?.name} - ${t('ui.build_manifest')}`,
+      authorityLine(result),
       '',
       `${t('sidebar.ergonomics')}: ${result.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil')}: ${result.final_stats.recoil_vertical.toFixed(1)} | ${t('ui.horiz_recoil')}: ${result.final_stats.recoil_horizontal.toFixed(1)} | ${t('ui.weight_label')}: ${result.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost')}: ~ ₽${result.final_stats.total_price.toLocaleString()}`,
       '',
       `${t('ui.table_items')}:`,
-      ...shoppingListLines(result)
+      ...shoppingListLines(result, shoppingLabels)
     ]
     copyToClipboard(lines.join('\n'))
   }
@@ -839,11 +880,12 @@ function AppContent({
     if (!gunsmithResult || !gunsmithResult.final_stats || !selectedTask) return
     const lines = [
       `${selectedTask.task_name} - ${selectedTask.weapon_name}`,
+      authorityLine(gunsmithResult),
       '',
       `${t('sidebar.ergonomics')}: ${gunsmithResult.final_stats.ergonomics.toFixed(1)} | ${t('ui.vert_recoil')}: ${gunsmithResult.final_stats.recoil_vertical.toFixed(1)} | ${t('ui.horiz_recoil')}: ${gunsmithResult.final_stats.recoil_horizontal.toFixed(1)} | ${t('ui.weight_label')}: ${gunsmithResult.final_stats.total_weight.toFixed(2)}kg | ${t('ui.total_cost')}: ~ ₽${gunsmithResult.final_stats.total_price.toLocaleString()}`,
       '',
       `${t('ui.table_items')}:`,
-      ...shoppingListLines(gunsmithResult)
+      ...shoppingListLines(gunsmithResult, shoppingLabels)
     ]
     copyToClipboard(lines.join('\n'))
   }
@@ -918,7 +960,7 @@ function AppContent({
               availableMagCapacities={availableMagCapacities}
               useMOA={useMOA}
               onUseMOAChange={(v) => { setUseMOA(v); if (v && maxMOA === 0) setMaxMOA(moaRange.base) }}
-              maxMOA={maxMOA}
+              maxMOA={effectiveMaxMOA}
               onMaxMOAChange={setMaxMOA}
               preventOverswing={preventOverswing}
               onPreventOverswingChange={setPreventOverswing}
@@ -928,15 +970,23 @@ function AppContent({
               useExactMOAFloor={useExactMOAFloor}
               onUseExactMOAFloorChange={setUseExactMOAFloor}
               computingMOAFloor={computingMOAFloor}
+              moaFloor={moaFloor}
+              moaFloorError={moaFloorError}
+              onCancelMOAFloor={floorCtl.cancel}
+              cancellingMOAFloor={floorCtl.cancelling}
+              onRetryMOAFloor={() => setFloorRetry(n => n + 1)}
             />
           }
           right={
             <OptimizeResult
               result={result}
+              failure={optimizeFailure}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               optimizing={optimizing}
               onOptimize={handleOptimize}
+              onCancel={optimizeCtl.cancel}
+              cancelling={optimizeCtl.cancelling}
               onCopy={copyBuild}
               disabled={!selectedGunId}
               weaponId={selectedGunId}
@@ -977,14 +1027,12 @@ function AppContent({
           }
           right={
             <ExploreResult
-              exploreResult={exploreResult}
-              solveTime={exploreSolveTime}
-              explorePrecision={explorePrecisionMeta}
+              runs={exploreRuns}
               resultTradeoff={resultTradeoff}
               exploring={exploring}
-              exploreProgress={exploreProgress}
               onExplore={handleExplore}
               onCancelExplore={handleExploreCancel}
+              cancellingExplore={exploreCtl.cancelling}
               disabled={exploreWeaponIds.length === 0}
               weaponId={exploreWeaponIds[0]}
               runWeaponIds={exploreRunIds}
@@ -1019,10 +1067,13 @@ function AppContent({
           right={
             <GunsmithResult
               result={gunsmithResult}
+              failure={gunsmithFailure}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               optimizing={optimizingGunsmith}
               onOptimize={handleGunsmithOptimize}
+              onCancel={gunsmithCtl.cancel}
+              cancelling={gunsmithCtl.cancelling}
               onCopy={copyGunsmithBuild}
               disabled={!selectedTask}
               weaponId={selectedTask?.weapon_id}
@@ -1098,7 +1149,7 @@ function AppContent({
             {isMobile ? (
               <Dropdown
                 trigger={['click']}
-                dropdownRender={() => (
+                popupRender={() => (
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <Button block icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing}>{t('ui.refresh_data')}</Button>
                     <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />

@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin } from 'antd'
-import { UndoOutlined, QuestionCircleOutlined } from '@ant-design/icons'
+import { UndoOutlined, QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
+import { CancelButton, ReasonText } from './ResultStatus'
+import type { FloorView } from './floorView'
 
 const { Text } = Typography
 
@@ -37,10 +39,71 @@ interface WeightAdjusterProps {
   useExactMOAFloor: boolean
   onUseExactMOAFloorChange: (v: boolean) => void
   computingMOAFloor: boolean
+  /** The last floor answer (provisional MOA model), or `null` before one. */
+  moaFloor: FloorView | null
+  /** The message of a failed floor request. */
+  moaFloorError: string | null
+  onCancelMOAFloor: () => void
+  cancellingMOAFloor: boolean
+  onRetryMOAFloor: () => void
   preventOverswing: boolean
   onPreventOverswingChange: (v: boolean) => void
   equipErgoPenalty: number
   onEquipErgoPenaltyChange: (v: number) => void
+}
+
+/**
+ * The status of the MOA floor request under the slider (ADR 0013 section 6): always a result of the PROVISIONAL MOA model, never a game-physical
+ * minimum. A proved floor, a best-witnessed floor (minimum not proved), an unresolved or infeasible one each say so; a floor with no safe display
+ * value says that instead of showing a number, and the slider then falls back to its estimate.
+ */
+function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry }: {
+  computing: boolean
+  view: FloorView | null
+  error: string | null
+  onCancel: () => void
+  cancelling: boolean
+  onRetry: () => void
+}) {
+  const { t } = useTranslation()
+  if (computing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Spin size="small" />
+        <Text type="secondary" style={labelStyle}>{t('moa_floor.computing')}</Text>
+        <CancelButton size="small" onCancel={onCancel} cancelling={cancelling} />
+      </div>
+    )
+  }
+  if (view === null && error === null) return null
+  const headline = view === null
+    ? null
+    : (view.kind === 'proved' || view.kind === 'witnessed') && view.display === null
+      ? t('moa_floor.withheld')
+      : t(view.titleKey, { floor: view.display ?? '' })
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, margin: '0 4px' }}>
+      {headline !== null && view !== null && (
+        <Text
+          type={view.tone === 'success' ? 'success' : view.tone === 'error' ? 'danger' : view.tone === 'warning' ? 'warning' : 'secondary'}
+          style={labelStyle}
+        >
+          {headline}
+        </Text>
+      )}
+      {view !== null && view.provedLower !== null && view.kind !== 'proved' && (
+        <Text type="secondary" style={{ fontSize: 11 }}>{t('moa_floor.proved_lower', { lower: view.provedLower })}</Text>
+      )}
+      {error !== null && <Text type="danger" style={labelStyle}>{t('moa_floor.error', { message: error })}</Text>}
+      {view !== null && <ReasonText reason={view.reason} />}
+      {(error !== null || view?.interrupted === true) && (
+        <div>
+          <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>{t('moa_floor.retry')}</Button>
+        </div>
+      )}
+      <Text type="secondary" style={{ fontSize: 11 }}>{t('moa_floor.provisional_note')}</Text>
+    </div>
+  )
 }
 
 export function WeightAdjuster({
@@ -74,6 +137,11 @@ export function WeightAdjuster({
   useExactMOAFloor,
   onUseExactMOAFloorChange,
   computingMOAFloor,
+  moaFloor,
+  moaFloorError,
+  onCancelMOAFloor,
+  cancellingMOAFloor,
+  onRetryMOAFloor,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
   const [slidersMode, setSlidersMode] = useState(() => localStorage.getItem('weightUiSliders') === 'true')
@@ -106,7 +174,7 @@ export function WeightAdjuster({
           label: <span style={{ userSelect: 'none' }}>{t('optimize.header')}</span>,
           extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onWeightChange(33, 34, 33) }} /></Tooltip>,
           children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Space size="small" wrap>
                 <Button size="small" onClick={() => onWeightChange(0, 100, 0)}>{t('optimize.preset_recoil')}</Button>
                 <Button size="small" onClick={() => onWeightChange(100, 0, 0)}>{t('optimize.preset_ergo')}</Button>
@@ -175,7 +243,7 @@ export function WeightAdjuster({
           label: <span style={{ userSelect: 'none' }}>{t('constraints.header')}</span>,
           extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} /></Tooltip>,
           children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={toggleRowStyle}>
                   <Space size={4}>
@@ -304,6 +372,16 @@ export function WeightAdjuster({
                         </Space>
                         <Segmented size="small" value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                       </div>
+                      {useExactMOAFloor && (
+                        <MoaFloorStatus
+                          computing={computingMOAFloor}
+                          view={moaFloor}
+                          error={moaFloorError}
+                          onCancel={onCancelMOAFloor}
+                          cancelling={cancellingMOAFloor}
+                          onRetry={onRetryMOAFloor}
+                        />
+                      )}
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <Slider
                           style={{ flex: 1, margin: '4px 8px 24px 8px' }}

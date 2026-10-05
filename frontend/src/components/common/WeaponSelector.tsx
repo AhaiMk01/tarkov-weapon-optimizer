@@ -306,7 +306,7 @@ export function WeaponSelector({
         ) : undefined
       }
     >
-      <Space direction="vertical" style={{ width: '100%' }} size={8}>
+      <Space orientation="vertical" style={{ width: '100%' }} size={8}>
         {multiple ? (
           <div
             style={{

@@ -1,8 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space, Table } from 'antd'
 import { TraderIcon, ItemRow, ItemTooltip } from '../ItemRow'
-import { QuantityTag } from '../QuantityTag'
-import { presetSupply } from '../../solver/presetSupply'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 
 const { Text } = Typography
@@ -21,12 +19,15 @@ function PresetTooltipContent({ preset }: { preset: Preset }) {
 
 interface UsingPresetCardProps {
   preset: Preset
+  /** The installed OCCURRENCES the preset supplies (`partitionManifest(...).preset`): one entry per copy, repeated templates are separate rows. */
   retainedItems?: ItemDetail[]
+  /** Units the preset supplies (the sum of its component counts) against occurrences installed from it; the difference is stripped stock. */
+  usage?: { supplied: number; installed: number }
   compactMode?: boolean
   viewMode?: 'detailed' | 'compact' | 'table'
 }
 
-export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }: UsingPresetCardProps) {
+export function UsingPresetCard({ preset, retainedItems, usage, compactMode, viewMode }: UsingPresetCardProps) {
   const { t } = useTranslation()
   const screens = Grid.useBreakpoint()
   const isMobile = !screens.md
@@ -49,8 +50,6 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
   }
   const unknown = t('ui.unknown')
   const tooltipContent = <PresetTooltipContent preset={preset} />
-  // Copies of each part the preset supplies (a part listed twice, or with a count above one, shows ×N).
-  const supplied = presetSupply(preset.items)
   // The naked receiver is the base that is not a factory preset; its id is the receiver's own.
   const isFactoryPreset = preset.id !== preset.receiver_id
   return (
@@ -58,7 +57,7 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
       {contextHolder}
       <div style={{ display: 'flex', gap: isMobile ? 10 : 14, alignItems: 'center', flexWrap: 'wrap' }}>
         {preset.icon && (
-          <Tooltip title={tooltipContent} overlayStyle={{ maxWidth: 340 }}>
+          <Tooltip title={tooltipContent} styles={{ root: { maxWidth: 340 } }}>
             <img
               src={preset.icon}
               alt=""
@@ -67,7 +66,7 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
           </Tooltip>
         )}
         <div style={{ flex: 1, minWidth: 150 }}>
-          <Tooltip title={tooltipContent} overlayStyle={{ maxWidth: 340 }}>
+          <Tooltip title={tooltipContent} styles={{ root: { maxWidth: 340 } }}>
             <Text
               strong
               style={{ display: 'block', cursor: 'pointer', fontSize: 13, lineHeight: 1.3 }}
@@ -92,13 +91,15 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
             label: (
               <Space style={{ userSelect: 'none' }}>
                 <Text type="secondary">{t('ui.retained_from_preset_short')}</Text>
-                <Tag color="blue">{retainedItems.length}</Tag>
+                <Tag color="blue" title={usage ? t('ui.preset_usage_tooltip', { installed: usage.installed, supplied: usage.supplied }) : undefined}>
+                  {usage ? `${usage.installed}/${usage.supplied}` : retainedItems.length}
+                </Tag>
               </Space>
             ),
             children: viewMode === 'table' ? (
               <Table
                 dataSource={retainedItems}
-                rowKey="id"
+                rowKey="instanceId"
                 pagination={false}
                 size="small"
                 scroll={{ x: 'max-content' }}
@@ -112,7 +113,6 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
                         <ItemTooltip item={record}>
                           <Text strong style={{ fontSize: 13, cursor: 'pointer' }}>{text}</Text>
                         </ItemTooltip>
-                        <QuantityTag count={supplied.get(record.id)} />
                       </Space>
                     ),
                   },
@@ -150,7 +150,7 @@ export function UsingPresetCard({ preset, retainedItems, compactMode, viewMode }
               />
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${compactMode ? 380 : 480}px), 1fr))`, gap: 8 }}>
-                {retainedItems.map(item => <ItemRow key={item.id} item={item} quantity={supplied.get(item.id)} hidePrice compactMode={compactMode} />)}
+                {retainedItems.map(item => <ItemRow key={item.instanceId} item={item} hidePrice compactMode={compactMode} />)}
               </div>
             ),
           }]}

@@ -112,9 +112,9 @@ export interface ItemDetail {
   price: number;
   icon?: string;
   source?: string;
-  /** When false, part is not on traders/flea in API — optimizer assumes FiR/owned (buy cost 0) */
+  /** When false, the API lists no trader or flea offer for the part: it can only be supplied by the base preset or by owned stock (see `acquisition`). */
   purchasable?: boolean;
-  /** BSG reference value for display when not purchasable */
+  /** BSG reference value of a part that has no offer (informational only: it never enters a spend). */
   reference_price_rub?: number;
   ergonomics: number;
   recoil_modifier: number;
@@ -303,6 +303,20 @@ export interface ExploreResponse {
   /** `provisional_model` when the sweep depends on the MOA model, otherwise `null`. */
   moa_qualification: MoaQualification;
   reason?: string;
+}
+
+/**
+ * The verified partial result of a RUNNING Explore sweep (Phase 2.8), published after each launched target through `RequestOptions.onSnapshot`.
+ * The last one is what a `CancellationError` carries for an Explore that was hard-terminated, so the points published so far are kept
+ * (ADR 0013 section 4D).
+ */
+export interface ExploreSnapshot {
+  /** Targets launched and classified so far. */
+  launched: number;
+  /** Targets scheduled so far: an adaptive sweep appends the next target as the previous one returns. */
+  scheduled: number;
+  /** The response as it would stand if the sweep stopped now: every unlaunched target is `U` without a reason, the points are verified witnesses only. */
+  response: ExploreResponse;
 }
 
 /** The complete normalized scope a MOA-floor witness was found under (ADR 0013 section 5): a cap trial is its own prepared domain. */

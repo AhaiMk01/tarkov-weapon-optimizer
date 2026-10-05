@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Statistic, Typography, theme } from 'antd'
+import { Card, Statistic, Tooltip, Typography, theme } from 'antd'
 
 const { useToken } = theme
 
@@ -29,7 +29,7 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
             // TED is nonnegative exactly when the model predicts no overswing.
             title={trueErgoDelta >= 0 ? t('ui.ted_label_ok') : t('ui.ted_label_over')}
             value={trueErgoDelta > 0 ? `+${trueErgoDelta.toFixed(1)}` : trueErgoDelta.toFixed(1)}
-            valueStyle={{ color: trueErgoDelta >= 0 ? token.colorSuccess : token.colorError }}
+            styles={{ content: { color: trueErgoDelta >= 0 ? token.colorSuccess : token.colorError } }}
           />
           {trueErgoDelta < 0 && overswingPct != null && (
             <Typography.Text type="danger" style={{ fontSize: 12 }}>
@@ -46,14 +46,17 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       </Card>
       {moa != null && moa > 0 && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-          <Statistic title={t('ui.moa_label')} value={moa.toFixed(3)} />
+          {/* The displayed MOA is the provisional model's value (ADR 0006), not a measured in-game figure: it is labelled as such. */}
+          <Tooltip title={t('ui.moa_provisional_tooltip')}>
+            <Statistic title={`${t('ui.moa_label')} (${t('ui.moa_provisional_short')})`} value={moa.toFixed(3)} />
+          </Tooltip>
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('ui.weight_label')} value={weight.toFixed(2)} suffix={t('ui.weight_unit')} />
       </Card>
       <Card size="small" style={{ flex: '2 1 150px', minWidth: 150 }}>
-        <Statistic title={t('ui.total_cost')} value={price.toLocaleString()} prefix="₽" valueStyle={{ color: token.colorWarning }} />
+        <Statistic title={t('ui.total_cost')} value={price.toLocaleString()} prefix="₽" styles={{ content: { color: token.colorWarning } }} />
       </Card>
     </div>
   )

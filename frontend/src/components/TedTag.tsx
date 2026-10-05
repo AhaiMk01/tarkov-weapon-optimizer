@@ -11,7 +11,7 @@ export function TedTag({ item, style, bordered }: { item: ItemDetail; style?: CS
   if (!isShownTedDelta(delta)) return null
   return (
     <Tooltip title={t('ui.ted_part_tooltip')}>
-      <Tag color={delta > 0 ? 'green' : 'red'} bordered={bordered} style={style}>
+      <Tag color={delta > 0 ? 'green' : 'red'} variant={bordered === false ? 'filled' : undefined} style={style}>
         {t('ui.ted_part_label')}: {delta > 0 ? '+' : ''}{delta.toFixed(1)}
       </Tag>
     </Tooltip>
