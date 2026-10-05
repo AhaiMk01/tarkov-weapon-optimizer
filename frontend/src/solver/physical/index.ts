@@ -7,3 +7,4 @@ export * from './bounds';
 export * from './spatial';
 export * from './specialize';
 export * from './decode';
+export * from './validate';
