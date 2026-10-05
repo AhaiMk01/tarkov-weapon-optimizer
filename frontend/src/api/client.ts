@@ -1,6 +1,11 @@
 import type {
   IdealPoint, ModelQualification, MoaQualification, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved, PresetComponent, SolveStatus,
 } from '../solver/types';
+import {
+  DEFAULT_EXPLORE_TIME_LIMIT_MS, DEFAULT_FLOOR_TIME_LIMIT_MS, DEFAULT_OPTIMIZE_TIME_LIMIT_MS, resolveTimeLimit,
+} from '../solver/workerProtocol';
+import { WorkerChannel } from './workerChannel';
+import type { RequestOptions, WorkerLike } from './workerChannel';
 // The shared transport contract (ADR 0013 section 5). Its leaf types are defined once in solver/types.ts (DOM-free, so the solver and the
 // reference harness can read them) and re-exported here with the request/response records that use them.
 export type {
@@ -69,14 +74,18 @@ export interface OptimizeRequest {
   /**
    * Stash multiset (ADR 0008): one entry per owned copy, so `['m', 'm']` is two copies. Omitted or [] means no stock. At most
    * 10,000 nonempty strings; an invalid list is rejected as `Invalid owned_items format`, never reported as infeasible.
-   * Inherited by `ExploreRequest`. Not yet honoured by the solver or forwarded by the worker.
+   * Inherited by `ExploreRequest`. The worker validates it first (before hashing, caching or any model work) and forwards the validated
+   * multiset to every solve of the request: Optimize, the Gunsmith optimize call, every Explore step and every floor trial.
    */
   owned_items?: string[];
   /** Boolean values are normalized: true → precise, false → fast. */
   precise_mode?: boolean | PrecisionRequest;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   bounds_mode?: 'structural' | 'naive';
-  /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
+  /**
+   * Request budget in milliseconds. ONE epoch deadline is stamped when the call enters, so time spent queued counts. Omitted means the
+   * default of the operation: 60 s for Optimize and Explore, 30 s for a MOA floor.
+   */
   time_limit_ms?: number;
 }
 /**
@@ -340,6 +349,13 @@ export interface WitnessBuild {
   scope: WitnessScope;
 }
 
+/**
+ * A MOA floor request (ADR 0013 section 5): the normalized Optimize domain except the MOA cap being searched. The objective is a constant
+ * zero, the placement model is always Precise and the weights are irrelevant, so those fields are not part of it. `time_limit_ms` defaults
+ * to 30 s.
+ */
+export type MOAFloorRequest = Omit<OptimizeRequest, 'max_moa' | 'ergo_weight' | 'recoil_weight' | 'price_weight' | 'use_tchebycheff' | 'precise_mode'>;
+
 /** The MOA floor of a weapon under the provisional model (ADR 0013 section 6): a bracket on the minimum, not a game-physical minimum. */
 export interface MOAFloorResponse {
   status: 'model_proved' | 'model_witnessed' | 'unresolved' | 'model_infeasible';
@@ -382,73 +398,28 @@ export interface GunsmithTasksResponse {
 
 // --- Worker Communication ---
 
-let worker: Worker | null = null;
-let messageId = 0;
-const pendingRequests = new Map<number, { resolve: (value: unknown) => void; reject: (reason: unknown) => void }>();
+// The channel owns the queue, the epoch deadlines, soft cancel and hard termination (`workerChannel.ts`); this module only wires the real Worker.
+const channel = new WorkerChannel({
+  createWorker: () => new Worker(
+    new URL('../solver/solver.worker.ts', import.meta.url),
+    { type: 'module' },
+  ) as unknown as WorkerLike,
+});
 
-function rejectAllPending(reason: Error): void {
-  for (const [, pending] of pendingRequests) {
-    pending.reject(reason);
-  }
-  pendingRequests.clear();
-}
+export { CancellationError, SolverError } from '../solver/runtimeErrors';
+export type { RequestOptions } from './workerChannel';
 
-/** Terminate the worker and fail all in-flight requests (fatal worker failure). */
-function resetWorker(reason: Error): void {
-  rejectAllPending(reason);
-  if (worker) {
-    worker.terminate();
-    worker = null;
-  }
-}
-
-function getWorker(): Worker {
-  if (!worker) {
-    const w = new Worker(
-      new URL('../solver/solver.worker.ts', import.meta.url),
-      { type: 'module' }
-    );
-    w.onmessage = (event: MessageEvent<{ type: string; id: number; payload: unknown }>) => {
-      const { type, id, payload } = event.data;
-      const pending = pendingRequests.get(id);
-      if (!pending) return;
-      pendingRequests.delete(id);
-
-      if (type === 'error') {
-        pending.reject(new Error(payload as string));
-      } else {
-        pending.resolve(payload);
-      }
-    };
-    w.onerror = (event) => {
-      console.error('Worker error:', event);
-      const msg = event.message || 'Web Worker failed';
-      resetWorker(new Error(msg));
-    };
-    w.onmessageerror = (event) => {
-      console.error('Worker message error:', event);
-      resetWorker(new Error('Web Worker message error'));
-    };
-    worker = w;
-  }
-  return worker;
-}
-
-function sendWorkerMessage<T>(type: string, payload: Record<string, unknown>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    const id = messageId++;
-    pendingRequests.set(id, {
-      resolve: resolve as (value: unknown) => void,
-      reject,
-    });
-    getWorker().postMessage({ type, id, payload });
-  });
-}
+/**
+ * HARD termination: reject every active and queued request exactly once with a `CancellationError` (keeping the last published snapshot of
+ * each), terminate the worker and start a fresh one on the next call. The soft path is the `signal` option of each operation, which asks the
+ * running operation to return its retained state with `Cancelled by user` and escalates to this only if the worker does not answer.
+ */
+export const terminateWorker = (reason?: string): void => channel.terminate(reason);
 
 // --- Exported API functions (same signatures, local solver) ---
 
 export const getInfo = async (gameMode: GameMode = 'regular', lang: string = 'en'): Promise<InfoResponse> => {
-  return sendWorkerMessage<InfoResponse>('getInfo', { lang, gameMode });
+  return channel.send<InfoResponse>('getInfo', { lang, gameMode });
 };
 
 /**
@@ -472,36 +443,48 @@ export const getWeaponMods = async (
   lang: string = 'en',
   opts: { withCompat?: boolean } = {},
 ): Promise<{ mods: ModInfo[] } & Partial<ModCompatibility>> => {
-  return sendWorkerMessage<{ mods: ModInfo[] } & Partial<ModCompatibility>>('getWeaponMods', { weaponId, lang, gameMode, withCompat: opts.withCompat === true });
+  return channel.send<{ mods: ModInfo[] } & Partial<ModCompatibility>>('getWeaponMods', { weaponId, lang, gameMode, withCompat: opts.withCompat === true });
 };
 
-export const optimize = async (request: OptimizeRequest, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<OptimizeResponse> => {
-  return sendWorkerMessage<OptimizeResponse>('optimize', { request, lang, gameMode });
+export const optimize = async (
+  request: OptimizeRequest, gameMode: GameMode = 'regular', lang: string = 'en', options: RequestOptions = {},
+): Promise<OptimizeResponse> => {
+  return channel.send<OptimizeResponse>('optimize', { request, lang, gameMode }, {
+    ...options, timeLimitMs: resolveTimeLimit(request.time_limit_ms, DEFAULT_OPTIMIZE_TIME_LIMIT_MS),
+  });
 };
 
-export const explore = async (request: ExploreRequest, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<ExploreResponse> => {
-  return sendWorkerMessage<ExploreResponse>('explore', { request, lang, gameMode });
+export const explore = async (
+  request: ExploreRequest, gameMode: GameMode = 'regular', lang: string = 'en', options: RequestOptions = {},
+): Promise<ExploreResponse> => {
+  return channel.send<ExploreResponse>('explore', { request, lang, gameMode }, {
+    ...options, timeLimitMs: resolveTimeLimit(request.time_limit_ms, DEFAULT_EXPLORE_TIME_LIMIT_MS),
+  });
 };
 
 export const getGunsmithTasks = async (gameMode: GameMode = 'regular', lang: string = 'en'): Promise<GunsmithTasksResponse> => {
-  return sendWorkerMessage<GunsmithTasksResponse>('getGunsmithTasks', { lang, gameMode });
+  return channel.send<GunsmithTasksResponse>('getGunsmithTasks', { lang, gameMode });
 };
 
 export const getStatus = async (gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ timestamp: number }> => {
-  return sendWorkerMessage<{ timestamp: number }>('getStatus', { lang, gameMode });
+  return channel.send<{ timestamp: number }>('getStatus', { lang, gameMode });
 };
 
-export const computeMOAFloor = async (weaponId: string, gameMode: GameMode = 'regular', lang: string = 'en'): Promise<{ floor: number }> => {
-  return sendWorkerMessage<{ floor: number }>('computeMOAFloor', { weaponId, lang, gameMode });
+export const computeMOAFloor = async (
+  request: MOAFloorRequest, gameMode: GameMode = 'regular', lang: string = 'en', options: RequestOptions = {},
+): Promise<MOAFloorResponse> => {
+  return channel.send<MOAFloorResponse>('computeMOAFloor', { request, lang, gameMode }, {
+    ...options, timeLimitMs: resolveTimeLimit(request.time_limit_ms, DEFAULT_FLOOR_TIME_LIMIT_MS),
+  });
 };
 
 /**
- * Wipe IndexedDB cache and terminate the worker (clearing its in-memory dataCache).
+ * Wipe IndexedDB cache and terminate the worker (clearing its in-memory dataCache). Pending requests are rejected with a `CancellationError`.
  * Caller should reload the page afterwards so stores re-fetch fresh data from tarkov.dev.
  * DB name kept in sync with `DB_NAME` in solver/dataService.ts.
  */
 export const clearDataCache = async (): Promise<void> => {
-  resetWorker(new Error('Cache cleared by user'));
+  channel.terminate('Cache cleared by user');
   if (typeof indexedDB === 'undefined') return;
   await new Promise<void>((resolve) => {
     const req = indexedDB.deleteDatabase('tarkov-optimizer-cache');

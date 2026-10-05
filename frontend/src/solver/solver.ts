@@ -23,18 +23,20 @@
  * upgraded to Precise (the caller resolves Auto by size, `precisionMode.ts`).
  */
 
-import type { OptimizeResponse, OptimizationMetadata, ItemDetail, PresetDetail, FinalStats } from '../api/client';
-import type { SolveParams, GunLookupEntry, IdealPoint, ModLookupEntry, PrecisionRequest } from './types';
+import type { OptimizeResponse, OptimizationMetadata, FinalStats } from '../api/client';
+import type { SolveParams, IdealPoint, ModelQualification, MoaQualification, PhysicalCertificate, PrecisionRequest, PrecisionResolved, SolveStatus } from './types';
 export type { SolveParams, IdealPoint } from './types';
-import { tedContribution } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { canonicalizeTraderLevels } from './reuseKey';
-import { mergeComponents, presetSupply } from './presetSupply';
+import { itemDetails, presetDetail } from './buildDetails';
+import { optimizeEnvelope } from './operationEnvelopes';
+import { withDeadline } from './requestGuard';
+import { fixedGuard, guardStop } from './runtimeGuard';
+import type { RuntimeGuard } from './runtimeGuard';
 import { setHighsBaseUrl } from './native';
-import { legalOffers, resolveMarket } from './physical/acquisition';
 import { axesOfStats } from './physical/objective';
 import { inspectOwnedItems } from './physical/ownedItems';
-import { classifyOptimize, invalidOwnedItemsOutcome, isMoaDependent, observationsOfReason } from './physical/outcome';
+import { classifyOptimize, isMoaDependent, observationsOfReason } from './physical/outcome';
 import type { OptimizeOutcome, StopObservations } from './physical/outcome';
 import { PUBLIC_REASONS } from './physical/reasons';
 import { solveFast } from './physical/solveFast';
@@ -113,12 +115,51 @@ export const SOLVER_CAPABILITIES = {
 // stock npm package or to any other HiGHS. The Vite base is the browser location of highs.js / highs.wasm.
 setHighsBaseUrl((import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/');
 
-const now = (): number => performance.now();
+/** The clock of a solve with no guard of its own (a direct caller): the page or worker monotonic clock. */
+const defaultNow = (): number => performance.now();
+
+/** Default request budget of a solve that was given neither a guard nor a `timeLimitMs`. */
+export const DEFAULT_SOLVE_TIME_LIMIT_MS = 60_000;
+
+/**
+ * The guard a solve runs under (ADR 0013 section 4D). The request's own guard when it has one (the deadline is the queue-inclusive epoch
+ * deadline; a `timeLimitMs` can only narrow it, never extend it), otherwise a guard built from `timeLimitMs` (no cancel source), which keeps
+ * direct callers and the tests working. Every stage reads this one clock.
+ */
+export function guardOfParams(params: Pick<SolveParams, 'guard' | 'timeLimitMs'>): RuntimeGuard {
+  const limit = Math.max(0, params.timeLimitMs ?? DEFAULT_SOLVE_TIME_LIMIT_MS);
+  if (params.guard === undefined) return fixedGuard(defaultNow() + limit);
+  return params.timeLimitMs === undefined ? params.guard : withDeadline(params.guard, params.guard.now() + limit);
+}
 
 /** The result of one solve plus the objective axes of its build (what a payoff-table endpoint reads). */
 interface Detailed {
   response: OptimizeResponse;
   axes?: ObjectiveAxes;
+  /** The payoff table THIS call computed (absent when it was supplied, or the request does not use one). */
+  payoff?: PayoffReport;
+}
+
+/** What one payoff endpoint established: the endpoint cache admits a table only when every endpoint is a qualified Precise certified optimum. */
+export interface EndpointRecord {
+  weights: readonly [number, number, number];
+  status: SolveStatus;
+  physical_certificate: PhysicalCertificate;
+  precision_resolved: PrecisionResolved;
+  model_qualification: ModelQualification;
+  moa_qualification: MoaQualification;
+}
+
+/** A payoff table with the proof state of the three solves that produced it. */
+export interface PayoffReport {
+  idealPoint: IdealPoint;
+  endpoints: readonly EndpointRecord[];
+}
+
+/** A solve response and, when this call computed the Tchebycheff payoff table, the table with its endpoint records. */
+export interface SolveReport {
+  response: OptimizeResponse;
+  payoff: PayoffReport | null;
 }
 
 /** The payoff table could not be computed. `endpoint` is the response of the endpoint solve that failed, when there is one. */
@@ -134,31 +175,51 @@ class PayoffTableError extends Error {
   }
 }
 
+const PAYOFF_WEIGHTS: readonly (readonly [number, number, number])[] = [[100, 0, 0], [0, 100, 0], [0, 0, 100]];
+
+/** The payoff table and the proof state of its three endpoint solves, under one guard (guard before each endpoint, a macrotask yield after it). */
+async function computePayoff(params: SolveParams, guard: RuntimeGuard): Promise<PayoffReport> {
+  const base: SolveParams = { ...params, useTchebycheff: false, idealPoint: undefined, guard, timeLimitMs: undefined };
+  const pay: ObjectiveAxes[] = [];
+  const endpoints: EndpointRecord[] = [];
+  for (const weights of PAYOFF_WEIGHTS) {
+    const stop = guardStop(guard);
+    if (stop !== null) throw new PayoffTableError(stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached, null);
+    const r = await solveDetailed({ ...base, ergoWeight: weights[0], recoilWeight: weights[1], priceWeight: weights[2] });
+    if (r.response.status !== 'optimal' || !r.axes) throw new PayoffTableError(r.response.reason ?? r.response.status, r.response);
+    pay.push(r.axes);
+    const { status, physical_certificate, precision_resolved, model_qualification, moa_qualification } = r.response;
+    endpoints.push({ weights, status, physical_certificate, precision_resolved, model_qualification, moa_qualification });
+    // The payoff solves are sub-solves of one request: yield a macrotask between them so an out-of-band cancel message is dispatched.
+    await guard.yieldMacrotask();
+  }
+  return {
+    idealPoint: {
+      zE: Math.max(...pay.map(p => p.fE)), nadE: Math.min(...pay.map(p => p.fE)),
+      zR: Math.min(...pay.map(p => p.fR)), nadR: Math.max(...pay.map(p => p.fR)),
+      zP: Math.min(...pay.map(p => p.fP)), nadP: Math.max(...pay.map(p => p.fP)),
+    },
+    endpoints,
+  };
+}
+
 /**
  * Endpoint payoff table (ADR 0013 section 4D): three solves with weights [100, 0, 0], [0, 100, 0] and [0, 0, 100], in the SAME frames as
  * the final objective (fE = 10 x ergonomics or TED, fR = 1000 x recoil modifier sum, fP = RUB spend). Each endpoint keeps every user
  * feasibility constraint and must be certified optimal; the six coordinates are derived from those three vectors.
  */
 export async function computeIdealPoint(params: SolveParams): Promise<IdealPoint> {
-  const deadline = now() + Math.max(0, params.timeLimitMs ?? 60_000);
-  const base = { ...params, useTchebycheff: false, idealPoint: undefined };
-  const pay: ObjectiveAxes[] = [];
-  for (const weights of [[100, 0, 0], [0, 100, 0], [0, 0, 100]]) {
-    const remaining = deadline - now();
-    if (remaining <= 0) throw new PayoffTableError(PUBLIC_REASONS.timeLimitReached, null);
-    const r = await solveDetailed({ ...base, timeLimitMs: remaining, ergoWeight: weights[0], recoilWeight: weights[1], priceWeight: weights[2] });
-    if (r.response.status !== 'optimal' || !r.axes) throw new PayoffTableError(r.response.reason ?? r.response.status, r.response);
-    pay.push(r.axes);
-  }
-  return {
-    zE: Math.max(...pay.map(p => p.fE)), nadE: Math.min(...pay.map(p => p.fE)),
-    zR: Math.min(...pay.map(p => p.fR)), nadR: Math.max(...pay.map(p => p.fR)),
-    zP: Math.min(...pay.map(p => p.fP)), nadP: Math.max(...pay.map(p => p.fP)),
-  };
+  return (await computePayoff(params, guardOfParams(params))).idealPoint;
 }
 
 export async function solve(params: SolveParams): Promise<OptimizeResponse> {
   return (await solveDetailed(params)).response;
+}
+
+/** {@link solve} plus the payoff table this call computed with the proof state of its endpoints (what the worker endpoint cache admits). */
+export async function solveRequest(params: SolveParams): Promise<SolveReport> {
+  const detailed = await solveDetailed(params);
+  return { response: detailed.response, payoff: detailed.payoff ?? null };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -169,6 +230,8 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 interface Assembly {
   precisionRequest: PrecisionRequest;
   start: number;
+  /** The guard clock: `start` and `solve_time_ms` are read on it. */
+  now: () => number;
   idealPoint?: IdealPoint;
 }
 
@@ -218,129 +281,9 @@ function noBuildResponse(assembly: Assembly, outcome: OptimizeOutcome, optimizat
       slot_pairs: [],
       objective_value: null,
       optimization,
-      solve_time_ms: now() - assembly.start,
+      solve_time_ms: assembly.now() - assembly.start,
       ...(assembly.idealPoint === undefined ? {} : { ideal_point: assembly.idealPoint }),
     },
-  };
-}
-
-const imageOf = (data: Record<string, unknown>): { icon?: string; large?: string } => ({
-  icon: (data.image512pxLink ?? data.imageLink ?? data.image8xLink ?? data.iconLink ?? data.iconLinkFallback) as string | undefined,
-  large: (data.image512pxLink ?? data.imageLink ?? data.image8xLink) as string | undefined,
-});
-
-function itemDetails(params: SolveParams, build: PhysicalBuild, stats: PhysicalBuildStats): ItemDetail[] {
-  const equip = params.equipErgoModifier ?? 0;
-  const provenance = new Map(stats.acquisition.occurrences.map(o => [o.instanceId, o]));
-  const details: ItemDetail[] = [];
-  for (const placement of build.placements) {
-    const entry = params.itemLookup[placement.itemId] as ModLookupEntry;
-    const data = entry.data as Record<string, unknown>;
-    const ms = entry.stats;
-    const { icon, large } = imageOf(data);
-    const occurrence = provenance.get(placement.childInstanceId);
-    const detail: ItemDetail = {
-      id: placement.itemId,
-      instanceId: placement.childInstanceId,
-      name: (data.name as string | undefined) ?? 'Unknown',
-      price: occurrence?.price ?? 0,
-      icon,
-      image_large: large || undefined,
-      source: occurrence?.offerSource ?? undefined,
-      purchasable: ms.purchasable,
-      reference_price_rub: ms.reference_price_rub,
-      ergonomics: ms.ergonomics || 0,
-      recoil_modifier: ms.recoil_modifier || 0,
-      accuracy_modifier: ms.accuracy_modifier || undefined,
-      weight: ms.weight || undefined,
-      category: ms.category || undefined,
-      handbook_categories: ms.handbook_categories?.length ? ms.handbook_categories : undefined,
-      capacity: ms.capacity || undefined,
-      sighting_range: ms.sighting_range || undefined,
-    };
-    if (occurrence) {
-      detail.acquisition = { source: occurrence.source === 'unavailable' ? 'offer' : occurrence.source, presetId: occurrence.presetId, offerSource: occurrence.offerSource, offerIndex: occurrence.offerIndex };
-      if (occurrence.source === 'offer' && occurrence.offerIndex !== null) {
-        const requirements = ms.offers[occurrence.offerIndex]?.barter_requirements;
-        if (requirements) detail.barter_requirements = requirements;
-      }
-    }
-    if (detail.weight != null || detail.ergonomics) {
-      detail.ted_delta = tedContribution(stats.rawErgonomics, stats.weight, detail.ergonomics || 0, detail.weight || 0, equip);
-    }
-    details.push(detail);
-  }
-  return details;
-}
-
-/** The cheapest legal offer of a base and the seller it names; ties keep the earlier offer, as the exact cover does. */
-function cheapestLegalOffer(
-  offers: GunLookupEntry['stats']['offers'], gate: number, market: ReturnType<typeof resolveMarket>,
-): { source: string; label: string; barterRequirements?: PresetDetail['barter_requirements'] } | undefined {
-  let best: ReturnType<typeof legalOffers>[number] | undefined;
-  for (const offer of legalOffers(offers, gate, market)) if (best === undefined || offer.price < best.price) best = offer;
-  if (best === undefined) return undefined;
-  const info = offers[best.index];
-  return {
-    source: best.source,
-    label: best.source === 'fleaMarket' ? 'Flea Market' : (info.vendor_name || info.vendor_normalized || best.source),
-    ...(best.source.startsWith('barter:') && info.barter_requirements ? { barterRequirements: info.barter_requirements } : {}),
-  };
-}
-
-const fleaGateOf = (stats: object): number => {
-  const gate = (stats as { min_level_flea?: unknown }).min_level_flea;
-  return typeof gate === 'number' ? gate : 0;
-};
-
-function presetDetail(params: SolveParams, build: PhysicalBuild, stats: PhysicalBuildStats): PresetDetail {
-  const weapon = params.itemLookup[params.weaponId] as GunLookupEntry;
-  const wStats = weapon.stats;
-  const market = resolveMarket(params);
-  const tooltip = {
-    caliber: wStats.caliber || undefined,
-    fire_rate: wStats.fire_rate || undefined,
-    fire_modes: wStats.fire_modes?.length ? wStats.fire_modes : undefined,
-    default_ergo: wStats.default_ergonomics || undefined,
-    default_recoil_v: wStats.default_recoil_v || undefined,
-    default_recoil_h: wStats.default_recoil_h || undefined,
-    weight: wStats.weight || undefined,
-  };
-  const basePrice = stats.basePrice ?? 0;
-  if (build.base.kind === 'naked') {
-    const data = weapon.data as Record<string, unknown>;
-    const seller = cheapestLegalOffer(wStats.offers, fleaGateOf(wStats), market);
-    return {
-      id: params.weaponId,
-      name: (data.name as string | undefined) ?? 'Naked Gun',
-      price: basePrice,
-      receiver_id: params.weaponId,
-      items: [],
-      icon: (data.iconLink ?? data.iconLinkFallback ?? wStats.default_preset_image) as string | undefined,
-      image_large: (data.image512pxLink ?? data.imageLink ?? data.image8xLink) as string | undefined,
-      source: seller?.source,
-      purchase_label: seller?.label,
-      barter_requirements: seller?.barterRequirements,
-      ...tooltip,
-    };
-  }
-  const presetId = build.base.presetId;
-  const preset = weapon.all_presets.find(p => p.id === presetId);
-  if (!preset) throw new Error(`Validated preset ${presetId} is not a preset of ${params.weaponId}`);
-  const seller = cheapestLegalOffer(preset.offers, fleaGateOf(preset), market);
-  return {
-    id: preset.id,
-    name: preset.name,
-    price: basePrice,
-    receiver_id: preset.receiver_id,
-    items: mergeComponents(preset.items ?? []),
-    icon: preset.image ?? undefined,
-    image_large: preset.image ?? undefined,
-    source: seller?.source ?? (preset.price_source && preset.price_source !== 'not_available' ? preset.price_source : undefined),
-    purchase_label: seller?.label ?? (preset.price_source === 'fleaMarket' ? 'Flea Market' : undefined),
-    barter_requirements: seller?.barterRequirements,
-    parts_count: presetSupply(preset.items).size || undefined,
-    ...tooltip,
   };
 }
 
@@ -371,7 +314,7 @@ function buildResponse(
     objective_value: score,
     optimization,
     final_stats: finalStatsOf(stats),
-    solve_time_ms: now() - assembly.start,
+    solve_time_ms: assembly.now() - assembly.start,
     ...(assembly.idealPoint === undefined ? {} : { ideal_point: assembly.idealPoint }),
   };
   return { response, axes };
@@ -381,8 +324,8 @@ function buildResponse(
 // Precise
 // ---------------------------------------------------------------------------------------------
 
-async function solveExact(params: SolveParams, deadline: number, assembly: Assembly): Promise<Detailed> {
-  const result = await solvePrecise({ params, deadline, now });
+async function solveExact(params: SolveParams, guard: RuntimeGuard, assembly: Assembly): Promise<Detailed> {
+  const result = await solvePrecise({ params, guard });
   const { outcome, summary } = result;
   if (result.kind !== 'build') return noBuildResponse(assembly, outcome, preciseOptimization(summary, outcome));
   const { best } = result;
@@ -398,8 +341,8 @@ async function solveExact(params: SolveParams, deadline: number, assembly: Assem
  * point of the approximate model that the exact validator accepts), otherwise `feasible` with the solver's stop reason; emptiness is incomplete
  * with the approximate-model reason, never infeasible.
  */
-async function solveApproximate(params: SolveParams, deadline: number, assembly: Assembly): Promise<Detailed> {
-  const result = await solveFast({ params, deadline, now });
+async function solveApproximate(params: SolveParams, guard: RuntimeGuard, assembly: Assembly): Promise<Detailed> {
+  const result = await solveFast({ params, guard });
   const { outcome, summary } = result;
   if (result.kind !== 'build') return noBuildResponse(assembly, outcome, fastOptimization(summary, outcome, null));
   const { best } = result;
@@ -411,29 +354,38 @@ async function solveApproximate(params: SolveParams, deadline: number, assembly:
 // ---------------------------------------------------------------------------------------------
 
 async function solveDetailed(input: SolveParams): Promise<Detailed> {
+  const guard = guardOfParams(input);
+  const now = guard.now;
   const start = now();
-  const deadline = start + Math.max(0, input.timeLimitMs ?? 60_000);
   // What the caller asked for.
   const precisionRequest: PrecisionRequest = input.precisionRequest ?? (input.preciseMode ? 'precise' : 'fast');
   const moaDependent = isMoaDependent(input);
   const owned = inspectOwnedItems(input.ownedItems);
   if (!owned.ok) {
     // Before hashing, caching or any model work: nothing resolved, the search never started.
-    return noBuildResponse({ precisionRequest, start }, invalidOwnedItemsOutcome(moaDependent), unknownOptimization(resolveTolerance(input.objectiveTolerance), 0, 'limit'));
+    return { response: optimizeEnvelope('invalid_owned_items', { precisionRequest, moaDependent, tolerance: resolveTolerance(input.objectiveTolerance), elapsedMs: now() - start }) };
   }
-  let params: SolveParams = { ...input, precisionRequest };
+  // The normalized request: the stash is the validated frozen snapshot, the guard the one clock of every stage below.
+  let params: SolveParams = { ...input, precisionRequest, ownedItems: owned.items, guard, timeLimitMs: undefined };
   if (params.traderLevels) params.traderLevels = canonicalizeTraderLevels(params.traderLevels) as SolveParams['traderLevels'];
   const mode = params.preciseMode ? 'precise' : 'fast';
   const tolerance = resolveTolerance(params.objectiveTolerance);
   /** A request that stopped before its search started: no build, no proof, the factual cause. */
   const unstarted = (observed: StopObservations, idealPoint?: IdealPoint): Detailed => noBuildResponse(
-    { precisionRequest, start, idealPoint },
+    { precisionRequest, start, now, idealPoint },
     classifyOptimize({ mode, moaDependent, end: 'unproved', witness: false, searchFinished: false, observed }),
     unknownOptimization(tolerance, 0, 'limit'),
   );
+  /** The stop the guard reports now (cancel before deadline, section 6), as an observation. */
+  const guardObservation = (stop: 'cancelled' | 'deadline'): StopObservations => (stop === 'cancelled' ? { cancelled: true } : { deadline: true });
+  // Stage guard: nothing runs for a request that was cancelled or ran out of time before its first stage.
+  const entryStop = guardStop(guard);
+  if (entryStop !== null) return unstarted(guardObservation(entryStop));
+  let payoff: PayoffReport | undefined;
   if (params.useTchebycheff && !params.idealPoint) {
     try {
-      params = { ...params, idealPoint: await computeIdealPoint({ ...params, timeLimitMs: Math.max(0, deadline - now()) }) };
+      payoff = await computePayoff(params, guard);
+      params = { ...params, idealPoint: payoff.idealPoint };
     } catch (error) {
       if (error instanceof PayoffTableError) {
         // An endpoint that proves the request empty proves it for every objective; any other failure leaves the table unavailable.
@@ -448,7 +400,9 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
     }
   }
   const idealPoint = params.useTchebycheff ? params.idealPoint : undefined;
-  if (now() >= deadline) return unstarted({ deadline: true }, idealPoint);
-  const assembly: Assembly = { precisionRequest, start, idealPoint };
-  return params.preciseMode ? solveExact(params, deadline, assembly) : solveApproximate(params, deadline, assembly);
+  const midStop = guardStop(guard);
+  if (midStop !== null) return unstarted(guardObservation(midStop), idealPoint);
+  const assembly: Assembly = { precisionRequest, start, now, idealPoint };
+  const detailed = await (params.preciseMode ? solveExact(params, guard, assembly) : solveApproximate(params, guard, assembly));
+  return payoff === undefined ? detailed : { ...detailed, payoff };
 }

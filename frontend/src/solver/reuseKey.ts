@@ -11,12 +11,33 @@ export interface CacheKeyOptions {
 }
 
 /**
+ * The resolved controls an endpoint table was computed under (ADR 0013 section 4D, canonical #38): the model that ran, the DURATION of the
+ * request budget (a relative length, never the absolute epoch deadline of one request), the spatial node cap and the objective tolerance.
+ * Transient request ids and absolute deadlines are not key fields.
+ */
+export interface EndpointControls {
+  precisionResolved: 'fast' | 'precise';
+  timeLimitMs: number;
+  maxSpatialNodes: number;
+  tolerance: number;
+}
+
+/**
  * Sorts and deduplicates an array of identifiers to prevent permutation invalidation.
  */
 export function canonicalizeArray(arr?: readonly string[] | null): string[] | undefined {
   if (!arr || arr.length === 0) return undefined;
   const set = new Set(arr);
   return Array.from(set).sort();
+}
+
+/**
+ * Canonical form of the stash multiset (ADR 0008): sorted in code-unit order with every duplicate KEPT (a multiplicity is a quantity, so
+ * ['a', 'a'] and ['a'] are different stock). Omitted and [] are the same zero stock. The input is not mutated.
+ */
+export function canonicalizeOwnedItems(items?: readonly string[] | null): string[] | undefined {
+  if (!items || items.length === 0) return undefined;
+  return [...items].sort();
 }
 
 /**
@@ -77,6 +98,7 @@ export function computeIdealPointCacheKey(
   lang: string,
   gameMode: string,
   req: OptimizeRequest,
+  controls?: EndpointControls,
 ): string {
   return JSON.stringify({
     lang,
@@ -107,6 +129,15 @@ export function computeIdealPointCacheKey(
     barter_available: req.barter_available ?? false,
     barter_exclude_dogtags: req.barter_exclude_dogtags ?? false,
     player_level: req.player_level != null ? Number(req.player_level) : undefined,
+    // Inventory domain: the full stash multiset, duplicates kept (a changed stash is a changed acquisition domain).
+    owned_items: canonicalizeOwnedItems(req.owned_items),
+    // Resolved controls (absent for a caller that does not resolve them).
+    controls: controls === undefined ? undefined : {
+      precision_resolved: controls.precisionResolved,
+      time_limit_ms: controls.timeLimitMs,
+      max_spatial_nodes: controls.maxSpatialNodes,
+      tolerance: controls.tolerance,
+    },
   });
 }
 

@@ -1,4 +1,5 @@
 import type { StructuralBounds } from './structuralBounds.ts';
+import type { RuntimeGuard } from './runtimeGuard.ts';
 /**
  * Core types for the weapon optimizer solver.
  * Ported from Python backend (optimizer.py, schemas.py).
@@ -208,20 +209,6 @@ export const DEFAULT_TRADER_LEVELS: TraderLevels = {
   prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4, ref: 4,
 };
 
-// --- Worker Messages ---
-
-export interface WorkerRequest {
-  type: 'loadData' | 'optimize' | 'explore';
-  id: number;
-  payload: unknown;
-}
-
-export interface WorkerResponse {
-  type: 'dataLoaded' | 'result' | 'error' | 'progress';
-  id: number;
-  payload: unknown;
-}
-
 export interface IdealPoint {
   zE: number;
   nadE: number;
@@ -310,6 +297,16 @@ export interface SolveParams {
   objectiveTolerance?: number;
   /** Spatial branch-and-bound limits; reaching either never proves infeasibility. */
   maxSpatialNodes?: number;
+  /**
+   * The runtime guard of the request epoch (ADR 0013 section 4D): one queue-inclusive deadline, the out-of-band cancel flag and the macrotask
+   * yield. When present it is the only clock: the pipelines check it before every stage and after every yield. Without it the solve builds a
+   * guard from `timeLimitMs` (no cancel source), which keeps direct callers working.
+   */
+  guard?: RuntimeGuard;
+  /**
+   * A time allowance from the moment the solve starts (default 60 s). With a `guard` it can only narrow the guard's deadline (a share of the
+   * request's time given to a sub-solve), never extend it.
+   */
   timeLimitMs?: number;
   traderLevels?: TraderLevels | null;
   fleaAvailable?: boolean;
@@ -320,10 +317,10 @@ export interface SolveParams {
    * Stash multiset (ADR 0008): one entry per owned copy, duplicates kept, unknown ids retained. Omitted or [] means no stock.
    * At most 10,000 nonempty strings with no sparse holes; anything else is the typed input error `INVALID_OWNED_ITEMS`
    * (`physical/ownedItems.ts`, public reason `Invalid owned_items format`), never infeasibility. Owning a part supplies copies
-   * of it at no cost but never grants a receiver. Precise honours it; Fast ignores it (it keeps its legacy model until Phase 2.4c) and
-   * only the independent validation of the published build prices the stash.
+   * of it at no cost but never grants a receiver. Precise and Fast both honour it. The runtime snapshots it once at the worker boundary
+   * (a frozen copy) and forwards that snapshot unchanged to every solve of the request.
    */
-  ownedItems?: string[];
+  ownedItems?: readonly string[];
   /** Classifiers for payloads without ammunition flags or category chains; see {@link PhysicalClassifiers}. */
   physicalOptions?: PhysicalClassifiers;
   preciseMode?: boolean;

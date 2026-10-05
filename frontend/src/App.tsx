@@ -418,10 +418,11 @@ function AppContent({
     if (!selectedGunId || !useExactMOAFloor) return
     const seq = ++moaFloorRequestSeq.current
     setComputingMOAFloor(true)
-    computeMOAFloor(selectedGunId, gameMode, i18n.language || 'en')
+    // Phase 2.8 passes the full acquisition and feasibility domain and reads the whole MOAFloorResponse (status, bracket, witness).
+    computeMOAFloor({ weapon_id: selectedGunId }, gameMode, i18n.language || 'en')
       .then(({ floor }) => {
         if (seq !== moaFloorRequestSeq.current) return
-        setExactMOAFloor(floor > 0 ? floor : null)
+        setExactMOAFloor(floor !== null && floor > 0 ? floor : null)
         setComputingMOAFloor(false)
       })
       .catch(err => {

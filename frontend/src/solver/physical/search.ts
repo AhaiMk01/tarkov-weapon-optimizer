@@ -32,6 +32,8 @@
  * is checked).
  */
 
+import { attachCompletion } from '../runtimeErrors';
+import type { RuntimeGuard } from '../runtimeGuard';
 import { ratCmp, ratFromDouble, ratSub, type Rat } from './exact';
 import { upperBoundExact, type BoundEvidence } from './proof';
 import { INTERVAL_RESOLUTION_REASON, PUBLIC_REASONS } from './reasons';
@@ -188,6 +190,18 @@ export interface SearchOptions<P> {
   now(): number;
   /** Absolute deadline on the `now` clock. */
   deadline: number;
+  /**
+   * The request epoch (ADR 0013 section 4D). With it the search checks the cancel flag and the deadline before every node and yields a MACROTASK
+   * between nodes, so an out-of-band cancel message is dispatched and observed at the next check (a microtask await would not deliver it). Its
+   * clock and deadline must be the `now` and `deadline` above. Without it only the deadline is checked, as before.
+   */
+  guard?: RuntimeGuard;
+  /**
+   * End the search at the first verified build (the first-witness policy of a MOA floor query, ADR 0013 section 6): once an incumbent exists and
+   * a node is still live, the search stops with the factual `Native solution limit reached` (a stop at the first improving solution, not a
+   * timeout) and is NOT finished or certified. A search with no live node left has completed and is never downgraded by this flag.
+   */
+  stopAtFirstWitness?: boolean;
 }
 
 export interface SearchResult<P> {
@@ -264,14 +278,47 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     }
   };
 
+  /** Pure interrupts a coincident cancel outranks (section 6 precedence: cancel, deadline, node limit, native solution limit). */
+  const interrupts: ReadonlySet<string> = new Set<string>([PUBLIC_REASONS.timeLimitReached, PUBLIC_REASONS.nodeLimitReached, PUBLIC_REASONS.nativeSolutionLimitReached]);
+  const withCancelPrecedence = (reason: string): string => (options.guard?.cancelled() === true && interrupts.has(reason) ? PUBLIC_REASONS.cancelledByUser : reason);
+
+  /** The bounds the search would report if it stopped now: the incumbent's score, every closed node and every live node, in one frame. */
+  const composeBounds = (): { upper: MaybeBound; lowerBound: number | null; gap: number | null } => {
+    let upper: MaybeBound = joinBounds(incumbentExact === null ? undefined : incumbentExact, fathomed);
+    for (const n of live) upper = joinBounds(upper, n.bound);
+    const gapExact = incumbentExact !== null && upper !== undefined && upper !== null ? ratSub(upper, incumbentExact) : null;
+    return {
+      upper,
+      lowerBound: incumbent === null ? null : candidateLower(incumbent),
+      gap: incumbent === null ? null : gapExact === null ? Infinity : boundToNumber(gapExact),
+    };
+  };
+
   while (true) {
     fathomWithinTolerance();
     if (live.length === 0) break;
+    if (options.stopAtFirstWitness === true && incumbent !== null) { stopReason = PUBLIC_REASONS.nativeSolutionLimitReached; break; }
     live.sort(byBoundThenLight);
+    // A stage boundary: yield a MACROTASK, so an out-of-band cancel message is dispatched (a microtask await would not deliver it), then check
+    // in the order of section 6: cancel, deadline, node limit. A completed proof (no live node, above) is never downgraded by any of them.
+    if (options.guard !== undefined) await options.guard.yieldMacrotask();
+    if (options.guard?.cancelled() === true) { stopReason = PUBLIC_REASONS.cancelledByUser; break; }
     if (options.now() >= options.deadline) { stopReason = PUBLIC_REASONS.timeLimitReached; break; }
     if (nodes >= options.maxNodes) { stopReason = PUBLIC_REASONS.nodeLimitReached; break; }
     const node = live.shift() as LiveNode;
-    const evaluation = await options.evaluate({ id: node.id, interval: node.interval, bound: node.up });
+    let evaluation: NodeEvaluation<P>;
+    try {
+      evaluation = await options.evaluate({ id: node.id, interval: node.interval, bound: node.up });
+    } catch (error) {
+      // A native failure ends the search: it travels as a typed error, with what the search had established BEFORE it (the failing node is
+      // still live, so it counts toward the upper bound; it is not counted among the completed nodes).
+      live.push(node);
+      const state = composeBounds();
+      const wire = transportedBounds({ lowerBound: state.lowerBound, upperBound: boundToNumber(state.upper), gap: state.gap });
+      throw attachCompletion(error, {
+        nodes, termination: 'limit', witness: incumbent !== null, lower_bound: wire.lower, upper_bound: wire.upper, absolute_gap: wire.gap,
+      });
+    }
     nodes++;
     if (evaluation.candidate !== null) {
       const exact = candidateExact(evaluation.candidate);
@@ -282,7 +329,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     if (evaluation.verdict === 'unresolved' || evaluation.verdict === 'failed') {
       finishedAtStop = evaluation.finished === true && live.length === 0;
       live.push(liveNode(node.interval, bound, node.id));
-      stopReason = evaluation.reason ?? (evaluation.verdict === 'failed' ? PUBLIC_REASONS.independentBuildValidationFailed : PUBLIC_REASONS.timeLimitReached);
+      stopReason = withCancelPrecedence(evaluation.reason ?? (evaluation.verdict === 'failed' ? PUBLIC_REASONS.independentBuildValidationFailed : PUBLIC_REASONS.timeLimitReached));
       break;
     }
     // solved
@@ -303,12 +350,9 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     live.push(liveNode(parts[0], bound), liveNode(parts[1], bound));
   }
 
-  let upper: MaybeBound = joinBounds(incumbentExact === null ? undefined : incumbentExact, fathomed);
-  for (const n of live) upper = joinBounds(upper, n.bound);
-  const completed = stopReason === null;
-  const lowerBound = incumbent === null ? null : candidateLower(incumbent);
+  const { upper, lowerBound, gap } = composeBounds();
   const gapExact = incumbentExact !== null && upper !== undefined && upper !== null ? ratSub(upper, incumbentExact) : null;
-  const gap = incumbent === null ? null : gapExact === null ? Infinity : boundToNumber(gapExact);
+  const completed = stopReason === null;
   return {
     incumbent,
     nodes,

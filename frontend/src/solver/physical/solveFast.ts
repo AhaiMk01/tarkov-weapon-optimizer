@@ -35,6 +35,9 @@
  */
 
 import type { NativeResult } from '../native';
+import { guardOfContext } from '../requestGuard';
+import { guardStop } from '../runtimeGuard';
+import type { RuntimeGuard } from '../runtimeGuard';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { SolveParams } from '../types';
 import { computeActiveBounds } from './bounds';
@@ -112,8 +115,13 @@ export type FastResult =
 export interface FastContext {
   /** The normalized request. `useTchebycheff` needs an `idealPoint`. TrueErgo and Prevent Overswing run the weight search over the count model. */
   params: SolveParams;
-  /** Absolute deadline on the `now` clock, milliseconds. */
-  deadline: number;
+  /**
+   * The request epoch (ADR 0013 section 4D): one queue-inclusive deadline, the out-of-band cancel flag and the macrotask yield. Checked before
+   * every stage (preparation, each weight node, each native re-solve after a rejected point) and after every yield. Preferred.
+   */
+  guard?: RuntimeGuard;
+  /** Without a `guard`: absolute deadline on the `now` clock, milliseconds (no cancel source). One of `guard` and `deadline` is required. */
+  deadline?: number;
   now?: () => number;
   /** Native solve, injectable for tests. */
   solve?: SolveFn;
@@ -136,7 +144,9 @@ function fastBoundEvidence(result: NativeResult): BoundEvidence {
 
 export async function solveFast(context: FastContext): Promise<FastResult> {
   const { params } = context;
-  const now = context.now ?? ((): number => performance.now());
+  const guard = guardOfContext(context);
+  const now = guard.now;
+  const deadline = guard.deadline;
   const lookup = params.itemLookup;
   const presolve = context.presolve ?? FAST_PRESOLVE;
   const tolerance = resolveTolerance(params.objectiveTolerance);
@@ -149,6 +159,13 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const empty = (source: 'domain' | 'request' | 'native', detail: string): FastResult => ({
     kind: 'empty', source, detail, outcome: classifyOptimize({ mode: 'fast', moaDependent, end: 'empty', witness: false, searchFinished: true }), summary,
   });
+
+  // Stage guard: nothing is prepared for a request that was already cancelled or out of time.
+  const preStop = guardStop(guard);
+  if (preStop !== null) {
+    const outcome = classifyOptimize({ mode: 'fast', moaDependent, end: 'unproved', witness: false, searchFinished: false, observed: preStop === 'cancelled' ? { cancelled: true } : { deadline: true } });
+    return { kind: 'incomplete', reason: outcome.reason as string, outcome, summary };
+  }
 
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
@@ -195,7 +212,15 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     const cuts: IntegerNoGood[] = [];
     let rejections = 0;
     for (;;) {
-      const outcome = await solveWithPresolvePolicy(model.lp(cuts), { options, deadline: context.deadline, now, solve: context.solve ?? nativeSolve, presolve });
+      if (cuts.length > 0) {
+        // A re-solve after a rejected point is a stage of its own: yield so a cancel message is dispatched, then guard.
+        await guard.yieldMacrotask();
+        const stop = guardStop(guard);
+        if (stop !== null) {
+          return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached };
+        }
+      }
+      const outcome = await solveWithPresolvePolicy(model.lp(cuts), { options, deadline, now, solve: context.solve ?? nativeSolve, presolve });
       summary.nativeSolves++;
       if (outcome.kind === 'unresolved') {
         return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: outcome.cause === 'deadline' ? PUBLIC_REASONS.timeLimitReached : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
@@ -250,7 +275,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
       }
       // Any other rejection is a validation failure (it outranks a coincident clock stop): the rejected point is cut out and the node solved again, so
       // the valid builds beside it are still found; the node fails when the rejections reach the limit, or the time runs out.
-      const deadlineHit = context.deadline - now() <= 0;
+      const deadlineHit = deadline - now() <= 0;
       const cut = rejections >= maxRejections || deadlineHit ? null : integerNoGood(`nogood_${cuts.length}`, model.decision, values);
       // A point with no cut (a value outside its column's domain) cannot be excluded, and solving again would return it.
       if (cut === null) {
@@ -268,7 +293,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     roots = rootIntervals(weight.lo, weight.hi, params.maxWeight);
   }
   const maxNodes = tedRequest ? Math.max(0, Math.floor(params.maxSpatialNodes ?? DEFAULT_MAX_SPATIAL_NODES)) : Number.POSITIVE_INFINITY;
-  const search = await runSpatialSearch<FastVerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline: context.deadline });
+  const search = await runSpatialSearch<FastVerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline, guard });
   summary.nodes = tedRequest ? search.nodes : 0;
   summary.modelBound = Number.isFinite(search.upperBound) ? search.upperBound : null;
 

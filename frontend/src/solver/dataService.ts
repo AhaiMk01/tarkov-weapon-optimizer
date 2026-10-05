@@ -935,12 +935,20 @@ export function getAvailablePrice(
 
 // --- State Cache ---
 
-interface LoadedState {
+export interface LoadedState {
   guns: RawItem[];
   mods: RawItem[];
   itemLookup: ItemLookup;
   loadedAt: number;
+  /**
+   * Identity of this load: a reload, a replacement (`seedDataCache`) and a cache clear all produce a NEW state, so everything derived from the
+   * data (physical blueprints, structural bounds, endpoint tables) is tied to it and never survives a replacement that kept the same
+   * language and game mode names (ADR 0013 section 4D).
+   */
+  generation: number;
 }
+
+let loadGeneration = 0;
 
 const VALID_LANGS = new Set(['en', 'ru', 'zh', 'es', 'de', 'fr', 'it', 'ja', 'ko', 'pl', 'pt', 'tr', 'cs', 'hu', 'ro', 'sk']);
 
@@ -964,9 +972,14 @@ export async function ensureDataLoaded(lang: string, gameMode: string): Promise<
 
   const { guns, mods } = await fetchAllData(lang, gameMode);
   const itemLookup = buildItemLookup(guns, mods);
-  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now() };
+  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now(), generation: ++loadGeneration };
   stateCache.set(key, state);
   return state;
+}
+
+/** Forget every loaded state, so the next load rebuilds the lookup (and everything derived from it) from the cached or fetched payloads. */
+export function clearLoadedState(): void {
+  stateCache.clear();
 }
 
 export function getLoadedState(lang: string, gameMode: string): LoadedState | undefined {
@@ -977,7 +990,7 @@ export function seedDataCache(lang: string, gameMode: string, guns: RawItem[], m
   lang = normalizeLang(lang);
   const key = `${lang}:${gameMode}`;
   const itemLookup = buildItemLookup(guns, mods);
-  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now() };
+  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now(), generation: ++loadGeneration };
   stateCache.set(key, state);
   return state;
 }

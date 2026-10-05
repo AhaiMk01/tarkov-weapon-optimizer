@@ -28,6 +28,9 @@
  */
 
 import type { HighsOptions, NativeResult } from '../native';
+import { guardOfContext } from '../requestGuard';
+import { guardStop } from '../runtimeGuard';
+import type { RuntimeGuard } from '../runtimeGuard';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { ItemLookup, PhysicalClassifiers, SolveParams } from '../types';
 import { preparePhysicalWeapon } from './blueprint';
@@ -176,8 +179,13 @@ export type PreciseResult =
 export interface PreciseContext {
   /** The normalized request. `useTchebycheff` needs an `idealPoint`. */
   params: SolveParams;
-  /** Absolute deadline on the `now` clock, milliseconds. */
-  deadline: number;
+  /**
+   * The request epoch (ADR 0013 section 4D): one queue-inclusive deadline, the out-of-band cancel flag and the macrotask yield. Checked before
+   * every stage (preparation, each spatial node, each native re-solve after a rejected candidate) and after every yield. Preferred.
+   */
+  guard?: RuntimeGuard;
+  /** Without a `guard`: absolute deadline on the `now` clock, milliseconds (no cancel source). One of `guard` and `deadline` is required. */
+  deadline?: number;
   now?: () => number;
   /** Native solve, injectable for tests. */
   solve?: SolveFn;
@@ -188,6 +196,11 @@ export interface PreciseContext {
    * first improving incumbent (ADR 0013 section 6, scoped to floor calls). Restricted to stopping options, so no caller can loosen a tolerance.
    */
   nativeStop?: Pick<HighsOptions, 'mip_max_improving_sols'>;
+  /**
+   * End the weight search at the first verified build (the first-witness policy of a MOA floor query): the result is a `build` that is not
+   * certified, with the factual reason `Native solution limit reached`. Only a search with a node still live stops this way.
+   */
+  stopAtFirstWitness?: boolean;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -225,7 +238,9 @@ export function rootIntervals(lo: number, hi: number, maxWeight: number | null |
 
 export async function solvePrecise(context: PreciseContext): Promise<PreciseResult> {
   const { params } = context;
-  const now = context.now ?? ((): number => performance.now());
+  const guard = guardOfContext(context);
+  const now = guard.now;
+  const deadline = guard.deadline;
   const lookup = params.itemLookup;
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
   const tolerance = resolveTolerance(params.objectiveTolerance);
@@ -237,6 +252,13 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
     lowerBound: null, upperBound: Infinity, gap: null, bounds: { lower: null, upper: null, gap: null }, tolerance, completed: false, spatial: tedRequest, telemetry, ...partial,
   });
+
+  // Stage guard: nothing is prepared for a request that was already cancelled or out of time.
+  const preStop = guardStop(guard);
+  if (preStop !== null) {
+    const outcome = classifyOptimize({ mode: 'precise', moaDependent, end: 'unproved', witness: false, searchFinished: false, observed: preStop === 'cancelled' ? { cancelled: true } : { deadline: true } });
+    return { kind: 'incomplete', reason: outcome.reason as string, outcome, summary: summary({ nodes: 0 }) };
+  }
 
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
@@ -279,9 +301,17 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     for (let b = 0; b < domain.bases.length; b++) decisionColumns.push(model.columns.base(b));
     const cuts: string[] = [];
     for (;;) {
+      if (cuts.length > 0) {
+        // A re-solve after a rejected candidate is a stage of its own: yield so a cancel message is dispatched, then guard.
+        await guard.yieldMacrotask();
+        const stop = guardStop(guard);
+        if (stop !== null) {
+          return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached };
+        }
+      }
       const lpText = insertRows(model.lp, cuts);
       const outcome = await solveWithPresolvePolicy(lpText, {
-        options: nativeOptions, deadline: context.deadline, now, solve: context.solve ?? nativeSolve, presolve: context.presolve, includeReadback: true,
+        options: nativeOptions, deadline, now, solve: context.solve ?? nativeSolve, presolve: context.presolve, includeReadback: true,
       });
       if (outcome.kind === 'unresolved') {
         return {
@@ -374,7 +404,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       }
       // Any other rejection is a boundary the solver's tolerance admitted and exact arithmetic does not (or a fault). The rejected assignment is
       // cut out and the node solved again, so the valid builds beside it are still found; only a repeated rejection fails the node.
-      if (trusted && cuts.length < MAX_REJECTIONS_PER_NODE && context.deadline - now() > 0) {
+      if (trusted && cuts.length < MAX_REJECTIONS_PER_NODE && deadline - now() > 0) {
         telemetry.rejectedCandidates++;
         cuts.push(noGoodRow(`nogood_${cuts.length}`, decisionColumns, values));
         continue;
@@ -389,7 +419,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     roots = rootIntervals(weight.lo, weight.hi, params.maxWeight);
   }
   const maxNodes = tedRequest ? Math.max(0, Math.floor(params.maxSpatialNodes ?? DEFAULT_MAX_SPATIAL_NODES)) : Number.POSITIVE_INFINITY;
-  const search = await runSpatialSearch<VerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline: context.deadline });
+  const search = await runSpatialSearch<VerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline, guard, stopAtFirstWitness: context.stopAtFirstWitness });
   const finished = summary({
     nodes: search.nodes,
     lowerBound: search.lowerBound,
