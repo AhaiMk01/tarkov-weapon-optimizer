@@ -43,6 +43,27 @@ suite, harness ratchet) and committed by the orchestrator.
 - Tchebycheff: the result reports the payoff table it used; comparisons are made under that table (9, 17).
 - Single correctness cutover; floor discovery then bisection; termination means search completion; floor
   queries use a zero objective with `mip_max_improving_sols=1`; unsupported external export disabled.
+- Native build host: `zpahai@10.147.20.119`, only `~/tarkov-highs-build`, no sudo; never the lab hosts.
+
+### Performance policy (owner, 2026-10-04)
+
+Measured on the pinned snapshot (60 s limit): the exact model with presolve off proves every gun up to 13,122
+occurrences in at most about 14 s (as fast as the legacy model at the default settings up to about the 90th
+percentile); the AK family and M4A1 do not finish. Fast (template model) solves every gun in about 1 s or less but
+is approximate. Decisions:
+
+1. **Auto chooses by size.** Precise up to `AUTO_PRECISE_MAX_OCCURRENCES` (15,000), Fast above, clearly
+   qualified as approximate (implemented in 2.4b-3b).
+2. **Fast first, then exact (progressive result).** For a Precise request, publish the validated Fast witness as
+   soon as it exists (status `feasible`, approximate qualification), keep the exact solve running within the same
+   request deadline, and replace or confirm it when the exact solve finishes or times out. Neither guarantee is
+   weakened: the early result is labelled for what it is and a later proof only upgrades it. Belongs to 2.6
+   (status transitions), 2.7 (worker streaming and cancel) and 2.8 (UI).
+3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
+   (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
+   only through the Stage 4 proof and comparative gates.
+4. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
+   the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
 
 ## Known baseline failures (before Stage 2)
 
