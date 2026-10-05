@@ -54,11 +54,9 @@ is approximate. Decisions:
 
 1. **Auto chooses by size.** Precise up to `AUTO_PRECISE_MAX_OCCURRENCES` (15,000), Fast above, clearly
    qualified as approximate (implemented in 2.4b-3b).
-2. **Fast first, then exact (progressive result).** For a Precise request, publish the validated Fast witness as
-   soon as it exists (status `feasible`, approximate qualification), keep the exact solve running within the same
-   request deadline, and replace or confirm it when the exact solve finishes or times out. Neither guarantee is
-   weakened: the early result is labelled for what it is and a later proof only upgrades it. Belongs to 2.6
-   (status transitions), 2.7 (worker streaming and cancel) and 2.8 (UI).
+2. **No progressive "Fast first, then exact" result.** Rejected by the owner: a Precise request returns only its
+   own Precise result (optimal, feasible with honest bounds at the deadline, or incomplete). No early Fast witness
+   is streamed or shown for it.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.
