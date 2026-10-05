@@ -38,12 +38,6 @@ import type { MoaQualification, PrecisionRequest, PrecisionResolved, SolveParams
 export type ExploreAxis = 'price' | 'recoil' | 'ergo';
 export type StepOutcome = ExploreStepOutcome['outcome'];
 
-/**
- * The reason of an entry failure that is not an input or queue failure: an empty or malformed schedule (nothing to sweep, nothing solved). It is a
- * new public string next to the closed set of `physical/reasons.ts`; the locale layer maps it (Phase 2.8).
- */
-export const EXPLORE_INVALID_SCHEDULE_REASON = 'Invalid Explore schedule';
-
 export interface SweepTarget {
   /** Position in the schedule, 0-based and consecutive. */
   target_index: number;
@@ -161,7 +155,10 @@ const unknownOptimization = (tolerance: number): OptimizationMetadata => ({
 
 const moaQualificationOf = (base: ExploreRunRequest['base']): MoaQualification => (base.maxMOA != null ? 'provisional_model' : null);
 
-/** The row of a target that produced a response. */
+/**
+ * The row of a target that produced a response. The reason is the response's own public reason, except for an `E` row (a response with status
+ * `error`), which may carry a diagnostic message outside the closed set: that is accepted for E rows only.
+ */
 function rowOfResponse(index: number, outcome: StepOutcome, r: OptimizeResponse, reason: string | undefined): ExploreStepOutcome {
   return {
     target_index: index,
@@ -313,7 +310,7 @@ function envelope(request: ExploreRunRequest, started: number, guard: RuntimeGua
  */
 export async function runExplore(request: ExploreRunRequest, schedule: SweepSchedule, guard: RuntimeGuard, optimize: OptimizeFn): Promise<ExploreResponse> {
   const started = guard.now();
-  if (scheduleProblem(schedule) !== null) return envelope(request, started, guard, EXPLORE_INVALID_SCHEDULE_REASON);
+  if (scheduleProblem(schedule) !== null) return envelope(request, started, guard, PUBLIC_REASONS.invalidExploreSchedule);
 
   const targets: SweepTarget[] = [...schedule.targets];
   const settled: SettledTarget[] = [];
@@ -349,7 +346,8 @@ export async function runExplore(request: ExploreRunRequest, schedule: SweepSche
         row = rowWithoutResponse(target.target_index, 'U', request, PUBLIC_REASONS.cancelledByUser);
       } else {
         outcome = 'E';
-        // A typed failure's own message is the only record of the cause; it is a diagnostic outside the closed set of public reasons.
+        // A typed failure's own message is the only record of the cause. It is a diagnostic outside the closed set of public reasons, accepted
+        // for E rows ONLY: no other row, response or snapshot carries a reason that is not in `PUBLIC_REASONS`.
         row = rowWithoutResponse(target.target_index, 'E', request, error instanceof Error ? error.message : String(error));
       }
     }

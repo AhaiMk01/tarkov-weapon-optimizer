@@ -20,11 +20,7 @@ import { computeStructuralBounds } from './structuralBounds.ts';
  */
 
 import type { ItemLookup, CompatibilityMap, PrecisionRequest, SolveParams, TraderLevels } from './types.ts';
-import type { ExplorePoint } from '../api/client.ts';
-import { solve } from './solver.ts';
-import { runExplore } from './exploreSweep.ts';
 import type { ExploreAxis, ExploreRunRequest, SettledTarget, SweepSchedule, SweepTarget } from './exploreSweep.ts';
-import { fixedGuard } from './runtimeGuard.ts';
 
 export interface ParetoParams {
   weaponId: string;
@@ -59,8 +55,6 @@ export interface ParetoParams {
   precisionRequest?: PrecisionRequest;
   boundsMode?: 'structural' | 'naive';
   structuralBounds?: import('./structuralBounds.ts').StructuralBounds;
-  /** Shared deadline of the compatibility entry point `explorePareto` only; the worker passes its own guard to `runExplore`. */
-  timeLimitMs?: number;
 }
 
 function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight'> {
@@ -209,20 +203,4 @@ export function buildSweepSchedule(params: ParetoParams): SweepSchedule {
       return nextStep(n);
     },
   };
-}
-
-/**
- * Compatibility entry point: the sweep's displayed points only, on a fixed guard of `timeLimitMs` (default 60 s).
- * @deprecated The worker runs `exploreRunRequest` + `buildSweepSchedule` + `runExplore` with its request guard and publishes the whole `ExploreResponse`;
- * this wrapper goes when the worker is rewired (Phase 2.7a).
- */
-export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[]> {
-  const guard = fixedGuard(performance.now() + Math.max(0, params.timeLimitMs ?? 60_000));
-  const response = await runExplore(
-    exploreRunRequest(params),
-    buildSweepSchedule(params),
-    guard,
-    (solveParams, g) => solve({ ...solveParams, guard: g }),
-  );
-  return response.points;
 }

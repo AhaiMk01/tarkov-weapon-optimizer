@@ -21,20 +21,25 @@
  *
  * A native failure is a typed `SolverError` envelope with the completion metadata captured before the failure (`runtimeErrors.ts`).
  *
- * `// 2.7b integration`: the Explore and MOA floor drivers below are the INTERIM bodies; Phase 2.7b's `runExplore` and `runMoaFloor` replace
- * `deps.runExplore` / `deps.runMoaFloor` through the {@link ExploreRunInput} / {@link FloorRunInput} seam.
+ * Explore and the MOA floor. Behind the queue-expiry, cancel and invalid-stock envelopes the handlers run Phase 2.7b's drivers: Explore builds the
+ * request and a FRESH schedule (`exploreRunRequest`, `buildSweepSchedule`) and runs `runExplore` with a step optimizer that forces the validated stash
+ * and the request guard onto every solve; the floor runs `runMoaFloor` on the normalized domain minus the MOA cap. A typed native failure during a
+ * floor query rethrows the same `SolverError` with the retained floor state on its completion metadata, after publishing that state as a snapshot.
+ * `deps.runExplore` / `deps.runMoaFloor` replace the drivers in tests ({@link ExploreRunInput} / {@link FloorRunInput}).
  */
 
-import type {
-  ExploreRequest, ExploreResponse, ItemDetail, MOAFloorRequest, MOAFloorResponse, OptimizeRequest, OptimizeResponse, WitnessBuild,
-} from '../api/client.ts';
+import type { ExploreRequest, ExploreResponse, MOAFloorRequest, MOAFloorResponse, OptimizeRequest, OptimizeResponse } from '../api/client.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { clearLoadedState, ensureDataLoaded } from './dataService.ts';
 import type { LoadedState } from './dataService.ts';
 import { EndpointCache } from './endpointCache.ts';
+import { runExplore as sweepExplore } from './exploreSweep.ts';
+import { runMoaFloor as searchMoaFloor } from './moaFloor.ts';
+import type { MoaFloorDeps } from './moaFloor.ts';
 import { exploreEnvelope, floorEnvelope, optimizeEnvelope } from './operationEnvelopes.ts';
 import type { PreModelStop } from './operationEnvelopes.ts';
-import { explorePareto } from './paretoExplorer.ts';
+import { buildSweepSchedule, exploreRunRequest } from './paretoExplorer.ts';
+import type { ParetoParams } from './paretoExplorer.ts';
 import { inspectOwnedItems } from './physical/ownedItems.ts';
 import { DEFAULT_MAX_SPATIAL_NODES, DEFAULT_OBJECTIVE_TOLERANCE } from './physical/solvePrecise.ts';
 import { MOA_K } from './physical/specialize.ts';
@@ -43,7 +48,7 @@ import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { epochNow } from './requestGuard.ts';
 import { canonicalizeTraderLevels, computeIdealPointCacheKey, computeStructuralBoundsCacheKey } from './reuseKey.ts';
 import { serializeWorkerError } from './runtimeErrors.ts';
-import { guardStop, remainingMs, yieldMacrotask as realYieldMacrotask } from './runtimeGuard.ts';
+import { guardStop, yieldMacrotask as realYieldMacrotask } from './runtimeGuard.ts';
 import type { RuntimeGuard } from './runtimeGuard.ts';
 import { SOLVER_CAPABILITIES, solveRequest } from './solver.ts';
 import type { SolveReport } from './solver.ts';
@@ -71,7 +76,7 @@ interface LoadedData {
 }
 
 // ---------------------------------------------------------------------------------------------
-// The seams of Explore and the floor (Phase 2.7b replaces the interim bodies)
+// The seams of Explore and the floor (the default drivers are Phase 2.7b's runExplore and runMoaFloor)
 // ---------------------------------------------------------------------------------------------
 
 /** Everything an Explore driver needs of a validated, in-time request. */
@@ -99,9 +104,11 @@ export interface FloorRunInput {
   request: MOAFloorRequest;
   ownedItems: readonly string[];
   guard: RuntimeGuard;
-  /** The common domain of every trial except the MOA cap and the objective: the same shape as {@link ExploreRunInput.baseParams}. */
+  /**
+   * The normalized domain of every query except the MOA cap (the floor sets the cap, the constant-zero objective and the Precise model itself):
+   * the same shape as {@link ExploreRunInput.baseParams}, with the validated stash.
+   */
   baseParams: SolveParams;
-  optimize(params: SolveParams, guard: RuntimeGuard): Promise<OptimizeResponse>;
   publishSnapshot(snapshot: unknown): void;
 }
 
@@ -119,8 +126,12 @@ export interface WorkerDeps {
   solve?: (params: SolveParams) => Promise<SolveReport>;
   /** The Gunsmith task list (`tasks.json`). */
   fetchTasks?: () => Promise<unknown[]>;
+  /** Replaces the Explore driver (tests). Default: {@link driveExplore}. */
   runExplore?: (input: ExploreRunInput) => Promise<ExploreResponse>;
+  /** Replaces the floor driver (tests). Default: {@link driveMoaFloor}. */
   runMoaFloor?: (input: FloorRunInput) => Promise<MOAFloorResponse>;
+  /** The collaborators of the default floor driver (tests inject the per-query function or the native solve). */
+  floorDeps?: Omit<MoaFloorDeps, 'publishSnapshot'>;
 }
 
 export interface WorkerRuntime {
@@ -143,9 +154,8 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
   const clearLoadedData = deps.clearLoadedData ?? clearLoadedState;
   const solveOnce = deps.solve ?? solveRequest;
   const fetchTasks = deps.fetchTasks ?? defaultFetchTasks;
-  // 2.7b integration: the two defaults below are the interim bodies; wire runExplore (exploreSweep.ts) and runMoaFloor (moaFloor.ts) here.
-  const runExplore = deps.runExplore ?? interimRunExplore; // 2.7b integration
-  const runMoaFloor = deps.runMoaFloor ?? interimRunMoaFloor; // 2.7b integration
+  const runExplore = deps.runExplore ?? driveExplore;
+  const runMoaFloor = deps.runMoaFloor ?? ((input: FloorRunInput) => driveMoaFloor(input, deps.floorDeps));
 
   const dataCache = new Map<string, LoadedData>();
 
@@ -336,7 +346,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       guard,
       precisionRequest,
       usePrecise,
-      baseParams: domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise),
+      baseParams: { ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise), maxMOA: req.max_moa },
       optimize: stepOptimizer(owned.items),
       publishSnapshot: snapshot => post('snapshot', id, snapshot),
     });
@@ -363,7 +373,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       ownedItems: owned.items,
       guard,
       baseParams: domainParams(req, data, lang, gameMode, owned.items, guard, 'precise', true),
-      optimize: stepOptimizer(owned.items),
       publishSnapshot: snapshot => post('snapshot', id, snapshot),
     });
     post('result', id, result);
@@ -567,117 +576,56 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
 }
 
 // ---------------------------------------------------------------------------------------------
-// INTERIM drivers (2.7b integration)
+// The Explore and floor drivers
 // ---------------------------------------------------------------------------------------------
 
-/**
- * 2.7b integration: INTERIM Explore driver, replaced by `buildSweepSchedule` + `runExplore` (the total V/I/U/E classification of ADR 0013
- * section 6). The pre-cutover sweep is adaptive and records no per-target outcome, so nothing here can honestly claim `complete` or
- * `infeasible`: a sweep with a verified point is `partial`, one without is `invalid`.
- */
-async function interimRunExplore(input: ExploreRunInput): Promise<ExploreResponse> {
-  const { request, baseParams, guard } = input;
-  const startedAt = guard.now();
-  const points = await explorePareto({
-    ...baseParams,
-    ignore: request.ignore,
-    steps: request.steps ?? 10,
-    ownedItems: [...input.ownedItems],
-    timeLimitMs: remainingMs(guard),
-  });
+/** The sweep parameters of a validated Explore request: the shared domain, the axis, the grid and the validated stash. */
+function paretoParamsOf(input: ExploreRunInput): ParetoParams {
+  const p = input.baseParams;
   return {
-    curve_status: points.length > 0 ? 'partial' : 'invalid',
-    points,
-    sweep_schedule: [],
-    step_outcomes: [],
-    total_solve_time_ms: Math.round(guard.now() - startedAt),
-    precision_request: input.precisionRequest,
-    // Every target of the sweep runs the one resolved mode of the request.
-    precision_resolved: input.usePrecise ? 'precise' : 'fast',
-    model_qualification: input.usePrecise ? 'exact' : 'approximate',
-    moa_qualification: request.max_moa != null ? 'provisional_model' : null,
+    weaponId: p.weaponId,
+    itemLookup: p.itemLookup,
+    compatibilityMap: p.compatibilityMap,
+    ignore: input.request.ignore,
+    steps: input.request.steps ?? 10,
+    maxPrice: p.maxPrice,
+    minErgonomics: p.minErgonomics,
+    maxRecoilV: p.maxRecoilV,
+    maxRecoilSum: p.maxRecoilSum,
+    minMagCapacity: p.minMagCapacity,
+    minSightingRange: p.minSightingRange,
+    maxWeight: p.maxWeight,
+    maxMOA: p.maxMOA,
+    includeItems: p.includeItems,
+    excludeItems: p.excludeItems,
+    includeCategories: p.includeCategories,
+    excludeCategories: p.excludeCategories,
+    useTrueErgo: p.useTrueErgo,
+    preventOverswing: p.preventOverswing,
+    equipErgoModifier: p.equipErgoModifier,
+    traderLevels: p.traderLevels,
+    fleaAvailable: p.fleaAvailable,
+    barterAvailable: p.barterAvailable,
+    barterExcludeDogtags: p.barterExcludeDogtags,
+    playerLevel: p.playerLevel,
+    ownedItems: input.ownedItems,
+    preciseMode: input.usePrecise,
+    precisionRequest: input.precisionRequest,
+    boundsMode: p.boundsMode,
+    structuralBounds: p.structuralBounds,
   };
 }
 
+/** Explore: the request, a fresh single-use schedule and the total V/I/U/E classification of `runExplore` (ADR 0013 section 6). */
+function driveExplore(input: ExploreRunInput): Promise<ExploreResponse> {
+  const params = paretoParamsOf(input);
+  return sweepExplore(exploreRunRequest(params), buildSweepSchedule(params), input.guard, input.optimize);
+}
+
 /**
- * 2.7b integration: INTERIM MOA floor driver, replaced by `runMoaFloor` (lower-bracket discovery, then qualified Precise bisection, at most 14
- * trials). This body is the pre-cutover seed plus bisection over the validated domain; it proves nothing, so it is only ever `model_witnessed`
- * (an upper-bound witness) or `unresolved`, never `model_proved`, and it has no display floor.
+ * The MOA floor: lower-bracket discovery, then qualified Precise bisection (`runMoaFloor`). The request is the normalized domain minus the cap with
+ * the validated stash; a typed native failure publishes the retained floor state through `publishSnapshot` and is rethrown as the same error.
  */
-async function interimRunMoaFloor(input: FloorRunInput): Promise<MOAFloorResponse> {
-  const { request, baseParams, guard, optimize } = input;
-  const startedAt = guard.now();
-  const unresolved = (reason?: string): MOAFloorResponse => ({
-    status: 'unresolved', moa_qualification: 'provisional_model', floor: null, display_floor: null, proved_lower_bound: null,
-    solve_time_ms: guard.now() - startedAt, ...(reason === undefined ? {} : { reason }),
-  });
-  const weapon = baseParams.itemLookup[request.weapon_id];
-  const gunStats = weapon?.type === 'gun' ? weapon.stats : null;
-  if (!gunStats || (gunStats.center_of_impact ?? 0) <= 0) return unresolved();
-
-  // Constant-zero objective: the floor seeks the best MOA, not the cheapest build.
-  const trial = (maxMOA: number | undefined): Promise<OptimizeResponse> => optimize({ ...baseParams, ergoWeight: 0, recoilWeight: 0, priceWeight: 0, maxMOA }, guard);
-  const seed = await trial(undefined);
-  if (seed.status === 'infeasible' && seed.precision_resolved === 'precise') return { ...unresolved(), status: 'model_infeasible' };
-  if (!seed.final_stats || (seed.status !== 'optimal' && seed.status !== 'feasible')) return unresolved(seed.reason);
-
-  let best: OptimizeResponse = seed;
-  let bestCap: number | null = null;
-  let hi = seed.final_stats.moa;
-  let lo = 0;
-  for (let iter = 0; iter < 14 && hi - lo > 0.02; iter++) {
-    await guard.yieldMacrotask();
-    if (guardStop(guard) !== null) break;
-    const mid = (lo + hi) / 2;
-    const res = await trial(mid);
-    if (res.final_stats && (res.status === 'optimal' || res.status === 'feasible')) {
-      if (res.final_stats.moa < hi) { hi = res.final_stats.moa; best = res; bestCap = mid; }
-    } else {
-      lo = mid;
-    }
-  }
-  const stats = best.final_stats as NonNullable<OptimizeResponse['final_stats']>;
-  const items: ItemDetail[] = best.selected_items;
-  const witness: WitnessBuild = {
-    achieved_moa: stats.moa,
-    base: best.selected_preset && best.selected_preset.id !== request.weapon_id ? { kind: 'preset', presetId: best.selected_preset.id } : { kind: 'naked' },
-    selected_items: items,
-    selected_item_ids: best.selected_item_ids,
-    ...(best.selected_preset === undefined ? {} : { selected_preset: best.selected_preset }),
-    slot_pairs: best.slot_pairs,
-    scope: {
-      weapon_id: request.weapon_id,
-      precision_resolved: 'precise',
-      model_qualification: 'exact',
-      moa_qualification: 'provisional_model',
-      max_moa: bestCap,
-      acquisition: {
-        trader_levels: (baseParams.traderLevels ?? null) as Record<string, number> | null,
-        flea_available: baseParams.fleaAvailable ?? true,
-        barter_available: baseParams.barterAvailable ?? false,
-        barter_exclude_dogtags: baseParams.barterExcludeDogtags ?? false,
-        player_level: baseParams.playerLevel ?? null,
-      },
-      feasibility: {
-        max_price: baseParams.maxPrice ?? null,
-        min_ergonomics: baseParams.minErgonomics ?? null,
-        max_recoil_v: baseParams.maxRecoilV ?? null,
-        max_recoil_sum: baseParams.maxRecoilSum ?? null,
-        min_mag_capacity: baseParams.minMagCapacity ?? null,
-        min_sighting_range: baseParams.minSightingRange ?? null,
-        max_weight: baseParams.maxWeight ?? null,
-        include_items: baseParams.includeItems ?? null,
-        exclude_items: baseParams.excludeItems ?? null,
-        include_categories: baseParams.includeCategories ?? null,
-        exclude_categories: baseParams.excludeCategories ?? null,
-        prevent_overswing: baseParams.preventOverswing ?? false,
-        equip_ergo_modifier: baseParams.equipErgoModifier ?? null,
-      },
-      inventory: { owned_items: [...input.ownedItems] },
-    },
-  };
-  return {
-    status: 'model_witnessed', moa_qualification: 'provisional_model', floor: hi, display_floor: null, proved_lower_bound: null, witness,
-    solve_time_ms: guard.now() - startedAt,
-  };
+function driveMoaFloor(input: FloorRunInput, floorDeps: WorkerDeps['floorDeps']): Promise<MOAFloorResponse> {
+  return searchMoaFloor(input.baseParams, input.guard, { ...floorDeps, publishSnapshot: snapshot => input.publishSnapshot(snapshot) });
 }

@@ -318,7 +318,7 @@ test('the validated multiset is forwarded to Optimize, and the Gunsmith optimize
   assert.deepEqual(h.calls.solve[2].ownedItems, [], '[] means zero stock');
 });
 
-test('Explore and the floor forward the validated multiset and the request guard to every step they run, whatever the step asks for', async () => {
+test('Explore forwards the validated multiset and the request guard to every step, whatever the step asks for; the floor gets them in its domain', async () => {
   const h = harness();
   h.receive(exploreMsg(1, { owned_items: ['x', 'x', 'y'] }));
   h.receive(floorMsg(2, { owned_items: ['x', 'x', 'y'] }));
@@ -327,12 +327,14 @@ test('Explore and the floor forward the validated multiset and the request guard
     assert.deepEqual(input.ownedItems, ['x', 'x', 'y']);
     assert.deepEqual(input.request.owned_items, ['x', 'x', 'y']);
     assert.deepEqual(input.baseParams.ownedItems, ['x', 'x', 'y']);
-    const before = h.calls.solve.length;
-    await input.optimize({ ...input.baseParams, ownedItems: ['smuggled'] }, input.guard);
-    const step = h.calls.solve[before];
-    assert.deepEqual(step.ownedItems, ['x', 'x', 'y'], 'a driver cannot swap the stash of a step');
-    assert.equal(step.guard, input.guard);
+    assert.ok(Object.isFrozen(input.ownedItems));
   }
+  const explore = h.calls.explore[0];
+  const before = h.calls.solve.length;
+  await explore.optimize({ ...explore.baseParams, ownedItems: ['smuggled'] }, explore.guard);
+  const step = h.calls.solve[before];
+  assert.deepEqual(step.ownedItems, ['x', 'x', 'y'], 'a driver cannot swap the stash of a step');
+  assert.equal(step.guard, explore.guard);
 });
 
 test('the full acquisition and feasibility domain reaches every operation base, and a floor base is Precise with no objective weights of its own', async () => {
@@ -527,30 +529,4 @@ test('any other failure is a generic error envelope, and an unknown message type
   const revived = reviveWorkerError(h.errorOf(1));
   assert.equal(revived.name, 'RangeError');
   assert.equal(reviveWorkerError('legacy text').message, 'legacy text');
-});
-
-// ---------------------------------------------------------------------------------------------------------------------------
-// The interim floor (replaced by Phase 2.7b)
-// ---------------------------------------------------------------------------------------------------------------------------
-
-test('the interim floor solves with a constant-zero objective over the validated stash, and never claims a proof', async () => {
-  const h = harness({ runMoaFloor: undefined });
-  h.setState({ ...makeState(1), itemLookup: lookupOf(
-    { ...gun(WEAPON, { slots: [slot('s', ['a'])] }), stats: { ...gun(WEAPON).stats, center_of_impact: 2 } },
-    ['a', mod('a', { ergo: 5 })],
-  ) });
-  let moa = 10;
-  h.setSolve(async () => ({ response: cannedResponse({ final_stats: { ergonomics: 5, recoil_vertical: 1, recoil_horizontal: 1, total_price: 1, total_weight: 1, moa: (moa = Math.max(1, moa - 3)) } }), payoff: null }));
-  h.receive(floorMsg(1, { owned_items: ['a'] }));
-  await h.idle();
-  const result = h.resultOf(1) as { status: string; floor: number; proved_lower_bound: number | null; display_floor: number | null; witness?: { scope: { inventory: { owned_items: string[] } } } };
-  assert.equal(result.status, 'model_witnessed');
-  assert.equal(result.proved_lower_bound, null);
-  assert.equal(result.display_floor, null);
-  assert.deepEqual(result.witness?.scope.inventory.owned_items, ['a']);
-  for (const params of h.calls.solve) {
-    assert.deepEqual([params.ergoWeight, params.recoilWeight, params.priceWeight], [0, 0, 0]);
-    assert.deepEqual(params.ownedItems, ['a']);
-    assert.equal(params.preciseMode, true);
-  }
 });

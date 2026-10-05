@@ -22,6 +22,14 @@ export interface CompletionMetadata {
   lower_bound: number | null;
   upper_bound: number | null;
   absolute_gap: number | null;
+  /**
+   * MOA floor only: the retained floor state at the failure, a `MOAFloorResponse` (the best verified witness, `floor`/`display_floor`, the proved
+   * lower bound; status `model_witnessed`, `model_proved` when the bracket was already proved, or `unresolved` without a witness). ADR 0013
+   * section 6 lists errors among the stops that RETAIN the best witness and the proved `lo`, so a native failure does not lose them. Typed
+   * `unknown` because this module is read by projects that cannot see `api/client.ts` (it needs the DOM lib); `moaFloor.ts` `retainedFloorOf`
+   * reads it back typed.
+   */
+  floor?: unknown;
 }
 
 const completions = new WeakMap<object, CompletionMetadata>();
@@ -32,6 +40,17 @@ const completions = new WeakMap<object, CompletionMetadata>();
  */
 export function attachCompletion<E>(error: E, completion: CompletionMetadata): E {
   if (typeof error === 'object' && error !== null && !completions.has(error)) completions.set(error, completion);
+  return error;
+}
+
+const NO_COMPLETION: CompletionMetadata = { nodes: 0, termination: 'limit', witness: false, lower_bound: null, upper_bound: null, absolute_gap: null };
+
+/**
+ * Add to the completion metadata of an error that is leaving an operation (the floor's retained state), keeping what the inner search captured.
+ * An error with no capture starts from "nothing completed".
+ */
+export function extendCompletion<E>(error: E, patch: Partial<CompletionMetadata>): E {
+  if (typeof error === 'object' && error !== null) completions.set(error, { ...(completions.get(error) ?? NO_COMPLETION), ...patch });
   return error;
 }
 
@@ -62,13 +81,14 @@ export class CancellationError extends Error {
  * metadata of the search that was running.
  */
 export class SolverError extends NativeSolverError {
-  readonly completion: CompletionMetadata | null;
-
   constructor(phase: string, cause: unknown, corrupted = true, completion: CompletionMetadata | null = null) {
     super(phase, cause, corrupted);
-    this.completion = completion;
-    // Also readable through completionOf, so a revived error serializes with its metadata again.
     if (completion !== null) attachCompletion(this, completion);
+  }
+
+  /** What the operation had established before the failure (see {@link completionOf}); always the current capture, so an extension shows. */
+  get completion(): CompletionMetadata | null {
+    return completionOf(this);
   }
 }
 

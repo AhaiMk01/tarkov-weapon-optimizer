@@ -1,12 +1,19 @@
 /**
  * Public reason strings of ADR 0013 section 6, verbatim: a CLOSED set. Locale mappings cover these strings, so no code builds an alias and no
  * response carries any other reason. `outcome.ts` chooses among them (precedence), the pipelines only report what they observed.
+ *
+ * One entry is NOT in the ADR: `invalidExploreSchedule`. Section 6 requires an empty or invalid Explore schedule to be rejected as
+ * `invalid`/[] "with a reason" before any solve, but names no string for it (the listed strings cover stock, queue expiry, validation, proof
+ * prerequisites and the interrupts). It is an ADR gap closed here by the owner's decision (Phase 2.7 integration) rather than by an alias of an
+ * existing string; the locale layer maps it with the others (Phase 2.8). The only reason text outside this set is the diagnostic message of an
+ * Explore `E` step row (`exploreSweep.ts`).
  */
 export const PUBLIC_REASONS = {
   approximateModelInfeasible: 'Approximate model infeasible',
   provisionalMoaModelInfeasible: 'Provisional MOA model infeasible',
   fastProvisionalMoaModelInfeasible: 'Fast provisional MOA model infeasible',
   invalidOwnedItems: 'Invalid owned_items format',
+  invalidExploreSchedule: 'Invalid Explore schedule',
   queueTimeoutBeforeDispatch: 'Queue timeout before dispatch',
   independentBuildValidationFailed: 'Independent build validation failed',
   requiredProofPrerequisiteUnavailable: 'Required proof prerequisite unavailable',

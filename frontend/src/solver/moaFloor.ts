@@ -43,17 +43,20 @@ import { PUBLIC_REASONS } from './physical/reasons';
 import type { SolveFn } from './physical/nativeSolve';
 import { solvePrecise } from './physical/solvePrecise';
 import type { PreciseResult } from './physical/solvePrecise';
+import { SolverError } from './native/errors';
 import { floorEnvelope } from './operationEnvelopes';
+import { completionOf, extendCompletion } from './runtimeErrors';
 import { guardStop } from './runtimeGuard';
 import type { RuntimeGuard } from './runtimeGuard';
 import type { PrecisionRequest, SolveParams } from './types';
+import { DEFAULT_FLOOR_TIME_LIMIT_MS } from './workerProtocol';
 
 // ---------------------------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------------------------
 
 /** Default shared request budget of a floor operation, queue time included (the worker stamps the deadline). */
-export const MOA_FLOOR_DEFAULT_TIME_LIMIT_MS = 30_000;
+export const MOA_FLOOR_DEFAULT_TIME_LIMIT_MS = DEFAULT_FLOOR_TIME_LIMIT_MS;
 /** Threshold trials across discovery and bisection; the seed is not a trial. */
 export const MOA_FLOOR_MAX_TRIALS = 14;
 /** The bracket width at which the minimum counts as proved: `hi - lo <= 0.02` MOA. */
@@ -108,6 +111,11 @@ export interface MoaFloorDeps {
   query?: FloorQuery;
   /** The native solve of the default query (injectable to record what the pinned build is asked, `solvePrecise`'s `solve`). Ignored with a custom `query`. */
   solve?: SolveFn;
+  /**
+   * Called with the retained floor state just before a typed native failure (`SolverError`) is rethrown, so the client can show it. The same
+   * snapshot travels on the error: `completionOf(error).floor`.
+   */
+  publishSnapshot?: (snapshot: MOAFloorResponse) => void;
 }
 
 export type FloorEnd =
@@ -320,7 +328,7 @@ export async function runMoaFloorDetailed(request: MoaFloorRequest, guard: Runti
   const started = guard.now();
   const owned = inspectOwnedItems(request.ownedItems);
   if (!owned.ok) return inputEnvelope(started, guard);
-  const query = deps.query ?? preciseFloorQuery(request, deps.solve);
+  const rawQuery = deps.query ?? preciseFloorQuery(request, deps.solve);
   const precisionRequest: PrecisionRequest = request.precisionRequest ?? 'precise';
   const trace: FloorTraceEntry[] = [];
   const record = (step: FloorTraceEntry['step'], trial: number | null, cap: number | null, at: number, result: FloorQueryResult): void => {
@@ -358,6 +366,32 @@ export async function runMoaFloorDetailed(request: MoaFloorRequest, guard: Runti
     };
   };
 
+  // The retained state, read by the failure path below. Declared before the first query so a failure of the seed is covered too.
+  let best: FloorWitness | null = null;
+  let lo: number | null = null;
+  let trials = 0;
+  /**
+   * One query. A typed native failure (`SolverError`) is never a floor result and never an interrupt reason: it is rethrown as the very same error,
+   * but first the retained state (the best verified witness, the proved `lo`; ADR 0013 section 6 lists errors among the stops that keep them) is
+   * published and attached to its completion metadata, so the caller can show what the floor had established.
+   */
+  const query: FloorQuery = async (cap, queryGuard) => {
+    try {
+      return await rawQuery(cap, queryGuard);
+    } catch (error) {
+      if (error instanceof SolverError) {
+        const snapshot = finish(best, lo, 'query_stopped', trials).response;
+        extendCompletion(error, { witness: best !== null, floor: snapshot });
+        try {
+          deps.publishSnapshot?.(snapshot);
+        } catch {
+          // A failing publisher must not replace the typed native failure.
+        }
+      }
+      throw error;
+    }
+  };
+
   // The seed: an achievable hi only. It shares the budget but is not a trial.
   const stopBeforeSeed = guardStop(guard);
   if (stopBeforeSeed !== null) return finish(null, null, stopBeforeSeed, 0, stopReasonOf(stopBeforeSeed));
@@ -368,10 +402,8 @@ export async function runMoaFloorDetailed(request: MoaFloorRequest, guard: Runti
     return seed.qualified ? finish(null, null, 'model_infeasible', 0) : finish(null, null, 'unqualified_empty', 0, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
   }
   if (seed.kind === 'stopped') return finish(null, null, 'query_stopped', 0, reconcileReason(seed.reason, guard));
-  let best = seed.witness;
-  let lo: number | null = null;
+  best = seed.witness;
   let discoveryStep = Math.max(MOA_FLOOR_MIN_DISCOVERY_STEP, Math.abs(best.achievedMoa) / 2);
-  let trials = 0;
 
   for (;;) {
     // A completed bracket proof is decided before any stop, so a late cancel or deadline never downgrades it.
@@ -415,7 +447,16 @@ export async function runMoaFloorDetailed(request: MoaFloorRequest, guard: Runti
   }
 }
 
-/** The MOA floor of a request (ADR 0013 section 6). Typed native failures propagate; every other outcome is a `MOAFloorResponse`. */
+/** The floor state a typed native failure retained (see {@link runMoaFloorDetailed}), `null` for any other error. */
+export function retainedFloorOf(error: unknown): MOAFloorResponse | null {
+  const floor = completionOf(error)?.floor;
+  return floor === undefined ? null : (floor as MOAFloorResponse);
+}
+
+/**
+ * The MOA floor of a request (ADR 0013 section 6). Every outcome is a `MOAFloorResponse` except a typed native failure, which propagates as the
+ * same `SolverError` with the retained floor state on `completionOf(error).floor` (and published through `deps.publishSnapshot`).
+ */
 export async function runMoaFloor(request: MoaFloorRequest, guard: RuntimeGuard, deps?: MoaFloorDeps): Promise<MOAFloorResponse> {
   return (await runMoaFloorDetailed(request, guard, deps)).response;
 }

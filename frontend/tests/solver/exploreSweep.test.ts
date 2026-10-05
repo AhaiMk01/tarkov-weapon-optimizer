@@ -7,11 +7,11 @@ import assert from 'node:assert/strict';
 import type { ExploreResponse, OptimizationMetadata, OptimizeResponse } from '../../src/api/client';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import {
-  classifyCurve, classifyResponse, countOutcomes, displayFrontier, EXPLORE_INVALID_SCHEDULE_REASON, explorePointOf, isCertifiedInfeasible, isVerifiedWitness,
+  classifyCurve, classifyResponse, countOutcomes, displayFrontier, explorePointOf, isCertifiedInfeasible, isVerifiedWitness,
   paramsOfTarget, runExplore, scheduleProblem, targetsProblem,
 } from '../../src/solver/exploreSweep';
 import type { ExploreRunRequest, OptimizeFn, SettledTarget, SweepSchedule, SweepTarget } from '../../src/solver/exploreSweep';
-import { buildSweepSchedule, exploreRunRequest, explorePareto } from '../../src/solver/paretoExplorer';
+import { buildSweepSchedule, exploreRunRequest } from '../../src/solver/paretoExplorer';
 import type { ParetoParams } from '../../src/solver/paretoExplorer';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
@@ -296,7 +296,7 @@ test('an empty or invalid schedule is invalid with no points, no records and no 
     assert.deepEqual(r.points, []);
     assert.deepEqual(r.sweep_schedule, []);
     assert.deepEqual(r.step_outcomes, []);
-    assert.equal(r.reason, EXPLORE_INVALID_SCHEDULE_REASON);
+    assert.equal(r.reason, PUBLIC_REASONS.invalidExploreSchedule);
     assert.equal(r.precision_resolved, null);
     assert.equal(r.model_qualification, null);
     assert.equal(r.precision_request, 'precise');
@@ -544,7 +544,7 @@ test('a request that cannot be swept builds an empty schedule, which runExplore 
     assert.deepEqual(schedule.targets, []);
     const r = await runExplore(exploreRunRequest(params), schedule, harness().guard, async () => assert.fail('no solve for an invalid schedule'));
     assert.equal(r.curve_status, 'invalid');
-    assert.equal(r.reason, EXPLORE_INVALID_SCHEDULE_REASON);
+    assert.equal(r.reason, PUBLIC_REASONS.invalidExploreSchedule);
     assert.deepEqual(r.step_outcomes, []);
   }
 });
@@ -586,7 +586,7 @@ test('a stop between the endpoints and the steps leaves the generated next step 
   assert.equal(r.sweep_schedule.length, 3);
 });
 
-test('exploreRunRequest carries the shared request: constraints, stash, precision flags and the naked recoil; explorePareto is its point-only wrapper', async () => {
+test('exploreRunRequest carries the shared request: constraints, stash, precision flags and the naked recoil', () => {
   const owned = ['g1', 'g1'];
   const params = paretoParams('price', { ownedItems: owned, maxPrice: 9000, maxMOA: 0, precisionRequest: 'auto', fleaAvailable: false });
   const request = exploreRunRequest(params);
@@ -600,8 +600,6 @@ test('exploreRunRequest carries the shared request: constraints, stash, precisio
   assert.equal(exploreRunRequest(paretoParams('price')).precisionRequest, 'precise', 'derived from the resolved mode when the caller gave none');
   assert.equal(exploreRunRequest(paretoParams('price', { preciseMode: false })).precisionRequest, 'fast');
   assert.equal('ownedItems' in exploreRunRequest(paretoParams('price')).base, false, 'omitted stash stays omitted');
-  const points = await explorePareto(paretoParams('price'));
-  assert.ok(points.length >= 2 && points.every(p => p.status === 'optimal' || p.status === 'feasible'));
 });
 
 // ---------------------------------------------------------------------------------------------
