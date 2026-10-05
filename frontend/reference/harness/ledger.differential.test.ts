@@ -15,20 +15,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEDGER } from '../ledger/index';
-import { gradeCase, probeNodeLoader, type GradedCase } from './compare.differential';
+import { gradeCase, probeNativeLoader, type GradedCase } from './compare.differential';
 import { compareToBaseline, formatSummary, parseBaseline, serializeBaseline, summarize, toBaseline } from './scoreboard';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const frontendRoot = resolve(here, '..', '..');
 const baselinePath = join(here, 'baseline.json');
 const update = process.env.UPDATE_HARNESS_BASELINE === '1';
 
-// production's Node HiGHS loader resolves public/highs.* against the working directory (see README.md)
-process.chdir(frontendRoot);
-const loader = probeNodeLoader(frontendRoot);
+// the pinned native HiGHS build production solves on (see README.md)
+const loader = await probeNativeLoader();
 
 const started = performance.now();
 const board: GradedCase[] = [];
@@ -55,7 +53,7 @@ test('every ledger case is graded exactly once, in ledger order', () => {
 });
 
 test('scoreboard summary (informational)', t => {
-  t.diagnostic(`HiGHS loader in Node: ${loader.path} (cwd ${loader.cwd}${loader.wasmSha256 ? `, public/highs.wasm sha256 ${loader.wasmSha256.slice(0, 16)}` : ''})`);
+  t.diagnostic(`native HiGHS ${loader.highsVersion} (githash ${loader.githash}), glue sha256 ${loader.jsSha256.slice(0, 16)}, wasm sha256 ${loader.wasmSha256.slice(0, 16)}`);
   for (const line of formatSummary(summarize(board)).split('\n')) t.diagnostic(line);
   for (const mode of ['precise', 'fast'] as const) {
     t.diagnostic(`production outcomes (${mode}): ${count(board.map(g => g.observed[mode])).map(([k, n]) => `${k} ${n}`).join(', ')}`);

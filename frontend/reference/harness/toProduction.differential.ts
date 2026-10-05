@@ -41,8 +41,6 @@ export const UNSUPPORTED_FEATURES = [
   'flea_player_level_on_base',
   /** One mod with flea offers at different player levels: `min_level_flea` is one number per item. */
   'flea_offers_distinct_player_levels',
-  /** A category filter that matches an item only through an ancestor: production keeps only the own `category_id`. */
-  'category_chain_ancestor_match',
   /** A receiver magazine capacity under a magazine minimum: `GunStats` has no capacity. */
   'weapon_magazine_capacity',
   /** A trader name that `canonicalizeTraderLevels` / the vendor lookup would trim or lowercase into another key. */
@@ -89,19 +87,6 @@ export function detectUnsupported(fixture: ReferenceFixture, request: ReferenceR
       if (levels.size > 1) add('flea_offers_distinct_player_levels', `mod ${s.id}: flea offers at player levels ${[...levels].sort((a, b) => a - b).join(', ')} (min_level_flea is one number)`);
     } else if (fleas.some(o => (o.minPlayerLevel ?? 0) > 0)) {
       add('flea_player_level_on_base', `${s.kind} ${s.id}: flea offer gated at player level ${Math.max(...fleas.map(o => o.minPlayerLevel ?? 0))} (only mods carry min_level_flea)`);
-    }
-  }
-
-  const requestedCategories = new Set<string>([...(request.exclude_categories ?? []), ...(request.include_categories ?? []).flat()]);
-  if (requestedCategories.size > 0) {
-    const viaAncestor = new Map<string, number>();
-    for (const item of fixture.items) {
-      (item.categories ?? []).slice(1).forEach(category => {
-        if (requestedCategories.has(category)) viaAncestor.set(category, (viaAncestor.get(category) ?? 0) + 1);
-      });
-    }
-    for (const [category, items] of viaAncestor) {
-      add('category_chain_ancestor_match', `category ${category} is an ancestor of ${items} item(s); production matches only the own category id`);
     }
   }
 
@@ -186,6 +171,11 @@ function fleaGate(offers: ReferenceOffer[] | undefined): number {
 // Lookup entries
 // ---------------------------------------------------------------------------------------------
 
+/** The nested `data.bsgCategory` chain production carries (own category first, then its ancestors), or null for an item with none. */
+function categoryNode(chain: readonly string[]): { id: string; parent: unknown } | null {
+  return chain.length === 0 ? null : { id: chain[0], parent: categoryNode(chain.slice(1)) };
+}
+
 function mapSlots(slots: ReferenceSlot[] | undefined): SlotInfo[] {
   return (slots ?? []).map(s => ({ id: s.id, name: s.id, nameId: s.id, required: s.required === true, allowedItems: [...s.allowedItemIds] }));
 }
@@ -213,7 +203,7 @@ function modEntry(item: ReferenceItem, receiverConflicts: readonly string[]): Mo
   };
   return {
     type: 'mod',
-    data: { id: item.id, name: item.id },
+    data: { id: item.id, name: item.id, bsgCategory: categoryNode(item.categories ?? []) },
     slots: mapSlots(item.slots),
     stats,
     // A receiver that lists this mod bans it: production has no receiver conflict list, but a mod that lists the receiver

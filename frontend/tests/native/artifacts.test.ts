@@ -155,9 +155,16 @@ test('production src/ never imports node built-ins statically in the native surf
   assert.ok(existsSync(at('src/solver/native/loadHighs.ts')));
 });
 
-test('solver.ts reaches HiGHS only through the native surface (no direct highs.solve, no silent catch around loading)', () => {
+test('solver.ts reaches HiGHS only through the native surface (no direct highs.solve, no silent catch around loading, no legacy shim)', () => {
   const solver = readFileSync(at('src/solver/solver.ts'), 'utf8');
   assert.ok(!/highs\.solve\(/.test(solver));
   assert.ok(!/loadHiGHS|HighsInstance|highsCorrupted/.test(solver));
-  assert.ok(/legacySolve\(/.test(solver) && /from '\.\/native'/.test(solver));
+  assert.ok(/from '\.\/native'/.test(solver));
+  // Phase 2.4b-3b: the structured solve is the only way in; the deprecated legacy shim has no caller left in src/.
+  const policy = readFileSync(at('src/solver/physical/nativeSolve.ts'), 'utf8');
+  assert.ok(/solveStructured\(/.test(policy) && /from '\.\.\/native'/.test(policy));
+  for (const file of sources(at('src'))) {
+    if (relative(frontend, file).replace(/\\/g, '/').startsWith('src/solver/native/')) continue;
+    assert.ok(!/legacySolve/.test(readFileSync(file, 'utf8')), `${relative(frontend, file)} still uses the deprecated legacySolve shim`);
+  }
 });

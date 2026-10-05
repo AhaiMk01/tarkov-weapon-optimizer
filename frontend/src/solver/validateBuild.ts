@@ -37,7 +37,10 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
   const placed = new Set<string>();
   const children = new Map<string, string[]>();
   if (!result.slot_pairs) fail('Missing complete slot placement');
-  for (const [slotId, id] of result.slot_pairs ?? []) {
+  // The published shape is Placement objects (ADR 0013 section 5); the legacy [slotId, itemId] pair is still read, for hand-built responses.
+  // This template-level check keys slots by id alone, so it is only meaningful for single-copy builds (retired in Phase 2.9).
+  const pairs = (result.slot_pairs ?? []).map((pair): [string, string] => (Array.isArray(pair) ? [pair[0], pair[1]] : [pair.slotId, pair.itemId]));
+  for (const [slotId, id] of pairs) {
     if (!selected.has(id)) fail(`Placement references unselected item ${id}`);
     if (placed.has(id)) fail(`Duplicate placement of ${id}`);
     if (occupied.has(slotId)) fail(`Slot capacity exceeded ${slotId}`);
@@ -122,7 +125,7 @@ export function validateBuild(request: OptimizeRequest, result: OptimizeResponse
   const barrels = mods.filter(m => m.entry.stats.center_of_impact > 0);
   if (barrels.length > 1) fail('Unsupported multiple COI-replacing barrels');
   const coi = barrels[0]?.entry.stats.center_of_impact ?? weapon.stats.center_of_impact;
-  const moa = coi * (1 - sum(m => m.entry.stats.accuracy_modifier) / 100) * 34.3;
+  const moa = coi * (1 - sum(m => m.entry.stats.accuracy_modifier) / 100) * (1000000 / 29089); // K = 100 / 2.9089, as the published statistics
   const stats = result.final_stats;
   close('Ergonomics', stats.ergonomics, ergo); close('Weight', stats.total_weight, weight);
   close('Vertical recoil', stats.recoil_vertical, recoilV); close('Horizontal recoil', stats.recoil_horizontal, recoilH);

@@ -4,6 +4,8 @@ import { buildLP } from './src/solver/lpBuilder.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { choiceFixture } from './test_solver_fixtures.ts';
 import { validateBuild } from './benchmarks/validateBuild.ts';
+import type { ModLookupEntry } from './src/solver/types.ts';
+import { physicalViolations } from './test_solver_fixtures.ts';
 
 const columns = { x_1: { Primal: 1 }, buy_1: { Primal: 1 }, base_1: { Primal: 1 } };
 assert.equal(incumbentBlockReason(columns, ['x_1', 'buy_1', 'base_1'], 1, []), undefined);
@@ -12,8 +14,13 @@ assert.match(incumbentBlockReason({ ...columns, x_1: { Primal: 0.4 } }, ['x_1', 
 assert.match(incumbentBlockReason({ ...columns, base_2: { Primal: 1 } }, ['x_1', 'buy_1', 'base_1', 'base_2'], 2, []) ?? '', /selected 2 purchase bases/);
 assert.match(incumbentBlockReason(columns, ['x_1', 'buy_1', 'base_1'], 1, ['Required slot is empty: right']) ?? '', /Required slot is empty/);
 
-function twoRequired(ids: string[]) {
+/**
+ * Two required slots that both accept the same parts. `capCopies` lists every part as conflicting with itself, which caps it at one installed
+ * copy (ADR 0003): without the cap the exact model fills both slots with copies of one part, as the template model could not.
+ */
+function twoRequired(ids: string[], capCopies = false) {
   const params = choiceFixture(ids.map((id, i) => ({ id, weight: 1.2, ergo: 10 + i })));
+  if (capCopies) for (const id of ids) (params.itemLookup[id] as ModLookupEntry).conflicting_items = [id];
   params.itemLookup.gun.slots = ['left', 'right'].map(id => ({
     id, name: id, nameId: id, required: true, allowedItems: ids,
   }));
@@ -21,10 +28,24 @@ function twoRequired(ids: string[]) {
   return params;
 }
 
-const shared = twoRequired(['Only']);
+// One part, capped at one copy, for two required slots: no build.
+const shared = twoRequired(['Only'], true);
 const sharedResult = await solve(shared);
 assert.equal(sharedResult.status, 'infeasible', sharedResult.reason);
 assert.equal(sharedResult.optimization?.termination, undefined);
+
+// Uncapped, the exact model installs the part twice: two required slots, two copies, two instances. The template model cannot.
+{
+  const uncapped = twoRequired(['Only']);
+  const two = await solve(uncapped);
+  assert.equal(two.status, 'optimal', two.reason);
+  assert.deepEqual(two.selected_item_ids, ['Only', 'Only']);
+  assert.equal(new Set(two.selected_items.map(i => i.instanceId)).size, 2);
+  assert.ok(Math.abs((two.final_stats?.total_weight ?? 0) - 1.4) < 1e-9, 'receiver 1 kg plus two copies of 0.2 kg each (a choice weight is the build weight with that part)');
+  assert.deepEqual(physicalViolations(uncapped, two), []);
+  const fastTwo = await solve({ ...uncapped, preciseMode: false });
+  assert.equal(fastTwo.status, 'incomplete', 'the template model has one copy: it cannot fill both required slots');
+}
 
 const fastShared = await solve({ ...shared, preciseMode: false });
 assert.notEqual(fastShared.status, 'optimal');
@@ -34,15 +55,16 @@ const sweet = await solve({ ...shared, useTchebycheff: true });
 assert.notEqual(sweet.status, 'optimal', sweet.reason);
 assert.notEqual(sweet.optimization?.termination, 'optimal');
 
-const filled = twoRequired(['A', 'B']);
+const filled = twoRequired(['A', 'B'], true);
 const filledResult = await solve(filled);
 assert.equal(filledResult.status, 'optimal', filledResult.reason);
 assert.deepEqual(filledResult.selected_items.map(i => i.id).sort(), ['A', 'B']);
-assert.deepEqual(validateBuild({ weapon_id: 'gun' }, filledResult, filled.itemLookup), []);
+assert.deepEqual(physicalViolations(filled, filledResult), []);
 
 // A limit objective is a primal value. It must not become a relaxation upper bound.
 assert.equal(certifiedDualBound('Time limit reached', 4500), undefined);
-assert.equal(certifiedDualBound('Optimal', 4500), 4500 + 1e-7);
+// No fixed margin: the nominal 1e-7 the pre-cutover code added made a tolerance below it uncertifiable (ADR 0013 4C: nominal margins are a defect).
+assert.equal(certifiedDualBound('Optimal', 4500), 4500);
 
 // One required choice. On [3, 10] the secant admits the 6 kg build (exact TED -5)
 // at relaxation objective 4500. The 3 kg build (exact TED 30) is the only exact

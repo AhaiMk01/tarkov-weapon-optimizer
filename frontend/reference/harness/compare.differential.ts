@@ -14,9 +14,6 @@
 // Differential helper: may import production code (reference/independenceScan.ts); no non-differential file
 // may import this one.
 
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve as resolvePath } from 'node:path';
 import type { SolveParams } from '../../src/solver/types';
 import type { LedgerCase } from '../ledger/index';
 import {
@@ -40,9 +37,10 @@ import { toProduction, type ProductionInputs, type UnsupportedFeature } from './
 export interface ProductionResponse {
   status: string;
   reason?: string;
-  selected_items?: { id: string }[];
+  /** One record per installed occurrence: `id` is the template id, `instanceId` the unique path-derived id of the copy. */
+  selected_items?: { id: string; instanceId?: string }[];
   selected_preset?: { id: string };
-  /** `[slotId, itemId][]` today; `Placement[]` once ADR 0013 section 5 lands. Both are decoded. */
+  /** `Placement[]` (ADR 0013 section 5, one per installed occurrence); the legacy `[slotId, itemId][]` pair is still decoded. */
   slot_pairs?: unknown;
   [field: string]: unknown;
 }
@@ -97,11 +95,14 @@ function readPairs(raw: unknown, issues: string[]): Pair[] {
 }
 
 /**
- * Maps a build-bearing response back to a ReferenceBuild. A `[slotId, itemId]` pair does not name its parent, so it is
- * reconstructed from the fixture: the parent is the placed instance that declares that slot (the receiver first), taken
- * in the order production emitted the pairs (parents before children, resolved to a fixpoint). Anything that cannot be
- * placed still becomes a placement, with `UNRESOLVED_PARENT` as parent, so the reference validator rejects it with a
- * specific code instead of the harness hiding it. Placement objects (the section 5 transport) are used as given.
+ * Maps a build-bearing response back to a ReferenceBuild. Placement objects (the section 5 transport, what production publishes) are
+ * used as given, and `selected_items` is cross-checked against them by instance: every item record's `instanceId` must be the
+ * `childInstanceId` of exactly one placement of the same template, and no placement may lack a record.
+ *
+ * A legacy `[slotId, itemId]` pair does not name its parent, so it is reconstructed from the fixture: the parent is the placed
+ * instance that declares that slot (the receiver first), taken in the order the pairs were emitted (parents before children, resolved
+ * to a fixpoint). Anything that cannot be placed still becomes a placement, with `UNRESOLVED_PARENT` as parent, so the reference
+ * validator rejects it with a specific code instead of the harness hiding it.
  */
 export function decodeBuild(fixture: ReferenceFixture, request: ReferenceRequest, response: ProductionResponse): DecodedBuild {
   const issues: string[] = [];
@@ -156,6 +157,26 @@ export function decodeBuild(fixture: ReferenceFixture, request: ReferenceRequest
     placements.push({ parentInstanceId: UNRESOLVED_PARENT, slotId: pair.slotId, childInstanceId: childInstanceId(UNRESOLVED_PARENT, pair.slotId, pair.itemId), itemId: pair.itemId });
   }
 
+  // selected_items and slot_pairs must describe the same installed occurrences: by instance when the records carry one.
+  const records = response.selected_items ?? [];
+  if (records.some(r => typeof r.instanceId === 'string')) {
+    const byInstance = new Map<string, string>();
+    for (const record of records) {
+      if (typeof record.instanceId !== 'string') {
+        issues.push(`selected_items record ${record.id} has no instanceId`);
+        continue;
+      }
+      if (byInstance.has(record.instanceId)) issues.push(`instanceId ${record.instanceId} appears twice in selected_items`);
+      byInstance.set(record.instanceId, record.id);
+    }
+    const placedInstances = new Map(placements.map(p => [p.childInstanceId, p.itemId]));
+    for (const [instanceId, itemId] of byInstance) {
+      const placedItem = placedInstances.get(instanceId);
+      if (placedItem === undefined) issues.push(`instance ${instanceId} is in selected_items but not in slot_pairs`);
+      else if (placedItem !== itemId) issues.push(`instance ${instanceId}: item ${itemId} in selected_items, ${placedItem} in slot_pairs`);
+    }
+    for (const instanceId of placedInstances.keys()) if (!byInstance.has(instanceId)) issues.push(`instance ${instanceId} is in slot_pairs but not in selected_items`);
+  }
   // selected_items and slot_pairs must describe the same installed multiset.
   const count = (ids: string[]) => ids.reduce((m, id) => m.set(id, (m.get(id) ?? 0) + 1), new Map<string, number>());
   const placed = count(placements.map(p => p.itemId));
@@ -410,25 +431,31 @@ export async function gradeCase(c: LedgerCase, options: GradeOptions = {}): Prom
 }
 
 // ---------------------------------------------------------------------------------------------
-// Production's Node HiGHS loader
+// Production's native HiGHS identity
 // ---------------------------------------------------------------------------------------------
 
+/**
+ * What the pinned native build reports about itself (ADR 0013 section 4B): the HiGHS version string, its git hash, and the SHA-256 of the
+ * glue and the wasm that were hash-checked against the committed manifest BEFORE any of their code ran. There is no stock fallback to
+ * probe any more: the loader either brings up exactly this artifact or throws.
+ */
 export interface LoaderProbe {
-  /**
-   * `custom`: `public/highs.js` and `public/highs.wasm` exist under the working directory, so solver.ts's Node path will
-   * try them. `stock-fallback`: they do not, so solver.ts silently loads the stock `highs` npm package instead.
-   * Either way a failure while evaluating the custom build is also swallowed and falls back to the stock package, which
-   * this probe cannot observe.
-   */
-  path: 'custom' | 'stock-fallback';
-  cwd: string;
-  wasmSha256: string | null;
+  highsVersion: string;
+  githash: string;
+  jsSha256: string;
+  wasmSha256: string;
 }
 
-/** Mirrors the file check of solver.ts's `loadHiGHS` Node branch (it resolves `public/highs.*` against `process.cwd()`). */
-export function probeNodeLoader(cwd: string = process.cwd()): LoaderProbe {
-  const wasmPath = resolvePath(cwd, 'public/highs.wasm');
-  const jsPath = resolvePath(cwd, 'public/highs.js');
-  const custom = existsSync(wasmPath) && existsSync(jsPath);
-  return { path: custom ? 'custom' : 'stock-fallback', cwd, wasmSha256: custom ? createHash('sha256').update(readFileSync(wasmPath)).digest('hex') : null };
+// The native module is loaded through a non-literal specifier for the same reason as solver.ts: its loader needs the WebAssembly types,
+// which tsconfig.reference.json (no DOM lib) does not have. The slice of its surface that is used is declared here.
+const NATIVE_MODULE = '../../src/solver/native/index.ts';
+interface NativeIdentityApi {
+  getNativeHighs(): { acquire(): Promise<{ identity: LoaderProbe & { sizeofHighsInt: number } }> };
+}
+
+/** Loads (if needed) the pinned native build and reports its identity. Throws the loader's typed error when the artifacts do not validate. */
+export async function probeNativeLoader(): Promise<LoaderProbe> {
+  const { getNativeHighs } = (await import(NATIVE_MODULE)) as NativeIdentityApi;
+  const { highsVersion, githash, jsSha256, wasmSha256 } = (await getNativeHighs().acquire()).identity;
+  return { highsVersion, githash, jsSha256, wasmSha256 };
 }

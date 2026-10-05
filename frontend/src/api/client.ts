@@ -1,5 +1,5 @@
-import type { IdealPoint, PresetComponent } from '../solver/types';
-export type { IdealPoint, PresetComponent } from '../solver/types';
+import type { IdealPoint, Placement, PresetComponent } from '../solver/types';
+export type { IdealPoint, Placement, PresetComponent } from '../solver/types';
 
 /**
  * API Client - uses Web Worker + HiGHS solver instead of HTTP backend.
@@ -75,8 +75,26 @@ export interface OptimizeRequest {
   /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
   time_limit_ms?: number;
 }
+/**
+ * How one installed occurrence is supplied (ADR 0013 section 4A): the preset's own stock, an owned copy, or a purchase of a whole lot of
+ * one offer. The charge of a paid lot is on its first occurrence (`ItemDetail.price`), the other units of the lot ride on it at 0.
+ */
+export interface ItemAcquisition {
+  source: 'preset' | 'owned' | 'offer';
+  /** The preset the unit comes from (`preset` only). */
+  presetId: string | null;
+  /** The offer's source key: `fleaMarket`, a trader key or `barter:<trader>` (`offer` only). */
+  offerSource: string | null;
+  /** Index into the item's offers (`offer` only). */
+  offerIndex: number | null;
+}
+
 export interface ItemDetail {
   id: string;
+  /** Unique per installed copy (path-derived, matches `Placement.childInstanceId`); `id` is the template id and repeats for copies. */
+  instanceId: string;
+  /** Exact per-occurrence acquisition: preset stock, owned copy, or the offer bought. */
+  acquisition?: ItemAcquisition;
   name: string;
   price: number;
   icon?: string;
@@ -151,8 +169,13 @@ export interface OptimizeResponse {
   solve_time_ms?: number;
   precision_request?: SolverPrecisionMode;
   precision_resolved?: 'fast' | 'precise';
-  /** Slot-item pairs [slotId, itemId][] for EFTForge build export */
-  slot_pairs?: [string, string][];
+  /** Installed multiset by template id, duplicates kept (one entry per installed copy). */
+  selected_item_ids?: string[];
+  /**
+   * Physical placements, one per installed occurrence. This is the internal instance-aware manifest, NOT the EFTForge v1 `[slotId, itemId][]`
+   * format: an external export needs a checked projection (Phase 2.8).
+   */
+  slot_pairs?: Placement[];
   /** Certified bounds on the maximizing scalarized objective. */
   optimization?: {
     lower_bound: number;
@@ -207,7 +230,7 @@ export interface ExplorePoint {
   price: number;
   selected_items: ItemDetail[];
   selected_preset?: PresetDetail;
-  slot_pairs?: [string, string][];
+  slot_pairs?: Placement[];
   status: string;
   solve_time_ms?: number;
   /** Set by the UI when overlaying multiple weapons on one explore chart. */

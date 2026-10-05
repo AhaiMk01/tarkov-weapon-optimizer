@@ -73,7 +73,8 @@ async function native(): Promise<NativeApi> {
  * gates were first written against gave wrong 'Optimal' values, false 'Infeasible' and WASM aborts, and the pinned 1.15.1 still reports a feasible
  * 6-row model 'Infeasible' with ALL default options (tests/physical/solverDefects.test.ts keeps the models; in the 2 x 1,500 random cases about
  * 15 pinned-projection solves hit it). The gates validate the MODEL against the oracle, so they use the setting that adds no errors of its own;
- * LP_GATE_PRESOLVE=choose reruns them with presolve on. What the production solve path must do about an Infeasible answer is for Phase 2.7.
+ * LP_GATE_PRESOLVE=choose reruns them with presolve on. Production does not trust a presolved Infeasible either: every such verdict is confirmed with presolve off
+ * (src/solver/physical/nativeSolve.ts, phase 2.4b-3b).
  */
 export const GATE_OPTIONS: Record<string, number | boolean | string> = {
   mip_rel_gap: 0,

@@ -246,7 +246,8 @@ const unbuyable = { purchasable: true, offers: [] as OfferInfo[], price: 0 };
   assert.ok(!buildLP(params).indexToItem.includes('Gone'));
 }
 
-// Found-in-raid and preset-retained parts stay. "Cannot buy separately" is not removal.
+// A preset-retained part stays. A part with no purchase path and no preset supply (formerly a free "found in raid" stand-in) is not modelled:
+// Stage 2 caps it at zero copies (ADR 0013 section 4A), so no build installs it and the model does not carry it.
 {
   const params = graph({
     slots: [{ id: 'mount', allows: ['Raid', 'Retained'] }],
@@ -259,7 +260,8 @@ const unbuyable = { purchasable: true, offers: [] as OfferInfo[], price: 0 };
   const report = assessCandidatePruning(params);
   assert.deepEqual(report.impossible, []);
   assert.deepEqual(report.alreadyFixedZero, []);
-  assert.ok(feasibleBuilds(params).some(build => build.includes('Raid')));
+  assert.ok(!feasibleBuilds(params).some(build => build.includes('Raid')), 'a part nothing supplies is never installed');
+  assert.ok(!buildLP(params).indexToItem.includes('Raid'));
   assert.ok(feasibleBuilds(params).some(build => build.includes('Retained')));
 }
 
@@ -272,7 +274,7 @@ const unbuyable = { purchasable: true, offers: [] as OfferInfo[], price: 0 };
       { id: 'Parent', ergo: 1, slots: [{ id: 'child', allows: ['Useful'] }] },
       { id: 'Useful', ergo: 5 },
       { id: 'Host', ...unbuyable, slots: [{ id: 'dead', allows: ['Orphan'] }] },
-      { id: 'Orphan', purchasable: false, ergo: 1 },
+      { id: 'Orphan', ergo: 1 }, // buyable: it is in the model, so only its dropped owner makes it impossible
     ],
   });
   // Host is reachable, then dropped because it cannot be bought. Orphan stays in the
@@ -307,7 +309,7 @@ const unbuyable = { purchasable: true, offers: [] as OfferInfo[], price: 0 };
       { id: 'Body', ergo: 1, slots: [{ id: 'need', required: true, allows: ['Missing'] }] },
       { id: 'Missing', ...unbuyable },
       { id: 'Other', ergo: 3 },
-      { id: 'OnlyOnBody', ergo: 4, purchasable: false },
+      { id: 'OnlyOnBody', ergo: 4 },
     ],
   });
   // OnlyOnBody is not attached yet; attach it through Body.
@@ -492,7 +494,7 @@ const unbuyable = { purchasable: true, offers: [] as OfferInfo[], price: 0 };
       { id: 'Parent', ergo: 2, slots: [{ id: 'child', allows: ['Useful'] }] },
       { id: 'Useful', ergo: 5 },
       { id: 'Ghost', ...unbuyable, slots: [{ id: 'nowhere', allows: ['Lost'] }] },
-      { id: 'Lost', purchasable: false, ergo: 20 },
+      { id: 'Lost', ergo: 20 },
     ],
   });
   const report = assessCandidatePruning(params);

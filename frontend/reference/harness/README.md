@@ -9,7 +9,7 @@ runs production's `solve()` end to end (HiGHS, in Node), maps the returned build
 | File | Role |
 | :--- | :--- |
 | `toProduction.differential.ts` | Pure mapping fixture/request -> `ItemLookup`, compatibility map, `SolveParams`; detects unsupported features |
-| `compare.differential.ts` | Decodes a response into a `ReferenceBuild`, grades the four dimensions, runs production, probes the Node HiGHS loader |
+| `compare.differential.ts` | Decodes a response into a `ReferenceBuild`, grades the four dimensions, runs production, reports the native HiGHS identity |
 | `scoreboard.ts` | Pure bookkeeping: grade shape, `baseline.json` format, ratchet comparison, printed summary |
 | `ledger.differential.test.ts` | Runs every ledger case and enforces the ratchet against `baseline.json` |
 | `toProduction.differential.test.ts`, `compare.differential.test.ts`, `scoreboard.test.ts` | Tests of the three modules above (production is only touched by a few end-to-end smoke cases) |
@@ -52,31 +52,27 @@ Overswing, gear factor, Tchebycheff with its ideal point, trader levels, flea, b
 absent fields stay absent so production applies its own defaults. `objectiveTolerance` is the case's runtime tolerance
 (`runtimeTolerance.absolute`, 1e-9; set in `outcomeFor`) and the deadline is 20 s per call.
 
-That tolerance exposes a production defect today: `solveDetailed` floors it at 1e-7 and every proved bound is the
-native objective plus `DUAL_MARGIN` (1e-7), so the gap is always a hair above the floor and a nonlinear (TrueErgo or
-overswing) case can never certify. Four cases (`F12-ted-weight-regimes`, `F12-ted-uses-gear-adjusted-ergonomics`,
-`F12-max-weight-singleton-interval`, `F14-negative-weight-ted`) return the exact optimum with `status: feasible` and
-`termination: limit`; with the default tolerance (1e-5) they return `optimal`. Their `buildValid`, `scoreOptimal` and
-`emptiness` still pass. Removing the margin (phase 2.3 native bound) or the floor (phase 2.5) is what clears them.
+That tolerance exposed a production defect: the pre-cutover `solveDetailed` floored it at 1e-7 and added a nominal 1e-7 margin to every
+proved bound, so a nonlinear (TrueErgo or overswing) case could never certify (four cases returned the exact optimum with
+`status: feasible` and `termination: limit`). Phase 2.4b-3b honours the requested tolerance as it is (no floor, no margin; the native MIP gap is
+at most a quarter of it), and those four cases return `optimal` at 1e-9.
 
 A feature production's inputs cannot carry is returned in `unsupported`, never dropped. Each detector lives in
 `detectUnsupported`; remove it in the same change that teaches production the feature.
 
 | Feature id | Meaning | Cases when the baseline was created |
 | :--- | :--- | ---: |
-| `category_chain_ancestor_match` | a category filter that matches an item only through an ancestor (only the own `category_id` exists) | 1 |
 | `flea_player_level_on_base` | a player-level flea gate on a receiver or preset (only mods carry `min_level_flea`) | 0 |
 | `flea_offers_distinct_player_levels` | one mod with flea offers at different levels (`min_level_flea` is one number) | 0 |
 | `weapon_magazine_capacity` | a receiver magazine capacity under a magazine minimum (`GunStats` has no capacity) | 0 |
 | `non_canonical_trader_name` | a trader name that production would trim or lowercase into another key | 0 |
 | `ambiguous_preset_id` | a preset id equal to its receiver id or to the naked-base marker `naked` | 0 |
 
-The two detectors `owned_items` (15 cases) and `barter_offered_count_gt_1` (1 case) existed when the baseline was created and
-are gone: phase 2.4b-1 gave production's inputs `SolveParams.ownedItems` (the stash multiset, mapped as a copy; null reads as
-omitted) and `OfferInfo.lot_size` (the units one barter delivers; an absent `offeredCount` is one unit, as in the oracle).
-Today's LP honours neither, so those cases now run and are graded on what they still fail; 14 cases gained 56 passing cells
-(all in the baseline) with no regression. `category_chain_ancestor_match` stays: the data layer carries the whole chain on both
-paths, but today's LP still matches the own category only, so the detector goes when phase 2.4b replaces the LP.
+The detectors `owned_items` (15 cases), `barter_offered_count_gt_1` (1 case) and `category_chain_ancestor_match` (1 case) are gone.
+Phase 2.4b-1 gave production's inputs `SolveParams.ownedItems` (the stash multiset, mapped as a copy; null reads as omitted) and
+`OfferInfo.lot_size` (the units one barter delivers; an absent `offeredCount` is one unit, as in the oracle); phase 2.4b-3b removed the chain
+detector because the Precise model matches the whole category chain and the mapping now writes the nested `data.bsgCategory` chain production
+carries (`category_id` stays the own category, which is all the Fast model reads). No ledger case is unsupported any more.
 
 A receiver's `conflictingItemIds` is carried onto the listed mods as a conflict with the receiver (production has no
 receiver conflict list; the compatibility map skips a mod that lists the receiver, which is the exclusion the oracle's
@@ -103,27 +99,18 @@ The update refuses to write while there are regressions, so it cannot launder on
 per family and dimension, the dominant failure reasons, the production outcomes, the unsupported features) as `ℹ` lines.
 The whole run takes about a second after the one-off HiGHS load.
 
-## Production's HiGHS loader in Node
+## Production's native HiGHS
 
-`frontend/src/solver/solver.ts` (`loadHiGHS`) is what the harness runs. In Node (no `window`, no `WorkerGlobalScope`) it:
-
-1. looks for `public/highs.js` and `public/highs.wasm` under **`process.cwd()`**; if both exist it evaluates the JS with
-   `new Function` and instantiates the custom WASM build checked in there (identical to `vendor/highs/`, built from
-   `lovasoa/highs-js` with more initial memory; not pinned or reproducible);
-2. **silently falls back to the stock `highs` npm package** when either file is missing (for example when the process is
-   not started in `frontend/`) or when anything in step 1 throws (`catch { }` with no log). The solve then runs on a
-   different WASM build (the vendored README says the stock package cannot solve the large LPs the custom memory settings exist for) and nothing in the response says so.
-
-This is the known ADR 0013 section 4B defect (unpinned binary, silent stock fallback, no native evidence) that phase 2.3
-removes with the pinned reproducible build and a loader that fails loudly. Until then the harness sets the working
-directory to `frontend/` itself (`process.chdir`) and `probeNodeLoader` reports which branch the file check selects
-(`custom` or `stock-fallback`, plus the SHA-256 of `public/highs.wasm`). The probe mirrors only the file check: an
-exception while evaluating the custom build would still fall back unseen. The test prints the probe result.
+`solve()` runs on the pinned native HiGHS build (`src/solver/native`, phase 2.3): the loader hash-checks `public/highs.js` and
+`public/highs.wasm` against the committed manifest before any of their code runs, validates the ABI, and throws a typed error on any mismatch.
+There is no stock fallback and no dependence on the working directory. `probeNativeLoader` loads it and reports what it is (HiGHS version,
+githash, glue and wasm SHA-256), and the ledger test prints that identity with the scoreboard.
 
 ## Maintaining the harness in later phases
 
-* Response shape: `decodeBuild` already accepts both `slot_pairs: [slotId, itemId][]` (today) and `Placement[]`
-  (ADR 0013 section 5); reading instance ids from `selected_items` is the follow-up when phase 2.6 lands.
+* Response shape (phase 2.4b-3b, done): `decodeBuild` reads the `Placement[]` that production publishes in `slot_pairs`, and checks `selected_items`
+  against it instance by instance (every record's `instanceId` is the `childInstanceId` of one placement of the same template, no placement
+  without a record). The legacy `[slotId, itemId][]` pair is still decoded for hand-built responses.
 * Count-bearing presets (phase 2.2, done): `presetInfo` emits `{ itemId, count }` components exactly as
   `extractAllPresets` does (repeated entries summed, a zero count kept as a component that supplies nothing, the
   receiver's own entry carried as `receiver_id`), and the `preset_component_count_gt_1` detector is gone. The three

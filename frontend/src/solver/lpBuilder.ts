@@ -29,10 +29,11 @@ import { canonicalizeTraderLevels } from './reuseKey';
 // ---------------------------------------------------------------------------
 
 /**
- * Empirical conversion factor from BSG's centerOfImpact units to in-game MOA.
+ * Conversion factor from BSG's centerOfImpact units to in-game MOA, K = 100 / 2.9089 = 1000000 / 29089 (ADR 0006 section 5, ADR 0013 4C):
+ * the exact constant of the physical model and its validator, replacing the empirical 34.3 literal.
  *   displayed_MOA = effectiveCenterOfImpact * (1 - totalAccuracyMod/100) * MOA_K
  */
-export const MOA_K = 34.3;
+export const MOA_K = 1000000 / 29089;
 
 export interface LPResult {
   lpString: string;
@@ -93,6 +94,8 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
   const excludeItemSet = new Set(params.excludeItems ?? []);
   const excludeCatSet = new Set(params.excludeCategories ?? []);
   const includeItemSet = new Set(params.includeItems ?? []);
+  // Stash (ADR 0008): the template model is single-copy, so an owned part is one free copy, available whatever its offers say.
+  const ownedSet = new Set(params.ownedItems ?? []);
 
   // ========================================================================
   // 1. Build preset maps (mirrors CP-SAT)
@@ -162,9 +165,14 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
       );
     }
 
+    if (entry.type === 'mod' && ownedSet.has(itemId)) {
+      price = 0;
+      source = 'owned';
+      canBuyAtSettings = true;
+    }
+
     const inPreset = itemId in itemToPresets;
     const defaultPrice = stats.price ?? 0;
-    const isFiRMod = entry.type === 'mod' && !(stats as ModStats).purchasable;
 
     // Items >100M price can only come via preset
     if (defaultPrice > 100_000_000) {
@@ -177,7 +185,9 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     // User-required mods stay in the model even when not purchasable at current trader/flea settings
     // (connectivity + buy variables still apply; avoids silently dropping x_i = 1 constraints).
     const userMustInclude = includeItemSet.has(itemId);
-    if (!canBuyAtSettings && !inPreset && !isFiRMod && !userMustInclude) continue;
+    // A part with no legal purchase path and no preset supply is not modelled: the former free "found in raid" stand-in installed parts
+    // the physical model caps at zero copies (ADR 0013 section 4A).
+    if (!canBuyAtSettings && !inPreset && !userMustInclude) continue;
 
     availableItems[itemId] = true;
     itemPrices[itemId] = [price, source, canBuyAtSettings];
@@ -194,7 +204,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     itemIndex.set(itemIds[i], i + 1);
     indexToItem.push(itemIds[i]);
   }
-  let n_items = itemIds.length;
+  const n_items = itemIds.length;
 
   // Collect only slots that have at least one available item
   const usedSlotIds = new Set<string>();
@@ -250,38 +260,8 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     baseIsNaked.push(0);
   }
 
-  // Fallback if no purchasable base
-  if (baseIds.length === 0) {
-    const allPresets = weapon.all_presets;
-    if (allPresets.length > 0) {
-      const fb = allPresets[0];
-      const fbId = fb.id || 'fallback_preset_0';
-      baseIds.push(fbId);
-      basePrices.push(0);
-      baseIsNaked.push(0);
-      // Add fallback preset items
-      const fbSupply = presetSupply(fb.items);
-      presetSupplyMap[fbId] = fbSupply;
-      presetPricesMap[fbId] = 0;
-      for (const iid of fbSupply.keys()) {
-        if (!itemToPresets[iid]) itemToPresets[iid] = [];
-        itemToPresets[iid].push(fbId);
-        if (iid in reachable && !(iid in availableItems)) {
-          availableItems[iid] = true;
-          itemPrices[iid] = [0, 'fallback_preset', false];
-          if (!itemIndex.has(iid)) {
-            indexToItem.push(iid);
-            itemIndex.set(iid, indexToItem.length - 1);
-            n_items++;
-          }
-        }
-      }
-    } else {
-      baseIds.push('naked');
-      basePrices.push(0);
-      baseIsNaked.push(1);
-    }
-  }
+  // No purchasable base: the model is empty (the base-choice row below is a contradiction). The former fallback installed the first preset at
+  // 0 RUB, a free base no player can buy (ADR 0013 section 4A).
 
   const n_bases = baseIds.length;
 
@@ -316,7 +296,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
       item_ergo.push(ms.ergonomics * ERGO_SCALE);
       item_recoil.push(ms.recoil_modifier * SCALE);
       const listedRub = itemPrices[iid]?.[0] ?? 0;
-      if (ms.purchasable) {
+      if (ms.purchasable || ownedSet.has(iid)) {
         item_price_budget.push(listedRub);
         item_price_objective.push(listedRub);
       } else {
@@ -650,7 +630,7 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     for (let b = 1; b <= n_bases; b++) {
       terms.push(`base_${b}`);
     }
-    L(`  base_sum: ${terms.join(' + ')} = 1`);
+    L(terms.length > 0 ? `  base_sum: ${terms.join(' + ')} = 1` : '  base_sum: 0 __dummy = 1');
   }
 
   // --- 2. Slot mutex ---
@@ -718,18 +698,14 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     L(`  conf_${c}: x_${conflict_a[c]} + x_${conflict_b[c]} <= 1`);
   }
 
-  // --- 6. Item availability: preset-only items; FiR-only mods (no API buy path) skip x_i=0 ---
+  // --- 6. Item availability: preset-only items; a part with no purchase path and no preset supply is never installed ---
   for (let i = 1; i <= n_items; i++) {
-    const iid = indexToItem[i];
-    const entry = itemLookup[iid];
-    const fiR = entry.type === 'mod' && !(entry.stats as ModStats).purchasable;
-
     if (item_available[i] === 1) continue;
     const presetBases = itemToPresetBases.get(i);
     if (presetBases && presetBases.length > 0) {
       // x_i can only be 1 when some selected preset supplies at least one copy: x_i <= sum_b q_{b,i} base_b.
       L(`  avail_${i}: x_${i} - ${suppliedBy(i)} <= 0`);
-    } else if (!fiR) {
+    } else {
       L(`  avail_${i}: x_${i} = 0`);
     }
   }
@@ -765,8 +741,13 @@ export function buildLP(params: SolveParams, weightInterval?: [number, number]):
     const sumExpr = itemsInSlot.map(i => (
       multiSlotItems.has(i) ? `p_${i}_${s}` : `x_${i}`
     )).join(' + ');
-    const owner = slot_owner_arr[s]; // 0=root, else item index
+    const owner = slot_owner_arr[s]; // 0=root, else item index, -1 = the owner has no column in this LP
 
+    if (owner === -1) {
+      // An owner that has no column can never be installed, so its required slot binds nothing. (The row used to be written as
+      // `- x_-1 + ...`: HiGHS reads `x_-1` as the column `x_` and the number -1, a different model than the one written.)
+      continue;
+    }
     if (owner === 0) {
       // Weapon-root required slot: must always have an item
       L(`  req_${s}: ${sumExpr} >= 1`);

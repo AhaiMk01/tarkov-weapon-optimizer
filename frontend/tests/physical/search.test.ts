@@ -1,0 +1,210 @@
+// The spatial search over total weight (src/solver/physical/search.ts), without HiGHS: a fake node evaluator over an enumerable set of
+// "builds" (a value and a weight), whose node relaxation is exactly what specializeLP writes (the secant lower envelope of the weight
+// penalty on the node), so the search logic, the bound composition and the limits are checked against a brute-force optimum.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  combineUpperBounds, nodeUpperBound, runSpatialSearch, secantOfPenalty, splitInterval, weightPenalty,
+  type NodeEvaluation, type SearchNode,
+} from '../../src/solver/physical';
+import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
+
+interface FakeBuild { name: string; value: number; weight: number }
+
+const exactScore = (b: FakeBuild): number => b.value - weightPenalty(b.weight);
+
+/** What a node model returns: the best build of the node under the penalty line of the node (an upper bound of the exact score). */
+function relaxedNode(builds: FakeBuild[], node: SearchNode): NodeEvaluation<FakeBuild> {
+  const interval = node.interval!;
+  const inside = builds.filter(b => b.weight >= interval.lo && b.weight <= interval.hi);
+  if (inside.length === 0) return { verdict: 'infeasible', upperBound: null, candidate: null, exact: true };
+  const penalty = secantOfPenalty(interval.lo, interval.hi);
+  const relaxed = (b: FakeBuild): number => b.value - (penalty.line.slope * b.weight + penalty.line.intercept);
+  const best = inside.reduce((a, b) => (relaxed(b) > relaxed(a) ? b : a));
+  return {
+    verdict: 'solved',
+    upperBound: relaxed(best),
+    candidate: { score: exactScore(best), payload: best },
+    exact: penalty.exact,
+    splitAt: best.weight,
+  };
+}
+
+const clock = () => {
+  let t = 0;
+  return { now: () => t, tick: (dt: number) => { t += dt; } };
+};
+
+const BUILDS: FakeBuild[] = [
+  { name: 'a', value: 30, weight: 2 },
+  { name: 'b', value: 80, weight: 4 }, // exact 80 - 25 = 55
+  { name: 'c', value: 95, weight: 5 }, // exact 95 - 40 = 55 (tied with b)
+  { name: 'd', value: 140, weight: 8 }, // exact 140 - 62.5 = 77.5, the maximum
+  { name: 'e', value: 150, weight: 12 }, // exact 150 - 75 = 75
+];
+const OPTIMUM = Math.max(...BUILDS.map(exactScore));
+
+const roots = [{ lo: 2, hi: 3 }, { lo: 3, hi: 12 }];
+
+test('the single bound seams: a node bound is the tighter of parent and proof; the global bound is the largest of incumbent, live and fathomed', () => {
+  assert.equal(nodeUpperBound(10, 7), 7);
+  assert.equal(nodeUpperBound(7, 10), 7);
+  assert.equal(nodeUpperBound(7, null), 7, 'nothing proved: the parent bound stands');
+  assert.equal(nodeUpperBound(Infinity, null), Infinity);
+  assert.equal(combineUpperBounds({ incumbent: 5, live: [], fathomed: -Infinity }), 5);
+  assert.equal(combineUpperBounds({ incumbent: 5, live: [9, 6], fathomed: 7 }), 9);
+  assert.equal(combineUpperBounds({ incumbent: 5, live: [], fathomed: 7 }), 7, 'a fathomed node still counts');
+  assert.equal(combineUpperBounds({ incumbent: -Infinity, live: [], fathomed: -Infinity }), -Infinity);
+  assert.equal(combineUpperBounds({ incumbent: 5, live: [Infinity], fathomed: 1 }), Infinity, 'an unproved live node is an unknown bound');
+});
+
+test('splitInterval splits at the relaxed optimum, clamped to the middle 80 percent, else at the midpoint, and refuses a point', () => {
+  assert.deepEqual(splitInterval({ lo: 0, hi: 10 }), [{ lo: 0, hi: 5 }, { lo: 5, hi: 10 }]);
+  assert.deepEqual(splitInterval({ lo: 0, hi: 10 }, 4), [{ lo: 0, hi: 4 }, { lo: 4, hi: 10 }]);
+  assert.deepEqual(splitInterval({ lo: 0, hi: 10 }, 0.01), [{ lo: 0, hi: 1 }, { lo: 1, hi: 10 }], 'near an end it is pulled in so both children shrink');
+  assert.deepEqual(splitInterval({ lo: 0, hi: 10 }, 99), [{ lo: 0, hi: 9 }, { lo: 9, hi: 10 }]);
+  assert.deepEqual(splitInterval({ lo: 0, hi: 10 }, Number.NaN), [{ lo: 0, hi: 5 }, { lo: 5, hi: 10 }]);
+  assert.equal(splitInterval({ lo: 4, hi: 4 }), null);
+  assert.equal(splitInterval({ lo: 4, hi: 4 + 1e-12 }), null, 'narrower than the numeric floor');
+});
+
+test('the search finds the exact optimum of an enumerable instance and certifies it within the tolerance', async () => {
+  const c = clock();
+  const result = await runSpatialSearch({ roots, evaluate: async node => relaxedNode(BUILDS, node), tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9 });
+  assert.equal(result.incumbent?.payload.name, 'd');
+  assert.equal(result.incumbent?.score, OPTIMUM);
+  assert.equal(result.completed, true);
+  assert.equal(result.certified, true);
+  assert.ok(result.gap !== null && result.gap <= 1e-9, `gap ${result.gap}`);
+  assert.ok(result.upperBound >= OPTIMUM && result.upperBound - OPTIMUM <= 1e-9);
+  assert.equal(result.stopReason, null);
+  assert.ok(result.nodes >= 2 && result.nodes < 60, `${result.nodes} nodes`);
+});
+
+test('a node closed by exactness or by tolerance still contributes its bound: a coarse tolerance reports the slack, not zero', async () => {
+  const c = clock();
+  const loose = await runSpatialSearch({ roots, evaluate: async node => relaxedNode(BUILDS, node), tolerance: 1e6, maxNodes: 512, now: c.now, deadline: 1e9 });
+  assert.equal(loose.completed, true);
+  assert.ok(loose.incumbent !== null);
+  // Everything is within the tolerance after the first nodes, so the answer is whatever was found first, and the bound says how far it may be.
+  assert.ok(loose.upperBound >= OPTIMUM, 'the bound never drops below the true optimum');
+  assert.equal(loose.gap, Math.max(0, loose.upperBound - loose.incumbent!.score));
+  assert.equal(loose.nodes, 2, 'two roots, nothing split');
+  // The same search at a fine tolerance explores more and tightens the gap.
+  const fine = await runSpatialSearch({ roots, evaluate: async node => relaxedNode(BUILDS, node), tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9 });
+  assert.ok(fine.nodes > loose.nodes);
+  assert.ok(fine.gap! < loose.gap! || loose.gap === 0);
+});
+
+test('best-first by bound, lighter first on a tie: the first node evaluated is the light root, then the highest bound', async () => {
+  const c = clock();
+  const seen: [number, number][] = [];
+  await runSpatialSearch({
+    roots,
+    evaluate: async node => { seen.push([node.interval!.lo, node.interval!.hi]); return relaxedNode(BUILDS, node); },
+    tolerance: 1e-9, maxNodes: 4, now: c.now, deadline: 1e9,
+  });
+  assert.deepEqual(seen[0], [2, 3], 'both roots have bound Infinity: the lighter one first');
+  assert.deepEqual(seen[1], [3, 12]);
+});
+
+test('a node limit stops the search with a factual reason, keeps the incumbent, and leaves an unproved bound unknown', async () => {
+  const c = clock();
+  const result = await runSpatialSearch({ roots, evaluate: async node => relaxedNode(BUILDS, node), tolerance: 1e-9, maxNodes: 1, now: c.now, deadline: 1e9 });
+  assert.equal(result.nodes, 1);
+  assert.equal(result.stopReason, PUBLIC_REASONS.nodeLimitReached);
+  assert.equal(result.completed, false);
+  assert.equal(result.certified, false);
+  assert.equal(result.incumbent?.payload.name, 'a', 'the light root holds only a');
+  assert.equal(result.upperBound, Infinity, 'the heavy root was never evaluated: no bound is known');
+  assert.equal(result.gap, Infinity);
+  const none = await runSpatialSearch({ roots, evaluate: async node => relaxedNode(BUILDS, node), tolerance: 1e-9, maxNodes: 0, now: c.now, deadline: 1e9 });
+  assert.equal(none.nodes, 0);
+  assert.equal(none.incumbent, null);
+  assert.equal(none.stopReason, PUBLIC_REASONS.nodeLimitReached);
+  assert.equal(none.empty, false, 'a node limit is not evidence of emptiness');
+});
+
+test('a passed deadline stops the search before any evaluation, and one that passes during a node ends it with the incumbent', async () => {
+  const c = clock();
+  const late = await runSpatialSearch({ roots, evaluate: async () => assert.fail('no node may start after the deadline'), tolerance: 1e-9, maxNodes: 512, now: () => 100, deadline: 100 });
+  assert.equal(late.stopReason, PUBLIC_REASONS.timeLimitReached);
+  assert.equal(late.nodes, 0);
+  assert.equal(late.empty, false);
+  const during = await runSpatialSearch({
+    roots,
+    evaluate: async node => { c.tick(60); return relaxedNode(BUILDS, node); },
+    tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 100,
+  });
+  assert.equal(during.stopReason, PUBLIC_REASONS.timeLimitReached);
+  assert.equal(during.nodes, 2);
+  assert.ok(during.incumbent !== null);
+  assert.equal(during.completed, false);
+});
+
+test('an unresolved or failed node stops the search with its reason; an earlier incumbent is kept and the node stays live', async () => {
+  const c = clock();
+  let calls = 0;
+  const unresolved = await runSpatialSearch({
+    roots,
+    evaluate: async node => {
+      calls++;
+      if (calls === 1) return relaxedNode(BUILDS, node);
+      return { verdict: 'unresolved', upperBound: 90, candidate: null, exact: false, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
+    },
+    tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9,
+  });
+  assert.equal(unresolved.stopReason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
+  assert.equal(unresolved.incumbent?.payload.name, 'a');
+  assert.equal(unresolved.upperBound, 90, 'the unresolved node keeps the bound it proved');
+  const failed = await runSpatialSearch({
+    roots: [{ lo: 2, hi: 12 }],
+    evaluate: async () => ({ verdict: 'failed', upperBound: null, candidate: null, exact: false }),
+    tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9,
+  });
+  assert.equal(failed.stopReason, PUBLIC_REASONS.independentBuildValidationFailed, 'a failed node defaults to the validation reason');
+  assert.equal(failed.incumbent, null);
+});
+
+test('every node proved empty completes the search with no incumbent: that, and only that, is emptiness', async () => {
+  const c = clock();
+  const result = await runSpatialSearch({
+    roots, evaluate: async () => ({ verdict: 'infeasible', upperBound: null, candidate: null, exact: true }),
+    tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9,
+  });
+  assert.equal(result.empty, true);
+  assert.equal(result.completed, true);
+  assert.equal(result.upperBound, -Infinity);
+  assert.equal(result.gap, null);
+  assert.equal(result.certified, false);
+});
+
+test('a node that cannot be split while its bound still exceeds the incumbent stops the search with the resolution reason', async () => {
+  const c = clock();
+  const result = await runSpatialSearch({
+    roots: [{ lo: 5, hi: 5 + 1e-12 }],
+    evaluate: async () => ({ verdict: 'solved', upperBound: 100, candidate: { score: 1, payload: 'x' }, exact: false }),
+    tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9,
+  });
+  assert.match(result.stopReason ?? '', /Numerical interval resolution/);
+  assert.equal(result.upperBound, 100);
+  assert.equal(result.certified, false);
+});
+
+test('a request with no spatial dimension is one null root solved once', async () => {
+  const c = clock();
+  const result = await runSpatialSearch({
+    roots: [null],
+    evaluate: async node => { assert.equal(node.interval, null); return { verdict: 'solved', upperBound: 12.5, candidate: { score: 12.5, payload: 'built' }, exact: true }; },
+    tolerance: 1e-9, maxNodes: 0, now: c.now, deadline: 1e9,
+  });
+  assert.equal(result.nodes, 0, 'maxNodes 0 stops even the single root: callers pass Infinity for a request with no spatial dimension');
+  const run = await runSpatialSearch({
+    roots: [null],
+    evaluate: async () => ({ verdict: 'solved', upperBound: 12.5, candidate: { score: 12.5, payload: 'built' }, exact: true }),
+    tolerance: 1e-9, maxNodes: Infinity, now: c.now, deadline: 1e9,
+  });
+  assert.equal(run.certified, true);
+  assert.equal(run.nodes, 1);
+  assert.equal(run.gap, 0);
+});

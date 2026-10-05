@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { solve } from './src/solver/solver.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
-import { choiceFixture } from './test_solver_fixtures.ts';
+import { choiceFixture, physicalViolations } from './test_solver_fixtures.ts';
 import { validateBuild } from './benchmarks/validateBuild.ts';
 import type { ItemLookup, ModLookupEntry, SlotInfo } from './src/solver/types.ts';
 
@@ -10,8 +10,12 @@ console.log('Running benchmark oracle correctness checks...');
 // 1. Interchangeable two-slot A + B counterexample:
 // Fast mode restricts both slots with sum(x_i) <= 1, missing A+B.
 // Precise mode allows exact placement [left->B, right->A].
+// Each part lists itself as conflicting, which caps it at one installed copy (ADR 0003): the exact model installs as many copies of a part
+// as it has slots for, so without the cap it would fill both slots with B (two copies, see 1b) and this fixture would not separate the models.
 {
   const p = choiceFixture([{ id: 'A', weight: 1.1, ergo: 10 }, { id: 'B', weight: 1.1, ergo: 20 }]);
+  (p.itemLookup.A as ModLookupEntry).conflicting_items = ['A'];
+  (p.itemLookup.B as ModLookupEntry).conflicting_items = ['B'];
   p.itemLookup.gun.slots = ['left', 'right'].map(id => ({
     id, name: id, nameId: id, required: false, allowedItems: ['A', 'B'],
   }));
@@ -21,7 +25,8 @@ console.log('Running benchmark oracle correctness checks...');
   assert.equal(resPrecise.status, 'optimal');
   assert.deepEqual(resPrecise.selected_items.map(i => i.id).sort(), ['A', 'B']);
   assert.equal(resPrecise.final_stats?.ergonomics, 30);
-  assert.deepEqual(validateBuild({ weapon_id: 'gun' }, resPrecise, p.itemLookup), []);
+  // The template-level validateBuild reads a self-conflict as a conflict of the part with itself; the occurrence-level one reads the copy cap.
+  assert.deepEqual(physicalViolations(p, resPrecise), []);
 
   const resFast = await solve({ ...p, preciseMode: false });
   assert.equal(resFast.status, 'optimal');
@@ -29,6 +34,24 @@ console.log('Running benchmark oracle correctness checks...');
   assert.equal(resFast.final_stats?.ergonomics, 20);
   // Proof that Fast mode cannot validly upper-bound the exact optimum:
   assert.ok(resFast.objective_value < resPrecise.objective_value, 'Fast mode optimum must not upper-bound exact optimum');
+}
+
+// 1b. No copy cap: the exact model installs two copies of the better part, one per slot, as distinct occurrences (the single-copy
+// assumption of the template model is gone). Fast still installs at most one.
+{
+  const p = choiceFixture([{ id: 'A', weight: 1.1, ergo: 10 }, { id: 'B', weight: 1.1, ergo: 20 }]);
+  p.itemLookup.gun.slots = ['left', 'right'].map(id => ({
+    id, name: id, nameId: id, required: false, allowedItems: ['A', 'B'],
+  }));
+  p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
+  const res = await solve({ ...p, preciseMode: true });
+  assert.equal(res.status, 'optimal');
+  assert.deepEqual(res.selected_items.map(i => i.id), ['B', 'B']);
+  assert.equal(new Set(res.selected_items.map(i => i.instanceId)).size, 2, 'two copies are two instances');
+  assert.deepEqual(res.selected_item_ids, ['B', 'B']);
+  assert.equal(res.final_stats?.ergonomics, 40);
+  const fast = await solve({ ...p, preciseMode: false });
+  assert.deepEqual(fast.selected_items.map(i => i.id), ['B']);
 }
 
 // 2. Required slot must be filled; empty required slot is infeasible
@@ -107,9 +130,11 @@ console.log('Running benchmark oracle correctness checks...');
     { id: 'Opt1', weight: 1, ergo: 25 },
     { id: 'Opt2', weight: 1, ergo: 20 },
   ]);
-  // Add direct conflict between Opt1 and Opt2
+  // Add direct conflict between Opt1 and Opt2. Each part also lists itself, capping it at one copy (the exact model fills every open slot
+  // with copies of the best allowed part otherwise, which is not what this fixture is about).
   const m1 = p.itemLookup.Opt1 as ModLookupEntry;
-  m1.conflicting_items = ['Opt2'];
+  m1.conflicting_items = ['Opt2', 'Opt1'];
+  (p.itemLookup.Opt2 as ModLookupEntry).conflicting_items = ['Opt2'];
 
   p.itemLookup.gun.slots = [
     { id: 's1', name: 'S1', nameId: 's1', required: false, allowedItems: ['Opt1', 'Opt2'] },
@@ -121,7 +146,7 @@ console.log('Running benchmark oracle correctness checks...');
   assert.equal(res.status, 'optimal');
   // Cannot select both despite two open slots; should pick Opt1 (ergo 25)
   assert.deepEqual(res.selected_items.map(i => i.id), ['Opt1']);
-  assert.deepEqual(validateBuild({ weapon_id: 'gun' }, res, p.itemLookup), []);
+  assert.deepEqual(physicalViolations(p, res), []);
 }
 
 // 5. 3 kg TED boundary: below or equal to 3 kg, weight penalty is zero
@@ -166,6 +191,7 @@ console.log('Running benchmark oracle correctness checks...');
     image: null,
     offers: [{ price: 500, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
   }];
+  p.itemLookup.gun.all_presets = p.itemLookup.gun.presets; // the physical model reads the full preset list
   p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
 
   // Optimizing for lowest price with ergoWeight=0, priceWeight=100
@@ -199,6 +225,7 @@ console.log('Running benchmark oracle correctness checks...');
     image: null,
     offers: [{ price: 500, source: 'mechanic', vendor_name: 'Mechanic', vendor_normalized: 'mechanic', trader_level: 1 }],
   }];
+  p.itemLookup.gun.all_presets = p.itemLookup.gun.presets; // the physical model reads the full preset list
   p.compatibilityMap = buildCompatibilityMap('gun', p.itemLookup);
   const res = await solve({ ...p, ergoWeight: 0, priceWeight: 100, recoilWeight: 0, preciseMode: true });
   assert.equal(res.status, 'optimal');

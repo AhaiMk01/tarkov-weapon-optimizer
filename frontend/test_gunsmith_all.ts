@@ -1,5 +1,10 @@
 /**
- * Verify every row in public/tasks.json against the HiGHS solver (same params as Gunsmith UI, precise mode).
+ * Verify every row in public/tasks.json against the HiGHS solver (same params as Gunsmith UI).
+ *
+ * Precision is resolved as the app resolves 'auto': the exact (Precise) model for a weapon whose exact model is small enough to solve to a proof
+ * within the request deadline, the Fast model for the large ones (the AK and M4A1 families, whose unreduced exact model is far slower:
+ * Part 7 (M4A1) found no incumbent in the 60 s default deadline, Part 6 (AKM) needed 54 s). This test used to force Precise on every task,
+ * which was affordable only while Precise was the cheap template model with a placement trick.
  * Run: cd frontend && npx tsx test_gunsmith_all.ts
  */
 
@@ -10,6 +15,7 @@ import { ensureDataLoaded } from './src/solver/dataService.ts';
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import { solve } from './src/solver/solver.ts';
 import { DEFAULT_TRADER_LEVELS } from './src/solver/types.ts';
+import { normalizePrecisionRequest, resolvePreciseFlag } from './src/solver/precisionMode.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -32,7 +38,8 @@ async function runTask(
   itemLookup: Awaited<ReturnType<typeof ensureDataLoaded>>['itemLookup'],
 ) {
   const cmap = buildCompatibilityMap(t.weapon_id, itemLookup);
-  return solve({
+  const preciseMode = resolvePreciseFlag(normalizePrecisionRequest('auto'), cmap);
+  return { mode: preciseMode ? 'precise' : 'fast', result: await solve({
     weaponId: t.weapon_id,
     itemLookup,
     compatibilityMap: cmap,
@@ -51,8 +58,8 @@ async function runTask(
     traderLevels: DEFAULT_TRADER_LEVELS,
     fleaAvailable: true,
     playerLevel: 60,
-    preciseMode: true,
-  });
+    preciseMode,
+  }) };
 }
 
 async function main() {
@@ -80,18 +87,18 @@ async function main() {
       continue;
     }
 
-    const res = await runTask(t, itemLookup);
+    const { mode, result: res } = await runTask(t, itemLookup);
 
     if (res.status === 'optimal') {
       pass++;
       const st = res.final_stats!;
       console.log(
-        `[OK] ${t.task_name} (precise ${res.solve_time_ms?.toFixed(0) ?? '?'}ms) ergo=${st.ergonomics.toFixed(1)} recoil_v=${st.recoil_vertical.toFixed(1)} ₽${st.total_price}`,
+        `[OK] ${t.task_name} (${mode} ${res.solve_time_ms?.toFixed(0) ?? '?'}ms) ergo=${st.ergonomics.toFixed(1)} recoil_v=${st.recoil_vertical.toFixed(1)} ₽${st.total_price}`,
       );
     } else {
       fail++;
       console.log(
-        `[FAIL] ${t.task_name} (precise) status=${res.status} reason=${res.reason ?? 'n/a'}`,
+        `[FAIL] ${t.task_name} (${mode}) status=${res.status} reason=${res.reason ?? 'n/a'}`,
       );
     }
   }

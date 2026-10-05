@@ -1,5 +1,8 @@
 import { buildCompatibilityMap } from './src/solver/compatibilityMap.ts';
 import type { GunLookupEntry, ItemLookup, ModLookupEntry, OfferInfo, SolveParams } from './src/solver/types.ts';
+import { validatePhysicalBuild } from './src/solver/physical/validate.ts';
+import type { PhysicalBuild } from './src/solver/physical/validate.ts';
+import type { OptimizeResponse } from './src/api/client.ts';
 
 export interface Choice { id: string; weight: number; ergo: number; recoil?: number; price?: number }
 
@@ -36,4 +39,32 @@ export function choiceFixture(choices: Choice[], receiverWeight = 1, receiverErg
     weaponId: 'gun', itemLookup, compatibilityMap: buildCompatibilityMap('gun', itemLookup),
     ergoWeight: 100, recoilWeight: 0, priceWeight: 0, fleaAvailable: true, preciseMode: true,
   };
+}
+
+/**
+ * Independent occurrence-level check of a published build: the response's placements and base go through the physical validator against the
+ * request the solve ran (so every cap, filter and the supply rules apply), and the published statistics must be the validator's own. Returns
+ * the violations, `[]` for a valid build. Unlike the legacy template-level `validateBuild`, it knows copies, instances and the self-conflict
+ * copy cap.
+ */
+export function physicalViolations(params: SolveParams, response: OptimizeResponse): string[] {
+  if (!response.selected_preset || !response.slot_pairs || !response.final_stats) return ['the response carries no build'];
+  const build: PhysicalBuild = {
+    base: response.selected_preset.id === params.weaponId ? { kind: 'naked' } : { kind: 'preset', presetId: response.selected_preset.id },
+    placements: response.slot_pairs,
+  };
+  const { ok, violations, stats } = validatePhysicalBuild(params.itemLookup, params, build, { requirePathInstanceIds: true });
+  const found = violations.map(v => `${v.code}: ${v.detail}`);
+  if (ok && stats) {
+    const published = response.final_stats;
+    const same = (name: string, got: number, want: number): void => {
+      if (!(Math.abs(got - want) <= 1e-9)) found.push(`published ${name} ${got} is not the exact ${want}`);
+    };
+    same('ergonomics', published.ergonomics, stats.ergonomics);
+    same('total price', published.total_price, stats.spend);
+    same('total weight', published.total_weight, stats.weight);
+    same('vertical recoil', published.recoil_vertical, stats.recoilVertical);
+    same('TED', published.true_ergo_delta ?? Number.NaN, stats.ted);
+  }
+  return found;
 }

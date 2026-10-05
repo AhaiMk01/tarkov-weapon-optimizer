@@ -231,6 +231,31 @@ export interface IdealPoint {
   nadP: number;
 }
 
+/**
+ * One installed occurrence attached to a physical slot `(parentInstanceId, slotId)` of its parent (ADR 0013 section 5): the unit of
+ * `OptimizeResponse.slot_pairs`. Instance ids are path-derived (`weapon_0/slot:item/slot:item...`), unique per installed copy.
+ */
+export interface Placement {
+  parentInstanceId: string;
+  /** Template slot id on the parent. */
+  slotId: string;
+  childInstanceId: string;
+  /** Template id of the installed item. */
+  itemId: string;
+}
+
+/**
+ * Classifiers the physical model needs from data the lookup alone cannot supply. Production data carries both (`SlotInfo.ammoItems`, the
+ * nested `data.bsgCategory` chain), so they are optional extras for payloads that do not: a hand-built lookup, the pinned snapshot, the
+ * differential harness. They apply to the blueprint AND to the independent validator, which must see the same domain.
+ */
+export interface PhysicalClassifiers {
+  /** True for an allowed id the lookup does not hold that is ammunition (camora and chamber contents are outside the physical domain). */
+  isAmmo?: (itemId: string) => boolean;
+  /** Category chain of an item, own category first (INTERPRETATIONS.md choice 5). */
+  categoryChainOf?: (itemId: string, entry: ItemLookupEntry) => readonly string[];
+}
+
 export interface SolveParams {
   weaponId: string;
   itemLookup: ItemLookup;
@@ -260,7 +285,10 @@ export interface SolveParams {
   preventOverswing?: boolean;
   /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
   equipErgoModifier?: number | null;
-  /** Absolute scalarized-objective certification tolerance (default 1e-5). */
+  /**
+   * Absolute scalarized-objective certification tolerance (default 1e-5), honoured as requested: it is neither floored nor padded by a
+   * fixed margin. The native MIP gap is at most a quarter of it.
+   */
   objectiveTolerance?: number;
   /** Spatial branch-and-bound limits; reaching either never proves infeasibility. */
   maxSpatialNodes?: number;
@@ -274,9 +302,12 @@ export interface SolveParams {
    * Stash multiset (ADR 0008): one entry per owned copy, duplicates kept, unknown ids retained. Omitted or [] means no stock.
    * At most 10,000 nonempty strings with no sparse holes; anything else is the typed input error `INVALID_OWNED_ITEMS`
    * (`physical/ownedItems.ts`, public reason `Invalid owned_items format`), never infeasibility. Owning a part supplies copies
-   * of it at no cost but never grants a receiver. Carried only; the solver does not honour it before the physical LP lands.
+   * of it at no cost but never grants a receiver. Precise honours it; Fast ignores it (it keeps its legacy model until Phase 2.4c) and
+   * only the independent validation of the published build prices the stash.
    */
   ownedItems?: string[];
+  /** Classifiers for payloads without ammunition flags or category chains; see {@link PhysicalClassifiers}. */
+  physicalOptions?: PhysicalClassifiers;
   preciseMode?: boolean;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   boundsMode?: 'structural' | 'naive';

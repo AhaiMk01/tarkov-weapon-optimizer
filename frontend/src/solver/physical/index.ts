@@ -8,3 +8,9 @@ export * from './spatial';
 export * from './specialize';
 export * from './decode';
 export * from './validate';
+export * from './reasons';
+export * from './search';
+export * from './objective';
+export * from './nogood';
+export * from './templateBuild';
+// nativeSolve.ts and solvePrecise.ts reach the native HiGHS surface, so they are imported by path, not through this barrel.

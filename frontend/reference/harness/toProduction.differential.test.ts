@@ -104,16 +104,16 @@ test('a receiver-listed conflict is carried as a conflict of the listed mod with
 
 // --- category -----------------------------------------------------------------------------------------------
 
-test('category id is the own category; the chain is not representable and is reported only when a request depends on an ancestor', () => {
+test('the whole category chain is carried as production carries it, so an ancestor filter is representable (no unsupported feature)', () => {
   const items = [{ id: 'a', categories: ['leaf', 'mid', 'root'] }, { id: 'b', categories: ['other', 'root'] }];
   const f = fixture({ items });
-  assert.equal(mod(mapFixture(f), 'a').stats.category_id, 'leaf');
-  assert.deepEqual(detectUnsupported(f, request({ exclude_categories: ['leaf'] })), [], 'an own-category filter loses nothing');
-  assert.deepEqual(detectUnsupported(f, request()), [], 'no category filter: the chain is unobservable');
-  const ancestor = detectUnsupported(f, request({ include_categories: [['mid'], ['leaf']] }));
-  assert.deepEqual(ancestor.map(u => u.feature), ['category_chain_ancestor_match']);
-  assert.match(ancestor[0].detail, /mid/);
-  assert.deepEqual(detectUnsupported(f, request({ exclude_categories: ['root'] })).map(u => u.feature), ['category_chain_ancestor_match']);
+  const lookup = mapFixture(f);
+  assert.equal(mod(lookup, 'a').stats.category_id, 'leaf', 'the own category id');
+  assert.deepEqual(mod(lookup, 'a').data.bsgCategory, { id: 'leaf', parent: { id: 'mid', parent: { id: 'root', parent: null } } }, 'the nested chain data.bsgCategory');
+  assert.equal(mod(mapFixture(fixture({ items: [{ id: 'c' }] })), 'c').data.bsgCategory, null, 'an item with no category has no chain');
+  assert.deepEqual(detectUnsupported(f, request({ exclude_categories: ['leaf'] })), []);
+  assert.deepEqual(detectUnsupported(f, request({ include_categories: [['mid'], ['leaf']] })), [], 'an ancestor include is matched by the chain');
+  assert.deepEqual(detectUnsupported(f, request({ exclude_categories: ['root'] })), [], 'an ancestor exclude is matched by the chain');
 });
 
 // --- offers ---------------------------------------------------------------------------------------------
@@ -376,7 +376,7 @@ test('several unsupported features are all listed, once per feature id per subje
     presets: [{ id: 'p', weaponId: 'gun', components: [{ itemId: 'a', count: 3 }], offers: [{ kind: 'flea', price: 5, minPlayerLevel: 20 }] }],
   });
   const found = flags(f, request({ exclude_categories: ['branch'] }));
-  assert.deepEqual(found, ['flea_player_level_on_base', 'category_chain_ancestor_match', 'non_canonical_trader_name']);
+  assert.deepEqual(found, ['flea_player_level_on_base', 'non_canonical_trader_name']);
   assert.deepEqual(found, flags(f, request({ exclude_categories: ['branch'] })), 'deterministic');
 });
 
@@ -384,16 +384,14 @@ test('several unsupported features are all listed, once per feature id per subje
 
 test('every ledger case maps without throwing and into a lookup that holds every fixture template', () => {
   const known = new Set<string>(UNSUPPORTED_FEATURES);
-  let unsupportedCases = 0;
   for (const c of LEDGER) {
     const inputs = toProduction(c.fixture, c.request, { preciseMode: true });
     for (const w of c.fixture.weapons) assert.equal(inputs.itemLookup[w.id]?.type, 'gun', `${c.id}: ${w.id}`);
     for (const i of c.fixture.items) assert.equal(inputs.itemLookup[i.id]?.type, 'mod', `${c.id}: ${i.id}`);
     assert.equal(inputs.params.weaponId, c.request.weapon_id, c.id);
     for (const u of inputs.unsupported) assert.ok(known.has(u.feature), `${c.id}: ${u.feature}`);
-    if (inputs.unsupported.length) unsupportedCases++;
   }
-  assert.ok(unsupportedCases > 0 && unsupportedCases < LEDGER.length, `unsupported cases: ${unsupportedCases}`);
+  // Phase 2.4b-3b removed the last detector a ledger case triggered (the chain is carried now): every case runs.
 });
 
 test('every ledger case with owned_items hands its stash to production, and none is reported unsupported for it', () => {

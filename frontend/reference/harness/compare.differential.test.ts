@@ -4,21 +4,16 @@
 // real production solver on one-slot cases it must get right.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import type { SolveParams } from '../../src/solver/types';
 import { defineCase, fix, nk, reqSlot, slot } from '../ledger/dsl';
 import { LEDGER, type LedgerCase } from '../ledger/index';
 import { gt, makeBuild, projectBuild, projectionKey, ROOT_INSTANCE_ID, runOracle, type ReferenceBuild } from '../oracle/index';
 import { DIMENSIONS, type DimensionResults, type ModeName } from './scoreboard';
 import {
-  decodeBuild, gradeCase, gradeOutcome, probeNodeLoader, runProduction, returnsBuild, UNRESOLVED_PARENT,
+  decodeBuild, gradeCase, gradeOutcome, probeNativeLoader, runProduction, returnsBuild, UNRESOLVED_PARENT,
   type ProductionOutcome, type ProductionResponse,
 } from './compare.differential';
 
-const frontendRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const ROOT = ROOT_INSTANCE_ID;
 
 // --- synthesized responses ----------------------------------------------------------------------------
@@ -40,7 +35,7 @@ function response(c: LedgerCase, mode: ModeName, build: ReferenceBuild | null, s
     slot_pairs: [],
   };
   if (build) {
-    outcome.selected_items = build.placements.map(p => ({ id: p.itemId }));
+    outcome.selected_items = build.placements.map(p => ({ id: p.itemId, instanceId: p.childInstanceId }));
     outcome.selected_preset = { id: build.base.kind === 'naked' ? c.request.weapon_id : build.base.presetId };
     outcome.slot_pairs = shape === 'placements' ? build.placements.map(p => ({ ...p })) : build.placements.map(p => [p.slotId, p.itemId]);
   }
@@ -145,6 +140,24 @@ test('decode: Placement objects (the ADR 0013 section 5 transport) are used as g
   const decoded = decodeBuild(decodeFixture, decodeRequest, dr({ selected_items: [{ id: 'host' }, { id: 'other' }], slot_pairs: placements }));
   assert.deepEqual(decoded.issues, []);
   assert.deepEqual(decoded.build.placements, placements);
+});
+
+test('decode: item records that carry an instanceId must match the placements instance for instance, repeated templates included', () => {
+  const placements = [
+    { parentInstanceId: ROOT, slotId: 's1', childInstanceId: 'a', itemId: 'host' },
+    { parentInstanceId: ROOT, slotId: 's2', childInstanceId: 'b', itemId: 'host' },
+  ];
+  const ok = decodeBuild(decodeFixture, decodeRequest, dr({ selected_items: [{ id: 'host', instanceId: 'a' }, { id: 'host', instanceId: 'b' }], slot_pairs: placements }));
+  assert.deepEqual(ok.issues, []);
+  const missing = decodeBuild(decodeFixture, decodeRequest, dr({ selected_items: [{ id: 'host', instanceId: 'a' }, { id: 'host' }], slot_pairs: placements }));
+  assert.match(missing.issues.join(' '), /selected_items record host has no instanceId/);
+  const swapped = decodeBuild(decodeFixture, decodeRequest, dr({ selected_items: [{ id: 'other', instanceId: 'a' }, { id: 'host', instanceId: 'b' }], slot_pairs: placements }));
+  assert.match(swapped.issues.join(' '), /instance a: item other in selected_items, host in slot_pairs/);
+  const unknown = decodeBuild(decodeFixture, decodeRequest, dr({ selected_items: [{ id: 'host', instanceId: 'a' }, { id: 'host', instanceId: 'c' }], slot_pairs: placements }));
+  assert.match(unknown.issues.join(' '), /instance c is in selected_items but not in slot_pairs/);
+  assert.match(unknown.issues.join(' '), /instance b is in slot_pairs but not in selected_items/);
+  const twice = decodeBuild(decodeFixture, decodeRequest, dr({ selected_items: [{ id: 'host', instanceId: 'a' }, { id: 'host', instanceId: 'a' }], slot_pairs: placements }));
+  assert.match(twice.issues.join(' '), /instanceId a appears twice in selected_items/);
 });
 
 test('decode: a malformed slot_pairs entry is reported', () => {
@@ -306,15 +319,15 @@ test('outcome contract: every admitted field is compared, and each missing or wr
 test('an unsupported mapping fails every applicable dimension with the reason, and is graded the same in both modes', () => {
   const c = byId('F04-exclude-category-ancestor-chain');
   assert.equal(c.expected.empty, false);
-  const outcome: ProductionOutcome = { kind: 'unsupported', unsupported: [{ feature: 'category_chain_ancestor_match', detail: 'category mod is an ancestor of 2 item(s)' }] };
+  const outcome: ProductionOutcome = { kind: 'unsupported', unsupported: [{ feature: 'flea_player_level_on_base', detail: 'receiver gun: flea offer gated at player level 20' }] };
   for (const mode of ['precise', 'fast'] as const) {
     const graded = gradeOutcome(c, mode, outcome);
     for (const d of DIMENSIONS) {
       if (d === 'scoreOptimal' && mode === 'fast') assert.equal(graded[d].verdict, 'n/a');
       else {
         assert.equal(graded[d].verdict, 'fail', `${mode}.${d}`);
-        assert.match(graded[d].reason, /^unsupported: category mod is an ancestor of 2 item\(s\)/);
-        assert.equal(graded[d].key, 'unsupported: category_chain_ancestor_match');
+        assert.match(graded[d].reason, /^unsupported: receiver gun: flea offer gated at player level 20/);
+        assert.equal(graded[d].key, 'unsupported: flea_player_level_on_base');
       }
     }
   }
@@ -334,11 +347,25 @@ test('a production crash fails every applicable dimension and names the exceptio
 // --- gradeCase -------------------------------------------------------------------------------------------
 
 test('gradeCase does not run a case with an unsupported feature, and records the feature ids', async () => {
-  const c = byId('F04-exclude-category-ancestor-chain');
+  const c = defineCase({
+    id: 'smoke-unsupported-receiver-magazine',
+    family: 4,
+    subcases: [],
+    title: 'smoke: a receiver magazine capacity under a magazine minimum (not representable in production inputs)',
+    adrRefs: [],
+    prerequisites: 'receiver magazine capacity 30',
+    source: 'min_mag_capacity 20',
+    derivation: 'the receiver already meets the minimum',
+    fixture: fix({ items: [{ id: 'a', ergonomics: 3 }], weapon: { magazineCapacity: 30, slots: [slot('s', ['a'])] } }),
+    request: { min_mag_capacity: 20, recoil_weight: 0 },
+    feasible: [nk(), nk('a')],
+    maxScore: '3',
+    maximizers: [nk('a')],
+  });
   let calls = 0;
   const graded = await gradeCase(c, { runner: async () => { calls++; return { kind: 'threw', message: 'must not run' }; } });
   assert.equal(calls, 0);
-  assert.deepEqual(graded.unsupported, ['category_chain_ancestor_match']);
+  assert.deepEqual(graded.unsupported, ['weapon_magazine_capacity']);
   assert.equal(graded.observed.precise, 'unsupported');
   assert.equal(graded.precise.emptiness.verdict, 'fail');
 });
@@ -353,8 +380,6 @@ test('gradeCase runs Precise then Fast with the matching precision flag and the 
 });
 
 // --- production end to end -----------------------------------------------------------------------------
-
-process.chdir(frontendRoot); // solver.ts resolves the custom HiGHS build against the working directory
 
 const choice = defineCase({
   id: 'smoke-required-choice',
@@ -409,16 +434,11 @@ test('runProduction turns a thrown exception into a crash outcome instead of pro
   assert.equal(returnsBuild({ status: 'incomplete' }), false);
 });
 
-test('the Node HiGHS loader probe tells the custom build from the silent stock fallback', () => {
-  const here = probeNodeLoader(frontendRoot);
-  assert.equal(here.path, 'custom');
-  assert.match(here.wasmSha256 ?? '', /^[0-9a-f]{64}$/);
-  const empty = mkdtempSync(join(tmpdir(), 'harness-loader-probe-'));
-  try {
-    const elsewhere = probeNodeLoader(empty);
-    assert.equal(elsewhere.path, 'stock-fallback');
-    assert.equal(elsewhere.wasmSha256, null);
-  } finally {
-    rmSync(empty, { recursive: true, force: true });
-  }
+test('the native loader identity names the pinned build: version, githash and the hash-checked artifacts (there is no stock fallback to tell apart)', async () => {
+  const identity = await probeNativeLoader();
+  assert.equal(identity.highsVersion, '1.15.1');
+  assert.match(identity.githash, /^[0-9a-f]{7,40}$/);
+  assert.match(identity.wasmSha256, /^[0-9a-f]{64}$/);
+  assert.match(identity.jsSha256, /^[0-9a-f]{64}$/);
+  assert.deepEqual(await probeNativeLoader(), identity, 'the same instance reports the same identity');
 });

@@ -38,7 +38,8 @@
  * Solver note (see tests/physical/solverDefects.test.ts): the retired npm `highs` 1.8.0 returned wrong answers and aborted on models of this
  * family. The pinned native build (HiGHS 1.15.1) solves that corpus, but with PRESOLVE ON it still reports some feasible models 'Infeasible' (a
  * 6-row model is kept as a fixture; about 15 pinned-projection solves in 2 x 1,500 random cases); with presolve off it agrees with the reference
- * oracle everywhere tried. An 'Infeasible' answer must therefore not be certified from a presolved solve alone (Phase 2.7).
+ * oracle everywhere tried. An 'Infeasible' answer is therefore never taken from a presolved solve alone: the solve path confirms it with presolve off
+ * (nativeSolve.ts, Phase 2.4b-3b).
  */
 
 import type { IdealPoint } from '../types';
