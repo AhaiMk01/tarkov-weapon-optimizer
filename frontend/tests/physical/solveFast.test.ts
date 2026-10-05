@@ -250,10 +250,15 @@ test('Tchebycheff against a given ideal point picks the same exact build as Prec
   await assert.rejects(() => solveFast({ params: paramsOf(lookup, { useTchebycheff: true }), deadline: FAR() }), /ideal point/);
 });
 
-test('TrueErgo and Prevent Overswing are Precise-only: the Fast model refuses them rather than ignoring them', async () => {
-  const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'])] }), ['a', mod('a', { ergo: 1 })]);
-  await assert.rejects(() => solveFast({ params: paramsOf(lookup, { useTrueErgo: true }), deadline: FAR() }), /Precise-only/);
-  await assert.rejects(() => solveFast({ params: paramsOf(lookup, { preventOverswing: true }), deadline: FAR() }), /Precise-only/);
+test('TrueErgo and Prevent Overswing run on the Fast model (the weight search of solveFast.ted.test.ts): they are neither refused nor ignored', async () => {
+  const lookup = lookupOf(gun(WEAPON, { weight: 1, slots: [slot('s', ['a'])] }), ['a', mod('a', { ergo: 1, weight: 1 })]);
+  for (const request of [{ useTrueErgo: true }, { preventOverswing: true }]) {
+    const params = paramsOf(lookup, request);
+    const result = await solveFast({ params, deadline: FAR() });
+    assert.deepEqual(installed(result), ['a']);
+    assert.equal(result.summary.spatial, true);
+    assertValid(params, result);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------

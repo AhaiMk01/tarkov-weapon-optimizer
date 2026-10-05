@@ -329,8 +329,8 @@ export interface SolveParams {
   preciseMode?: boolean;
   /**
    * What the caller asked for, echoed as `precision_request` (an Auto request that the caller resolved into `preciseMode` is still 'auto').
-   * Default: 'precise' when `preciseMode` is true, otherwise 'fast'. It never changes what runs: `preciseMode` does, and a TrueErgo or
-   * Prevent Overswing request runs Precise whatever was asked (`precision_resolved` says so).
+   * Default: 'precise' when `preciseMode` is true, otherwise 'fast'. It never changes what runs: `preciseMode` does (a TrueErgo or Prevent
+   * Overswing request is not upgraded to Precise: Fast runs the weight search on its own count model), and `precision_resolved` says what ran.
    */
   precisionRequest?: PrecisionRequest;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */

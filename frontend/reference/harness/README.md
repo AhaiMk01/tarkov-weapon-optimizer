@@ -36,12 +36,12 @@ exact optimality is not required of it (ADR 0013 section 6) and `scoreOptimal` i
 A case with an unsupported feature (below) is a recorded failure on every applicable dimension with the reason
 `unsupported: ...`; it is not run. Nothing is ever passed by loosening a comparison.
 
-Stage 2 is complete when every Precise cell passes. The Fast column is the secondary signal. One known open question, still open after
-phase 2.6: production resolves a Fast request on a TrueErgo or Prevent Overswing case to Precise (`solve` forces `preciseMode`, because the
-Fast model has no TED rows), and reports it honestly as `precision_request: 'fast'`, `precision_resolved: 'precise'`, certified and exact. The 15
-Fast `outcomeContract` cells of those cases (F11 6, F12 8, F14 1) therefore fail on `precision_resolved`, `model_qualification` and
-`physical_certificate`, while `precision_resolved` must equal the requested mode. They pass only if Fast learns TED rows or the owner changes the
-admitted Fast outcome of a TED case; no comparison is loosened for them.
+Stage 2 is complete when every Precise cell passes. The Fast column is the secondary signal. Phase 2.6b closed the one question that stayed open
+after phase 2.6: the 15 Fast `outcomeContract` cells of the TrueErgo and Prevent Overswing cases (F11 6, F12 8, F14 1) failed because `solve`
+resolved such a Fast request to Precise (the Fast model had no TED rows) and reported it as `precision_resolved: 'precise'`, certified and exact,
+while `precision_resolved` must equal the requested mode. Owner decision 2b (2026-10-05): a Fast request with TED runs on the Fast model, which now
+states the TED rows on a weight node and runs the same spatial search over total weight, and answers `approximate_optimal` / `approximate` (or the
+Fast emptiness row). The 15 cells pass without any comparison loosened, and the Fast column is 149/149 on `buildValid`, `emptiness` and `outcomeContract`.
 
 ## Mapping and unsupported features
 

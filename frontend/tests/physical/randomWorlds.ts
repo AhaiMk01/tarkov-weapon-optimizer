@@ -2,7 +2,7 @@
 // feature the Fast rows state drawn at random.
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import { DEFAULT_TRADER_LEVELS } from '../../src/solver/types';
-import type { ItemLookup, OfferInfo, SolveParams } from '../../src/solver/types';
+import type { GunLookupEntry, ItemLookup, ModLookupEntry, OfferInfo, SolveParams } from '../../src/solver/types';
 import { barter, flea, gunWith, lookupOf, modWith, slot, trader, WEAPON, type SlotSpec } from './lpFixtures';
 
 export function rng(seed: number): () => number {
@@ -111,4 +111,35 @@ export function randomWorld(seed: number, cyclic: boolean): World {
   }
   const params: SolveParams = { weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup), ...extra };
   return { lookup, params, ids };
+}
+
+/**
+ * A world that exercises TrueErgo and Prevent Overswing: the seeded world of `randomWorld` with its weights raised to the range where the 3 kg knee
+ * matters, an equipment modifier, and at least one of the two TED flags. Drawn from a second generator, so `randomWorld(seed, cyclic)` itself is
+ * unchanged. The weights and ergonomics are small multiples of an eighth, so a build's TED sits near the overswing boundary often.
+ */
+export function randomTedWorld(seed: number, cyclic: boolean): World {
+  const world = randomWorld(seed, cyclic);
+  const rand = rng(Math.imul(seed, 7919) + 104_729);
+  const pick = <T,>(items: readonly T[]): T => items[Math.floor(rand() * items.length)];
+  const chance = (p: number): boolean => rand() < p;
+  const weapon = world.lookup[WEAPON] as GunLookupEntry;
+  weapon.stats.weight = pick([0.5, 1, 1.5, 2, 3]);
+  weapon.stats.naked_ergonomics = pick([5, 15, 25, 40, 55]);
+  for (const id of world.ids) {
+    const entry = world.lookup[id] as ModLookupEntry;
+    entry.stats.weight = pick([0, 0.125, 0.25, 0.5, 1, 1.5]);
+    entry.stats.ergonomics = pick([-8, -3, 0, 2, 5, 9, 14, 22]);
+  }
+  const useTrueErgo = chance(0.65);
+  const params = world.params;
+  // Most of the random caps would make the request empty before TED matters: keep each with a small probability.
+  for (const cap of ['maxPrice', 'minErgonomics', 'maxWeight', 'maxRecoilV', 'maxRecoilSum', 'minMagCapacity', 'minSightingRange', 'maxMOA', 'includeItems'] as const) {
+    if (!chance(0.25)) delete params[cap];
+  }
+  params.useTrueErgo = useTrueErgo;
+  params.preventOverswing = !useTrueErgo || chance(0.5);
+  params.equipErgoModifier = pick([0, 0, -0.1, 0.2, -0.35]);
+  if (useTrueErgo && !(params.ergoWeight && params.ergoWeight > 0)) params.ergoWeight = 1;
+  return world;
 }

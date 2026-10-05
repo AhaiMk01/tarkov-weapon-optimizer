@@ -47,7 +47,23 @@
  * here claims that every model point is a physical build: the solver decodes a rooted occurrence tree from the counts, the exact physical
  * validator judges it, and a point it rejects is cut out and the model re-solved (`solveFast.ts`).
  *
- * TrueErgo and Prevent Overswing are Precise-only (the production driver routes them there); a request that sets either is an input error.
+ * TrueErgo and Prevent Overswing (Phase 2.6b, owner decision 2b). A request that reads TED is specialized on a WEIGHT NODE, exactly as `specializeLP`
+ * does for the Precise model, and the same spatial search over total weight (`search.ts`) runs on top of it (`solveFast.ts`). The rows are the
+ * Precise ones, on the count model's columns:
+ *   gear_ergo, eff_ergo   gear_ergo = f x capped_ergo with f = max(0, 1 + modifier) built exactly (`gearFactor`, two neighbouring inequalities when f is
+ *                         not representable), then the second clamp eff_ergo = clamp(gear_ergo, 0, 100) (the general three-regime clamp, prefix c2)
+ *   node rows             the closed weight interval [lo, hi] of the node as rows on the `weight` column (the column keeps the active domain)
+ *   ted, ted_def          ted = eff_ergo - (slope x weight + intercept), the line being the node's verified lower envelope of the weight penalty
+ *                         q(W) = max(0, 100 - 300 / W) (`secantOfPenalty`: exact up to 3 kg or at a single weight, the chord on a concave piece, the zero line
+ *                         across the 3 kg knee; the intercept is the largest double that keeps the emitted line at or below the exact chord at both ends)
+ *   lim_overswing         ted >= 0 under Prevent Overswing
+ *   ergo_frame            fE = 10 x ted under TrueErgo (else 10 x capped_ergo, as before)
+ * `weight` is the exact aggregate of the template counts (weight_def: the receiver plus the sum of n_t x weight_t), which is what makes the node
+ * restriction a row on counts and the spatial search transfer node by node. Every auxiliary of these rows has a finite enclosed domain (the gear and
+ * clamp ranges, the ted enclosure of eff minus the line's range on the node); there is no Big-M literal beyond the clamp's, computed from those ranges.
+ * A node whose line is a secant or the knee relaxation is an UPPER bound of the best exactly scored build of the node (the line lies below q), and a
+ * build the model returns there may overswing exactly: the validator decides, and the search refines the node (`solveFast.ts`). Like every Fast bound,
+ * the bound is the bound of the APPROXIMATE model (the rows are plain doubles, no proof frame): it orders and fathoms the search, it never certifies.
  */
 
 import type { PhysicalBlueprint } from './blueprint';
@@ -57,9 +73,11 @@ import { PhysicalModelError } from './errors';
 import { appendCuts, type DecisionColumn, type IntegerNoGood } from './fastCut';
 import { LpWriter, mergeTerms, type RowSense } from './lpText';
 import { iAdd, iScale, nextUp, sumEnclosure, type Interval } from './numeric';
+import { differenceEnclosure, gearEnclosure, gearFactor } from './proof';
+import { lineEnclosure, secantOfPenalty, type NodePenalty, type PenaltyLine } from './spatial';
 import {
-  AUGMENTATION, ERGO_CLAMP_MAX, ERGO_SCALE, MOA_K, RECOIL_SCALE,
-  type ModelStats, type ObjectiveCoefficient, type ObjectiveMeta, type ProvedEmpty, type SpecializeRequest,
+  AUGMENTATION, ERGO_CLAMP_MAX, ERGO_SCALE, MOA_K, RECOIL_SCALE, checkedNodePenalty,
+  type ModelStats, type ObjectiveCoefficient, type ObjectiveMeta, type ProvedEmpty, type SpatialMeta, type SpatialNode, type SpecializeRequest,
 } from './specialize';
 import { buildTemplateGraph, type TemplateGraph, type TemplateSlot } from './templateGraph';
 import type { IdealPoint } from '../types';
@@ -135,6 +153,13 @@ export interface FastModel {
   readonly plans: ReadonlyMap<number, FastTemplatePlan>;
   readonly objective: ObjectiveMeta;
   readonly activeBounds: ActiveBounds | null;
+  /** Set when the request reads TED: the weight interval enforced on the node and the penalty line used on it. */
+  readonly spatial: SpatialMeta | null;
+  /**
+   * True when every model point is exactly as good as its physical build: false only for a TED request on a node whose penalty line is a relaxation
+   * (a secant or the knee line: the objective is then an UPPER bound and `prevent_overswing` is relaxed); the spatial search tightens it.
+   */
+  readonly exact: boolean;
   readonly notes: readonly string[];
   /** A written coefficient is at or below HiGHS's `small_matrix_value` (it would be dropped on read) or at or above `large_matrix_value`. */
   readonly matrixFilterRisk: boolean;
@@ -160,6 +185,10 @@ interface ResolvedFast {
   r: number;
   p: number;
   tchebycheff: IdealPoint | null;
+  useTrueErgo: boolean;
+  preventOverswing: boolean;
+  /** The equipment ergonomics modifier as given (the factor max(0, 1 + modifier) is built exactly by `gearFactor`). */
+  gearModifier: number;
 }
 
 function finite(value: number | null | undefined, name: string): number | null {
@@ -169,9 +198,6 @@ function finite(value: number | null | undefined, name: string): number | null {
 }
 
 function resolveFastRequest(request: SpecializeRequest): ResolvedFast {
-  if (request.useTrueErgo === true || request.preventOverswing === true) {
-    throw new PhysicalModelError('INVALID_REQUEST', 'The Fast model has no TrueErgo or Prevent Overswing rows: those requests are Precise-only', { name: 'useTrueErgo' });
-  }
   const weight = (value: number | null | undefined, fallback: number, name: string): number => Math.max(0, finite(value, name) ?? fallback);
   let tchebycheff: IdealPoint | null = null;
   if (request.useTchebycheff === true) {
@@ -195,6 +221,9 @@ function resolveFastRequest(request: SpecializeRequest): ResolvedFast {
     r: weight(request.recoilWeight, 1, 'recoilWeight'),
     p: weight(request.priceWeight, 0, 'priceWeight'),
     tchebycheff,
+    useTrueErgo: request.useTrueErgo === true,
+    preventOverswing: request.preventOverswing === true,
+    gearModifier: finite(request.equipErgoModifier, 'equipErgoModifier') ?? 0,
   };
 }
 
@@ -295,19 +324,27 @@ class FastSpecializer {
   /** Edge columns of a slot, by slot index. */
   private readonly edgeColumns: { child: number; column: string; max: number }[][];
   private readonly edgeByKey = new Map<string, FastEdge>();
+  /** The weight interval the node leaves on the active weight domain (the whole domain without a node). */
+  weightInterval: Interval = { lo: 0, hi: 0 };
+  /** The weight-penalty line of a TED request on this node. */
+  penalty: NodePenalty | { line: PenaltyLine; kind: 'supplied'; exact: boolean } | null = null;
+  /** The column the ergonomics axis is read from: the first clamp, or TED. */
+  ergoColumn: 'capped_ergo' | 'ted' = 'capped_ergo';
 
   readonly bp: PhysicalBlueprint;
   readonly domain: SubproblemDomain;
   readonly graph: TemplateGraph;
   readonly req: ResolvedFast;
   readonly bounds: ActiveBounds;
+  readonly node: SpatialNode | undefined;
 
-  constructor(bp: PhysicalBlueprint, domain: SubproblemDomain, graph: TemplateGraph, req: ResolvedFast, bounds: ActiveBounds) {
+  constructor(bp: PhysicalBlueprint, domain: SubproblemDomain, graph: TemplateGraph, req: ResolvedFast, bounds: ActiveBounds, node: SpatialNode | undefined) {
     this.bp = bp;
     this.domain = domain;
     this.graph = graph;
     this.req = req;
     this.bounds = bounds;
+    this.node = node;
     this.edgeColumns = graph.slots.map(() => []);
   }
 
@@ -578,14 +615,35 @@ class FastSpecializer {
     const recMod = bounds.recoil;
     const recAxis = iScale(RECOIL_SCALE, recMod);
     const priceAxis: Interval = { lo: 0, hi: priceUpper };
-    const needWeight = req.maxWeight !== null;
+    const tedMode = req.useTrueErgo || req.preventOverswing;
+    const needWeight = tedMode || req.maxWeight !== null;
 
     this.declareAux('raw_ergo', rawErgo.lo, rawErgo.hi);
     this.declareAux('capped_ergo', capped.lo, capped.hi);
     this.declareAux('rec_mod', recMod.lo, recMod.hi);
     this.declareAux('rec_axis', recAxis.lo, recAxis.hi);
     this.declareAux('price_axis', priceAxis.lo, priceAxis.hi);
-    if (needWeight) this.declareAux('weight', bounds.weight.lo, bounds.weight.hi);
+    if (needWeight) {
+      // The column keeps the full active domain and a node is enforced by ROWS, as in the Precise model.
+      const weight = bounds.weight;
+      this.declareAux('weight', weight.lo, weight.hi);
+      // A node is read by a request that reads TED only (a weight cap alone has no spatial dimension).
+      const node = tedMode ? this.node : undefined;
+      const lo = node ? Math.max(weight.lo, node.weightMin) : weight.lo;
+      const hi = node ? Math.min(weight.hi, node.weightMax) : weight.hi;
+      this.weightInterval = { lo, hi };
+      if (node && lo > hi) {
+        // The node does not meet the weights any build can have: no build lies in it.
+        this.contradict('node', `the weight node [${node.weightMin}, ${node.weightMax}] is disjoint from the active weight range [${weight.lo}, ${weight.hi}]`);
+      } else if (node) {
+        if (node.weightMin === node.weightMax) {
+          this.emit('node_fix', [['weight', 1]], '=', node.weightMin, 'weight node');
+        } else {
+          if (node.weightMin > weight.lo) this.emit('node_lo', [['weight', 1]], '>=', node.weightMin, 'weight node');
+          if (node.weightMax < weight.hi) this.emit('node_hi', [['weight', 1]], '<=', node.weightMax, 'weight node');
+        }
+      }
+    }
     if (req.maxMoa !== null) this.declareAux('acc_total', bounds.accuracy.lo, bounds.accuracy.hi);
 
     // The receiver's constant on the right-hand side, installed copies on the left.
@@ -597,9 +655,48 @@ class FastSpecializer {
     if (req.maxMoa !== null) stat('acc_def', [['acc_total', 1], ...this.statTerms(bp.templateAccuracyModifier, -1)], 0);
     this.emitClamp('c1', 'raw_ergo', 'capped_ergo', rawErgo, ERGO_CLAMP_MAX);
 
-    const ergoAxis = iScale(ERGO_SCALE, capped);
+    // gear factor, second clamp, TED (the rows of `specializeLP`, on the count model's columns)
+    let ergoSource: Interval = capped;
+    if (tedMode) {
+      // f = max(0, 1 + modifier) is built exactly: a representable f is one equality, otherwise the two inequalities low x capped <= gear <= high x
+      // capped (the first clamp is never negative), which enclose f x capped for the real f.
+      const factor = gearFactor(req.gearModifier);
+      const gear = gearEnclosure(factor, capped);
+      const eff: Interval = { lo: clampErgo(gear.lo), hi: clampErgo(gear.hi) };
+      this.declareAux('gear_ergo', gear.lo, gear.hi);
+      this.declareAux('eff_ergo', eff.lo, eff.hi);
+      if (factor.low === factor.high) {
+        this.emit('gear_def', [['gear_ergo', 1], ['capped_ergo', -factor.low]], '=', 0, 'gear factor');
+      } else {
+        this.emit('gear_def_lo', [['gear_ergo', 1], ['capped_ergo', -factor.low]], '>=', 0, 'gear factor (lower neighbour)');
+        this.emit('gear_def_hi', [['gear_ergo', 1], ['capped_ergo', -factor.high]], '<=', 0, 'gear factor (upper neighbour)');
+      }
+      this.emitClamp('c2', 'gear_ergo', 'eff_ergo', gear, ERGO_CLAMP_MAX);
+      const { lo, hi } = this.weightInterval;
+      if (lo <= hi) {
+        const penalty = this.node?.penalty ? checkedNodePenalty(lo, hi, this.node.penalty) : secantOfPenalty(lo, hi);
+        this.penalty = penalty;
+        const ted = differenceEnclosure(eff, lineEnclosure(penalty.line, lo, hi));
+        this.declareAux('ted', ted.lo, ted.hi);
+        // ted = eff - (slope W + intercept)
+        this.emit('ted_def', [['ted', 1], ['eff_ergo', -1], ['weight', penalty.line.slope]], '=', -penalty.line.intercept, 'TED definition');
+        if (req.preventOverswing) this.emit('lim_overswing', [['ted', 1]], '>=', 0, 'prevent overswing');
+        if (req.useTrueErgo) {
+          ergoSource = ted;
+          this.ergoColumn = 'ted';
+        }
+      } else {
+        // The node is empty (its contradiction row is written): the column only has to exist with a finite domain.
+        this.declareAux('ted', 0, 0);
+        if (req.useTrueErgo) {
+          ergoSource = { lo: 0, hi: 0 };
+          this.ergoColumn = 'ted';
+        }
+      }
+    }
+    const ergoAxis = iScale(ERGO_SCALE, ergoSource);
     this.declareAux('ergo_axis', ergoAxis.lo, ergoAxis.hi);
-    this.emit('ergo_frame', [['ergo_axis', 1], ['capped_ergo', -ERGO_SCALE]], '=', 0, 'ergonomics frame');
+    this.emit('ergo_frame', [['ergo_axis', 1], [this.ergoColumn, -ERGO_SCALE]], '=', 0, 'ergonomics frame');
 
     // The exact wallet: the cheapest legal base lot plus the whole-lot cost of every paid deficit.
     const wallet: [string, number][] = [['price_axis', 1]];
@@ -712,7 +809,7 @@ class FastSpecializer {
       column: 'total_obj',
       kind: req.tchebycheff ? 'tchebycheff' : 'weighted',
       frame: { ergoScale: ERGO_SCALE, recoilScale: RECOIL_SCALE, priceScale: 1 },
-      ergoSource: 'capped_ergo',
+      ergoSource: this.ergoColumn,
       weights: { e, r, p },
       toOracle: { scale: 1, offset: 0 },
       coefficients,
@@ -772,26 +869,48 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): Fas
       weights: { e: 0, r: 0, p: 0 }, toOracle: { scale: 1, offset: 0 }, coefficients: [], tchebycheff: null,
     },
     activeBounds: null,
+    spatial: null,
+    exact: true,
     notes: ['the domain is empty: no build exists, so the model is the one-row contradiction'],
     matrixFilterRisk: false,
     stats: { minAbsCoefficient: 1, maxAbsCoefficient: 1, columns: 2, rows: 1, nonzeros: 1, binaries: 0, integers: 0, continuous: 2, lpChars: lp.length },
   };
 }
 
-export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemDomain, request: SpecializeRequest = {}): FastModel {
+/** What a domain determines about its Fast model whatever the request or the weight node: the template graph and the active ranges. */
+const structureMemo = new WeakMap<SubproblemDomain, { graph: TemplateGraph; bounds: ActiveBounds }>();
+
+/**
+ * Specialize the Fast model of one request.
+ *
+ * @param node Optional weight node (see `SpatialNode`); read only by requests that use TED. Without one, a TED request is specialized on the whole
+ *   active weight range, which is a relaxation unless every build weighs at most 3 kg. A domain is immutable, so its template graph and active ranges
+ *   are computed once and shared by the nodes of a spatial search.
+ */
+export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemDomain, request: SpecializeRequest = {}, node?: SpatialNode): FastModel {
   if (domain.blueprint !== blueprint) {
     throw new PhysicalModelError('FOREIGN_DOMAIN', `The domain was not prepared from the blueprint of ${blueprint.weaponId}`, { weaponId: blueprint.weaponId });
   }
   const resolved = resolveFastRequest(request);
+  if (node) {
+    finite(node.weightMin, 'node.weightMin');
+    finite(node.weightMax, 'node.weightMax');
+  }
   if (domain.empty) return emptyModel(blueprint, domain);
 
-  const graph = buildTemplateGraph(blueprint, domain);
-  const bounds = computeActiveBounds(blueprint, domain);
-  const specializer = new FastSpecializer(blueprint, domain, graph, resolved, bounds);
+  let structure = structureMemo.get(domain);
+  if (structure === undefined) {
+    structure = { graph: buildTemplateGraph(blueprint, domain), bounds: computeActiveBounds(blueprint, domain) };
+    structureMemo.set(domain, structure);
+  }
+  const { graph, bounds } = structure;
+  const specializer = new FastSpecializer(blueprint, domain, graph, resolved, bounds, node);
   const objective = specializer.build();
   const w = specializer.w;
   const lpBase = w.toString();
   const proved = specializer.contradictionDetails.length > 0;
+  const tedMode = resolved.useTrueErgo || resolved.preventOverswing;
+  const penalty = specializer.penalty;
   return {
     version: 1,
     blueprint,
@@ -807,6 +926,8 @@ export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemD
     plans: specializer.plans,
     objective,
     activeBounds: bounds,
+    spatial: tedMode && penalty ? { weightMin: specializer.weightInterval.lo, weightMax: specializer.weightInterval.hi, penalty } : null,
+    exact: tedMode && penalty ? penalty.exact : true,
     notes: specializer.notes,
     matrixFilterRisk: w.minAbsCoefficient <= HIGHS_SMALL_MATRIX_VALUE || w.maxAbsCoefficient >= HIGHS_LARGE_MATRIX_VALUE,
     stats: {

@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { solveFast } from '../../src/solver/physical/solveFast';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
-import { randomWorld } from './randomWorlds';
+import { randomTedWorld, randomWorld } from './randomWorlds';
 
 const close = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b));
 
@@ -51,6 +51,68 @@ test('acyclic worlds: Fast equals the exact optimum, or is empty exactly when Pr
   t.diagnostic(JSON.stringify([...tally]));
   assert.ok((tally.get('equal') ?? 0) >= 50, `most cases are nonempty: ${JSON.stringify([...tally])}`);
   assert.equal(tally.get('below') ?? 0, 0);
+});
+
+/**
+ * TrueErgo and Prevent Overswing (Phase 2.6b): the Fast weight search against the Precise one on seeded worlds with weights near the 3 kg knee, an equipment
+ * modifier and at least one TED flag. Both run at the default tolerance, which is the most either may sit below the exact optimum.
+ */
+const TED_SLACK = 2e-5;
+const near = (a: number, b: number): boolean => Math.abs(a - b) <= TED_SLACK + 1e-9 * Math.abs(b);
+
+async function compareTed(seed: number, cyclic: boolean): Promise<{ outcome: string }> {
+  const { params } = randomTedWorld(seed, cyclic);
+  const precise = await solvePrecise({ params, deadline: performance.now() + 60_000 });
+  const fast = await solveFast({ params, deadline: performance.now() + 60_000, presolve: 'off' });
+  const label = `seed ${seed} (${cyclic ? 'cyclic' : 'acyclic'}, TrueErgo ${String(params.useTrueErgo)}, Prevent Overswing ${String(params.preventOverswing)})`;
+  assert.equal(fast.summary.spatial, true, label);
+  if (fast.kind === 'build') {
+    // Whatever Fast publishes is a valid physical build, and under Prevent Overswing its exact TED is not negative.
+    const verdict = validatePhysicalBuild(params.itemLookup, params, fast.best.build, { requirePathInstanceIds: true });
+    assert.equal(verdict.ok, true, `${label}: ${JSON.stringify(verdict.violations)}`);
+    if (params.preventOverswing) assert.ok(fast.best.stats.ted >= 0, `${label}: Fast published an overswinging build (TED ${fast.best.stats.ted})`);
+    assert.equal(fast.outcome.physical_certificate === 'approximate_optimal' || fast.outcome.physical_certificate === 'feasible', true, label);
+    assert.equal(fast.outcome.model_qualification, 'approximate', label);
+  }
+  if (precise.kind === 'incomplete') return { outcome: 'precise incomplete' };
+  if (precise.kind === 'empty') {
+    assert.notEqual(fast.kind, 'build', `${label}: Fast published a build for a request Precise proves empty`);
+    return { outcome: 'empty' };
+  }
+  const exact = precise.best.score;
+  if (fast.kind === 'build') {
+    assert.ok(fast.best.score <= exact + TED_SLACK + 1e-9 * Math.abs(exact), `${label}: Fast ${fast.best.score} beats the exact optimum ${exact}`);
+    if (!cyclic || fast.summary.acyclic) {
+      assert.ok(near(fast.best.score, exact), `${label}: Fast ${fast.best.score} against the exact optimum ${exact}`);
+      assert.equal(fast.optimal, true, `${label}: the search completed`);
+    }
+    return { outcome: near(fast.best.score, exact) ? 'equal' : 'below' };
+  }
+  assert.equal(cyclic, true, `${label}: Precise found a build and Fast returned ${fast.kind}`);
+  assert.equal(fast.summary.acyclic, false, `${label}: an acyclic graph must decode`);
+  return { outcome: `fast ${fast.kind}` };
+}
+
+test('TED, acyclic worlds: the Fast weight search equals the exact TED optimum, or is empty exactly when Precise is, and never overswings (200 seeded cases)', { timeout: 600_000 }, async t => {
+  const tally = new Map<string, number>();
+  for (let seed = 1; seed <= 200; seed++) {
+    const { outcome } = await compareTed(seed, false);
+    tally.set(outcome, (tally.get(outcome) ?? 0) + 1);
+  }
+  t.diagnostic(JSON.stringify([...tally]));
+  assert.ok((tally.get('equal') ?? 0) >= 100, `most cases are nonempty: ${JSON.stringify([...tally])}`);
+  assert.equal(tally.get('below') ?? 0, 0);
+  assert.equal(tally.get('precise incomplete') ?? 0, 0);
+});
+
+test('TED, cyclic worlds: every published build is valid, never overswings and never beats the exact optimum (60 seeded cases)', { timeout: 600_000 }, async t => {
+  const tally = new Map<string, number>();
+  for (let seed = 1001; seed <= 1060; seed++) {
+    const { outcome } = await compareTed(seed, true);
+    tally.set(outcome, (tally.get(outcome) ?? 0) + 1);
+  }
+  t.diagnostic(JSON.stringify([...tally]));
+  assert.ok((tally.get('equal') ?? 0) + (tally.get('below') ?? 0) >= 10, `some cases are nonempty: ${JSON.stringify([...tally])}`);
 });
 
 test('cyclic worlds: every published build is valid and never beats the exact optimum (60 seeded cases)', { timeout: 600_000 }, async t => {

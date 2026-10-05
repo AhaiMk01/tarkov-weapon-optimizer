@@ -206,8 +206,11 @@ export function resolveTolerance(requested: number | undefined): number {
   return requested !== undefined && Number.isFinite(requested) && requested >= 0 ? requested : DEFAULT_OBJECTIVE_TOLERANCE;
 }
 
-/** Root intervals: the active weight range clipped by the weight cap, split at the 3 kg knee where the penalty changes shape. */
-function rootIntervals(lo: number, hi: number, maxWeight: number | null | undefined): SearchInterval[] {
+/**
+ * Root intervals: the active weight range clipped by the weight cap, split at the 3 kg knee where the penalty changes shape. Shared by the Precise
+ * and the Fast spatial search, which run the same search over the same weight domain.
+ */
+export function rootIntervals(lo: number, hi: number, maxWeight: number | null | undefined): SearchInterval[] {
   let top = hi;
   if (maxWeight != null && maxWeight >= lo) top = Math.min(hi, maxWeight);
   return lo < TED_FREE_WEIGHT_KG && top > TED_FREE_WEIGHT_KG

@@ -4,12 +4,14 @@
  * Two models, one acceptance rule. Nothing is published that the independent physical validator (`physical/validate.ts`) did not accept,
  * and every published statistic is the validator's exact recomputation.
  *
- *  - Precise (`preciseMode: true`, forced by TrueErgo and Prevent Overswing): the exact occurrence-level model of `physical/`
- *    (`solvePrecise`). Multiple copies, physical slots, the exact wallet, preset/owned supply. TED requests run the spatial search.
- *  - Fast (everything else): the template-count model of `physical/specializeFast.ts` on the same physical domain, acquisition and request as
- *    Precise (only placement is approximated: counts per template and per slot edge, no ancestor-repetition rule), solved on the same pinned
- *    native build. Its counts are decoded into a rooted occurrence tree and judged by the same exact validator; a rejected point is cut out and
- *    the model re-solved, and a result that is not a valid physical build is `incomplete`, never published (`physical/solveFast.ts`).
+ *  - Precise (`preciseMode: true`): the exact occurrence-level model of `physical/` (`solvePrecise`). Multiple copies, physical slots, the exact
+ *    wallet, preset/owned supply. TrueErgo and Prevent Overswing run its spatial search over total weight, certified.
+ *  - Fast (`preciseMode` false or absent): the template-count model of `physical/specializeFast.ts` on the same physical domain, acquisition and
+ *    request as Precise (only placement is approximated: counts per template and per slot edge, no ancestor-repetition rule), solved on the same
+ *    pinned native build. Its counts are decoded into a rooted occurrence tree and judged by the same exact validator; a rejected point is cut out
+ *    and the model re-solved, and a result that is not a valid physical build is `incomplete`, never published (`physical/solveFast.ts`).
+ *    TrueErgo and Prevent Overswing run the same spatial search over total weight on the count model (owner decision 2b, Phase 2.6b): an
+ *    approximate answer, never a certificate.
  *
  * This module only ASSEMBLES. The status, certificate, qualifications, termination and reason of every response come from the pure classifier
  * (`physical/outcome.ts`, ADR 0013 section 6), fed by the facts `solvePrecise` and `solveFast` report; the optimization metadata is the search's
@@ -17,8 +19,8 @@
  * A native failure is a typed error (`SolverError`), never a fabricated result.
  *
  * Precision. `precision_request` echoes what the caller asked (`SolveParams.precisionRequest`, else derived from `preciseMode`);
- * `precision_resolved` is the model that ran. A TrueErgo or Prevent Overswing request always runs Precise (the Fast model has no TED rows),
- * so a Fast request for one resolves to 'precise' and is reported as such; it is never labelled Fast.
+ * `precision_resolved` is the model that actually ran, which is `preciseMode` and nothing else: a TrueErgo or Prevent Overswing request is NOT
+ * upgraded to Precise (the caller resolves Auto by size, `precisionMode.ts`).
  */
 
 import type { OptimizeResponse, OptimizationMetadata, ItemDetail, PresetDetail, FinalStats } from '../api/client';
@@ -186,11 +188,12 @@ const preciseOptimization = (summary: PreciseSummary, outcome: OptimizeOutcome):
 });
 
 /**
- * The Fast model has no proof frame: no physical upper bound or gap, no spatial calls. Its lower bound is the downward enclosure of the exact
- * score of the verified witness, when there is one.
+ * The Fast model has no proof frame: no physical upper bound or gap (its node bounds belong to the approximate model and never travel). Its lower
+ * bound is the downward enclosure of the exact score of the verified witness, when there is one. `nodes` counts the outer spatial calls of a TED
+ * request's weight search (0 for a request with no spatial dimension), never native MIP nodes.
  */
 const fastOptimization = (summary: FastSummary, outcome: OptimizeOutcome, scoreLower: number | null): OptimizationMetadata => ({
-  ...unknownOptimization(summary.tolerance, 0, outcome.termination),
+  ...unknownOptimization(summary.tolerance, summary.nodes, outcome.termination),
   lower_bound: scoreLower,
 });
 
@@ -410,7 +413,7 @@ async function solveApproximate(params: SolveParams, deadline: number, assembly:
 async function solveDetailed(input: SolveParams): Promise<Detailed> {
   const start = now();
   const deadline = start + Math.max(0, input.timeLimitMs ?? 60_000);
-  // What the caller asked for, read BEFORE a TED request forces Precise.
+  // What the caller asked for.
   const precisionRequest: PrecisionRequest = input.precisionRequest ?? (input.preciseMode ? 'precise' : 'fast');
   const moaDependent = isMoaDependent(input);
   const owned = inspectOwnedItems(input.ownedItems);
@@ -420,8 +423,6 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   }
   let params: SolveParams = { ...input, precisionRequest };
   if (params.traderLevels) params.traderLevels = canonicalizeTraderLevels(params.traderLevels) as SolveParams['traderLevels'];
-  // Certificates describe real slot placements, not the Fast model's restrictions.
-  if (params.useTrueErgo || params.preventOverswing) params.preciseMode = true;
   const mode = params.preciseMode ? 'precise' : 'fast';
   const tolerance = resolveTolerance(params.objectiveTolerance);
   /** A request that stopped before its search started: no build, no proof, the factual cause. */

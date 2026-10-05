@@ -169,12 +169,15 @@ test('the conflict clique cover covers every pair, with cliques of pairwise conf
   assert.deepEqual([...cover].sort(), [...edges].sort());
 });
 
-test('refusals and degenerate inputs: TED flags, a foreign domain, an empty domain, a non-finite cap', () => {
+test('refusals and degenerate inputs: a foreign domain, an empty domain, a non-finite cap or node or modifier', () => {
   const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'])] }), ['a', mod('a')]);
   const blueprint = preparePhysicalWeapon(lookup, WEAPON);
   const domain = prepareSubproblemDomain(blueprint, lookup, {});
-  assert.throws(() => specializeFast(blueprint, domain, { useTrueErgo: true }), /Precise-only/);
-  assert.throws(() => specializeFast(blueprint, domain, { preventOverswing: true }), /Precise-only/);
+  // TrueErgo and Prevent Overswing are Fast rows now (specializeFast.ted.test.ts), not a refusal.
+  assert.doesNotThrow(() => specializeFast(blueprint, domain, { useTrueErgo: true }));
+  assert.doesNotThrow(() => specializeFast(blueprint, domain, { preventOverswing: true }));
+  assert.throws(() => specializeFast(blueprint, domain, { useTrueErgo: true, equipErgoModifier: Number.NaN }), /not a finite number/);
+  assert.throws(() => specializeFast(blueprint, domain, { useTrueErgo: true }, { weightMin: Number.NaN, weightMax: 1 }), /not a finite number/);
   assert.throws(() => specializeFast(blueprint, domain, { maxPrice: Number.NaN }), /not a finite number/);
   assert.throws(() => specializeFast(blueprint, domain, { useTchebycheff: true }), /ideal point/);
   const other = preparePhysicalWeapon(lookup, WEAPON);
@@ -214,6 +217,8 @@ test('real guns: the Fast text of the default, Tchebycheff, MOA and capped reque
     tchebycheff: { useTchebycheff: true, idealPoint: { zE: 500, nadE: 100, zR: -300, nadR: 0, zP: 1000, nadP: 100000 } },
     capped: { maxMOA: 5, maxPrice: 300000, minMagCapacity: 20, maxRecoilV: 300, minSightingRange: 50, maxWeight: 6, minErgonomics: 20 },
     stash: { ownedItems: ['5447a9cd4bdc2dbd208b4567'], barterAvailable: true },
+    trueErgo: { useTrueErgo: true, equipErgoModifier: -0.15 },
+    overswing: { preventOverswing: true, maxWeight: 9 },
   };
   for (const name of ['MP5', 'M4A1', 'AK-74N']) {
     const entry = snapshot.guns.find(g => g.shortName === name);

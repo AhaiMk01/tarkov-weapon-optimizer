@@ -411,6 +411,14 @@ test('every response kind carries the full contract: required qualifiers, nullab
   responses.push(['TED optimum', await solve(paramsOf(lookup, { useTrueErgo: true, ergoWeight: 100 }))]);
   responses.push(['TED node cap with a witness', await solve(paramsOf(lookup, { useTrueErgo: true, ergoWeight: 100, maxSpatialNodes: 1 }))]);
   responses.push(['TED node cap without one', await solve(paramsOf(lookup, { useTrueErgo: true, ergoWeight: 100, maxSpatialNodes: 0 }))]);
+  // the same three rows on the Fast model (Phase 2.6b: TED runs on the count model, it is not upgraded to Precise), and a Fast TED emptiness
+  const fastTed = { preciseMode: false, useTrueErgo: true, ergoWeight: 100 } as const;
+  responses.push(['fast TED optimum', await solve(paramsOf(lookup, fastTed))]);
+  responses.push(['fast TED MOA optimum', await solve(paramsOf(lookup, { ...fastTed, maxMOA: 100 }))]);
+  responses.push(['fast TED node cap with a witness', await solve(paramsOf(lookup, { ...fastTed, maxSpatialNodes: 1 }))]);
+  responses.push(['fast TED node cap without one', await solve(paramsOf(lookup, { ...fastTed, maxSpatialNodes: 0 }))]);
+  responses.push(['fast TED emptiness', await solve(paramsOf(lookup, { ...fastTed, maxPrice: 10 }))]);
+  responses.push(['fast overswing emptiness', await solve(paramsOf(lookup, { preciseMode: false, preventOverswing: true, maxPrice: 10 }))]);
   for (const [label, response] of responses) assertTransport(response, label);
   const by = Object.fromEntries(responses);
   const row = (r: OptimizeResponse) => [r.status, r.physical_certificate, r.model_qualification, r.moa_qualification, r.reason];
@@ -428,6 +436,20 @@ test('every response kind carries the full contract: required qualifiers, nullab
   assert.equal(by['precise deadline'].optimization.termination, 'limit');
   assert.equal(by['TED node cap with a witness'].status, 'feasible');
   assert.equal(by['TED node cap without one'].status, 'incomplete');
+  // The Fast TED rows are the Fast rows: approximate, no physical certificate beyond approximate_optimal, an unknown upper bound.
+  assert.deepEqual(row(by['fast TED optimum']), ['optimal', 'approximate_optimal', 'approximate', null, undefined]);
+  assert.deepEqual(row(by['fast TED MOA optimum']), ['optimal', 'approximate_optimal', 'approximate', 'provisional_model', undefined]);
+  assert.deepEqual(row(by['fast TED emptiness']), ['incomplete', 'none', 'approximate', null, 'Approximate model infeasible']);
+  assert.deepEqual(row(by['fast overswing emptiness']), ['incomplete', 'none', 'approximate', null, 'Approximate model infeasible']);
+  assert.equal(by['fast TED emptiness'].optimization.termination, 'optimal', 'a completed model search terminates optimal');
+  assert.deepEqual(row(by['fast TED node cap with a witness']), ['feasible', 'feasible', 'approximate', null, 'Node limit reached']);
+  assert.equal(by['fast TED node cap with a witness'].optimization.termination, 'limit');
+  assert.equal(by['fast TED node cap without one'].status, 'incomplete');
+  for (const label of ['fast TED optimum', 'fast TED MOA optimum', 'fast TED node cap with a witness']) {
+    assert.equal(by[label].precision_resolved, 'fast', label);
+    assert.equal(by[label].optimization.upper_bound, null, label + ': Fast has no physical upper bound');
+    assert.equal(by[label].optimization.absolute_gap, null, label);
+  }
 });
 
 test('an invalid owned_items list publishes the null envelope: nothing resolved, empty manifest, null objective and bounds, no nodes, the search never started', async () => {
@@ -455,7 +477,7 @@ test('an invalid owned_items list publishes the null envelope: nothing resolved,
   assert.equal((await solve(paramsOf(small(), { ownedItems: [''], maxMOA: 3 }))).moa_qualification, 'provisional_model');
 });
 
-test('precision_request echoes what was asked and precision_resolved says what ran: an Auto request resolved by the caller, and a Fast request for TrueErgo that must run Precise', async () => {
+test('precision_request echoes what was asked and precision_resolved says what ran: an Auto request resolved by the caller, and TrueErgo or Prevent Overswing on either model', async () => {
   const lookup = small();
   const precise = await solve(paramsOf(lookup, { preciseMode: true }));
   assert.deepEqual([precise.precision_request, precise.precision_resolved], ['precise', 'precise']);
@@ -463,13 +485,48 @@ test('precision_request echoes what was asked and precision_resolved says what r
   assert.deepEqual([fast.precision_request, fast.precision_resolved], ['fast', 'fast']);
   const auto = await solve(paramsOf(lookup, { preciseMode: false, precisionRequest: 'auto' }));
   assert.deepEqual([auto.precision_request, auto.precision_resolved, auto.model_qualification], ['auto', 'fast', 'approximate']);
-  // The Fast model has no TED rows: a TrueErgo request runs Precise whatever was asked, and the response says so (never labelled Fast).
-  for (const request of [{ useTrueErgo: true }, { preventOverswing: true }]) {
+  // TrueErgo and Prevent Overswing are not upgraded to Precise (owner decision 2b): a Fast request, or an Auto request the caller resolved to Fast
+  // by size, runs the weight search on the Fast model and is reported as what ran, approximate and uncertified.
+  for (const request of [{ useTrueErgo: true }, { preventOverswing: true }, { useTrueErgo: true, preventOverswing: true }]) {
+    const label = JSON.stringify(request);
     const ted = await solve(paramsOf(lookup, { preciseMode: false, ergoWeight: 100, ...request }));
-    assert.equal(ted.precision_request, 'fast');
-    assert.equal(ted.precision_resolved, 'precise');
-    assert.equal(ted.model_qualification, 'exact');
+    assert.deepEqual([ted.precision_request, ted.precision_resolved, ted.model_qualification, ted.physical_certificate], ['fast', 'fast', 'approximate', 'approximate_optimal'], label);
     assert.equal(ted.status, 'optimal', ted.reason);
+    const resolvedFast = await solve(paramsOf(lookup, { preciseMode: false, precisionRequest: 'auto', ergoWeight: 100, ...request }));
+    assert.deepEqual([resolvedFast.precision_request, resolvedFast.precision_resolved, resolvedFast.model_qualification], ['auto', 'fast', 'approximate'], label);
+    const resolvedPrecise = await solve(paramsOf(lookup, { preciseMode: true, precisionRequest: 'auto', ergoWeight: 100, ...request }));
+    assert.deepEqual(
+      [resolvedPrecise.precision_request, resolvedPrecise.precision_resolved, resolvedPrecise.model_qualification, resolvedPrecise.physical_certificate],
+      ['auto', 'precise', 'exact', 'certified_optimal'], label,
+    );
+    const asked = await solve(paramsOf(lookup, { preciseMode: true, ergoWeight: 100, ...request }));
+    assert.deepEqual([asked.precision_request, asked.precision_resolved], ['precise', 'precise'], label);
+  }
+});
+
+test('a Fast TED response is the same build the Precise model certifies, with Fast bounds: the lower bound of the witness, no upper bound, spatial node calls', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { weight: 1, slots: [slot('choice', ['a', 'b', 'c'], true)] }),
+    ['a', mod('a', { weight: 1, ergo: 20 })], ['b', mod('b', { weight: 2, ergo: 30 })], ['c', mod('c', { weight: 3, ergo: 41 })],
+  );
+  for (const request of [{ useTrueErgo: true }, { preventOverswing: true, useTrueErgo: true }]) {
+    const params = paramsOf(lookup, { preciseMode: false, ergoWeight: 100, ...request });
+    const fast = await solve(params);
+    const precise = await solve({ ...params, preciseMode: true });
+    assert.equal(fast.status, 'optimal', fast.reason);
+    assert.deepEqual(fast.selected_item_ids, ['b']);
+    assert.deepEqual(fast.selected_item_ids, precise.selected_item_ids);
+    assert.equal(fast.objective_value, precise.objective_value);
+    assert.equal(revalidate(params, fast).ok, true);
+    assert.equal(fast.optimization.upper_bound, null);
+    assert.equal(fast.optimization.absolute_gap, null);
+    assert.ok(fast.optimization.lower_bound !== null && fast.objective_value !== null && fast.optimization.lower_bound <= fast.objective_value);
+    assert.ok(fast.optimization.nodes >= 2, fast.optimization.nodes + ' spatial node calls: the root is split at the 3 kg knee');
+    assert.equal(fast.optimization.termination, 'optimal');
+    assert.equal(fast.reason, undefined);
+    assert.equal(fast.final_stats?.overswing_pct, 0);
+    assert.ok((fast.final_stats?.true_ergo_delta ?? -1) >= 0);
+    assert.ok(precise.optimization.upper_bound !== null, 'the Precise response of the same request is certified, with a physical upper bound');
   }
 });
 

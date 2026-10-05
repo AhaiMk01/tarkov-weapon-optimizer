@@ -206,7 +206,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
           const precReq = normalizePrecisionRequest(req.precise_mode);
-          const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
+          const usePrecise = resolvePreciseFlag(precReq, compatMap);
 
           const optimizeStart = performance.now();
           const totalLimitMs = Math.max(0, req.time_limit_ms ?? 60_000);
@@ -277,7 +277,7 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
           const data = await getOrLoadData(lang, gameMode);
           const compatMap = getCompatMap(data, req.weapon_id);
           const precReq = normalizePrecisionRequest(req.precise_mode);
-          const usePrecise = !!(req.use_true_ergo || req.prevent_overswing) || resolvePreciseFlag(precReq, compatMap);
+          const usePrecise = resolvePreciseFlag(precReq, compatMap);
 
           const startTime = performance.now();
           const expBounds = req.bounds_mode !== 'naive'

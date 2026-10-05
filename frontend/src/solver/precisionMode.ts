@@ -15,6 +15,9 @@
  * path-unrolling rule the blueprint uses (a template never repeats an ancestor on one path), bounded by the threshold so a huge weapon costs
  * no more than the threshold to classify. It agrees with the blueprint to within a fifth on the pinned capture (exactly on most guns), which
  * is far inside the width of the gap above.
+ *
+ * TrueErgo and Prevent Overswing do not enter the resolution (owner decision 2b, Phase 2.6b): the Fast model states the same TED rows on a weight
+ * node and runs the same spatial search, so Auto resolves a TED request by size like any other, and a Fast request for one stays Fast (approximate).
  */
 
 import type { CompatibilityMap, PrecisionRequest } from './types';

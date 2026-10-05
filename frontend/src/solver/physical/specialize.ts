@@ -289,6 +289,18 @@ export interface SpatialMeta {
   penalty: NodePenalty | { line: PenaltyLine; kind: 'supplied'; exact: boolean };
 }
 
+/**
+ * A weight-penalty line supplied with a node, verified against q on the node interval: it must be a lower envelope (on or below q over the
+ * closed interval, decided in exact rationals). The Precise and the Fast model state the same TED rows on a node and share this check.
+ */
+export function checkedNodePenalty(lo: number, hi: number, line: PenaltyLine): { line: PenaltyLine; kind: 'supplied'; exact: boolean } {
+  if (!Number.isFinite(line.slope) || !Number.isFinite(line.intercept) || line.slope < 0 || !penaltyLineIsValid(lo, hi, line)) {
+    throw new PhysicalModelError('INVALID_REQUEST', `The supplied weight-penalty line is not a lower envelope of q on [${lo}, ${hi}]`, { lo, hi, line });
+  }
+  const exact = hi <= 3 || lo === hi;
+  return { line, kind: 'supplied', exact };
+}
+
 export interface ModelStats {
   /** Smallest and largest magnitude of a written matrix coefficient. */
   minAbsCoefficient: number;
@@ -819,7 +831,7 @@ class Specializer {
       const { lo, hi } = this.weightInterval;
       if (lo <= hi) {
         const penalty = this.node?.penalty
-          ? this.checkedPenalty(lo, hi, this.node.penalty)
+          ? checkedNodePenalty(lo, hi, this.node.penalty)
           : secantOfPenalty(lo, hi);
         this.penalty = penalty;
         const ted = differenceEnclosure(eff, lineEnclosure(penalty.line, lo, hi));
@@ -855,14 +867,6 @@ class Specializer {
     this.emit('wallet', 'price_def', wallet, '=', 0, 'wallet');
 
     return { ergoAxis, recAxis, priceAxis };
-  }
-
-  private checkedPenalty(lo: number, hi: number, line: PenaltyLine): { line: PenaltyLine; kind: 'supplied'; exact: boolean } {
-    if (!Number.isFinite(line.slope) || !Number.isFinite(line.intercept) || line.slope < 0 || !penaltyLineIsValid(lo, hi, line)) {
-      throw new PhysicalModelError('INVALID_REQUEST', `The supplied weight-penalty line is not a lower envelope of q on [${lo}, ${hi}]`, { lo, hi, line });
-    }
-    const exact = hi <= 3 || lo === hi;
-    return { line, kind: 'supplied', exact };
   }
 
   // --- caps ---------------------------------------------------------------------------------

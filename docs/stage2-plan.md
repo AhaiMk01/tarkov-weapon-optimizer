@@ -32,6 +32,7 @@ suite, harness ratchet) and committed by the orchestrator.
 | 2.4 Physical model | §4A occurrence/path identity, template-slot collision assertion, immutable domain masks; emit rules (one accessible base or contradiction, required occupancy, template/self/slot conflicts, supply caps, integer deficit surrogate with decoded d_i); delete FiR, 100M, price stand-ins and buy aliases; chain category matching; camora ammo excluded | 2.2 |
 | 2.5 Numerics | §4C: K = 100/2.9089, no Big-M literal, no `toFixed(6)`, signed accuracy, zero-intrinsic and constant MOA rows, outward secants, recoil caps with nonpositive denominators, finite auxiliary ranges, global UB including tolerance-fathomed bounds | 2.4, 2.3 |
 | 2.6 Solve and status | §5/§6 transport shapes, statuses, certificates, reasons and precedence; decoder; production validator matching every reference accept/reject; payoff-table reporting | 2.3–2.5 |
+| 2.6b Fast TED | Owner decision 2b: TrueErgo/Prevent Overswing on the Fast count model (weight search over its exact aggregate weight), approximate qualification, no silent Precise upgrade | 2.6 |
 | 2.7 Operations | §4D deadlines and macrotask yields, out-of-band cancel, `owned_items` validation and forwarding, floor discovery then bisection, Explore classification, metadata ops, cache invalidation, `preparePhysicalWeapon` / `prepareSubproblemDomain` / `specializeLP` | 2.6 |
 | 2.8 Consumers | §4E client, App and UI components, locales, EFTForge v1 export (supported-only), MethodologyModal | 2.6–2.7 |
 | 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere | all |
@@ -62,7 +63,11 @@ is approximate. Decisions:
    certificate. **First Stage 4 candidate:** prove that the Fast count/edge model is an exact reformulation on
    acyclic template graphs (all 172 pinned guns are acyclic) with a lifting/projection proof plus Gates A–C and
    the comparative gates; ADR 0011's cyclic counterexamples bound its scope. If adopted, acyclic weapons get
-   certified answers at Fast speed.
+   certified answers at Fast speed. Research complete (2026-10-05, `docs/research/acyclic-fast-exactness.md`):
+   conditionally exact on acyclic active graphs; the adoption steps are listed there.
+2b. **Fast supports TrueErgo and Prevent Overswing (owner, 2026-10-05).** A Fast request (or Auto resolving to Fast)
+   with TED runs the weight search on the Fast count model and returns a Fast, approximate answer; it is never silently
+   upgraded to Precise (Phase 2.6b). Precise keeps its own certified TED search.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.
