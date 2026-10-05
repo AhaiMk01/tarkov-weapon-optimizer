@@ -3,3 +3,7 @@ export * from './blueprint';
 export * from './acquisition';
 export * from './domain';
 export * from './ownedItems';
+export * from './bounds';
+export * from './spatial';
+export * from './specialize';
+export * from './decode';

@@ -136,6 +136,9 @@ export interface PhysicalBlueprint {
   readonly templateCenterOfImpact: F64;
   readonly templateCapacity: F64;
   readonly templateSightingRange: F64;
+  /** Receiver naked recoil in game units (vertical, horizontal): the final-recoil caps are stated against them. */
+  readonly receiverRecoilVertical: number;
+  readonly receiverRecoilHorizontal: number;
   /** Own category first, then ancestors. */
   readonly templateCategoryChain: readonly (readonly string[])[];
   /** Template index of an id, or -1 when the id has no template in this weapon's universe. */
@@ -682,6 +685,8 @@ export function preparePhysicalWeapon(
     templateCenterOfImpact,
     templateCapacity,
     templateSightingRange,
+    receiverRecoilVertical: weapon.stats.naked_recoil_v || 0,
+    receiverRecoilHorizontal: weapon.stats.naked_recoil_h || 0,
     templateCategoryChain,
     templateIndexOf: id => templateIndex.get(id) ?? -1,
     occurrenceCount: N,

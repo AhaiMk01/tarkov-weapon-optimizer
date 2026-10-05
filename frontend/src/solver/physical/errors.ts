@@ -23,7 +23,13 @@ export type PhysicalModelErrorCode =
   /** A request field the domain preparation reads is malformed (a non-finite trader or player level). */
   | 'INVALID_REQUEST'
   /** The blueprint was not prepared from the lookup it is being used with. */
-  | 'FOREIGN_BLUEPRINT';
+  | 'FOREIGN_BLUEPRINT'
+  /** The domain was not prepared from the blueprint it is being specialized with. */
+  | 'FOREIGN_DOMAIN'
+  /** The masks of a domain contradict each other (an active owner with a required slot nobody can fill). An internal fault. */
+  | 'DOMAIN_INCONSISTENT'
+  /** A solution vector cannot be read as a physical build: a missing or non-integral decision column, an unrooted placement. */
+  | 'DECODE_FAILED';
 
 export class PhysicalModelError extends Error {
   readonly code: PhysicalModelErrorCode;
