@@ -60,7 +60,16 @@ is approximate. Decisions:
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.
-4. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
+4. **Native arithmetic noise is a stated assumption (owner, 2026-10-05).** The pinned build exports no node
+   duals, so HiGHS's own floating-point error cannot be bounded. Observed: on 7 ledger cases the qualified dual
+   bound sat 1e-15 to 5e-12 below the exact score of a build verified in the same node. Stage 2 records this in
+   `NATIVE_FRAME.assumptions`, measures it in `telemetry.boundShortfall`, and withholds any bound whose shortfall
+   exceeds `max(tolerance, 1e-9·max(1,|bound|))`; no allowance is added, so cases certify at 1e-9. Stage 4
+   revisits a proved allowance with a rebuild that exports the needed duals.
+5. **No optimality or infeasibility claim from a presolved solve, on any model.** HiGHS 1.15.1 presolve produced
+   both a false Infeasible (exact model) and a false Optimal (Fast model); fixtures in
+   `tests/physical/solverDefects/`. Precise and Fast both solve with presolve off.
+6. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
    the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
 
 ## Known baseline failures (before Stage 2)
