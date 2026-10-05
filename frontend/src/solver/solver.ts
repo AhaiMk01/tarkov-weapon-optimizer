@@ -13,13 +13,7 @@ import type { ObjectiveAxes } from './trueErgo';
 import { getAvailablePrice } from './dataService';
 import { canonicalizeTraderLevels } from './reuseKey';
 import { mergeComponents, presetSupply } from './presetSupply';
-
-interface HighsInstance {
-  solve(problem: string, options?: {
-    mip_rel_gap: number; mip_abs_gap: number; mip_feasibility_tolerance: number;
-    primal_feasibility_tolerance: number; dual_feasibility_tolerance: number; time_limit: number;
-  }): { Status: string; ObjectiveValue: number; Columns: Record<string, { Primal?: number }> };
-}
+import { discardNativeHighs, legacySolve, setHighsBaseUrl } from './native';
 
 const DUAL_MARGIN = 1e-7;
 
@@ -90,71 +84,10 @@ function isExpectedExactTedGap(errors: readonly string[]): boolean {
   return errors.length > 0 && errors.every(error => error === PREVENT_OVERSWING_VIOLATION);
 }
 
-let highs: HighsInstance | null = null;
-let highsCorrupted = false;
-
-// Load HiGHS module.  In Node (tests), use the npm package directly.
-// In browser workers, Vite's ES module bundling corrupts the Emscripten
-// runtime, so we load highs.js from public/ at runtime instead.
-async function loadHiGHS() {
-  const base = import.meta.env?.BASE_URL || '/';
-
-  // Node / test environment: use custom WASM build from public/ if present on disk
-  const g = globalThis as unknown as {
-    WorkerGlobalScope?: unknown;
-    window?: unknown;
-    process?: { cwd: () => string };
-  };
-  if (typeof g.WorkerGlobalScope === 'undefined' && typeof g.window === 'undefined') {
-    try {
-      const cwd = g.process?.cwd?.() || '.';
-      // @ts-expect-error — dynamic node import for test environments
-      const fs = await import('fs');
-      // @ts-expect-error — dynamic node import for test environments
-      const path = await import('path');
-      const wasmPath = path.resolve(cwd, 'public/highs.wasm');
-      const jsPath = path.resolve(cwd, 'public/highs.js');
-      if (fs.existsSync(wasmPath) && fs.existsSync(jsPath)) {
-        const wasmBinary = new Uint8Array(fs.readFileSync(wasmPath));
-        const jsSource = fs.readFileSync(jsPath, 'utf8');
-        const exports = {} as Record<string, unknown>;
-        const module = { exports };
-        // @ts-expect-error — dynamic node import for test environments
-        const { createRequire } = await import('module');
-        const nodeRequire = createRequire(import.meta.url);
-        new Function('module', 'exports', 'require', '__dirname', '__filename', jsSource)(
-          module, exports, nodeRequire, cwd, 'highs.js'
-        );
-        const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<HighsInstance>;
-        return loader({ wasmBinary });
-      }
-    } catch {
-      // Fallback to stock npm package
-    }
-
-    const loader = (await import('highs')).default as unknown as () => Promise<HighsInstance>;
-    return loader();
-  }
-
-  // Browser: fetch both WASM binary and highs.js source, then evaluate
-  // highs.js with CJS shims.  Vite's ES module bundling corrupts the
-  // Emscripten runtime, so we bypass the bundler entirely.
-  const [wasmResp, jsResp] = await Promise.all([
-    fetch(base + 'highs.wasm'),
-    fetch(base + 'highs.js'),
-  ]);
-  const wasmBinary = new Uint8Array(await wasmResp.arrayBuffer());
-  const jsSource = await jsResp.text();
-
-  // Evaluate highs.js with CJS module/exports shims
-  const exports = {} as Record<string, unknown>;
-  const module = { exports };
-  const fn = new Function('module', 'exports', jsSource);
-  fn(module, exports);
-  const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<HighsInstance>;
-
-  return loader({ wasmBinary });
-}
+// HiGHS is the pinned native build behind ./native (see vendor/highs/README.md). The loader hash-checks both artifacts and
+// validates the ABI against the committed manifest, and throws a typed error on any mismatch: there is no fallback to the
+// stock npm package or to any other HiGHS. The Vite base is the browser location of highs.js / highs.wasm.
+setHighsBaseUrl(import.meta.env?.BASE_URL || '/');
 
 interface ModelResponse extends OptimizeResponse {
   axes?: ObjectiveAxes;
@@ -327,12 +260,9 @@ function toOptimizeRequest(params: SolveParams): OptimizeRequest {
 async function solveModel(params: SolveParams, interval?: [number, number], timeLimit = 60): Promise<ModelResponse> {
   const startTime = performance.now();
   try {
-    if (!highs || highsCorrupted) {
-      highs = await loadHiGHS();
-      highsCorrupted = false;
-    }
     const lp = buildLP(params, interval);
-    const result = highs.solve(lp.lpString, {
+    // TEMPORARY: legacySolve is the compatibility shape over the structured native solve (deleted in 2.4b-3 / 2.6).
+    const result = await legacySolve(lp.lpString, {
       mip_rel_gap: 0, mip_abs_gap: 1e-9, mip_feasibility_tolerance: 1e-8,
       primal_feasibility_tolerance: 1e-9, dual_feasibility_tolerance: 1e-9,
       time_limit: timeLimit,
@@ -692,7 +622,7 @@ async function solveModel(params: SolveParams, interval?: [number, number], time
       : `Unknown solver error: ${String(e)}`;
     console.error('HiGHS Solve Error:', e);
     // Mark as corrupted so next solve reinitializes WASM
-    highsCorrupted = true;
+    discardNativeHighs();
     return {
       status: 'error',
       reason: msg,
