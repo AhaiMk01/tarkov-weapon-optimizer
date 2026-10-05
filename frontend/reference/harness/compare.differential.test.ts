@@ -412,19 +412,19 @@ const tooCheap = defineCase({
   maximizers: [],
 });
 
-test('production end to end: a required one-slot choice is solved to the exact optimum, and the missing contract fields are what fails', async () => {
+test('production end to end: a required one-slot choice is solved to the exact optimum and publishes the admitted outcome', async () => {
   const graded = await gradeCase(choice);
   assert.equal(graded.observed.precise, 'optimal');
-  assert.deepEqual(verdicts(graded.precise), { buildValid: 'pass', scoreOptimal: 'pass', emptiness: 'pass', outcomeContract: 'fail' }, JSON.stringify(graded.precise));
-  assert.match(graded.precise.outcomeContract.key ?? '', /missing physical_certificate/);
+  assert.deepEqual(verdicts(graded.precise), { buildValid: 'pass', scoreOptimal: 'pass', emptiness: 'pass', outcomeContract: 'pass' }, JSON.stringify(graded.precise));
   assert.equal(graded.fast.buildValid.verdict, 'pass');
   assert.equal(graded.fast.scoreOptimal.verdict, 'n/a');
+  assert.equal(graded.fast.outcomeContract.verdict, 'pass', graded.fast.outcomeContract.reason);
 });
 
 test('production end to end: an infeasible price cap is reported infeasible with no build', async () => {
   const graded = await gradeCase(tooCheap);
   assert.equal(graded.observed.precise, 'infeasible');
-  assert.deepEqual(verdicts(graded.precise), { buildValid: 'pass', scoreOptimal: 'n/a', emptiness: 'pass', outcomeContract: 'fail' }, JSON.stringify(graded.precise));
+  assert.deepEqual(verdicts(graded.precise), { buildValid: 'pass', scoreOptimal: 'n/a', emptiness: 'pass', outcomeContract: 'pass' }, JSON.stringify(graded.precise));
 });
 
 test('runProduction turns a thrown exception into a crash outcome instead of propagating it', async () => {

@@ -1,5 +1,11 @@
-import type { IdealPoint, Placement, PresetComponent } from '../solver/types';
-export type { IdealPoint, Placement, PresetComponent } from '../solver/types';
+import type {
+  IdealPoint, ModelQualification, MoaQualification, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved, PresetComponent, SolveStatus,
+} from '../solver/types';
+// The shared transport contract (ADR 0013 section 5). Its leaf types are defined once in solver/types.ts (DOM-free, so the solver and the
+// reference harness can read them) and re-exported here with the request/response records that use them.
+export type {
+  IdealPoint, ModelQualification, MoaQualification, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved, PresetComponent, SolveStatus,
+} from '../solver/types';
 
 /**
  * API Client - uses Web Worker + HiGHS solver instead of HTTP backend.
@@ -21,8 +27,6 @@ export interface InfoResponse {
   guns: Gun[];
 }
 
-/** Solver LP mode: Fast (default omit), Precise, or Auto (precise when mod tree is small). */
-export type SolverPrecisionMode = 'auto' | 'fast' | 'precise';
 
 export interface OptimizeRequest {
   weapon_id: string;
@@ -69,7 +73,7 @@ export interface OptimizeRequest {
    */
   owned_items?: string[];
   /** Boolean values are normalized: true → precise, false → fast. */
-  precise_mode?: boolean | SolverPrecisionMode;
+  precise_mode?: boolean | PrecisionRequest;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   bounds_mode?: 'structural' | 'naive';
   /** Shared request deadline in milliseconds. Omitted means the solver default (60s). */
@@ -158,34 +162,54 @@ export interface FinalStats {
   moa: number;
 }
 
+/**
+ * What the search proved about the objective (ADR 0013 section 5). Every bound is in the objective frame of the oracle. A bound the search
+ * does not have is `null` (unknown or unbounded): it is never coerced to 0 and never transported as Infinity, and the UI guards each one
+ * before `toFixed` / `toPrecision`.
+ */
+export interface OptimizationMetadata {
+  /** The downward enclosure of the verified incumbent's exact score; `null` without an incumbent. */
+  lower_bound: number | null;
+  /** A proved upper bound of the optimum; `null` when none was proved. */
+  upper_bound: number | null;
+  /** The justified gap (upper bound minus the exact incumbent score); `null` unless both ends are known. */
+  absolute_gap: number | null;
+  tolerance: number;
+  /** Outer spatial calls: never a fabricated native MIP node count. */
+  nodes: number;
+  /**
+   * Search completion ONLY: `optimal` when the executed model search finished (a proof of emptiness or of an optimum, or a finished search
+   * whose proof or build was then withheld), `limit` when it was unfinished or never started. No certificate follows from either value;
+   * the status, certificate, qualifications and reason carry the proof.
+   */
+  termination: 'optimal' | 'limit';
+}
+
 export interface OptimizeResponse {
-  status: string;
+  status: SolveStatus;
+  precision_request: PrecisionRequest;
+  precision_resolved: PrecisionResolved;
+  model_qualification: ModelQualification;
+  moa_qualification: MoaQualification;
+  physical_certificate: PhysicalCertificate;
+  /** One record per installed occurrence, each with a unique `instanceId`. */
   selected_items: ItemDetail[];
-  selected_preset?: PresetDetail;
-  fallback_base?: Record<string, unknown>;
-  objective_value: number;
-  reason?: string;
-  final_stats?: FinalStats;
-  solve_time_ms?: number;
-  precision_request?: SolverPrecisionMode;
-  precision_resolved?: 'fast' | 'precise';
   /** Installed multiset by template id, duplicates kept (one entry per installed copy). */
-  selected_item_ids?: string[];
+  selected_item_ids: string[];
+  selected_preset?: PresetDetail;
   /**
    * Physical placements, one per installed occurrence. This is the internal instance-aware manifest, NOT the EFTForge v1 `[slotId, itemId][]`
    * format: an external export needs a checked projection (Phase 2.8).
    */
-  slot_pairs?: Placement[];
-  /** Certified bounds on the maximizing scalarized objective. */
-  optimization?: {
-    lower_bound: number;
-    upper_bound: number;
-    absolute_gap: number;
-    tolerance: number;
-    nodes: number;
-    termination: 'optimal' | 'limit';
-  };
-  /** Tchebycheff mode: ideal/nadir reference point used during scalarization. */
+  slot_pairs: Placement[];
+  /** The exact score of the published build in the objective frame; `null` when there is no build. */
+  objective_value: number | null;
+  optimization: OptimizationMetadata;
+  final_stats?: FinalStats;
+  /** One of the closed set of public reasons (`physical/reasons.ts`, ADR 0013 section 6); absent when none is required. */
+  reason?: string;
+  solve_time_ms: number;
+  /** Tchebycheff mode: the payoff table (ideal/nadir reference point) the scalarization used, supplied or computed (INTERPRETATIONS 9 and 17). */
   ideal_point?: IdealPoint;
   /** Observed ideal-point cache lookup for this request. Absent when Sweet Spot is off. */
   endpoint_cache?: 'hit' | 'miss';
@@ -222,27 +246,111 @@ export interface ExploreRequest extends OptimizeRequest {
   steps?: number;
 }
 
-export interface ExplorePoint {
+/**
+ * One verified optimal or feasible witness of an Explore sweep (ADR 0013 section 5): the proof and witness fields of the Optimize result that
+ * generated it, plus the plotted coordinates.
+ */
+export interface ExplorePoint extends Pick<OptimizeResponse,
+  'status' | 'physical_certificate' | 'precision_request' | 'precision_resolved' | 'model_qualification' | 'moa_qualification'
+  | 'selected_items' | 'selected_item_ids' | 'selected_preset' | 'slot_pairs' | 'objective_value' | 'optimization' | 'reason' | 'solve_time_ms'
+> {
   ergo: number;
   recoil_pct: number;
   recoil_v: number;
   recoil_h: number;
   price: number;
-  selected_items: ItemDetail[];
-  selected_preset?: PresetDetail;
-  slot_pairs?: Placement[];
-  status: string;
-  solve_time_ms?: number;
   /** Set by the UI when overlaying multiple weapons on one explore chart. */
   weapon_id?: string;
   weapon_name?: string;
 }
 
+/** The classification of one scheduled sweep target: V valid witness, I certified infeasible, U unresolved or unlaunched, E runtime error. */
+export interface ExploreStepOutcome {
+  target_index: number;
+  outcome: 'V' | 'I' | 'U' | 'E';
+  /** Index into `ExploreResponse.points` of the witness (V only). */
+  point_index: number | null;
+  status: SolveStatus;
+  physical_certificate: PhysicalCertificate;
+  precision_resolved: PrecisionResolved;
+  model_qualification: ModelQualification;
+  moa_qualification: MoaQualification;
+  optimization: OptimizationMetadata;
+  reason?: string;
+}
+
 export interface ExploreResponse {
+  curve_status: 'complete' | 'partial' | 'infeasible' | 'invalid';
+  /** Verified optimal or feasible witnesses only. */
   points: ExplorePoint[];
-  total_solve_time_ms?: number;
-  precision_request?: SolverPrecisionMode;
-  precision_resolved?: 'fast' | 'precise';
+  sweep_schedule: { target_index: number; target_value: number }[];
+  /** One per scheduled target, `U` when it was never launched. */
+  step_outcomes: ExploreStepOutcome[];
+  total_solve_time_ms: number;
+  precision_request: PrecisionRequest;
+  /** The uniform resolved mode of the sweep when known, otherwise `null`; the per-target fields stay authoritative. */
+  precision_resolved: PrecisionResolved;
+  model_qualification: ModelQualification;
+  /** `provisional_model` when the sweep depends on the MOA model, otherwise `null`. */
+  moa_qualification: MoaQualification;
+  reason?: string;
+}
+
+/** The complete normalized scope a MOA-floor witness was found under (ADR 0013 section 5): a cap trial is its own prepared domain. */
+export interface WitnessScope {
+  weapon_id: string;
+  precision_resolved: 'fast' | 'precise';
+  model_qualification: 'exact' | 'approximate';
+  moa_qualification: 'provisional_model';
+  /** The MOA cap this witness was found under; `null` for the unconstrained seed. */
+  max_moa: number | null;
+  acquisition: {
+    trader_levels: Record<string, number> | null;
+    flea_available: boolean;
+    barter_available: boolean;
+    barter_exclude_dogtags: boolean;
+    player_level: number | null;
+  };
+  feasibility: {
+    max_price: number | null;
+    min_ergonomics: number | null;
+    max_recoil_v: number | null;
+    max_recoil_sum: number | null;
+    min_mag_capacity: number | null;
+    min_sighting_range: number | null;
+    max_weight: number | null;
+    include_items: string[] | null;
+    exclude_items: string[] | null;
+    include_categories: string[][] | null;
+    exclude_categories: string[] | null;
+    prevent_overswing: boolean;
+    equip_ergo_modifier: number | null;
+  };
+  inventory: { owned_items: string[] };
+}
+
+/** A verified full build that met a MOA cap: the upper-bound witness of a floor query (never a proved minimum). */
+export interface WitnessBuild {
+  achieved_moa: number;
+  base: { kind: 'naked' } | { kind: 'preset'; presetId: string };
+  selected_items: ItemDetail[];
+  selected_item_ids: string[];
+  selected_preset?: PresetDetail;
+  slot_pairs: Placement[];
+  scope: WitnessScope;
+}
+
+/** The MOA floor of a weapon under the provisional model (ADR 0013 section 6): a bracket on the minimum, not a game-physical minimum. */
+export interface MOAFloorResponse {
+  status: 'model_proved' | 'model_witnessed' | 'unresolved' | 'model_infeasible';
+  moa_qualification: 'provisional_model';
+  /** The achieved raw upper bound, not a game-physical minimum; `null` without a witness. */
+  floor: number | null;
+  display_floor: number | null;
+  proved_lower_bound: number | null;
+  witness?: WitnessBuild;
+  solve_time_ms: number;
+  reason?: string;
 }
 
 export interface GunsmithConstraints {

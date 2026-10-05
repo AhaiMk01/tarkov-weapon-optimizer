@@ -231,6 +231,24 @@ export interface IdealPoint {
   nadP: number;
 }
 
+// --- Transport contract (ADR 0013 section 5): the leaf types, defined once and re-exported by api/client.ts ---
+
+/** What the caller asked for: Fast, Precise, or Auto (Precise when the exact model is small enough to solve to a proof). */
+export type PrecisionRequest = 'fast' | 'precise' | 'auto';
+/** What actually ran; `null` before any model work (an invalid request). */
+export type PrecisionResolved = 'fast' | 'precise' | null;
+/** `exact`: the occurrence-level model; `approximate`: the Fast template-count model; `null`: no model ran. */
+export type ModelQualification = 'exact' | 'approximate' | null;
+/** `provisional_model` when the result depends on the provisional MOA model (a MOA cap), otherwise `null` (never 'n/a'). */
+export type MoaQualification = 'provisional_model' | null;
+export type SolveStatus = 'optimal' | 'feasible' | 'incomplete' | 'infeasible' | 'error';
+/**
+ * The authority of a result about the PHYSICAL problem: `certified_*` only from a qualified Precise proof that does not depend on the
+ * provisional MOA model; `approximate_optimal` for a Fast or MOA-dependent model optimum; `feasible` for a verified build with no proof;
+ * `none` when there is no build and no certified emptiness.
+ */
+export type PhysicalCertificate = 'certified_optimal' | 'approximate_optimal' | 'feasible' | 'certified_infeasible' | 'none';
+
 /**
  * One installed occurrence attached to a physical slot `(parentInstanceId, slotId)` of its parent (ADR 0013 section 5): the unit of
  * `OptimizeResponse.slot_pairs`. Instance ids are path-derived (`weapon_0/slot:item/slot:item...`), unique per installed copy.
@@ -309,6 +327,12 @@ export interface SolveParams {
   /** Classifiers for payloads without ammunition flags or category chains; see {@link PhysicalClassifiers}. */
   physicalOptions?: PhysicalClassifiers;
   preciseMode?: boolean;
+  /**
+   * What the caller asked for, echoed as `precision_request` (an Auto request that the caller resolved into `preciseMode` is still 'auto').
+   * Default: 'precise' when `preciseMode` is true, otherwise 'fast'. It never changes what runs: `preciseMode` does, and a TrueErgo or
+   * Prevent Overswing request runs Precise whatever was asked (`precision_resolved` says so).
+   */
+  precisionRequest?: PrecisionRequest;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   boundsMode?: 'structural' | 'naive';
   /** Precomputed structural bounds on weight and ergonomics. */

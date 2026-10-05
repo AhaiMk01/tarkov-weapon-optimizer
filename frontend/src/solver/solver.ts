@@ -11,18 +11,20 @@
  *    native build. Its counts are decoded into a rooted occurrence tree and judged by the same exact validator; a rejected point is cut out and
  *    the model re-solved, and a result that is not a valid physical build is `incomplete`, never published (`physical/solveFast.ts`).
  *
- * Statuses and reasons are the minimal set of this phase (the full ADR 0013 sections 5 and 6 transport is Phase 2.6):
- *   optimal       the search completed with a justified gap within the tolerance (Fast: the native solve was optimal, an approximate optimum)
- *   feasible      a verified build, search not complete or gap not justified
- *   infeasible    Precise, MOA-independent emptiness confirmed with presolve off (never a presolved verdict alone)
- *   incomplete    anything else: a Precise emptiness under a MOA cap, Fast emptiness, a limit with no verified build, a rejected build
+ * This module only ASSEMBLES. The status, certificate, qualifications, termination and reason of every response come from the pure classifier
+ * (`physical/outcome.ts`, ADR 0013 section 6), fed by the facts `solvePrecise` and `solveFast` report; the optimization metadata is the search's
+ * own bounds (an unknown bound is `null`, never 0). The response is the section 5 transport of `api/client.ts`.
  * A native failure is a typed error (`SolverError`), never a fabricated result.
+ *
+ * Precision. `precision_request` echoes what the caller asked (`SolveParams.precisionRequest`, else derived from `preciseMode`);
+ * `precision_resolved` is the model that ran. A TrueErgo or Prevent Overswing request always runs Precise (the Fast model has no TED rows),
+ * so a Fast request for one resolves to 'precise' and is reported as such; it is never labelled Fast.
  */
 
-import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
-import type { SolveParams, GunLookupEntry, IdealPoint, ModLookupEntry } from './types';
+import type { OptimizeResponse, OptimizationMetadata, ItemDetail, PresetDetail, FinalStats } from '../api/client';
+import type { SolveParams, GunLookupEntry, IdealPoint, ModLookupEntry, PrecisionRequest } from './types';
 export type { SolveParams, IdealPoint } from './types';
-import { objectiveModel, objectiveScore, tedContribution } from './trueErgo';
+import { tedContribution } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { canonicalizeTraderLevels } from './reuseKey';
 import { mergeComponents, presetSupply } from './presetSupply';
@@ -30,9 +32,12 @@ import { setHighsBaseUrl } from './native';
 import { legalOffers, resolveMarket } from './physical/acquisition';
 import { axesOfStats } from './physical/objective';
 import { inspectOwnedItems } from './physical/ownedItems';
+import { classifyOptimize, invalidOwnedItemsOutcome, isMoaDependent, observationsOfReason } from './physical/outcome';
+import type { OptimizeOutcome, StopObservations } from './physical/outcome';
 import { PUBLIC_REASONS } from './physical/reasons';
 import { solveFast } from './physical/solveFast';
-import { solvePrecise } from './physical/solvePrecise';
+import type { FastSummary } from './physical/solveFast';
+import { resolveTolerance, solvePrecise } from './physical/solvePrecise';
 import type { PreciseSummary } from './physical/solvePrecise';
 import type { PhysicalBuild, PhysicalBuildStats } from './physical/validate';
 
@@ -158,36 +163,62 @@ export async function solve(params: SolveParams): Promise<OptimizeResponse> {
 // Response assembly (shared by Precise and Fast: both publish a validated PhysicalBuild)
 // ---------------------------------------------------------------------------------------------
 
-interface ResponseExtras {
-  reason?: string;
-  optimization?: OptimizeResponse['optimization'];
+/** What every assembled response shares: the caller's precision request, the clock and the payoff table that was used (if any). */
+interface Assembly {
+  precisionRequest: PrecisionRequest;
+  start: number;
   idealPoint?: IdealPoint;
 }
 
-function withoutBuild(status: 'incomplete' | 'infeasible', reason: string | undefined, start: number, extras: ResponseExtras): OptimizeResponse {
+/** Bounds the search does not have: unknown, never 0. */
+const unknownOptimization = (tolerance: number, nodes: number, termination: OptimizationMetadata['termination']): OptimizationMetadata => ({
+  lower_bound: null, upper_bound: null, absolute_gap: null, tolerance, nodes, termination,
+});
+
+/** The Precise search's own bounds as they travel (`null` for an unknown or unproved value) with the classifier's termination. */
+const preciseOptimization = (summary: PreciseSummary, outcome: OptimizeOutcome): OptimizationMetadata => ({
+  lower_bound: summary.bounds.lower,
+  upper_bound: summary.bounds.upper,
+  absolute_gap: summary.bounds.gap,
+  tolerance: summary.tolerance,
+  nodes: summary.nodes,
+  termination: outcome.termination,
+});
+
+/**
+ * The Fast model has no proof frame: no physical upper bound or gap, no spatial calls. Its lower bound is the downward enclosure of the exact
+ * score of the verified witness, when there is one.
+ */
+const fastOptimization = (summary: FastSummary, outcome: OptimizeOutcome, scoreLower: number | null): OptimizationMetadata => ({
+  ...unknownOptimization(summary.tolerance, 0, outcome.termination),
+  lower_bound: scoreLower,
+});
+
+/** The fields every response takes from the classified outcome. */
+const outcomeFields = (assembly: Assembly, outcome: OptimizeOutcome) => ({
+  status: outcome.status,
+  precision_request: assembly.precisionRequest,
+  precision_resolved: outcome.precision_resolved,
+  model_qualification: outcome.model_qualification,
+  moa_qualification: outcome.moa_qualification,
+  physical_certificate: outcome.physical_certificate,
+  ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+});
+
+/** A response with no build: an emptiness, a limit or a refusal. The objective is `null`, the manifest empty. */
+function noBuildResponse(assembly: Assembly, outcome: OptimizeOutcome, optimization: OptimizationMetadata): Detailed {
   return {
-    status,
-    ...(reason === undefined ? {} : { reason }),
-    selected_items: [],
-    selected_item_ids: [],
-    slot_pairs: [],
-    objective_value: 0,
-    solve_time_ms: now() - start,
-    ...(extras.idealPoint === undefined ? {} : { ideal_point: extras.idealPoint }),
+    response: {
+      ...outcomeFields(assembly, outcome),
+      selected_items: [],
+      selected_item_ids: [],
+      slot_pairs: [],
+      objective_value: null,
+      optimization,
+      solve_time_ms: now() - assembly.start,
+      ...(assembly.idealPoint === undefined ? {} : { ideal_point: assembly.idealPoint }),
+    },
   };
-}
-
-const incomplete = (reason: string, start: number, extras: ResponseExtras = {}): Detailed =>
-  ({ response: withoutBuild('incomplete', reason, start, extras) });
-
-/** A proved or admitted emptiness (Precise: infeasible, or incomplete under a MOA cap; Fast: incomplete with the approximate-model reason). */
-function emptyOutcome(params: SolveParams, mode: 'precise' | 'fast', start: number, extras: ResponseExtras): Detailed {
-  const moa = params.maxMOA != null;
-  if (mode === 'fast') {
-    return incomplete(moa ? PUBLIC_REASONS.fastProvisionalMoaModelInfeasible : PUBLIC_REASONS.approximateModelInfeasible, start, extras);
-  }
-  if (moa) return incomplete(PUBLIC_REASONS.provisionalMoaModelInfeasible, start, extras);
-  return { response: withoutBuild('infeasible', undefined, start, extras) };
 }
 
 const imageOf = (data: Record<string, unknown>): { icon?: string; large?: string } => ({
@@ -324,53 +355,35 @@ function finalStatsOf(stats: PhysicalBuildStats): FinalStats {
 }
 
 /** The published build: the installed multiset, placements, base and statistics all come from the validated build and its exact stats. */
-function buildOutcome(
-  params: SolveParams, build: PhysicalBuild, stats: PhysicalBuildStats, status: 'optimal' | 'feasible', start: number, extras: ResponseExtras,
+function buildResponse(
+  params: SolveParams, assembly: Assembly, build: PhysicalBuild, stats: PhysicalBuildStats, score: number, outcome: OptimizeOutcome, optimization: OptimizationMetadata,
 ): Detailed {
-  const useTrueErgo = params.useTrueErgo === true;
-  const axes = axesOfStats(stats, useTrueErgo);
+  const axes = axesOfStats(stats, params.useTrueErgo === true);
   const response: OptimizeResponse = {
-    status,
-    ...(extras.reason === undefined ? {} : { reason: extras.reason }),
+    ...outcomeFields(assembly, outcome),
     selected_items: itemDetails(params, build, stats),
     selected_item_ids: build.placements.map(p => p.itemId),
     selected_preset: presetDetail(params, build, stats),
     slot_pairs: build.placements.map(p => ({ ...p })),
-    objective_value: objectiveScore(objectiveModel(params), axes),
+    objective_value: score,
+    optimization,
     final_stats: finalStatsOf(stats),
-    solve_time_ms: now() - start,
-    ...(extras.optimization === undefined ? {} : { optimization: extras.optimization }),
-    ...(extras.idealPoint === undefined ? {} : { ideal_point: extras.idealPoint }),
+    solve_time_ms: now() - assembly.start,
+    ...(assembly.idealPoint === undefined ? {} : { ideal_point: assembly.idealPoint }),
   };
   return { response, axes };
-}
-
-function optimizationOf(summary: PreciseSummary): NonNullable<OptimizeResponse['optimization']> {
-  // An unknown bound has no number yet: it is transported as Infinity until the nullable transport of Phase 2.6.
-  return {
-    lower_bound: summary.lowerBound ?? -Infinity,
-    upper_bound: summary.upperBound,
-    absolute_gap: summary.gap ?? Infinity,
-    tolerance: summary.tolerance,
-    nodes: summary.nodes,
-    termination: summary.completed ? 'optimal' : 'limit',
-  };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Precise
 // ---------------------------------------------------------------------------------------------
 
-async function solveExact(params: SolveParams, deadline: number, start: number, extras: ResponseExtras): Promise<Detailed> {
+async function solveExact(params: SolveParams, deadline: number, assembly: Assembly): Promise<Detailed> {
   const result = await solvePrecise({ params, deadline, now });
-  if (result.kind === 'empty') return emptyOutcome(params, 'precise', start, extras);
-  if (result.kind === 'incomplete') return incomplete(result.reason, start, extras);
-  const { best, certified } = result;
-  return buildOutcome(params, best.build, best.stats, certified ? 'optimal' : 'feasible', start, {
-    ...extras,
-    ...(result.reason === undefined ? {} : { reason: result.reason }),
-    ...(result.summary.spatial ? { optimization: optimizationOf(result.summary) } : {}),
-  });
+  const { outcome, summary } = result;
+  if (result.kind !== 'build') return noBuildResponse(assembly, outcome, preciseOptimization(summary, outcome));
+  const { best } = result;
+  return buildResponse(params, assembly, best.build, best.stats, best.score, outcome, preciseOptimization(summary, outcome));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -378,15 +391,16 @@ async function solveExact(params: SolveParams, deadline: number, start: number, 
 // ---------------------------------------------------------------------------------------------
 
 /**
- * The approximate model's outcome: a verified build is `optimal` when the native solve was (the build is the best point of the approximate
- * model that the exact validator accepts), otherwise `feasible` with the solver's stop reason; emptiness is incomplete with the approximate-model
- * reason, never infeasible.
+ * The approximate model's outcome: a verified build is `optimal` / `approximate_optimal` when the native solve was Optimal (the build is the best
+ * point of the approximate model that the exact validator accepts), otherwise `feasible` with the solver's stop reason; emptiness is incomplete
+ * with the approximate-model reason, never infeasible.
  */
-async function solveApproximate(params: SolveParams, deadline: number, start: number, extras: ResponseExtras): Promise<Detailed> {
+async function solveApproximate(params: SolveParams, deadline: number, assembly: Assembly): Promise<Detailed> {
   const result = await solveFast({ params, deadline, now });
-  if (result.kind === 'empty') return emptyOutcome(params, 'fast', start, extras);
-  if (result.kind === 'incomplete') return incomplete(result.reason, start, extras);
-  return buildOutcome(params, result.best.build, result.best.stats, result.optimal ? 'optimal' : 'feasible', start, result.optimal ? extras : { ...extras, reason: result.reason });
+  const { outcome, summary } = result;
+  if (result.kind !== 'build') return noBuildResponse(assembly, outcome, fastOptimization(summary, outcome, null));
+  const { best } = result;
+  return buildResponse(params, assembly, best.build, best.stats, best.score, outcome, fastOptimization(summary, outcome, best.scoreLower));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -396,12 +410,26 @@ async function solveApproximate(params: SolveParams, deadline: number, start: nu
 async function solveDetailed(input: SolveParams): Promise<Detailed> {
   const start = now();
   const deadline = start + Math.max(0, input.timeLimitMs ?? 60_000);
+  // What the caller asked for, read BEFORE a TED request forces Precise.
+  const precisionRequest: PrecisionRequest = input.precisionRequest ?? (input.preciseMode ? 'precise' : 'fast');
+  const moaDependent = isMoaDependent(input);
   const owned = inspectOwnedItems(input.ownedItems);
-  if (!owned.ok) return incomplete(owned.reason, start);
-  let params: SolveParams = { ...input };
+  if (!owned.ok) {
+    // Before hashing, caching or any model work: nothing resolved, the search never started.
+    return noBuildResponse({ precisionRequest, start }, invalidOwnedItemsOutcome(moaDependent), unknownOptimization(resolveTolerance(input.objectiveTolerance), 0, 'limit'));
+  }
+  let params: SolveParams = { ...input, precisionRequest };
   if (params.traderLevels) params.traderLevels = canonicalizeTraderLevels(params.traderLevels) as SolveParams['traderLevels'];
   // Certificates describe real slot placements, not the Fast model's restrictions.
   if (params.useTrueErgo || params.preventOverswing) params.preciseMode = true;
+  const mode = params.preciseMode ? 'precise' : 'fast';
+  const tolerance = resolveTolerance(params.objectiveTolerance);
+  /** A request that stopped before its search started: no build, no proof, the factual cause. */
+  const unstarted = (observed: StopObservations, idealPoint?: IdealPoint): Detailed => noBuildResponse(
+    { precisionRequest, start, idealPoint },
+    classifyOptimize({ mode, moaDependent, end: 'unproved', witness: false, searchFinished: false, observed }),
+    unknownOptimization(tolerance, 0, 'limit'),
+  );
   if (params.useTchebycheff && !params.idealPoint) {
     try {
       params = { ...params, idealPoint: await computeIdealPoint({ ...params, timeLimitMs: Math.max(0, deadline - now()) }) };
@@ -412,13 +440,14 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
         const empty = endpoint !== null && (endpoint.status === 'infeasible' || endpoint.reason === PUBLIC_REASONS.provisionalMoaModelInfeasible
           || endpoint.reason === PUBLIC_REASONS.approximateModelInfeasible || endpoint.reason === PUBLIC_REASONS.fastProvisionalMoaModelInfeasible);
         if (empty) return { response: { ...endpoint, solve_time_ms: now() - start } };
-        return incomplete(error.reason === PUBLIC_REASONS.timeLimitReached ? error.reason : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, start);
+        // The table is a prerequisite of the objective, but the stop is reported as what actually stopped the endpoint (its own factual reason).
+        return unstarted(observationsOfReason(error.reason));
       }
       throw error;
     }
   }
-  if (now() >= deadline) return incomplete(PUBLIC_REASONS.timeLimitReached, start, { idealPoint: params.useTchebycheff ? params.idealPoint : undefined });
-  const extras: ResponseExtras = { idealPoint: params.useTchebycheff ? params.idealPoint : undefined };
-  return params.preciseMode ? solveExact(params, deadline, start, extras) : solveApproximate(params, deadline, start, extras);
+  const idealPoint = params.useTchebycheff ? params.idealPoint : undefined;
+  if (now() >= deadline) return unstarted({ deadline: true }, idealPoint);
+  const assembly: Assembly = { precisionRequest, start, idealPoint };
+  return params.preciseMode ? solveExact(params, deadline, assembly) : solveApproximate(params, deadline, assembly);
 }
-

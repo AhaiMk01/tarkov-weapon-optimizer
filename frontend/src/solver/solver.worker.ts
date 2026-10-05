@@ -6,7 +6,7 @@ import { ensureDataLoaded } from './dataService.ts';
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
-import { solve, computeIdealPoint, SOLVER_CAPABILITIES } from './solver.ts';
+import { solve, SOLVER_CAPABILITIES } from './solver.ts';
 import { computeIdealPointCacheKey, computeStructuralBoundsCacheKey, canonicalizeTraderLevels } from './reuseKey.ts';
 import { computeStructuralBounds, type StructuralBounds } from './structuralBounds.ts';
 import { MOA_K } from './lpBuilder.ts';
@@ -210,106 +210,20 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
 
           const optimizeStart = performance.now();
           const totalLimitMs = Math.max(0, req.time_limit_ms ?? 60_000);
-          const deadline = optimizeStart + totalLimitMs;
 
           // Finish preparation upfront so preparation time is strictly charged against the request deadline
           const precomputedBounds = req.bounds_mode !== 'naive'
             ? getStructuralBounds(data, lang, gameMode, req.weapon_id)
             : undefined;
 
+          // A cached payoff table skips the three endpoint solves. Otherwise `solve` computes it inside the request deadline and reports the table it
+          // used (`ideal_point`), which is cached here; a request whose table cannot be computed comes back as an ordinary classified response.
           let idealPoint: IdealPoint | undefined;
           let endpointCache: 'hit' | 'miss' | undefined;
-          if (req.use_tchebycheff) {
-            const cacheKey = getIdealCacheKey(lang, gameMode, req);
+          const cacheKey = req.use_tchebycheff ? getIdealCacheKey(lang, gameMode, req) : undefined;
+          if (cacheKey !== undefined) {
             idealPoint = idealPointCache.get(cacheKey);
             endpointCache = idealPoint ? 'hit' : 'miss';
-            if (!idealPoint) {
-              const remainingForEndpoints = Math.max(0, deadline - performance.now());
-              if (remainingForEndpoints <= 0) {
-                self.postMessage({
-                  type: 'result',
-                  id,
-                  payload: {
-                    status: 'incomplete',
-                    reason: 'Request time limit reached before endpoint computation',
-                    selected_items: [],
-                    objective_value: 0,
-                    solve_time_ms: performance.now() - optimizeStart,
-                    precision_request: precReq,
-                    precision_resolved: usePrecise ? 'precise' : 'fast',
-                    endpoint_cache: endpointCache,
-                  },
-                });
-                break;
-              }
-              try {
-                idealPoint = await computeIdealPoint({
-                  weaponId: req.weapon_id,
-                  itemLookup: data.itemLookup,
-                  compatibilityMap: compatMap,
-                  structuralBounds: precomputedBounds,
-                  maxPrice: req.max_price,
-                  minErgonomics: req.min_ergonomics,
-                  maxRecoilV: req.max_recoil_v,
-                  maxRecoilSum: req.max_recoil_sum,
-                  minMagCapacity: req.min_mag_capacity,
-                  minSightingRange: req.min_sighting_range,
-                  maxWeight: req.max_weight,
-                  maxMOA: req.max_moa,
-                  includeItems: req.include_items,
-                  excludeItems: req.exclude_items,
-                  includeCategories: req.include_categories,
-                  excludeCategories: req.exclude_categories,
-                  useTrueErgo: req.use_true_ergo ?? false,
-                  preventOverswing: req.prevent_overswing ?? false,
-                  equipErgoModifier: req.equip_ergo_modifier,
-                  traderLevels: req.trader_levels as TraderLevels | undefined,
-                  fleaAvailable: req.flea_available ?? true,
-                  barterAvailable: req.barter_available ?? false,
-                  barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
-                  playerLevel: req.player_level,
-                  preciseMode: usePrecise,
-                  boundsMode: req.bounds_mode,
-                  timeLimitMs: remainingForEndpoints,
-                });
-                idealPointCache.set(cacheKey, idealPoint);
-              } catch (err) {
-                self.postMessage({
-                  type: 'result',
-                  id,
-                  payload: {
-                    status: 'incomplete',
-                    reason: err instanceof Error ? err.message : String(err),
-                    selected_items: [],
-                    objective_value: 0,
-                    solve_time_ms: performance.now() - optimizeStart,
-                    precision_request: precReq,
-                    precision_resolved: usePrecise ? 'precise' : 'fast',
-                    endpoint_cache: endpointCache,
-                  },
-                });
-                break;
-              }
-            }
-          }
-
-          const remainingForSolve = Math.max(0, deadline - performance.now());
-          if (remainingForSolve <= 0) {
-            self.postMessage({
-              type: 'result',
-              id,
-              payload: {
-                status: 'incomplete',
-                reason: 'Request time limit reached before search',
-                selected_items: [],
-                objective_value: 0,
-                solve_time_ms: performance.now() - optimizeStart,
-                precision_request: precReq,
-                precision_resolved: usePrecise ? 'precise' : 'fast',
-                endpoint_cache: endpointCache,
-              },
-            });
-            break;
           }
 
           const result: OptimizeResponse = await solve({
@@ -343,13 +257,13 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
             playerLevel: req.player_level,
             preciseMode: usePrecise,
+            precisionRequest: precReq,
             boundsMode: req.bounds_mode,
-            timeLimitMs: remainingForSolve,
+            timeLimitMs: Math.max(0, totalLimitMs - (performance.now() - optimizeStart)),
           });
 
+          if (cacheKey !== undefined && endpointCache === 'miss' && result.ideal_point) idealPointCache.set(cacheKey, result.ideal_point);
           result.solve_time_ms = performance.now() - optimizeStart;
-          result.precision_request = precReq;
-          result.precision_resolved = usePrecise ? 'precise' : 'fast';
           if (endpointCache) result.endpoint_cache = endpointCache;
           self.postMessage({ type: 'result', id, payload: result });
           break;
@@ -399,13 +313,23 @@ async function dispatchMessage(eventData: WorkerMessage): Promise<void> {
             barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
             playerLevel: req.player_level,
             preciseMode: usePrecise,
+            precisionRequest: precReq,
           });
 
+          // INTERIM (Phase 2.7 replaces it with the total classification of ADR 0013 section 6: a nonempty scheduled sweep, one V/I/U/E outcome
+          // per target, the complete/partial/infeasible/invalid precedence). The current sweep is adaptive and records no per-target outcome, so
+          // nothing here can honestly claim 'complete' or 'infeasible': a sweep with a verified point is 'partial', one without is 'invalid'.
           const result: ExploreResponse = {
+            curve_status: points.length > 0 ? 'partial' : 'invalid',
             points,
+            sweep_schedule: [],
+            step_outcomes: [],
             total_solve_time_ms: Math.round(performance.now() - startTime),
             precision_request: precReq,
+            // Every target of the sweep runs the one resolved mode of the request.
             precision_resolved: usePrecise ? 'precise' : 'fast',
+            model_qualification: usePrecise ? 'exact' : 'approximate',
+            moa_qualification: req.max_moa != null ? 'provisional_model' : null,
           };
 
           self.postMessage({ type: 'result', id, payload: result });

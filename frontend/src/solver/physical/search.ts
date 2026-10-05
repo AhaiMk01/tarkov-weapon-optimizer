@@ -22,7 +22,11 @@
  *     exact score (the upward enclosure when reported);
  *   - the tolerance is tested against the exact gap `UB - score` (fathoming a node, certifying the search), never a floating difference.
  *
- * Termination. `completed` means the executed search finished (no live node, no stop): it is search completion only, never proof authority.
+ * Termination. Two facts, kept apart (ADR 0013 section 6):
+ *   - `completed`: the search ran to its logical end with every node settled by a proof (no live node, no stop). Emptiness is read from it.
+ *   - `finished`: the EXECUTED search finished, which is what `optimization.termination` reports. It is search completion only, never proof
+ *     authority: a search whose last node's native solve ran to completion and whose proof or candidate was then withheld (an exact node, no
+ *     other live node) is finished but not completed, and a stop on the clock, the node cap or an unsplittable interval is neither.
  * `certified` additionally needs the justified gap within the tolerance, which an unknown bound never has. A search that stopped before
  * finishing always has a live node whose bound exceeds the incumbent by more than the tolerance (nodes within it are fathomed before any limit
  * is checked).
@@ -108,6 +112,12 @@ export interface NodeEvaluation<P> {
   splitAt?: number;
   /** The factual stop cause of an `unresolved` or `failed` verdict. */
   reason?: string;
+  /**
+   * The node's own native search ran to completion although its proof or candidate was withheld: an Optimal solve of an EXACT node (a
+   * withheld bound, a rejected build) or an infeasibility verdict that could not be qualified. With no other live node the executed search is
+   * then finished (`SearchResult.finished`). A limit stop, and any node that still needs splitting, is never finished.
+   */
+  finished?: boolean;
 }
 
 /**
@@ -192,8 +202,10 @@ export interface SearchResult<P> {
   upperBoundExact: MaybeBound;
   /** `UB - score` of the exact bound and the exact incumbent score, rounded up to a double (`Infinity` when the upper bound is unknown), `null` without an incumbent. */
   gap: number | null;
-  /** The search finished: no live node and no stop (search completion only, not proof). */
+  /** Every node was settled by a proof: no live node and no stop. */
   completed: boolean;
+  /** The executed search finished (search completion only, never proof authority): `completed`, or a finished last node whose proof was withheld. */
+  finished: boolean;
   /** The factual cause of the stop, `null` when the search completed. */
   stopReason: string | null;
   /** The search completed and every node was proved empty: the request has no build (the caller applies confirmation policy). */
@@ -237,6 +249,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
   let fathomed: MaybeBound;
   let nodes = 0;
   let stopReason: string | null = null;
+  let finishedAtStop = false;
 
   /** Is a node with this upper bound within the tolerance of the incumbent? Decided on the EXACT gap, an unknown bound never is. */
   const withinTolerance = (bound: Bound): boolean => incumbentExact !== null && bound !== null && ratCmp(ratSub(bound, incumbentExact), tolerance) <= 0;
@@ -267,6 +280,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     const bound = nodeBound(node.bound, evaluation.evidence);
     if (evaluation.verdict === 'infeasible') continue;
     if (evaluation.verdict === 'unresolved' || evaluation.verdict === 'failed') {
+      finishedAtStop = evaluation.finished === true && live.length === 0;
       live.push(liveNode(node.interval, bound, node.id));
       stopReason = evaluation.reason ?? (evaluation.verdict === 'failed' ? PUBLIC_REASONS.independentBuildValidationFailed : PUBLIC_REASONS.timeLimitReached);
       break;
@@ -303,6 +317,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     upperBoundExact: upper,
     gap,
     completed,
+    finished: completed || finishedAtStop,
     stopReason,
     empty: completed && incumbent === null && fathomed === undefined,
     certified: completed && gapExact !== null && ratCmp(gapExact, tolerance) <= 0,

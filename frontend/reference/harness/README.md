@@ -13,6 +13,7 @@ runs production's `solve()` end to end (HiGHS, in Node), maps the returned build
 | `scoreboard.ts` | Pure bookkeeping: grade shape, `baseline.json` format, ratchet comparison, printed summary |
 | `ledger.differential.test.ts` | Runs every ledger case and enforces the ratchet against `baseline.json` |
 | `toProduction.differential.test.ts`, `compare.differential.test.ts`, `scoreboard.test.ts` | Tests of the three modules above (production is only touched by a few end-to-end smoke cases) |
+| `payoffReport.differential.test.ts` | The payoff table a Tchebycheff result reports (INTERPRETATIONS 17): the oracle must find it admissible (`checkIdealPoint`) and the returned build optimal under that same table |
 | `baseline.json` | The committed scoreboard: one line per case |
 
 `*.differential.ts` files may import production code and nothing outside them may import them (see
@@ -30,14 +31,17 @@ exact optimality is not required of it (ADR 0013 section 6) and `scoreOptimal` i
 | `buildValid` | The build production returned, mapped back to a `ReferenceBuild`, is accepted by `validateReference` (rooted placements, slot capacity, allowed items, required slots, conflicts, includes and excludes, supply caps, base access, every request cap). For an empty case it passes when production returns no build. A response that cannot be decoded faithfully (no `selected_preset`, `selected_items` and `slot_pairs` that disagree, a slot with no placed owner) fails with the reason; the unplaceable part is kept as a placement under an unresolved parent so the validator rejects it by code. |
 | `scoreOptimal` | The oracle's exact score (exact rationals, `scoreBuild`) of that valid build equals `expected.maxScore` and the build's projection key is in `expected.maximizers`. Exception: a `tiny_positive_gap` case whose gap is below its runtime tolerance (`resolvableAtTolerance: false`) also accepts a build within `runtimeTolerance.absolute` of the optimum, since a solver held to that tolerance cannot tell the two apart. `n/a` for empty cases (no optimum) and for Fast. |
 | `emptiness` | Production reports infeasibility exactly when `expected.empty`. Nonempty: production returned an `optimal` or `feasible` build (`infeasible` is a false emptiness, `incomplete`/`error` is no verdict, both fail). Empty: status `infeasible`, or `incomplete` carrying the admitted empty reason of ADR 0013 section 6 (provisional-MOA and Fast emptiness are published that way). |
-| `outcomeContract` | The response carries the admitted public outcome of ADR 0013 section 6 for the mode: `status`, `physical_certificate`, `model_qualification`, `moa_qualification` (an explicit `null` when MOA-independent, absent is a miss), `precision_resolved` (the requested mode), `reason` and `optimization.termination`. `reason` is a closed set: the admitted reason when one is required, otherwise none at all (so today's `"No valid configuration found"` fails). The failure key lists the fields that are missing and the ones that are wrong, so the progress of phase 2.6 is visible. |
+| `outcomeContract` | The response carries the admitted public outcome of ADR 0013 section 6 for the mode: `status`, `physical_certificate`, `model_qualification`, `moa_qualification` (an explicit `null` when MOA-independent, absent is a miss), `precision_resolved` (the requested mode), `reason` and `optimization.termination`. `reason` is a closed set: the admitted reason when one is required, otherwise none at all (so today's `"No valid configuration found"` fails). The failure key lists the fields that are missing and the ones that are wrong. Phase 2.6 made production publish the section 5 transport through the pure classifier `src/solver/physical/outcome.ts`. |
 
 A case with an unsupported feature (below) is a recorded failure on every applicable dimension with the reason
 `unsupported: ...`; it is not run. Nothing is ever passed by loosening a comparison.
 
-Stage 2 is complete when every Precise cell passes. The Fast column is the secondary signal. One known open question:
-production resolves a Fast request on a TrueErgo or Prevent Overswing case to Precise (`solve` forces `preciseMode`), so
-the Fast `outcomeContract` cells of those cases cannot pass while `precision_resolved` must equal the requested mode.
+Stage 2 is complete when every Precise cell passes. The Fast column is the secondary signal. One known open question, still open after
+phase 2.6: production resolves a Fast request on a TrueErgo or Prevent Overswing case to Precise (`solve` forces `preciseMode`, because the
+Fast model has no TED rows), and reports it honestly as `precision_request: 'fast'`, `precision_resolved: 'precise'`, certified and exact. The 15
+Fast `outcomeContract` cells of those cases (F11 6, F12 8, F14 1) therefore fail on `precision_resolved`, `model_qualification` and
+`physical_certificate`, while `precision_resolved` must equal the requested mode. They pass only if Fast learns TED rows or the owner changes the
+admitted Fast outcome of a TED case; no comparison is loosened for them.
 
 ## Mapping and unsupported features
 

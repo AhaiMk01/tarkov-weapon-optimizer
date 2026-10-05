@@ -1,7 +1,7 @@
 import { buildItemLookup } from '../src/solver/dataService.ts';
 import { buildCompatibilityMap } from '../src/solver/compatibilityMap.ts';
 import { presetSupply } from '../src/solver/presetSupply.ts';
-import type { OptimizeRequest, SolverPrecisionMode } from '../src/api/client.ts';
+import type { OptimizeRequest, PrecisionRequest } from '../src/api/client.ts';
 import type { BenchmarkCase, Snapshot } from './types.ts';
 
 export function makeCases(snapshot: Snapshot): BenchmarkCase[] {
@@ -18,7 +18,7 @@ export function makeCases(snapshot: Snapshot): BenchmarkCase[] {
     flea_available: true, barter_available: false, barter_exclude_dogtags: true, player_level: 50, trader_levels: { ...access }, equip_ergo_modifier: 0 });
   const cases: BenchmarkCase[] = [];
   const add = (id: string, description: string, request: OptimizeRequest) => cases.push({ id, description, kind: 'optimize', request });
-  const modes: SolverPrecisionMode[] = ['fast', 'precise', 'auto'];
+  const modes: PrecisionRequest[] = ['fast', 'precise', 'auto'];
   const toggles = [
     ['linear', {}], ['ted', { use_true_ergo: true }], ['overswing', { prevent_overswing: true }],
     ['sweet', { use_tchebycheff: true }], ['ted-sweet', { use_true_ergo: true, use_tchebycheff: true }],

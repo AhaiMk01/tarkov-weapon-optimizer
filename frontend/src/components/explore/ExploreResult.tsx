@@ -6,7 +6,7 @@ import { compressToEncodedURIComponent } from 'lz-string'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { EmptyState } from '../common/EmptyState'
 import { BuildManifest } from '../common/BuildManifest'
-import type { ExplorePoint, OptimizeResponse, SolverPrecisionMode } from '../../api/client'
+import type { ExplorePoint, OptimizeResponse, PrecisionRequest } from '../../api/client'
 import { paletteColorAt, seriesPalette } from './palette'
 
 const { Text } = Typography
@@ -21,7 +21,7 @@ export interface ExploreProgress {
 interface ExploreResultProps {
   exploreResult: ExplorePoint[]
   solveTime?: number
-  explorePrecision?: { request?: SolverPrecisionMode; resolved?: 'fast' | 'precise' }
+  explorePrecision?: { request?: PrecisionRequest; resolved?: 'fast' | 'precise' }
   resultTradeoff: 'price' | 'recoil' | 'ergo'
   exploring: boolean
   exploreProgress?: ExploreProgress | null
@@ -48,10 +48,19 @@ const EFTFORGE_URL = 'https://www.eftforge.com'
 function pointAsBuild(point: ExplorePoint): OptimizeResponse {
   return {
     status: point.status,
+    precision_request: point.precision_request,
+    precision_resolved: point.precision_resolved,
+    model_qualification: point.model_qualification,
+    moa_qualification: point.moa_qualification,
+    physical_certificate: point.physical_certificate,
     selected_items: point.selected_items,
+    selected_item_ids: point.selected_item_ids,
     selected_preset: point.selected_preset,
     slot_pairs: point.slot_pairs,
-    objective_value: 0,
+    objective_value: point.objective_value,
+    optimization: point.optimization,
+    solve_time_ms: point.solve_time_ms,
+    ...(point.reason === undefined ? {} : { reason: point.reason }),
     // final_stats is deliberately omitted: an ExplorePoint carries no weight or
     // MOA, and filling them with zeros would report every Explore build as 0 kg
     // at 0 MOA the moment BuildManifest starts showing those fields.

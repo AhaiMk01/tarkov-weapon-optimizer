@@ -63,7 +63,8 @@ export function OptimizeResult({ result, viewMode, onViewModeChange, optimizing,
                 </Tag>
               )}
               {result.reason && <Text type="secondary" style={{ margin: 0 }}>{result.reason}</Text>}
-              {result.optimization && (
+              {/* An unknown bound is null (never 0): show the line only when every number in it is known. */}
+              {result.optimization.lower_bound !== null && result.optimization.upper_bound !== null && result.optimization.absolute_gap !== null && (
                 <Text type="secondary">
                   {t('results.optimization_bounds', {
                     lower: result.optimization.lower_bound.toPrecision(5),

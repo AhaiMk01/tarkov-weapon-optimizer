@@ -8,6 +8,7 @@ import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import { computeIdealPoint, solve } from '../../src/solver/solver';
 import type { ItemLookup, ModLookupEntry, SolveParams } from '../../src/solver/types';
 import { validatePhysicalBuild } from '../../src/solver/physical';
+import { PUBLIC_REASON_SET } from '../../src/solver/physical/reasons';
 import { barter, gun, lookupOf, mod, slot, trader, WEAPON } from '../physical/lpFixtures';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
@@ -85,8 +86,13 @@ test('the response carries unique instances, placements, the installed multiset,
   assert.equal(response.final_stats?.total_weight, exact.stats?.weight);
   assert.equal(response.final_stats?.true_ergo_delta, exact.stats?.ted);
   // score = (e / 10) fE - (p / 1000) fP with fE = 10 x 17 and fP = 1400.
-  assert.ok(Math.abs(response.objective_value - (17 - 0.014)) < 1e-9, String(response.objective_value));
-  assert.equal(response.optimization, undefined, 'a request with no TED has no spatial search to report');
+  assert.ok(response.objective_value !== null && Math.abs(response.objective_value - (17 - 0.014)) < 1e-9, String(response.objective_value));
+  // One exact native solve: one outer call, a justified gap within the tolerance, the bounds of the exact optimum.
+  assert.equal(response.optimization.nodes, 1);
+  assert.equal(response.optimization.termination, 'optimal');
+  assert.ok(response.optimization.lower_bound !== null && response.optimization.upper_bound !== null && response.optimization.absolute_gap !== null);
+  assert.ok(response.optimization.lower_bound <= response.objective_value && response.objective_value <= response.optimization.upper_bound);
+  assert.ok(response.optimization.absolute_gap <= response.optimization.tolerance);
 });
 
 test('a barter lot is bought whole and is charged once, to the first unit taken; the rest of the lot rides on it', async () => {
@@ -143,16 +149,18 @@ test('an invalid owned_items list is incomplete with its reason, before any mode
   }
 });
 
-test('a deadline that has passed is incomplete with the time-limit reason and no optimization claim', async () => {
+test('a deadline that has passed is incomplete with the time-limit reason, an unstarted search (limit) and no bound', async () => {
   for (const preciseMode of [true, false]) {
     const response = await solve(paramsOf(small(), { preciseMode, timeLimitMs: 0 }));
     assert.equal(response.status, 'incomplete');
+    assert.equal(response.physical_certificate, 'none');
     assert.equal(response.reason, 'Time limit reached');
-    assert.equal(response.optimization, undefined);
+    assert.equal(response.objective_value, null);
+    assert.deepEqual(response.optimization, { lower_bound: null, upper_bound: null, absolute_gap: null, tolerance: 1e-5, nodes: 0, termination: 'limit' });
   }
 });
 
-test('a TED request reports its search; a limit with a verified build is feasible with the factual reason, and an unknown bound is Infinity', async () => {
+test('a TED request reports its search; a limit with a verified build is feasible with the factual reason, and an unknown bound is null', async () => {
   const lookup = lookupOf(
     gun(WEAPON, { weight: 1, slots: [slot('choice', ['a', 'b', 'c'], true)] }),
     ['a', mod('a', { weight: 1, ergo: 20 })], ['b', mod('b', { weight: 2, ergo: 30 })], ['c', mod('c', { weight: 3, ergo: 41 })],
@@ -160,13 +168,16 @@ test('a TED request reports its search; a limit with a verified build is feasibl
   const full = await solve(paramsOf(lookup, { ergoWeight: 100, useTrueErgo: true }));
   assert.equal(full.status, 'optimal', full.reason);
   assert.equal(full.optimization?.termination, 'optimal');
-  assert.ok(full.optimization!.absolute_gap <= full.optimization!.tolerance);
+  assert.ok(full.optimization.absolute_gap !== null && full.optimization.absolute_gap <= full.optimization.tolerance);
   assert.deepEqual(full.selected_item_ids, ['b']);
   const limited = await solve(paramsOf(lookup, { ergoWeight: 100, useTrueErgo: true, maxSpatialNodes: 1 }));
   assert.equal(limited.status, 'feasible');
   assert.equal(limited.reason, 'Node limit reached');
   assert.equal(limited.optimization?.termination, 'limit');
-  assert.equal(limited.optimization?.upper_bound, Infinity);
+  assert.equal(limited.optimization?.upper_bound, null, 'an unproved upper bound travels as null, never Infinity or 0');
+  assert.equal(limited.optimization?.absolute_gap, null);
+  assert.ok(limited.optimization.lower_bound !== null, 'the verified build keeps its lower bound');
+  assert.equal(limited.physical_certificate, 'feasible');
   assert.deepEqual(limited.selected_item_ids, ['b']);
   const none = await solve(paramsOf(lookup, { ergoWeight: 100, useTrueErgo: true, maxSpatialNodes: 0 }));
   assert.equal(none.status, 'incomplete');
@@ -183,7 +194,7 @@ test('a requested tolerance is honoured: 1e-9 certifies a TrueErgo request, and 
   assert.equal(response.status, 'optimal', response.reason);
   assert.equal(response.optimization?.tolerance, 1e-9);
   assert.equal(response.optimization?.termination, 'optimal');
-  assert.ok(response.optimization!.absolute_gap <= 1e-9);
+  assert.ok(response.optimization.absolute_gap !== null && response.optimization.absolute_gap <= 1e-9);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -217,11 +228,15 @@ test('a Tchebycheff solve without a payoff table computes it and reports the tab
   assert.equal((await solve(paramsOf(payoff()))).ideal_point, undefined);
 });
 
-test('a payoff endpoint that cannot be certified is not papered over with the weighted objective: the request is incomplete', async () => {
+test('a payoff endpoint that cannot be certified is not papered over with the weighted objective: the request is incomplete, with the factual stop of the endpoint', async () => {
   const params = paramsOf(payoff(), { useTchebycheff: true, useTrueErgo: true, maxSpatialNodes: 0 });
   const response = await solve(params);
   assert.equal(response.status, 'incomplete');
-  assert.equal(response.reason, 'Required proof prerequisite unavailable');
+  assert.equal(response.physical_certificate, 'none');
+  // The endpoint solve stopped on the spatial node cap: that is the reported cause, not a rewritten "prerequisite" (section 6, factual stop cause).
+  assert.equal(response.reason, 'Node limit reached');
+  assert.equal(response.optimization.termination, 'limit', 'the search of the objective itself never started');
+  assert.equal(response.ideal_point, undefined, 'no table was used');
   assert.deepEqual(response.selected_items, []);
   await assert.rejects(computeIdealPoint({ ...params, useTchebycheff: false }), /Ideal-point endpoint not certified/);
 });
@@ -317,9 +332,13 @@ test('Fast installs several copies of one part with the same provenance and spen
   assert.deepEqual(fast.selected_items.map(i => [i.instanceId, i.acquisition, i.price]), precise.selected_items.map(i => [i.instanceId, i.acquisition, i.price]));
   assert.deepEqual(fast.selected_preset?.id, 'pre');
   assert.equal(fast.final_stats?.total_price, 1400);
-  assert.ok(Math.abs(fast.objective_value - precise.objective_value) < 1e-9);
+  assert.ok(fast.objective_value !== null && precise.objective_value !== null && Math.abs(fast.objective_value - precise.objective_value) < 1e-9);
   assert.equal(revalidate(params, fast).ok, true);
-  assert.equal(fast.optimization, undefined, 'a request with no TED has no spatial search to report');
+  // Fast has no proof frame: its lower bound is the verified witness's, its upper bound and gap are unknown, and there are no spatial calls.
+  assert.equal(fast.optimization.upper_bound, null);
+  assert.equal(fast.optimization.absolute_gap, null);
+  assert.equal(fast.optimization.nodes, 0);
+  assert.ok(fast.optimization.lower_bound !== null && fast.optimization.lower_bound <= fast.objective_value);
 });
 
 test('Fast emptiness after a rejected point is still emptiness, never infeasible: the cut loop ends in the approximate-model reason', async () => {
@@ -338,4 +357,135 @@ test('Fast emptiness after a rejected point is still emptiness, never infeasible
   const none = await solve(paramsOf(lookup, { preciseMode: false, minErgonomics: 50 }));
   assert.equal(none.status, 'incomplete');
   assert.equal(none.reason, 'Approximate model infeasible');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The transport (ADR 0013 sections 5 and 6): every response carries the whole contract
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const PAIRS: Record<string, string[]> = { optimal: ['certified_optimal', 'approximate_optimal'], feasible: ['feasible'], incomplete: ['none'], infeasible: ['certified_infeasible'] };
+
+/** The contract every response satisfies, whatever happened: required fields, nullable bounds, the closed reason set, status/certificate pairing. */
+function assertTransport(response: OptimizeResponse, label: string): void {
+  for (const key of [
+    'status', 'precision_request', 'precision_resolved', 'model_qualification', 'moa_qualification', 'physical_certificate', 'selected_items', 'selected_item_ids',
+    'slot_pairs', 'objective_value', 'optimization', 'solve_time_ms',
+  ] as const) assert.notEqual(response[key], undefined, `${label}: ${key} is required (null is a value, absent is not)`);
+  assert.ok(['optimal', 'feasible', 'incomplete', 'infeasible'].includes(response.status), `${label}: ${response.status}`);
+  assert.ok(PAIRS[response.status].includes(response.physical_certificate), `${label}: ${response.status} / ${response.physical_certificate}`);
+  const o = response.optimization;
+  for (const key of ['lower_bound', 'upper_bound', 'absolute_gap'] as const) {
+    assert.ok(o[key] === null || Number.isFinite(o[key]), `${label}: ${key} is a finite number or null, never Infinity or NaN: ${String(o[key])}`);
+  }
+  assert.ok(Number.isFinite(o.tolerance) && Number.isInteger(o.nodes) && o.nodes >= 0, label);
+  assert.ok(o.termination === 'optimal' || o.termination === 'limit', label);
+  if (response.reason !== undefined) assert.ok(PUBLIC_REASON_SET.has(response.reason), `${label}: "${response.reason}" is outside the closed reason set`);
+  const hasBuild = response.status === 'optimal' || response.status === 'feasible';
+  assert.equal(response.objective_value !== null, hasBuild, `${label}: the objective is a number exactly when there is a build`);
+  assert.equal(response.selected_item_ids.length, response.selected_items.length, label);
+  assert.equal(response.slot_pairs.length, response.selected_items.length, label);
+  assert.equal(response.final_stats !== undefined, hasBuild, label);
+  assert.equal(response.selected_preset !== undefined, hasBuild, label);
+  if (!hasBuild) {
+    assert.deepEqual(response.selected_items, [], label);
+    assert.deepEqual(response.slot_pairs, [], label);
+  }
+  if (o.lower_bound !== null && response.objective_value !== null) assert.ok(o.lower_bound <= response.objective_value, label);
+  if (o.upper_bound !== null && response.objective_value !== null) assert.ok(response.objective_value <= o.upper_bound, label);
+}
+
+test('every response kind carries the full contract: required qualifiers, nullable bounds, the closed reason set, the status/certificate pairing', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { weight: 1, slots: [slot('choice', ['a', 'b', 'c'], true)] }),
+    ['a', mod('a', { weight: 1, ergo: 20 })], ['b', mod('b', { weight: 2, ergo: 30 })], ['c', mod('c', { weight: 3, ergo: 41 })],
+  );
+  const responses: [string, OptimizeResponse][] = [];
+  for (const [mode, preciseMode] of [['precise', true], ['fast', false]] as const) {
+    responses.push([`${mode} optimum`, await solve(paramsOf(lookup, { preciseMode }))]);
+    responses.push([`${mode} MOA optimum`, await solve(paramsOf(lookup, { preciseMode, maxMOA: 100 }))]);
+    responses.push([`${mode} emptiness`, await solve(paramsOf(lookup, { preciseMode, maxPrice: 10 }))]);
+    responses.push([`${mode} MOA emptiness`, await solve(paramsOf(lookup, { preciseMode, maxPrice: 10, maxMOA: 100 }))]);
+    responses.push([`${mode} deadline`, await solve(paramsOf(lookup, { preciseMode, timeLimitMs: 0 }))]);
+    responses.push([`${mode} invalid stock`, await solve(paramsOf(lookup, { preciseMode, ownedItems: [''] }))]);
+  }
+  responses.push(['TED optimum', await solve(paramsOf(lookup, { useTrueErgo: true, ergoWeight: 100 }))]);
+  responses.push(['TED node cap with a witness', await solve(paramsOf(lookup, { useTrueErgo: true, ergoWeight: 100, maxSpatialNodes: 1 }))]);
+  responses.push(['TED node cap without one', await solve(paramsOf(lookup, { useTrueErgo: true, ergoWeight: 100, maxSpatialNodes: 0 }))]);
+  for (const [label, response] of responses) assertTransport(response, label);
+  const by = Object.fromEntries(responses);
+  const row = (r: OptimizeResponse) => [r.status, r.physical_certificate, r.model_qualification, r.moa_qualification, r.reason];
+  // the rows of section 6, as published
+  assert.deepEqual(row(by['precise optimum']), ['optimal', 'certified_optimal', 'exact', null, undefined]);
+  assert.deepEqual(row(by['precise MOA optimum']), ['optimal', 'approximate_optimal', 'exact', 'provisional_model', undefined]);
+  assert.deepEqual(row(by['fast optimum']), ['optimal', 'approximate_optimal', 'approximate', null, undefined]);
+  assert.deepEqual(row(by['fast MOA optimum']), ['optimal', 'approximate_optimal', 'approximate', 'provisional_model', undefined]);
+  assert.deepEqual(row(by['precise emptiness']), ['infeasible', 'certified_infeasible', 'exact', null, undefined]);
+  assert.deepEqual(row(by['precise MOA emptiness']), ['incomplete', 'none', 'exact', 'provisional_model', 'Provisional MOA model infeasible']);
+  assert.deepEqual(row(by['fast emptiness']), ['incomplete', 'none', 'approximate', null, 'Approximate model infeasible']);
+  assert.deepEqual(row(by['fast MOA emptiness']), ['incomplete', 'none', 'approximate', 'provisional_model', 'Fast provisional MOA model infeasible']);
+  assert.equal(by['precise emptiness'].optimization.termination, 'optimal');
+  assert.equal(by['fast emptiness'].optimization.termination, 'optimal', 'every completed search, emptiness included, terminates optimal');
+  assert.equal(by['precise deadline'].optimization.termination, 'limit');
+  assert.equal(by['TED node cap with a witness'].status, 'feasible');
+  assert.equal(by['TED node cap without one'].status, 'incomplete');
+});
+
+test('an invalid owned_items list publishes the null envelope: nothing resolved, empty manifest, null objective and bounds, no nodes, the search never started', async () => {
+  const response = await solve(paramsOf(small(), { ownedItems: ['a', ''], precisionRequest: 'auto', objectiveTolerance: 1e-7 }));
+  const { solve_time_ms, ...rest } = response;
+  assert.ok(solve_time_ms >= 0);
+  assert.deepEqual(rest, {
+    status: 'incomplete',
+    precision_request: 'auto',
+    precision_resolved: null,
+    model_qualification: null,
+    moa_qualification: null,
+    physical_certificate: 'none',
+    selected_items: [],
+    selected_item_ids: [],
+    slot_pairs: [],
+    objective_value: null,
+    optimization: { lower_bound: null, upper_bound: null, absolute_gap: null, tolerance: 1e-7, nodes: 0, termination: 'limit' },
+    reason: 'Invalid owned_items format',
+  });
+  // a Tchebycheff request that supplies a table does not echo it: no table was used
+  const table = { zE: 1, nadE: 0, zR: 0, nadR: 0, zP: 1, nadP: 0 };
+  assert.equal((await solve(paramsOf(small(), { ownedItems: [''], useTchebycheff: true, idealPoint: table }))).ideal_point, undefined);
+  // the MOA qualification is the request's, even before the model runs
+  assert.equal((await solve(paramsOf(small(), { ownedItems: [''], maxMOA: 3 }))).moa_qualification, 'provisional_model');
+});
+
+test('precision_request echoes what was asked and precision_resolved says what ran: an Auto request resolved by the caller, and a Fast request for TrueErgo that must run Precise', async () => {
+  const lookup = small();
+  const precise = await solve(paramsOf(lookup, { preciseMode: true }));
+  assert.deepEqual([precise.precision_request, precise.precision_resolved], ['precise', 'precise']);
+  const fast = await solve(paramsOf(lookup, { preciseMode: false }));
+  assert.deepEqual([fast.precision_request, fast.precision_resolved], ['fast', 'fast']);
+  const auto = await solve(paramsOf(lookup, { preciseMode: false, precisionRequest: 'auto' }));
+  assert.deepEqual([auto.precision_request, auto.precision_resolved, auto.model_qualification], ['auto', 'fast', 'approximate']);
+  // The Fast model has no TED rows: a TrueErgo request runs Precise whatever was asked, and the response says so (never labelled Fast).
+  for (const request of [{ useTrueErgo: true }, { preventOverswing: true }]) {
+    const ted = await solve(paramsOf(lookup, { preciseMode: false, ergoWeight: 100, ...request }));
+    assert.equal(ted.precision_request, 'fast');
+    assert.equal(ted.precision_resolved, 'precise');
+    assert.equal(ted.model_qualification, 'exact');
+    assert.equal(ted.status, 'optimal', ted.reason);
+  }
+});
+
+test('the Tchebycheff result reports the payoff table it used on every response that used one: computed, supplied, MOA-dependent, Fast, and a stop after the table', async () => {
+  const table = { zE: 500, nadE: 0, zR: -300, nadR: 0, zP: 5010, nadP: 5100 };
+  const params = paramsOf(payoff(), { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true });
+  const computed = await solve(params);
+  assert.deepEqual(computed.ideal_point, table);
+  assert.deepEqual(computed.ideal_point, await computeIdealPoint(params), 'the reported table is the one three single-axis solves give');
+  assert.deepEqual((await solve({ ...params, idealPoint: table })).ideal_point, table);
+  assert.deepEqual((await solve({ ...params, maxMOA: 100 })).ideal_point, table);
+  assert.deepEqual((await solve({ ...params, preciseMode: false })).ideal_point, table);
+  // a response under a supplied table that stops before the search still reports the table the request carried
+  const stopped = await solve({ ...params, idealPoint: table, maxSpatialNodes: 0, useTrueErgo: true });
+  assert.equal(stopped.status, 'incomplete');
+  assert.deepEqual(stopped.ideal_point, table);
+  // a weighted request used none
+  assert.equal((await solve(paramsOf(payoff()))).ideal_point, undefined);
 });

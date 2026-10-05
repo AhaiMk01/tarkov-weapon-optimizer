@@ -21,9 +21,12 @@
  * infeasibility verdict from it is unresolved (`Required proof prerequisite unavailable`), never emptiness. The incumbent is scored as the exact rational
  * of the validator's statistics: its downward enclosure is the lower bound, its exact score the incumbent's part of the upper bound, and the
  * certificate compares the exact upper bound with the exact score.
+ *
+ * Every result carries its `outcome` (ADR 0013 section 6, `outcome.ts`): the pipeline reports what the search established (an optimum, an
+ * emptiness, or neither, whether a verified witness exists, whether the executed search finished, which stops it observed) and the pure
+ * classifier chooses the status, certificate, qualifications, termination and reason.
  */
 
-import { MODEL_STATUS_TEXT } from '../native';
 import type { NativeResult } from '../native';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { ItemLookup, PhysicalClassifiers, SolveParams } from '../types';
@@ -43,7 +46,9 @@ import { axesOfStats } from './objective';
 import { exactAxes, exactObjectiveScore, scoreEnclosure, upperBoundExact } from './proof';
 import { ratCmp, ratSub, ratToNumber, type Rat } from './exact';
 import { ratRoundUp } from './rational';
-import { PUBLIC_REASONS } from './reasons';
+import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
+import type { OptimizeOutcome } from './outcome';
+import { PUBLIC_REASONS, reasonOfNativeLimit } from './reasons';
 import { runSpatialSearch, transportedBounds } from './search';
 import type { NodeEvaluation, SearchInterval, SearchNode } from './search';
 import { specializeLP } from './specialize';
@@ -153,7 +158,7 @@ export interface PreciseSummary {
   /** The same bounds as they travel: an unknown or unproved value is `null`, never `Infinity` and never zero. */
   bounds: { lower: number | null; upper: number | null; gap: number | null };
   tolerance: number;
-  /** The executed search finished. Search completion only, never proof authority. */
+  /** The executed search finished. Search completion only, never proof authority (`SearchResult.finished`). */
   completed: boolean;
   /** The request reads TED, so the weight search ran (optimization metadata applies). */
   spatial: boolean;
@@ -162,11 +167,11 @@ export interface PreciseSummary {
 
 export type PreciseResult =
   /** The request has no build. `source`: the domain, a constant row of the request, or confirmed native infeasibility. */
-  | { kind: 'empty'; source: 'domain' | 'request' | 'native'; detail: string; summary: PreciseSummary }
-  /** A verified build. `certified`: the search completed with a gap within the tolerance. */
-  | { kind: 'build'; best: VerifiedBuild; certified: boolean; reason?: string; summary: PreciseSummary }
-  /** No verified build and no proof of emptiness. */
-  | { kind: 'incomplete'; reason: string; summary: PreciseSummary };
+  | { kind: 'empty'; source: 'domain' | 'request' | 'native'; detail: string; outcome: OptimizeOutcome; summary: PreciseSummary }
+  /** A verified build. `certified`: the search completed with a gap within the tolerance. `reason`: the outcome's, when it is not certified. */
+  | { kind: 'build'; best: VerifiedBuild; certified: boolean; reason?: string; outcome: OptimizeOutcome; summary: PreciseSummary }
+  /** No verified build and no proof of emptiness. `reason` is the outcome's. */
+  | { kind: 'incomplete'; reason: string; outcome: OptimizeOutcome; summary: PreciseSummary };
 
 export interface PreciseContext {
   /** The normalized request. `useTchebycheff` needs an `idealPoint`. */
@@ -201,12 +206,6 @@ export function resolveTolerance(requested: number | undefined): number {
   return requested !== undefined && Number.isFinite(requested) && requested >= 0 ? requested : DEFAULT_OBJECTIVE_TOLERANCE;
 }
 
-const limitReason = (status: string): string => {
-  if (status === 'TimeLimit') return PUBLIC_REASONS.timeLimitReached;
-  if (status === 'SolutionLimit') return PUBLIC_REASONS.nativeSolutionLimitReached;
-  return (MODEL_STATUS_TEXT as Record<string, string>)[status] ?? status;
-};
-
 /** Root intervals: the active weight range clipped by the weight cap, split at the 3 kg knee where the penalty changes shape. */
 function rootIntervals(lo: number, hi: number, maxWeight: number | null | undefined): SearchInterval[] {
   let top = hi;
@@ -226,6 +225,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     nativeSolves: 0, presolveRescues: 0, confirmedInfeasible: 0, provedEmptyNodes: 0, rejectedCandidates: 0,
     readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
   };
+  const moaDependent = isMoaDependent(params);
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
     lowerBound: null, upperBound: Infinity, gap: null, bounds: { lower: null, upper: null, gap: null }, tolerance, completed: false, spatial: tedRequest, telemetry, ...partial,
   });
@@ -234,7 +234,8 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
   if (domain.empty) {
     const detail = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`)).join('; ');
-    return { kind: 'empty', source: 'domain', detail, summary: summary({ nodes: 0, upperBound: -Infinity, completed: true }) };
+    const outcome = classifyOptimize({ mode: 'precise', moaDependent, end: 'empty', witness: false, searchFinished: true });
+    return { kind: 'empty', source: 'domain', detail, outcome, summary: summary({ nodes: 0, upperBound: -Infinity, completed: true }) };
   }
 
   const validator = preparePhysicalValidator(lookup, params, {
@@ -289,7 +290,8 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         // dominating, declared tolerances, presolve off), so a filtered coefficient can never prove emptiness.
         const deciding = outcome.confirmation ?? outcome.first;
         if (!assess(model, lpText, deciding).qualified) {
-          return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
+          // The native search finished (it said Infeasible); only the proof of it is withheld.
+          return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: true };
         }
         telemetry.confirmedInfeasible++;
         return { verdict: 'infeasible', evidence: null, candidate: null, exact: model.exact };
@@ -302,10 +304,13 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       // The bound of this solve: its dual bound, qualified or not (unqualified evidence proves nothing), plus the model's proved frame error.
       const evidence = boundEvidenceOf(model.proof, result, assessment);
       const optimal = status === 'Optimal';
-      const stopReason = optimal ? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable : limitReason(status);
+      const stopReason = optimal ? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable : reasonOfNativeLimit(status);
+      // An Optimal solve of an exact node is a finished search of it, whatever is then withheld (the bound, the build). An inexact node still
+      // needs refining, and a limit stop has not finished.
+      const finished = optimal && model.exact;
 
       if (result.colValues === null) {
-        return { verdict: 'unresolved', evidence, candidate: null, exact: model.exact, reason: stopReason };
+        return { verdict: 'unresolved', evidence, candidate: null, exact: model.exact, reason: stopReason, finished };
       }
       const values = columnValuesFromStructured(result.colNames, result.colValues);
       let decoded: DecodedBuild;
@@ -313,7 +318,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         decoded = decodeSolution(model, values);
       } catch (error) {
         if (error instanceof PhysicalModelError && error.code === 'DECODE_FAILED') {
-          return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed };
+          return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished };
         }
         throw error;
       }
@@ -345,11 +350,11 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
             telemetry.unqualifiedSolves++;
             const reason = `a verified build of the node scores ${shortfall} above the node's proved upper bound`;
             if (telemetry.unqualifiedReasons.length < 3 && !telemetry.unqualifiedReasons.includes(reason)) telemetry.unqualifiedReasons.push(reason);
-            return { verdict: 'unresolved', evidence: { ...evidence, qualified: false }, candidate, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
+            return { verdict: 'unresolved', evidence: { ...evidence, qualified: false }, candidate, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished };
           }
         }
         if (optimal && trusted) return { verdict: 'solved', evidence, candidate, exact: model.exact, splitAt: stats.weight };
-        return { verdict: 'unresolved', evidence, candidate, exact: model.exact, reason: stopReason };
+        return { verdict: 'unresolved', evidence, candidate, exact: model.exact, reason: stopReason, finished };
       }
       // The weight penalty of an inexact node is a lower envelope of q, so its optimum may be overswinging exactly: the relaxation is a valid
       // upper bound, the build is not a candidate, and the node is refined.
@@ -366,7 +371,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         cuts.push(noGoodRow(`nogood_${cuts.length}`, decisionColumns, values));
         continue;
       }
-      return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed };
+      return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished };
     }
   };
 
@@ -383,16 +388,18 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     upperBound: search.upperBound,
     gap: search.gap,
     bounds: transportedBounds(search),
-    completed: search.completed,
+    completed: search.finished,
   });
 
+  const facts = { mode: 'precise', moaDependent, witness: search.incumbent !== null, searchFinished: search.finished, observed: observationsOfReason(search.stopReason) } as const;
   if (search.incumbent !== null) {
-    const reason = search.certified ? undefined : search.stopReason ?? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable;
-    return { kind: 'build', best: search.incumbent.payload, certified: search.certified, ...(reason === undefined ? {} : { reason }), summary: finished };
+    const outcome = classifyOptimize({ ...facts, end: search.certified ? 'optimum' : 'unproved' });
+    return { kind: 'build', best: search.incumbent.payload, certified: search.certified, ...(outcome.reason === undefined ? {} : { reason: outcome.reason }), outcome, summary: finished };
   }
   if (search.empty) {
     const source = telemetry.nativeSolves > 0 ? 'native' : 'request';
-    return { kind: 'empty', source, detail: 'every spatial node is infeasible', summary: finished };
+    return { kind: 'empty', source, detail: 'every spatial node is infeasible', outcome: classifyOptimize({ ...facts, end: 'empty' }), summary: finished };
   }
-  return { kind: 'incomplete', reason: search.stopReason ?? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, summary: finished };
+  const outcome = classifyOptimize({ ...facts, end: 'unproved' });
+  return { kind: 'incomplete', reason: outcome.reason as string, outcome, summary: finished };
 }

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor, clearDataCache } from './api/client'
-import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, SolverPrecisionMode } from './api/client'
+import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOption, ExplorePoint, GunsmithTask, GameMode, PrecisionRequest } from './api/client'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
 import { MethodologyModal } from './components/common/MethodologyModal'
@@ -268,7 +268,7 @@ function AppContent({
   const [fleaAvailable, setFleaAvailable] = useState(initialLevelConfig.fleaAvailable)
   const [barterAvailable, setBarterAvailable] = useState(initialLevelConfig.barterAvailable)
   const [barterExcludeDogtags, setBarterExcludeDogtags] = useState(initialLevelConfig.barterExcludeDogtags)
-  const [solverPrecision, setSolverPrecision] = useState<SolverPrecisionMode>(() => {
+  const [solverPrecision, setSolverPrecision] = useState<PrecisionRequest>(() => {
     const s = localStorage.getItem('solverPrecision')
     if (s === 'fast' || s === 'precise' || s === 'auto') return s
     return 'auto'
@@ -285,7 +285,7 @@ function AppContent({
   const [exploring, setExploring] = useState(false)
   const [exploreResult, setExploreResult] = useState<ExplorePoint[]>([])
   const [explorePrecisionMeta, setExplorePrecisionMeta] = useState<{
-    request?: SolverPrecisionMode
+    request?: PrecisionRequest
     resolved?: 'fast' | 'precise'
   }>({})
   const [exploreSolveTime, setExploreSolveTime] = useState<number | undefined>(undefined)
@@ -679,7 +679,7 @@ function AppContent({
     let totalTime = 0
     let errorCount = 0
     const infeasibleIds: string[] = []
-    let lastPrecision: { request?: SolverPrecisionMode; resolved?: 'fast' | 'precise' } = {}
+    let lastPrecision: { request?: PrecisionRequest; resolved?: 'fast' | 'precise' } = {}
 
     try {
       for (let i = 0; i < weaponIds.length; i++) {
@@ -707,7 +707,7 @@ function AppContent({
           totalTime += res.total_solve_time_ms ?? 0
           lastPrecision = {
             request: res.precision_request,
-            resolved: res.precision_resolved,
+            resolved: res.precision_resolved ?? undefined,
           }
           setExploreResult([...allPoints])
           setExploreSolveTime(totalTime)
@@ -1106,7 +1106,7 @@ function AppContent({
                         block
                         size="small"
                         value={solverPrecision}
-                        onChange={(v) => setSolverPrecision(v as SolverPrecisionMode)}
+                        onChange={(v) => setSolverPrecision(v as PrecisionRequest)}
                         options={[
                           { label: t('sidebar.auto'), value: 'auto' },
                           { label: t('sidebar.fast'), value: 'fast' },
@@ -1137,7 +1137,7 @@ function AppContent({
                   <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
                     <Segmented
                       value={solverPrecision}
-                      onChange={(v) => setSolverPrecision(v as SolverPrecisionMode)}
+                      onChange={(v) => setSolverPrecision(v as PrecisionRequest)}
                       options={[
                         { label: t('sidebar.auto'), value: 'auto' },
                         { label: t('sidebar.fast'), value: 'fast' },

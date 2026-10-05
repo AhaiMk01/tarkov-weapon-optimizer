@@ -4,7 +4,7 @@ import { computeStructuralBounds } from './structuralBounds.ts';
  * Ported from optimizer.py:explore_pareto()
  */
 
-import type { ItemLookup, CompatibilityMap, TraderLevels } from './types.ts';
+import type { ItemLookup, CompatibilityMap, PrecisionRequest, TraderLevels } from './types.ts';
 import type { ExplorePoint, OptimizeResponse } from '../api/client.ts';
 import { solve } from './solver.ts';
 import type { SolveParams } from './solver.ts';
@@ -36,6 +36,8 @@ export interface ParetoParams {
   barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
   preciseMode?: boolean;
+  /** What the caller asked for, echoed on every point's `precision_request`. */
+  precisionRequest?: PrecisionRequest;
   boundsMode?: 'structural' | 'naive';
   structuralBounds?: import('./structuralBounds.ts').StructuralBounds;
 }
@@ -63,6 +65,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     barterExcludeDogtags: p.barterExcludeDogtags ?? false,
     playerLevel: p.playerLevel,
     preciseMode: p.preciseMode,
+    precisionRequest: p.precisionRequest,
     boundsMode: p.boundsMode,
     structuralBounds: p.structuralBounds,
   };
@@ -119,10 +122,20 @@ export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[
       recoil_v: Math.round(stats.recoil_vertical * 10) / 10,
       recoil_h: Math.round(stats.recoil_horizontal * 10) / 10,
       price: Math.round(stats.total_price),
+      // The point carries the proof and witness fields of the Optimize result that generated it (ADR 0013 section 5).
       selected_items: result.selected_items,
+      selected_item_ids: result.selected_item_ids,
       selected_preset: result.selected_preset,
       slot_pairs: result.slot_pairs,
       status: result.status,
+      physical_certificate: result.physical_certificate,
+      precision_request: result.precision_request,
+      precision_resolved: result.precision_resolved,
+      model_qualification: result.model_qualification,
+      moa_qualification: result.moa_qualification,
+      objective_value: result.objective_value,
+      optimization: result.optimization,
+      ...(result.reason === undefined ? {} : { reason: result.reason }),
       solve_time_ms: result.solve_time_ms,
     });
   }

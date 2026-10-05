@@ -17,12 +17,10 @@
  * is far inside the width of the gap above.
  */
 
-import type { CompatibilityMap } from './types';
+import type { CompatibilityMap, PrecisionRequest } from './types';
 
 /** Auto mode runs Precise when the exact model has at most this many item occurrences. */
 export const AUTO_PRECISE_MAX_OCCURRENCES = 15_000;
-
-export type PrecisionRequest = 'auto' | 'fast' | 'precise';
 
 export function normalizePrecisionRequest(raw: boolean | PrecisionRequest | undefined): PrecisionRequest {
   if (raw === true || raw === 'precise') return 'precise';

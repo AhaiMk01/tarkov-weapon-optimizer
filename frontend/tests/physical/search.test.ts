@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   combineUpperBounds, nodeUpperBound, ratRoundDown, ratRoundUp, runSpatialSearch, secantOfPenalty, splitInterval, transportedBounds, weightPenalty,
-  type BoundEvidence, type NodeEvaluation, type SearchNode,
+  type BoundEvidence, type NodeEvaluation, type SearchInterval, type SearchNode,
 } from '../../src/solver/physical';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
 import { gapUpward, nextUp } from '../../src/solver/physical/numeric';
@@ -307,4 +307,49 @@ test('a better incumbent is chosen on the EXACT score, even when two doubles can
     tolerance: 1e-9, maxNodes: Infinity, now: c.now, deadline: 1e9,
   });
   assert.equal(result.incumbent?.payload, 'second');
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Search completion (termination) is not proof completion
+// ---------------------------------------------------------------------------------------------------------------------------
+
+test('"finished" is search completion only: a finished last node whose proof or candidate was withheld finishes the search without completing it', async () => {
+  const c = clock();
+  const run = (roots: (SearchInterval | null)[], evaluate: (node: SearchNode) => Promise<NodeEvaluation<string>>, extra: { maxNodes?: number; deadline?: number } = {}) =>
+    runSpatialSearch<string>({ roots, evaluate, tolerance: 1e-9, maxNodes: extra.maxNodes ?? Infinity, now: c.now, deadline: extra.deadline ?? 1e9 });
+  const withheld = (finished: boolean | undefined, verdict: 'unresolved' | 'failed' = 'unresolved'): NodeEvaluation<string> => ({
+    verdict, evidence: null, candidate: { score: 1, payload: 'x' }, exact: true, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, ...(finished === undefined ? {} : { finished }),
+  });
+  // one exact root, its native search finished, only the proof withheld: finished, not completed, never emptiness
+  const single = await run([null], async () => withheld(true));
+  assert.equal(single.finished, true);
+  assert.equal(single.completed, false);
+  assert.equal(single.empty, false);
+  assert.equal(single.certified, false);
+  assert.equal(single.stopReason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
+  // the same through a failed verdict (a candidate the validator kept rejecting)
+  assert.equal((await run([null], async () => withheld(true, 'failed'))).finished, true);
+  // a node that was not finished (a limit stop, or one that still needs refining) leaves the search unfinished
+  assert.equal((await run([null], async () => withheld(false))).finished, false);
+  assert.equal((await run([null], async () => withheld(undefined))).finished, false);
+  // another live node was never evaluated: the executed search is unfinished even though this node's solve finished
+  const two = await run([{ lo: 2, hi: 3 }, { lo: 3, hi: 12 }], async () => withheld(true));
+  assert.equal(two.finished, false);
+  assert.equal(two.nodes, 1);
+  // an unresolved infeasibility verdict (finished, no proof) with nothing else live finishes the search with no emptiness
+  const unconfirmed = await run([null], async () => ({ verdict: 'unresolved', evidence: null, candidate: null, exact: true, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: true }));
+  assert.equal(unconfirmed.finished, true);
+  assert.equal(unconfirmed.empty, false);
+  // the clock, the node cap and an unsplittable interval are never finished
+  const late = await run([null], async () => withheld(true), { deadline: -1 });
+  assert.equal(late.finished, false);
+  assert.equal(late.nodes, 0);
+  assert.equal((await run([null], async () => withheld(true), { maxNodes: 0 })).finished, false);
+  const narrow = await run([{ lo: 5, hi: 5 + 1e-12 }], async () => ({ verdict: 'solved', evidence: proved(100), candidate: { score: 1, payload: 'x' }, exact: false }));
+  assert.match(narrow.stopReason ?? '', /Numerical interval resolution/);
+  assert.equal(narrow.finished, false);
+  // a search that settles every node by proof is completed and finished
+  const done = await run([null], async () => ({ verdict: 'solved', evidence: proved(12.5), candidate: { score: 12.5, payload: 'built' }, exact: true }));
+  assert.equal(done.completed, true);
+  assert.equal(done.finished, true);
 });

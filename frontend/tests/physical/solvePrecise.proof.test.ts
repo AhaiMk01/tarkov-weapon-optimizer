@@ -62,7 +62,12 @@ test('a filtered coefficient: the verified build is published, the bound and the
   assert.equal(summary.bounds.gap, null);
   assert.ok(summary.bounds.lower !== null && Math.abs(summary.bounds.lower - 0.5) < 1e-12, 'the lower bound is the downward enclosure of the verified build');
   assert.equal(summary.upperBound, Infinity);
-  assert.equal(summary.completed, false);
+  // The native search of the one exact node ran to Optimal and only its PROOF was withheld: the executed search finished (ADR 0013 section 6, "a completed
+  // search followed by failed validation/proof qualification remains optimal"), whatever the certificate says.
+  assert.equal(summary.completed, true);
+  assert.equal(built(result).outcome.termination, 'optimal');
+  assert.equal(built(result).outcome.status, 'feasible');
+  assert.equal(built(result).outcome.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
 });
 
 test('an infeasibility verdict from a solve whose parsed model differs from the text is not emptiness: the request is incomplete, never infeasible', async () => {
