@@ -27,7 +27,7 @@
  * classifier chooses the status, certificate, qualifications, termination and reason.
  */
 
-import type { NativeResult } from '../native';
+import type { HighsOptions, NativeResult } from '../native';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { ItemLookup, PhysicalClassifiers, SolveParams } from '../types';
 import { preparePhysicalWeapon } from './blueprint';
@@ -183,6 +183,11 @@ export interface PreciseContext {
   solve?: SolveFn;
   /** Presolve of the first solve of every node (default `PRECISE_PRESOLVE`); tests set 'choose' to exercise the confirmation path. */
   presolve?: PresolveSetting;
+  /**
+   * Native stopping options of THIS call only, layered over `nativeSolveOptions`: a MOA floor query sets `mip_max_improving_sols: 1` to stop at the
+   * first improving incumbent (ADR 0013 section 6, scoped to floor calls). Restricted to stopping options, so no caller can loosen a tolerance.
+   */
+  nativeStop?: Pick<HighsOptions, 'mip_max_improving_sols'>;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -268,7 +273,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       telemetry.provedEmptyNodes++;
       return { verdict: 'infeasible', evidence: null, candidate: null, exact: true };
     }
-    const nativeOptions = nativeSolveOptions(tolerance);
+    const nativeOptions = { ...nativeSolveOptions(tolerance), ...context.nativeStop };
     telemetry.nativeSolves++;
     const decisionColumns = [...model.columns.activeOccurrences].map(v => model.columns.occurrence(v) as string);
     for (let b = 0; b < domain.bases.length; b++) decisionColumns.push(model.columns.base(b));
