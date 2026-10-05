@@ -144,6 +144,7 @@ export function MethodologyModal({ open, onClose }: MethodologyModalProps) {
 
           <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.nonlinear_bounds_title')}</Text>}>
             <Paragraph>{t('methodology.nonlinear_bounds_desc')}</Paragraph>
+            <Paragraph style={{ marginBottom: 0 }}>{t('methodology.details_hint')}</Paragraph>
           </Card>
 
           <Card size="small" style={cardStyle} title={<Text strong>{t('methodology.precision_title')}</Text>}>

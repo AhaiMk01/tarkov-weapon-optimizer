@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { MOAFloorResponse } from '../../src/api/client';
-import { floorViewOf, isFloorResponse, moaSliderRange, retainedFloorOf, usableDisplayFloor } from '../../src/components/common/floorView';
+import { floorLineOf, floorViewOf, isFloorResponse, moaSliderRange, retainedFloorOf, usableDisplayFloor } from '../../src/components/common/floorView';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
 import { CancellationError, SolverError } from '../../src/solver/runtimeErrors';
 
@@ -101,4 +101,52 @@ test('the floor a failed request retained is read back from a SolverError\'s com
   assert.equal(isFloorResponse(retained), true);
   assert.equal(isFloorResponse({ status: 'model_proved' }), false, 'a floor is always provisional');
   assert.equal(isFloorResponse({ status: 'something', moa_qualification: 'provisional_model' }), false);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The plain default line (owner decision 2026-10-05: plain by default; the provisional-model caveat is in the info tooltip)
+// ---------------------------------------------------------------------------------------------
+
+test('the default line of each floor status: one short sentence, a number only where there is a safe one', () => {
+  const proved = floorLineOf(floorViewOf(floor()), null);
+  assert.deepEqual(proved, { id: 'proved', key: 'moa_floor.proved', floor: '1.24', tone: 'success', retry: false });
+  const witnessed = floorLineOf(floorViewOf(floor({ status: 'model_witnessed', proved_lower_bound: null, reason: PUBLIC_REASONS.timeLimitReached })), null);
+  assert.deepEqual(witnessed, { id: 'witnessed', key: 'moa_floor.witnessed', floor: '1.24', tone: 'warning', retry: false });
+  const unresolved = floorLineOf(floorViewOf(floor({ status: 'unresolved', floor: null, display_floor: null, proved_lower_bound: null })), null);
+  assert.deepEqual(unresolved, { id: 'unresolved', key: 'moa_floor.unresolved', floor: null, tone: 'warning', retry: false });
+  const infeasible = floorLineOf(floorViewOf(floor({ status: 'model_infeasible', floor: null, display_floor: null, proved_lower_bound: null })), null);
+  assert.deepEqual(infeasible, { id: 'infeasible', key: 'moa_floor.infeasible', floor: null, tone: 'error', retry: false });
+});
+
+test('a floor whose value is withheld says "unresolved" (the estimate is used), never a number: proved and witnessed alike', () => {
+  for (const status of ['model_proved', 'model_witnessed'] as const) {
+    const line = floorLineOf(floorViewOf(floor({ status, display_floor: null })), null);
+    assert.deepEqual([line?.id, line?.key, line?.floor, line?.tone], ['unresolved', 'moa_floor.unresolved', null, 'warning'], status);
+    assert.equal(floorViewOf(floor({ status, display_floor: null })).sliderMin, null, 'and the slider falls back to its estimate');
+  }
+});
+
+test('a floor that was cut short keeps a Retry; a finished one does not; a cancel is informational, not an error, and a proved floor stays a success', () => {
+  const cancelled = floorLineOf(floorViewOf(floor({ status: 'model_witnessed', proved_lower_bound: null, reason: PUBLIC_REASONS.cancelledByUser })), null);
+  assert.deepEqual([cancelled?.id, cancelled?.tone, cancelled?.retry, cancelled?.floor], ['witnessed', 'info', true, '1.24']);
+  const failedRetained = floorLineOf(floorViewOf(floor({ status: 'model_witnessed', proved_lower_bound: null }), { interrupted: true }), 'wasm trap');
+  assert.deepEqual([failedRetained?.id, failedRetained?.retry], ['witnessed', true]);
+  const timed = floorLineOf(floorViewOf(floor({ status: 'model_witnessed', proved_lower_bound: 1.1, reason: PUBLIC_REASONS.timeLimitReached })), null);
+  assert.deepEqual([timed?.tone, timed?.retry], ['warning', false], 'a time-limited floor is a finished answer; its tooltip carries the reason');
+  const late = floorLineOf(floorViewOf(floor({ reason: PUBLIC_REASONS.cancelledByUser })), null);
+  assert.deepEqual([late?.id, late?.tone, late?.retry], ['proved', 'success', false]);
+  const cancelledNothing = floorLineOf(floorViewOf(floor({ status: 'unresolved', floor: null, display_floor: null, proved_lower_bound: null, reason: PUBLIC_REASONS.cancelledByUser })), null);
+  assert.deepEqual([cancelledNothing?.id, cancelledNothing?.tone, cancelledNothing?.retry], ['unresolved', 'info', true]);
+});
+
+test('a failed floor request with nothing retained is an unresolved line with a Retry; before any answer there is no line', () => {
+  assert.equal(floorLineOf(null, null), null);
+  assert.deepEqual(floorLineOf(null, 'out of memory'), { id: 'unresolved', key: 'moa_floor.unresolved', floor: null, tone: 'warning', retry: true });
+});
+
+test('the detail of a floor (the provisional-model caveat, the proved lower end, the reason) is still computed for the tooltip', () => {
+  const view = floorViewOf(floor({ status: 'model_witnessed', proved_lower_bound: 1.1, reason: PUBLIC_REASONS.timeLimitReached }));
+  assert.equal(view.provisional, true);
+  assert.equal(view.provedLower, '1.10');
+  assert.equal(view.reason?.key, 'reasons.timeLimitReached');
 });

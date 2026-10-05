@@ -618,11 +618,9 @@ function AppContent({
     }
   }, [guns, selectedGunId, exploreWeaponIds])
 
-  /** Show the toast of a finished Optimize or Gunsmith request: one message per authority level, never "complete" for an approximate result. */
+  /** Show the toast of a finished Optimize or Gunsmith request: it says what the result's headline says, never "complete" for anything but a proved optimum. */
   const announce = (spec: ReturnType<typeof toastOf>) => {
-    const reason = spec.reason === null ? null : spec.reason.key !== null ? t(spec.reason.key) : spec.reason.text
-    const text = reason === null ? t(spec.key) : `${t(spec.key)} (${reason})`
-    messageApi[spec.type](text)
+    messageApi[spec.type](t(spec.key))
   }
 
   /** The floor must not hold up another request: cancel it (softly) and wait until it has settled before the next request is sent. */

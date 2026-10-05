@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin } from 'antd'
-import { UndoOutlined, QuestionCircleOutlined, ReloadOutlined } from '@ant-design/icons'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin, theme } from 'antd'
+import { UndoOutlined, QuestionCircleOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
-import { CancelButton, ReasonText } from './ResultStatus'
+import { CancelButton } from './ResultStatus'
+import { floorLineOf } from './floorView'
 import type { FloorView } from './floorView'
 
 const { Text } = Typography
@@ -53,9 +54,10 @@ interface WeightAdjusterProps {
 }
 
 /**
- * The status of the MOA floor request under the slider (ADR 0013 section 6): always a result of the PROVISIONAL MOA model, never a game-physical
- * minimum. A proved floor, a best-witnessed floor (minimum not proved), an unresolved or infeasible one each say so; a floor with no safe display
- * value says that instead of showing a number, and the slider then falls back to its estimate.
+ * The status of the MOA floor request under the slider, plain by default: one short line ("Lowest MOA: 1.73", "Lowest MOA found: 1.80 (may go
+ * lower)", "Couldn't find the lowest MOA - using an estimate", "No build meets your other constraints") and an info icon. The icon's tooltip holds
+ * the rest: the floor is a result of the PROVISIONAL MOA model, not a game-physical minimum; the proved lower end; the reason; the error of a
+ * failed request. The slider falls back to its estimate whenever the line says so. A running request keeps its Cancel button, a cut-short one Retry.
  */
 function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry }: {
   computing: boolean
@@ -66,6 +68,7 @@ function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry 
   onRetry: () => void
 }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   if (computing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -75,33 +78,30 @@ function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry 
       </div>
     )
   }
-  if (view === null && error === null) return null
-  const headline = view === null
-    ? null
-    : (view.kind === 'proved' || view.kind === 'witnessed') && view.display === null
-      ? t('moa_floor.withheld')
-      : t(view.titleKey, { floor: view.display ?? '' })
+  const line = floorLineOf(view, error)
+  if (line === null) return null
+  const tooltip = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div>{t('moa_floor.provisional_note')}</div>
+      {view !== null && view.provedLower !== null && view.kind !== 'proved' && <div>{t('moa_floor.proved_lower', { lower: view.provedLower })}</div>}
+      {view !== null && view.reason !== null && <div>{view.reason.key !== null ? t(view.reason.key) : view.reason.text}</div>}
+      {error !== null && <div>{t('moa_floor.error', { message: error })}</div>}
+    </div>
+  )
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, margin: '0 4px' }}>
-      {headline !== null && view !== null && (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '0 4px' }}>
+      <Space size={4}>
         <Text
-          type={view.tone === 'success' ? 'success' : view.tone === 'error' ? 'danger' : view.tone === 'warning' ? 'warning' : 'secondary'}
+          type={line.tone === 'success' ? 'success' : line.tone === 'error' ? 'danger' : line.tone === 'warning' ? 'warning' : 'secondary'}
           style={labelStyle}
         >
-          {headline}
+          {t(line.key, { floor: line.floor ?? '' })}
         </Text>
-      )}
-      {view !== null && view.provedLower !== null && view.kind !== 'proved' && (
-        <Text type="secondary" style={{ fontSize: 11 }}>{t('moa_floor.proved_lower', { lower: view.provedLower })}</Text>
-      )}
-      {error !== null && <Text type="danger" style={labelStyle}>{t('moa_floor.error', { message: error })}</Text>}
-      {view !== null && <ReasonText reason={view.reason} />}
-      {(error !== null || view?.interrupted === true) && (
-        <div>
-          <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>{t('moa_floor.retry')}</Button>
-        </div>
-      )}
-      <Text type="secondary" style={{ fontSize: 11 }}>{t('moa_floor.provisional_note')}</Text>
+        <Tooltip title={tooltip}>
+          <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
+        </Tooltip>
+      </Space>
+      {line.retry && <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>{t('moa_floor.retry')}</Button>}
     </div>
   )
 }

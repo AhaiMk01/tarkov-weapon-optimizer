@@ -1,4 +1,5 @@
-// How an Explore sweep is shown (src/components/explore/exploreView.ts; ADR 0013 section 6, Phase 2.8): the curve status with its meaning (discrete
+// How an Explore sweep is shown (src/components/explore/exploreView.ts; ADR 0013 section 6, Phase 2.8 / 2.8b): the plain default line of a sweep that is
+// not complete, and, for Details, the curve status with its meaning (discrete
 // schedule coverage, never continuous Pareto optimality), the per-target coverage (V / I / U / E counts and which targets are unresolved, with their
 // reasons), the runs of several weapons, the points with their proof and qualification fields, snapshots, and the toast. The responses come from the
 // real `runExplore`, so the view reads exactly what the worker publishes.
@@ -6,8 +7,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { ExploreResponse, OptimizationMetadata, OptimizeResponse } from '../../src/api/client';
 import {
-  CURVE_STATUSES, CURVE_TONE, asExploreSnapshot, authorityCounts, coverageOf, curveMeaningKey, curveStatusKey, exploreToastOf, isExploreResponse, pointsOfRuns,
-  retainedExploreOf, runQualifiers, settledResponseOf, summarizeRuns,
+  CURVE_STATUSES, CURVE_TONE, asExploreSnapshot, authorityCounts, coverageOf, curveMeaningKey, curveStatusKey, exploreLineOf, exploreMetaOf, exploreToastOf,
+  isExploreResponse, pointsOfRuns, retainedExploreOf, runLineOf, runQualifiers, settledResponseOf, summarizeRuns,
 } from '../../src/components/explore/exploreView';
 import type { ExploreWeaponRun } from '../../src/components/explore/exploreView';
 import { runExplore } from '../../src/solver/exploreSweep';
@@ -181,7 +182,7 @@ test('the toast of a finished Explore: "complete" only for full coverage, a canc
   const empty = await sweep([infeasible(), infeasible()]);
   const invalid = await sweep([timeout()]);
   assert.deepEqual(exploreToastOf([run('a', complete)], 1), { type: 'success', key: 'toast.explore_success', params: {} });
-  assert.deepEqual(exploreToastOf([run('a', partial)], 1), { type: 'warning', key: 'toast.explore_partial', params: {} });
+  assert.deepEqual(exploreToastOf([run('a', partial)], 1), { type: 'warning', key: 'explore.notice_partial', params: {} });
   assert.deepEqual(exploreToastOf([run('a', partial, { phase: 'cancelled' })], 1), { type: 'info', key: 'toast.explore_cancelled', params: { count: partial.points.length } });
   assert.deepEqual(exploreToastOf([run('a', complete), run('b', null, { phase: 'failed', error: 'x' })], 2), { type: 'warning', key: 'toast.explore_compare_partial', params: { failed: 1, total: 2 } });
   assert.deepEqual(exploreToastOf([run('a', null, { phase: 'failed', error: 'x' })], 1), { type: 'error', key: 'toast.explore_failed', params: {} });
@@ -208,4 +209,87 @@ test('a published snapshot is validated before the UI reads it; a CancellationEr
   assert.equal(retainedExploreOf(new CancellationError()), null);
   assert.equal(retainedExploreOf(new CancellationError('Cancelled by user', { status: 'model_witnessed' })), null, 'a floor snapshot is not an Explore one');
   assert.equal(retainedExploreOf(new Error('plain')), null);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The plain default line (owner decision 2026-10-05: the chart is the result; a plain line only when the sweep is not complete)
+// ---------------------------------------------------------------------------------------------
+
+test('the default line of a sweep, by curve status: none when complete, one plain sentence otherwise (invalid names its reason like an Optimize result)', async () => {
+  const complete = await sweep([witness(40), witness(45)]);
+  const withEmpty = await sweep([witness(40), infeasible(), witness(50)]);
+  const partial = await sweep([witness(40), timeout()]);
+  const empty = await sweep([infeasible(), infeasible()]);
+  const invalidTimeout = await sweep([timeout(), timeout()]);
+  const invalidFast = await sweep([fastEmpty()]);
+  const invalidSchedule = await runExplore(request(), { targets: [] }, guard(), async () => witness(40));
+  assert.equal(complete.curve_status, 'complete');
+  assert.equal(runLineOf(run('a', complete)), null, 'complete: nothing but the chart');
+  assert.equal(runLineOf(run('a', withEmpty)), null, 'complete with a proved-empty target: nothing');
+  assert.deepEqual(runLineOf(run('a', partial)), { key: 'explore.notice_partial', params: {}, tone: 'warning' });
+  assert.deepEqual(runLineOf(run('a', empty)), { key: 'explore.notice_infeasible', params: {}, tone: 'error' });
+  assert.deepEqual(runLineOf(run('a', invalidTimeout)), { key: 'notice.none_time', params: {}, tone: 'warning' });
+  assert.deepEqual(runLineOf(run('a', invalidFast)), { key: 'notice.fast_empty', params: {}, tone: 'warning' });
+  assert.equal(invalidSchedule.curve_status, 'invalid');
+  assert.deepEqual(runLineOf(run('a', invalidSchedule)), { key: 'notice.invalid_schedule', params: {}, tone: 'warning' });
+});
+
+test('every curve status and run phase has exactly one default line, and none of them uses the coverage wording (that is in Details)', async () => {
+  const responses: Record<string, ExploreResponse> = {
+    complete: await sweep([witness(40), witness(45)]),
+    partial: await sweep([witness(40), timeout()]),
+    infeasible: await sweep([infeasible(), infeasible()]),
+    invalid: await sweep([timeout()]),
+  };
+  assert.deepEqual(Object.keys(responses).sort(), [...CURVE_STATUSES].sort(), 'every curve status is covered');
+  for (const [status, response] of Object.entries(responses)) {
+    for (const phase of ['done', 'cancelled', 'failed', 'running'] as const) {
+      const line = runLineOf(run('a', response, { phase, launched: 1, scheduled: 3 }));
+      const label = `${status} ${phase}`;
+      if (phase === 'done' && status === 'complete') { assert.equal(line, null, label); continue; }
+      assert.ok(line !== null, label);
+      assert.ok(!line.key.startsWith('explore.curve_') && !line.key.includes('coverage'), `${label}: ${line.key}`);
+    }
+  }
+  assert.deepEqual(runLineOf(run('a', responses.partial, { phase: 'running', launched: 2, scheduled: 4 })), { key: 'explore.running_progress', params: { launched: 2, scheduled: 4 }, tone: 'info' });
+  assert.deepEqual(runLineOf(run('a', null, { phase: 'running' })), { key: 'explore.running', params: {}, tone: 'info' });
+  assert.deepEqual(runLineOf(run('a', responses.partial, { phase: 'cancelled' })), { key: 'explore.cancelled_kept', params: { count: 1 }, tone: 'info' });
+  assert.deepEqual(runLineOf(run('a', responses.invalid, { phase: 'cancelled' })), { key: 'notice.cancelled_none', params: {}, tone: 'info' }, 'a cancel that kept no point says only "Cancelled"');
+  assert.deepEqual(runLineOf(run('a', null, { phase: 'failed', error: 'boom' })), { key: 'notice.error', params: {}, tone: 'error' });
+  assert.deepEqual(runLineOf(run('a', responses.partial, { phase: 'failed', error: 'boom' })), { key: 'notice.error', params: {}, tone: 'warning' }, 'a failed sweep that kept points is a warning');
+});
+
+test('the default line of several weapons: progress of the live one, a cancel keeps and counts the points, partial when any point exists, else no builds / the reason', async () => {
+  const complete = await sweep([witness(40), witness(45)]);
+  const partial = await sweep([witness(40), timeout()]);
+  const empty = await sweep([infeasible(), infeasible()]);
+  const invalid = await sweep([timeout()]);
+  assert.equal(exploreLineOf([run('a', complete), run('b', complete)], 2), null, 'every weapon complete: nothing');
+  assert.equal(exploreLineOf([], 0), null);
+  assert.equal(exploreLineOf([run('a', complete)], 1), null, 'a single complete weapon has no line');
+  assert.deepEqual(exploreLineOf([run('a', complete), run('b', null, { phase: 'running', launched: 1, scheduled: 5 })], 2), { key: 'explore.running_progress', params: { launched: 1, scheduled: 5 }, tone: 'info' });
+  assert.deepEqual(exploreLineOf([run('a', complete), run('b', partial, { phase: 'cancelled' })], 2), { key: 'explore.cancelled_kept', params: { count: 3 }, tone: 'info' });
+  assert.deepEqual(exploreLineOf([run('a', complete), run('b', partial)], 2), { key: 'explore.notice_partial', params: {}, tone: 'warning' });
+  assert.deepEqual(exploreLineOf([run('a', complete), run('b', null, { phase: 'failed', error: 'x' })], 2), { key: 'explore.notice_partial', params: {}, tone: 'warning' }, 'a failure beside a weapon with points is a gap in the points');
+  assert.deepEqual(exploreLineOf([run('a', empty), run('b', empty)], 2), { key: 'explore.notice_infeasible', params: {}, tone: 'error' });
+  assert.deepEqual(exploreLineOf([run('a', null, { phase: 'failed', error: 'x' }), run('b', null, { phase: 'failed', error: 'y' })], 2), { key: 'notice.error', params: {}, tone: 'error' });
+  assert.deepEqual(exploreLineOf([run('a', empty), run('b', invalid)], 2), { key: 'notice.none_time', params: {}, tone: 'warning' });
+  assert.deepEqual(exploreLineOf([run('a', partial)], 1), runLineOf(run('a', partial)), 'a single weapon uses its own line');
+});
+
+test('the quiet facts of an Explore request: total time, and the one mode every weapon ran in', async () => {
+  const fast = { ...(await sweep([witness(40)])), precision_request: 'auto' as const, precision_resolved: 'fast' as const };
+  const precise = { ...(await sweep([witness(40)])), precision_request: 'auto' as const, precision_resolved: 'precise' as const };
+  assert.deepEqual(exploreMetaOf([run('a', fast)], 1234.4), { ms: 1234, request: 'auto', mode: 'fast' });
+  assert.deepEqual(exploreMetaOf([run('a', fast), run('b', fast)], 10), { ms: 10, request: 'auto', mode: 'fast' });
+  assert.deepEqual(exploreMetaOf([run('a', fast), run('b', precise)], 10), { ms: 10, request: 'auto', mode: null }, 'weapons that ran in different modes show no single mode');
+  assert.deepEqual(exploreMetaOf([run('a', null, { phase: 'running' })], undefined), { ms: null, request: null, mode: null });
+  assert.equal(exploreMetaOf([run('a', fast)], 0).ms, null);
+});
+
+test('the coverage wording is still computed for Details: the curve status keys, the V / I / U / E counts and the authority counts', async () => {
+  const response = await sweep([witness(40), infeasible(), timeout()]);
+  assert.equal(curveStatusKey(response.curve_status), 'explore.curve_partial');
+  assert.deepEqual(coverageOf(response).counts, { V: 1, I: 1, U: 1, E: 0 });
+  assert.deepEqual(authorityCounts(response.points), { certified_optimal: 1, approximate_optimal: 0, feasible: 0, incomplete: 0, certified_infeasible: 0, error: 0 });
 });

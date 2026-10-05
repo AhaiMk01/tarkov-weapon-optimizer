@@ -1,4 +1,4 @@
-// The locale files (frontend/public/locales/*.json; CLAUDE.md "Internationalization", Phase 2.8): all 16 files end with the same key set as zh.json (the
+// The locale files (frontend/public/locales/*.json; CLAUDE.md "Internationalization", Phase 2.8 / 2.8b): all 16 files end with the same key set as zh.json (the
 // source of truth), every value is a nonempty string with the same interpolation placeholders as the English text, and every key the UI helpers and
 // components ask for exists. Untranslated languages carry the English text (the project's documented fallback), never a missing key.
 import { test } from 'node:test';
@@ -6,8 +6,8 @@ import assert from 'node:assert/strict';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
-import { EFTFORGE_REFUSALS, eftforgeRefusalKey } from '../../src/components/common/eftforgeExport';
-import { qualifierKey, allReasonKeys } from '../../src/components/common/resultView';
+import { EFTFORGE_MESSAGE_KEYS, EFTFORGE_REFUSALS, eftforgeRefusalKey } from '../../src/components/common/eftforgeExport';
+import { BADGE_KEY, NOTICE_IDS, noticeKey, qualifierKey, allReasonKeys } from '../../src/components/common/resultView';
 import type { AuthorityLevel } from '../../src/components/common/resultView';
 import { CURVE_STATUSES, curveMeaningKey, curveStatusKey } from '../../src/components/explore/exploreView';
 
@@ -63,12 +63,15 @@ const helperKeys = (): string[] => [
   ...LEVELS.flatMap(level => [`results.authority_${level}`, `results.authority_${level}_short`, `results.authority_${level}_detail`]),
   ...(['fast_model', 'provisional_moa'] as const).flatMap(q => [qualifierKey(q), `${qualifierKey(q)}_tooltip`]),
   ...CURVE_STATUSES.flatMap(s => [curveStatusKey(s), curveMeaningKey(s)]),
+  // The plain default view: the two badges, one sentence per situation, the floor line of each status, the Explore lines.
+  ...Object.values(BADGE_KEY),
+  ...NOTICE_IDS.map(noticeKey),
   ...(['proved', 'witnessed', 'unresolved', 'infeasible'] as const).map(kind => `moa_floor.${kind}`),
-  ...EFTFORGE_REFUSALS.map(eftforgeRefusalKey),
-  'results.cancelled', 'results.bound_unknown', 'toast.cancelled', 'toast.optimize_approximate', 'toast.optimize_feasible', 'toast.optimize_incomplete',
-  'toast.optimize_success', 'toast.optimize_infeasible', 'toast.optimize_failed', 'toast.gunsmith_success', 'toast.gunsmith_infeasible', 'toast.gunsmith_failed',
-  'toast.explore_success', 'toast.explore_partial', 'toast.explore_cancelled', 'toast.explore_failed', 'toast.explore_empty', 'toast.explore_infeasible',
-  'toast.explore_compare_partial',
+  'explore.notice_partial', 'explore.notice_infeasible', 'explore.running', 'explore.running_progress', 'explore.cancelled_kept', 'explore.status',
+  'results.details',
+  ...EFTFORGE_REFUSALS.map(eftforgeRefusalKey), ...EFTFORGE_MESSAGE_KEYS,
+  'results.bound_unknown', 'toast.cancelled', 'toast.optimize_success', 'toast.optimize_failed', 'toast.gunsmith_success', 'toast.gunsmith_failed',
+  'toast.explore_success', 'toast.explore_cancelled', 'toast.explore_failed', 'toast.explore_empty', 'toast.explore_infeasible', 'toast.explore_compare_partial',
 ];
 
 test('every key the UI helpers can ask for exists in every language: one message per public reason, per authority level, per curve status and per export refusal', () => {
@@ -98,4 +101,50 @@ test('every literal t(\'...\') key in the UI source exists in en.json and zh.jso
     }
   }
   assert.deepEqual(missing, []);
+});
+
+// ---------------------------------------------------------------------------------------------
+// Plain by default (owner decision 2026-10-05)
+// ---------------------------------------------------------------------------------------------
+
+/** Words a regular player does not need on the default view: they belong in Details. */
+const JARGON = /\b(bounds?|gap|tolerance|provisional|certificat\w*|approximate|proved|proof|optimal|optimum|nodes?|coverage|authority|qualif\w*|infeasible|unresolved)\b/i;
+
+test('the default messages are plain in English: no jargon, and "best" only on the proved-optimum badge', () => {
+  for (const id of NOTICE_IDS) {
+    const text = locales.en[noticeKey(id)] as string;
+    assert.ok(typeof text === 'string' && text !== '', id);
+    assert.doesNotMatch(text, JARGON, `${id}: ${text}`);
+    assert.doesNotMatch(text, /\b(best|optimal|optimum)\b/i, `${id} must not say or imply "best": ${text}`);
+  }
+  for (const key of ['explore.notice_partial', 'explore.notice_infeasible', 'explore.running', 'explore.running_progress', 'explore.cancelled_kept', 'moa_floor.proved', 'moa_floor.witnessed', 'moa_floor.unresolved', 'moa_floor.infeasible', ...EFTFORGE_MESSAGE_KEYS]) {
+    const text = locales.en[key] as string;
+    assert.doesNotMatch(text, JARGON, `${key}: ${text}`);
+    assert.doesNotMatch(text, /\b(best|optimal|optimum)\b/i, `${key}: ${text}`);
+  }
+  assert.match(locales.en[BADGE_KEY.best] as string, /best/i, 'the proved-optimum badge is where "Best build" lives');
+  assert.doesNotMatch(locales.en[BADGE_KEY.found] as string, /\b(best|optimal)\b/i, '"Build found" claims nothing');
+});
+
+test('the default texts of every language are filled in (the badge, the sentences, the floor lines), with the same placeholders as English', () => {
+  const keys = [...Object.values(BADGE_KEY), ...NOTICE_IDS.map(noticeKey), 'results.details', 'explore.notice_partial', 'explore.notice_infeasible', 'moa_floor.proved', 'moa_floor.witnessed'];
+  for (const lang of EXPECTED) {
+    for (const key of keys) {
+      assert.ok(typeof locales[lang][key] === 'string' && (locales[lang][key] as string).trim() !== '', `${lang} ${key}`);
+    }
+  }
+  assert.match(locales.en['moa_floor.proved'] as string, /\{\{floor\}\}/);
+  assert.match(locales.en['moa_floor.witnessed'] as string, /\{\{floor\}\}/);
+  assert.match(locales.en['explore.running_progress'] as string, /\{\{launched\}\}.*\{\{scheduled\}\}/);
+});
+
+test('keys that the plain default view replaced are gone from every language (no stale strings)', () => {
+  const removed = [
+    'results.cancelled', 'toast.optimize_approximate', 'toast.optimize_feasible', 'toast.optimize_incomplete', 'toast.optimize_infeasible',
+    'toast.gunsmith_infeasible', 'toast.explore_partial', 'explore.failed', 'explore.coverage', 'explore.coverage_details', 'explore.point_authority',
+    'export.eftforge_unaffected', 'export.eftforge_disabled_no_weapon', 'export.eftforge_disabled_detached', 'export.eftforge_disabled_invalid_placement',
+    'export.eftforge_disabled_repeated_slot', 'export.eftforge_disabled_repeated_item', 'export.eftforge_disabled_round_trip', 'moa_floor.withheld',
+    'ui.moa_provisional_short',
+  ];
+  for (const lang of EXPECTED) assert.deepEqual(removed.filter(k => k in locales[lang]), [], lang);
 });

@@ -14,7 +14,7 @@ interface EftforgeButtonProps {
 
 /**
  * Opens a build in EFTForge through the checked v1 projection (`eftforgeExport.ts`). A build whose placements the format cannot represent
- * unambiguously (a slot or a template used more than once, a detached placement) gets a DISABLED button with the localized reason; the in-app
+ * unambiguously (a slot or a template used more than once, a detached placement) gets a DISABLED button with one plain localized sentence; the in-app
  * manifest, copy and shopping list are unaffected. Nothing is rendered for a build with no placements.
  */
 export function EftforgeButton({ weaponId, placements, size = 'small' }: EftforgeButtonProps) {
@@ -29,14 +29,7 @@ export function EftforgeButton({ weaponId, placements, size = 'small' }: Eftforg
     )
   }
   return (
-    <Tooltip
-      title={
-        <div>
-          <div>{t(eftforgeRefusalKey(projection.refusal))}</div>
-          <div style={{ marginTop: 4, opacity: 0.85 }}>{t('export.eftforge_unaffected')}</div>
-        </div>
-      }
-    >
+    <Tooltip title={t(eftforgeRefusalKey(projection.refusal))}>
       {/* A disabled button swallows hover, so the tooltip sits on a wrapper. */}
       <span style={{ display: 'inline-block', cursor: 'not-allowed' }}>
         <Button size={size} icon={<ExportOutlined />} disabled style={{ pointerEvents: 'none' }}>

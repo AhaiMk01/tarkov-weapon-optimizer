@@ -45,6 +45,9 @@ suite, harness ratchet) and committed by the orchestrator.
 - Single correctness cutover; floor discovery then bisection; termination means search completion; floor
   queries use a zero objective with `mip_max_improving_sols=1`; unsupported external export disabled.
 - Native build host: `zpahai@10.147.20.119`, only `~/tarkov-highs-build`, no sudo; never the lab hosts.
+- **Results are plain by default, details on demand (owner, 2026-10-05, Phase 2.8b).** A regular player sees the build and,
+  only when something is off, one plain sentence; "best" only for a proved optimum. Authority wording, model tags,
+  bounds, gap, tolerance, MOA-model caveats and Explore coverage live in a collapsed Details section.
 
 ### Performance policy (owner, 2026-10-04)
 

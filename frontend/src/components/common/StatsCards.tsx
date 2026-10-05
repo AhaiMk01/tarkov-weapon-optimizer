@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Statistic, Tooltip, Typography, theme } from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
 
 const { useToken } = theme
 
@@ -46,10 +47,18 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       </Card>
       {moa != null && moa > 0 && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-          {/* The displayed MOA is the provisional model's value (ADR 0006), not a measured in-game figure: it is labelled as such. */}
-          <Tooltip title={t('ui.moa_provisional_tooltip')}>
-            <Statistic title={`${t('ui.moa_label')} (${t('ui.moa_provisional_short')})`} value={moa.toFixed(3)} />
-          </Tooltip>
+          {/* The displayed MOA is the provisional model's value (ADR 0006), not a measured in-game figure: the label is plain, the caveat is in the info tooltip. */}
+          <Statistic
+            title={
+              <span>
+                {t('ui.moa_label')}{' '}
+                <Tooltip title={t('ui.moa_provisional_tooltip')}>
+                  <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
+                </Tooltip>
+              </span>
+            }
+            value={moa.toFixed(3)}
+          />
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>

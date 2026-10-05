@@ -8,11 +8,16 @@
  *   infeasible  every scheduled target is certified empty
  *   invalid     no witness and some target unresolved or failed, or the request itself was rejected
  * A point is a verified witness; each carries the proof and qualification fields of the Optimize result that produced it.
+ *
+ * Plain by default, details on demand (owner decision 2026-10-05): the default view is the chart and its points, plus ONE plain line only when the
+ * sweep is not complete (`exploreLineOf`). The curve-status wording, the coverage counts and table, the authority counts and the model notes are for
+ * the collapsed Details; they are computed here too (`coverageOf`, `authorityCounts`, `runQualifiers`, `curveStatusKey`).
  */
 
 import type { ExplorePoint, ExploreResponse, ExploreSnapshot, ExploreStepOutcome } from '../../api/client';
-import { levelOf, qualifiersOf, reasonViewOf } from '../common/resultView';
-import type { AuthorityInput, AuthorityLevel, Qualifier, ReasonView, Tone } from '../common/resultView';
+import { levelOf, noticeKey, noticeOf, qualifiersOf, reasonViewOf } from '../common/resultView';
+import type { AuthorityInput, AuthorityLevel, MetaView, Qualifier, ReasonView, Tone } from '../common/resultView';
+import { PUBLIC_REASONS } from '../../solver/physical/reasons';
 
 export type CurveStatus = ExploreResponse['curve_status'];
 
@@ -97,6 +102,9 @@ export function settledResponseOf(run: Pick<ExploreWeaponRun, 'response' | 'phas
   return { ...response, step_outcomes: response.step_outcomes.slice(0, run.launched) };
 }
 
+/** The factual cause of a target that carries no reason in a cancelled run: the cancel. */
+export const cancelReasonOf = (run: Pick<ExploreWeaponRun, 'phase'>): string | undefined => (run.phase === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : undefined);
+
 /** All plotted points of the runs, each tagged with its weapon. */
 export function pointsOfRuns(runs: readonly ExploreWeaponRun[]): ExplorePoint[] {
   const points: ExplorePoint[] = [];
@@ -138,6 +146,80 @@ export function summarizeRuns(runs: readonly ExploreWeaponRun[], total: number):
   else if (byCurve.complete === 0 && byCurve.partial === 0 && cancelled === 0) tone = 'error';
   else tone = 'warning';
   return { tone, total, running, byCurve, failed, cancelled, allComplete };
+}
+
+// ---------------------------------------------------------------------------------------------
+// The default line
+// ---------------------------------------------------------------------------------------------
+
+/** The one plain line of an Explore sweep that is not complete (running, partial, empty, cancelled, failed). A complete sweep has none. */
+export interface ExploreLine {
+  /** i18n key of the sentence. */
+  key: string;
+  params: Record<string, string | number>;
+  tone: Tone;
+}
+
+/** The line of a sweep with no point at all and no certified emptiness (`invalid`): the plain sentence of its reason, as an Optimize result with no build says it. */
+const invalidLineOf = (reason: string | undefined): ExploreLine => {
+  const off = noticeOf({ level: 'incomplete', hasBuild: false }, reasonViewOf(reason));
+  // `noticeOf` is total for the `incomplete` level: it always returns a sentence.
+  return { key: off?.key ?? noticeKey('none_other'), params: {}, tone: off?.tone ?? 'warning' };
+};
+
+const progressLineOf = (run: Pick<ExploreWeaponRun, 'launched' | 'scheduled'>): ExploreLine => ({
+  key: run.launched !== undefined && run.scheduled !== undefined ? 'explore.running_progress' : 'explore.running',
+  params: run.launched !== undefined && run.scheduled !== undefined ? { launched: run.launched, scheduled: run.scheduled } : {},
+  tone: 'info',
+});
+
+/**
+ * The plain line of ONE weapon's sweep, `null` when it is complete. Running: "Computing... n of m"; cancelled: what was kept; failed: "Something went
+ * wrong"; partial, empty and invalid sweeps each say so in one sentence (an invalid one names its reason like an Optimize result does).
+ */
+export function runLineOf(run: ExploreWeaponRun): ExploreLine | null {
+  const points = run.response?.points.length ?? 0;
+  if (run.phase === 'running') return progressLineOf(run);
+  if (run.phase === 'cancelled') return points > 0 ? { key: 'explore.cancelled_kept', params: { count: points }, tone: 'info' } : { key: noticeKey('cancelled_none'), params: {}, tone: 'info' };
+  if (run.phase === 'failed' || run.response === null) return { key: noticeKey('error'), params: {}, tone: points > 0 ? 'warning' : 'error' };
+  switch (run.response.curve_status) {
+    case 'complete': return null;
+    case 'partial': return { key: 'explore.notice_partial', params: {}, tone: 'warning' };
+    case 'infeasible': return { key: 'explore.notice_infeasible', params: {}, tone: 'error' };
+    case 'invalid': return invalidLineOf(run.response.reason);
+  }
+}
+
+/**
+ * The plain line of the whole request (one weapon or several), `null` when every weapon's sweep is complete. A running request shows the progress of
+ * the weapon being computed; a cancel keeps and counts the points; a sweep with some points is "partial" whatever the weapons did; without any point
+ * it is "no builds" when every weapon was proved empty, else the plain sentence of the first reason.
+ */
+export function exploreLineOf(runs: readonly ExploreWeaponRun[], total: number): ExploreLine | null {
+  if (total <= 1) return runs[0] === undefined ? null : runLineOf(runs[0]);
+  const summary = summarizeRuns(runs, total);
+  const live = runs.find(r => r.phase === 'running');
+  if (live !== undefined) return progressLineOf(live);
+  const points = runs.reduce((n, r) => n + (r.response?.points.length ?? 0), 0);
+  if (summary.cancelled > 0) return points > 0 ? { key: 'explore.cancelled_kept', params: { count: points }, tone: 'info' } : { key: noticeKey('cancelled_none'), params: {}, tone: 'info' };
+  if (summary.allComplete) return null;
+  if (points > 0) return { key: 'explore.notice_partial', params: {}, tone: 'warning' };
+  if (summary.failed >= total) return { key: noticeKey('error'), params: {}, tone: 'error' };
+  if (summary.byCurve.infeasible === total) return { key: 'explore.notice_infeasible', params: {}, tone: 'error' };
+  return invalidLineOf(runs.find(r => r.response?.reason !== undefined)?.response?.reason);
+}
+
+/** The quiet facts of an Explore request ("12345 ms · Fast"): the total time, and the mode every weapon ran in (`null` when they differ or it is unknown). */
+export function exploreMetaOf(runs: readonly ExploreWeaponRun[], solveTimeMs: number | undefined): MetaView {
+  const modes = new Set<'fast' | 'precise'>();
+  for (const run of runs) {
+    const mode = run.response?.precision_resolved;
+    if (mode === 'fast' || mode === 'precise') modes.add(mode);
+  }
+  const first = runs.find(r => r.response !== null)?.response ?? null;
+  const request = first !== null && (first.precision_request === 'auto' || first.precision_request === 'fast' || first.precision_request === 'precise') ? first.precision_request : null;
+  const only = modes.size === 1 ? [...modes][0] : null;
+  return { ms: solveTimeMs !== undefined && Number.isFinite(solveTimeMs) && solveTimeMs > 0 ? Math.round(solveTimeMs) : null, request, mode: only };
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -211,7 +293,7 @@ export function exploreToastOf(runs: readonly ExploreWeaponRun[], total: number)
   if (summary.failed > 0 && points > 0) return { type: 'warning', key: 'toast.explore_compare_partial', params: { failed: summary.failed, total } };
   if (summary.failed >= total) return { type: 'error', key: 'toast.explore_failed', params: {} };
   if (summary.allComplete) return { type: 'success', key: 'toast.explore_success', params: {} };
-  if (points > 0) return { type: 'warning', key: 'toast.explore_partial', params: {} };
+  if (points > 0) return { type: 'warning', key: 'explore.notice_partial', params: {} };
   const empty = runs.filter(r => r.response?.curve_status === 'infeasible').map(r => r.weaponName);
   if (empty.length > 0) return { type: 'error', key: 'toast.explore_infeasible', params: { names: empty.join(', ') } };
   return { type: 'warning', key: 'toast.explore_empty', params: {} };

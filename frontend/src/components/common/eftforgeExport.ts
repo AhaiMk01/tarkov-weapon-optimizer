@@ -50,8 +50,28 @@ export type EftforgeProjection =
   | { ok: true; payload: EftforgePayload }
   | { ok: false; refusal: EftforgeRefusal; detail: string };
 
-/** i18n key of the explanation shown for a disabled export. */
-export const eftforgeRefusalKey = (refusal: EftforgeRefusal): string => `export.eftforge_disabled_${refusal}`;
+/**
+ * i18n key of the ONE plain sentence shown for a disabled export (owner decision 2026-10-05: no technical subcodes for players). Three sentences cover
+ * the seven refusals: repeated parts (the case players can recognise), nothing to export, and anything else the format cannot represent. The refusal
+ * itself and its `detail` stay in the projection for tests and diagnostics.
+ */
+export const eftforgeRefusalKey = (refusal: EftforgeRefusal): string => {
+  switch (refusal) {
+    case 'repeated_slot':
+    case 'repeated_item':
+      return 'export.eftforge_disabled_repeated';
+    case 'no_weapon':
+    case 'empty':
+      return 'export.eftforge_disabled_empty';
+    case 'invalid_placement':
+    case 'detached':
+    case 'round_trip':
+      return 'export.eftforge_disabled_unsupported';
+  }
+};
+
+/** Every key `eftforgeRefusalKey` can return, for the locale-parity test. */
+export const EFTFORGE_MESSAGE_KEYS: readonly string[] = ['export.eftforge_disabled_repeated', 'export.eftforge_disabled_empty', 'export.eftforge_disabled_unsupported'];
 
 /** Every refusal, for the locale-parity test. */
 export const EFTFORGE_REFUSALS: readonly EftforgeRefusal[] = [

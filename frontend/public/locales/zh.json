@@ -65,8 +65,6 @@
     "curve_invalid_meaning": "没有任何目标产生已验证的配装，且部分目标未解决、失败或未运行（或请求被拒绝）。",
     "coverage_counts": "共 {{total}} 个目标：{{v}} 个有已验证配装，{{i}} 个已证明无解，{{u}} 个未解决，{{e}} 个失败",
     "coverage_all_resolved": "每个目标都有已验证的配装，或已证明不存在配装。",
-    "coverage_details": "覆盖详情",
-    "coverage": "覆盖情况",
     "target": "目标",
     "target_value": "目标值",
     "target_outcome": "结果",
@@ -74,14 +72,15 @@
     "outcome_unresolved": "未解决",
     "target_reason": "原因",
     "reason_not_launched": "尚未开始",
-    "running": "正在探索…",
-    "running_progress": "探索中：目前已求解 {{launched}} / {{scheduled}} 个目标",
-    "failed": "探索失败",
+    "running": "正在计算…",
+    "running_progress": "正在计算… {{launched}} / {{scheduled}}",
     "cancelled_kept": "已取消——保留了 {{count}} 个点",
     "compare_status_v2": "{{total}} 把武器中有 {{complete}} 把已完整",
     "compare_breakdown": "其他武器：{{partial}} 把部分完成，{{infeasible}} 把无解，{{invalid}} 把无结果，{{failed}} 把失败，{{cancelled}} 把已取消",
     "points_authority": "点：{{proved}} 个已证明最优，{{approximate}} 个近似，{{feasible}} 个仅可行",
-    "point_authority": "可信度"
+    "notice_partial": "部分点未能在限时内计算出来。",
+    "notice_infeasible": "没有配装满足这些限制。",
+    "status": "状态"
   },
   "optimize": {
     "header": "属性权重",
@@ -148,8 +147,27 @@
     "qualifier_fast_model_tooltip": "快速模式搜索的是武器的“配件模板计数”模型。速度快但属于近似：其结果不能证明最优。",
     "qualifier_provisional_moa": "临时 MOA 模型",
     "qualifier_provisional_moa_tooltip": "此结果依赖 MOA 限制。MOA 来自临时模型，因此使用它的结果不会被标为“已证明”。",
-    "cancelled": "已取消",
-    "bound_unknown": "未知"
+    "bound_unknown": "未知",
+    "best_build": "最佳配装",
+    "build_found": "已找到配装",
+    "details": "详情"
+  },
+  "notice": {
+    "feasible_time": "已在时间上限处停止——可能还有更好的配装。",
+    "feasible_limit": "已在搜索上限处停止——可能还有更好的配装。",
+    "feasible_other": "可能还有更好的配装。",
+    "none_time": "未能在限时内找到配装。请重试或放宽一项限制。",
+    "none_limit": "在搜索上限内未能找到配装。请重试或放宽一项限制。",
+    "none_other": "未能验证出可用的配装。",
+    "fast_empty": "快速模式没有找到配装——请改用精确模式。",
+    "moa_empty": "在当前 MOA 模型下，没有配装满足 MOA 上限。",
+    "infeasible": "没有配装满足这些限制——请放宽一项。",
+    "cancelled_build": "已取消——显示目前已找到的配装。",
+    "cancelled_none": "已取消。",
+    "invalid_owned": "库存清单无效——请修正后重试。",
+    "invalid_schedule": "探索设置无效——请调整后重试。",
+    "queue_timeout": "请求等待过久，已被丢弃——请重试。",
+    "error": "出了点问题——请重试。"
   },
   "toast": {
     "optimize_success": "优化完成",
@@ -161,19 +179,13 @@
     "copied": "已复制到剪贴板",
     "copy_failed": "复制失败",
     "load_failed": "游戏数据加载失败，请检查网络后重试",
-    "optimize_infeasible": "在这些限制下无法求解",
     "explore_empty": "这些条件下求不到最优解，可放宽限制再试",
-    "gunsmith_infeasible": "按当前商人 / 跳蚤条件无法求解这个枪匠任务",
     "refresh_done": "缓存已清空，重新加载中…",
     "refresh_failed": "清空缓存失败",
     "explore_compare_partial": "{{total}} 把武器中有 {{failed}} 把探索失败",
     "explore_infeasible": "当前约束下无可行前沿（{{names}}）",
     "cancelled": "已取消",
-    "optimize_approximate": "优化完成——结果为近似解，未证明最优",
-    "optimize_feasible": "找到可行配装——未证明最优",
-    "optimize_incomplete": "没有找到已验证的配装",
-    "explore_cancelled": "探索已取消——保留了 {{count}} 个点",
-    "explore_partial": "探索结束，但仍有未解决的目标"
+    "explore_cancelled": "探索已取消——保留了 {{count}} 个点"
   },
   "ui": {
     "initializing": "加载中…",
@@ -266,7 +278,6 @@
     "acq_lot_tooltip": "与同一批次的前一件一起获得；批次价格只在第一件上计费一次。",
     "preset_usage_tooltip": "预设共提供 {{supplied}} 件，其中装上了 {{installed}} 件；其余被拆除。",
     "shopping_base": "基础",
-    "moa_provisional_short": "临时模型",
     "moa_provisional_tooltip": "MOA 来自临时模型，并非游戏内实测值。"
   },
   "trader": {
@@ -354,7 +365,8 @@
     "status_feasible": "可行：已验证的配装，但搜索在证明其最优之前就停止了（时间、节点或解数量限制，或被取消）。",
     "status_incomplete": "未完成：没有找到已验证的配装。这并不证明不存在配装；原因会说明搜索为何停止。",
     "glossary_status_title": "已证明 / 近似 / 可行 / 未完成",
-    "glossary_status_desc": "结果证明了多少。只有不带 MOA 限制的精确结果才能被证明最优或无解；快速结果和依赖 MOA 的结果是近似的；可行配装已验证但未证明最优；未完成表示没有已验证的配装。"
+    "glossary_status_desc": "结果证明了多少。只有不带 MOA 限制的精确结果才能被证明最优或无解；快速结果和依赖 MOA 的结果是近似的；可行配装已验证但未证明最优；未完成表示没有已验证的配装。",
+    "details_hint": "点开结果下方的“详情”可查看证明状态、上述界限和模型说明；主界面只给出简短直白的摘要。"
   },
   "gallery": {
     "title": "武器图库",
@@ -415,22 +427,16 @@
     "retained_build_no": "失败前搜索尚无已验证的配装（已完成 {{nodes}} 次搜索调用）。"
   },
   "export": {
-    "eftforge_unaffected": "应用内的配装清单、复制的清单和购物清单不受影响。",
-    "eftforge_disabled_no_weapon": "无法导出到 EFTForge：此配装没有武器 ID。",
-    "eftforge_disabled_empty": "无法导出到 EFTForge：没有安装任何配件。",
-    "eftforge_disabled_invalid_placement": "无法导出到 EFTForge：有一处安装记录不完整。",
-    "eftforge_disabled_detached": "无法导出到 EFTForge：安装记录没有构成以武器为根的单一结构。",
-    "eftforge_disabled_repeated_slot": "无法导出到 EFTForge：同一个槽位被使用了不止一次（例如同一配件的两个副本），EFTForge v1 无法区分哪个副本装了哪个配件。",
-    "eftforge_disabled_repeated_item": "无法导出到 EFTForge：此配装含有同一配件的多个副本，EFTForge v1 无法区分这些副本。",
-    "eftforge_disabled_round_trip": "无法导出到 EFTForge：无法按 EFTForge v1 格式验证此配装。"
+    "eftforge_disabled_empty": "没有可发送到 EFTForge 的内容。",
+    "eftforge_disabled_repeated": "此配装含有重复的配件，EFTForge 格式无法表示。",
+    "eftforge_disabled_unsupported": "EFTForge 无法打开此配装。"
   },
   "moa_floor": {
-    "computing": "正在计算临时模型下的 MOA 下限…",
-    "proved": "临时模型下的 MOA 最小值：{{floor}}（已证明）",
-    "witnessed": "已实现的最佳 MOA {{floor}} —— 最小值未证明",
-    "unresolved": "无法确定 MOA 下限；滑块范围为估算值。",
-    "infeasible": "在临时模型下，没有配装能满足其他限制，因此任何 MOA 限制都无法满足。",
-    "withheld": "已找到下限，但其数值无法安全地显示；滑块范围为估算值。",
+    "computing": "正在查找最低 MOA…",
+    "proved": "最低 MOA：{{floor}}",
+    "witnessed": "已找到的最低 MOA：{{floor}}（可能还能更低）",
+    "unresolved": "未能找到最低 MOA——改用估算值",
+    "infeasible": "没有配装能满足你的其他限制",
     "proved_lower": "已证明的下界：{{lower}} MOA",
     "provisional_note": "临时 MOA 模型——并非游戏物理层面的最小值。",
     "error": "下限计算请求失败：{{message}}",

@@ -65,8 +65,6 @@
     "curve_invalid_meaning": "No target produced a verified build, and some were unresolved, failed or never ran (or the request was rejected).",
     "coverage_counts": "{{total}} targets: {{v}} with a verified build, {{i}} proved empty, {{u}} unresolved, {{e}} failed",
     "coverage_all_resolved": "Every target has a verified build or a proof that none exists.",
-    "coverage_details": "Coverage details",
-    "coverage": "Coverage",
     "target": "Target",
     "target_value": "Target value",
     "target_outcome": "Outcome",
@@ -74,14 +72,15 @@
     "outcome_unresolved": "Unresolved",
     "target_reason": "Reason",
     "reason_not_launched": "Not started yet",
-    "running": "Exploring…",
-    "running_progress": "Exploring: {{launched}} of {{scheduled}} targets solved so far",
-    "failed": "Exploration failed",
+    "running": "Computing…",
+    "running_progress": "Computing… {{launched}} of {{scheduled}}",
     "cancelled_kept": "Cancelled — {{count}} points kept",
     "compare_status_v2": "{{complete}} of {{total}} weapons complete",
     "compare_breakdown": "Other weapons: {{partial}} partial, {{infeasible}} infeasible, {{invalid}} no result, {{failed}} failed, {{cancelled}} cancelled",
     "points_authority": "Points: {{proved}} proved optimal, {{approximate}} approximate, {{feasible}} feasible",
-    "point_authority": "Authority"
+    "notice_partial": "Some points couldn't be computed in time.",
+    "notice_infeasible": "No builds meet these constraints.",
+    "status": "Status"
   },
   "optimize": {
     "header": "Dostosowanie Wag",
@@ -148,8 +147,27 @@
     "qualifier_fast_model_tooltip": "Fast mode searches a template-count model of the weapon. It is quick but approximate: its answers are not proved optimal.",
     "qualifier_provisional_moa": "Provisional MOA model",
     "qualifier_provisional_moa_tooltip": "This result depends on a MOA limit. MOA comes from a provisional model, so a result that uses it is never presented as proved.",
-    "cancelled": "Cancelled",
-    "bound_unknown": "unknown"
+    "bound_unknown": "unknown",
+    "best_build": "Best build",
+    "build_found": "Build found",
+    "details": "Details"
+  },
+  "notice": {
+    "feasible_time": "Stopped at the time limit — a better build may exist.",
+    "feasible_limit": "Stopped at the search limit — a better build may exist.",
+    "feasible_other": "A better build may exist.",
+    "none_time": "No build found in time. Try again or loosen a constraint.",
+    "none_limit": "No build found within the search limit. Try again or loosen a constraint.",
+    "none_other": "No build could be verified.",
+    "fast_empty": "Fast mode found no build — try Precise.",
+    "moa_empty": "No build meets the MOA limit under the current MOA model.",
+    "infeasible": "No build meets these constraints — loosen one.",
+    "cancelled_build": "Cancelled — showing the build found so far.",
+    "cancelled_none": "Cancelled.",
+    "invalid_owned": "Your stash list isn't valid — fix it and try again.",
+    "invalid_schedule": "The Explore settings aren't valid — change them and try again.",
+    "queue_timeout": "The request waited too long and was dropped — try again.",
+    "error": "Something went wrong — try again."
   },
   "toast": {
     "optimize_success": "Optymalizacja zakończona",
@@ -161,19 +179,13 @@
     "copied": "Skopiowano",
     "copy_failed": "Kopiowanie nieudane",
     "load_failed": "Nie udało się wczytać danych gry",
-    "optimize_infeasible": "Brak poprawnej konfiguracji przy tych ograniczeniach",
     "explore_empty": "Brak punktów granicy przy tych ograniczeniach",
-    "gunsmith_infeasible": "Nie można spełnić zadania rusznikarza",
     "refresh_done": "Pamięć podręczna wyczyszczona, ponowne ładowanie…",
     "refresh_failed": "Nie udało się wyczyścić pamięci podręcznej",
     "explore_compare_partial": "Nie udało się zbadać {{failed}} z {{total}} broni",
     "explore_infeasible": "Brak osiągalnego frontier dla {{names}}",
     "cancelled": "Cancelled",
-    "optimize_approximate": "Optimization finished — approximate result, not proved",
-    "optimize_feasible": "Feasible build found — optimality not proved",
-    "optimize_incomplete": "No verified build found",
-    "explore_cancelled": "Exploration cancelled — {{count}} points kept",
-    "explore_partial": "Exploration finished with unresolved targets"
+    "explore_cancelled": "Exploration cancelled — {{count}} points kept"
   },
   "ui": {
     "initializing": "Inicjalizacja...",
@@ -266,7 +278,6 @@
     "acq_lot_tooltip": "Comes with the previous unit of the same lot; the lot's price is charged once, on its first unit.",
     "preset_usage_tooltip": "{{installed}} installed from the preset out of {{supplied}} supplied; the rest of the preset's stock is stripped.",
     "shopping_base": "base",
-    "moa_provisional_short": "provisional",
     "moa_provisional_tooltip": "MOA comes from a provisional model, not a measured in-game value."
   },
   "error": {
@@ -354,7 +365,8 @@
     "status_feasible": "Feasible: a verified build, but the search stopped (time, node or solution limit, or cancel) before proving it is the best.",
     "status_incomplete": "Incomplete: no verified build was found. This is not a proof that none exists; the reason says what stopped the search.",
     "glossary_status_title": "Proved / Approximate / Feasible / Incomplete",
-    "glossary_status_desc": "How much a result proves. Only a Precise result without a MOA limit can be proved optimal or infeasible; Fast and MOA-dependent results are approximate; a feasible build is verified but unproven; incomplete means no verified build."
+    "glossary_status_desc": "How much a result proves. Only a Precise result without a MOA limit can be proved optimal or infeasible; Fast and MOA-dependent results are approximate; a feasible build is verified but unproven; incomplete means no verified build.",
+    "details_hint": "Open Details under a result to see the proof status, these bounds and the model notes; the main view keeps to a short, plain summary."
   },
   "gallery": {
     "title": "Weapon gallery",
@@ -415,22 +427,16 @@
     "retained_build_no": "Before the failure the search had no verified build ({{nodes}} search calls completed)."
   },
   "export": {
-    "eftforge_unaffected": "The in-app manifest, copied list and shopping list are not affected.",
-    "eftforge_disabled_no_weapon": "EFTForge export is unavailable: the build has no weapon id.",
-    "eftforge_disabled_empty": "EFTForge export is unavailable: nothing is installed.",
-    "eftforge_disabled_invalid_placement": "EFTForge export is unavailable: a placement is incomplete.",
-    "eftforge_disabled_detached": "EFTForge export is unavailable: the placements do not form one tree rooted at the weapon.",
-    "eftforge_disabled_repeated_slot": "EFTForge export is unavailable: the same slot is used more than once (for example by two copies of one part), and EFTForge v1 cannot say which copy holds which part.",
-    "eftforge_disabled_repeated_item": "EFTForge export is unavailable: the build contains several copies of the same part, and EFTForge v1 cannot tell the copies apart.",
-    "eftforge_disabled_round_trip": "EFTForge export is unavailable: the build could not be verified against the EFTForge v1 format."
+    "eftforge_disabled_empty": "There is nothing to send to EFTForge.",
+    "eftforge_disabled_repeated": "This build has repeated parts, which the EFTForge format can't represent.",
+    "eftforge_disabled_unsupported": "EFTForge can't open this build."
   },
   "moa_floor": {
-    "computing": "Finding the provisional-model MOA floor…",
-    "proved": "Minimum MOA of the provisional model: {{floor}} (proved)",
-    "witnessed": "Best witnessed MOA {{floor}} — minimum not proved",
-    "unresolved": "The MOA floor could not be determined; the slider range is an estimate.",
-    "infeasible": "No build satisfies the other constraints under the provisional model, so no MOA limit can be met.",
-    "withheld": "A floor was found, but its value could not be shown safely; the slider range is an estimate.",
+    "computing": "Finding the lowest MOA…",
+    "proved": "Lowest MOA: {{floor}}",
+    "witnessed": "Lowest MOA found: {{floor}} (may go lower)",
+    "unresolved": "Couldn't find the lowest MOA — using an estimate",
+    "infeasible": "No build meets your other constraints",
     "proved_lower": "Proved lower end: {{lower}} MOA",
     "provisional_note": "Provisional MOA model — not a game-physical minimum.",
     "error": "The floor request failed: {{message}}",

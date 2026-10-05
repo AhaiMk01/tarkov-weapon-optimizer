@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import LZString from 'lz-string';
 import type { OptimizeResponse, Placement } from '../../src/api/client';
 import {
-  EFTFORGE_REFUSALS, EFTFORGE_URL, eftforgeRefusalKey, eftforgeUrl, projectToEftforgeV1, reconstructEftforgeV1,
+  EFTFORGE_MESSAGE_KEYS, EFTFORGE_REFUSALS, EFTFORGE_URL, eftforgeRefusalKey, eftforgeUrl, projectToEftforgeV1, reconstructEftforgeV1,
 } from '../../src/components/common/eftforgeExport';
 import type { EftforgePayload } from '../../src/components/common/eftforgeExport';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
@@ -165,10 +165,19 @@ test('malformed manifests are refused: no weapon, nothing installed, incomplete 
   assert.equal(refusalOf(G, [place('weapon_0', 's1', 'a', 'i1'), place('i2', 's2', 'b', 'i3'), place('i3', 's3', 'c', 'i2')]), 'detached');
 });
 
-test('every refusal has a localized explanation key, one per refusal', () => {
+test('every refusal has one plain localized sentence: repeated parts, nothing to send, or "cannot open this build" (no technical subcodes for players)', () => {
   const keys = EFTFORGE_REFUSALS.map(eftforgeRefusalKey);
-  assert.equal(new Set(keys).size, EFTFORGE_REFUSALS.length);
-  assert.ok(keys.every(k => k.startsWith('export.eftforge_disabled_')));
+  assert.ok(keys.every(k => (EFTFORGE_MESSAGE_KEYS as readonly string[]).includes(k)), 'every refusal maps into the closed set of sentences');
+  assert.deepEqual([...new Set(keys)].sort(), [...EFTFORGE_MESSAGE_KEYS].sort(), 'and every sentence is reachable');
+  assert.equal(eftforgeRefusalKey('repeated_slot'), 'export.eftforge_disabled_repeated');
+  assert.equal(eftforgeRefusalKey('repeated_item'), 'export.eftforge_disabled_repeated');
+  assert.equal(eftforgeRefusalKey('empty'), 'export.eftforge_disabled_empty');
+  assert.equal(eftforgeRefusalKey('no_weapon'), 'export.eftforge_disabled_empty');
+  for (const refusal of ['invalid_placement', 'detached', 'round_trip'] as const) assert.equal(eftforgeRefusalKey(refusal), 'export.eftforge_disabled_unsupported', refusal);
+  // The technical detail stays in the projection (for diagnostics), never in the sentence key.
+  const repeated = projectToEftforgeV1(G, [place('weapon_0', 's1', 'a'), place('weapon_0', 's2', 'a')]);
+  assert.equal(repeated.ok, false);
+  if (!repeated.ok) assert.deepEqual([repeated.refusal, /installed more than once/.test(repeated.detail)], ['repeated_item', true]);
 });
 
 // ---------------------------------------------------------------------------------------------

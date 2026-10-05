@@ -1,20 +1,19 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Button, Card, Collapse, Drawer, Grid, Space, Table, Tag, Typography, theme } from 'antd'
-import { BarChartOutlined, SettingOutlined } from '@ant-design/icons'
+import { Button, Card, Collapse, Drawer, Grid, Table, Tag, Typography, theme } from 'antd'
+import { BarChartOutlined, CheckCircleOutlined, SettingOutlined } from '@ant-design/icons'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { EmptyState } from '../common/EmptyState'
 import { BuildManifest } from '../common/BuildManifest'
 import { UsingPresetCard } from '../common/UsingPresetCard'
 import { partitionManifest, presetUsage } from '../common/manifest'
 import { EftforgeButton } from '../common/EftforgeButton'
-import { AuthorityTag, CancelButton, QualifierTags, ReasonText } from '../common/ResultStatus'
+import { ApproximateTag, AuthorityTag, CancelButton, DetailsPanel, QualifierTags, ReasonText } from '../common/ResultStatus'
 import { qualifiersOf, reasonViewOf } from '../common/resultView'
 import type { ExplorePoint, ExploreResponse, OptimizeResponse } from '../../api/client'
 import { paletteColorAt, seriesPalette } from './palette'
-import { CoverageCounts, CoverageDetails, CurveTag, ExploreStatusAlert } from './ExploreStatus'
-import { pointsOfRuns, settledResponseOf } from './exploreView'
-import { PUBLIC_REASONS } from '../../solver/physical/reasons'
+import { CoverageDetails, ExploreStatusAlert } from './ExploreStatus'
+import { cancelReasonOf, pointsOfRuns, runLineOf, settledResponseOf } from './exploreView'
 import type { ExploreWeaponRun } from './exploreView'
 
 const { Text } = Typography
@@ -70,9 +69,6 @@ function xKeyOf(tradeoff: 'price' | 'recoil' | 'ergo'): 'ergo' | 'recoil_v' {
  * Two points are the same point when their weapon and plotted coordinates agree. A live sweep republishes every point as a fresh object with each
  * snapshot, so a pinned point is followed by this identity rather than by object identity.
  */
-/** The factual cause of a target that carries no reason in a cancelled run: the cancel. */
-const cancelReasonOf = (run: ExploreWeaponRun): string | undefined => (run.phase === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : undefined)
-
 const samePoint = (a: ExplorePoint, b: ExplorePoint): boolean =>
   a.weapon_id === b.weapon_id && a.ergo === b.ergo && a.recoil_v === b.recoil_v && a.recoil_h === b.recoil_h && a.price === b.price
 
@@ -252,14 +248,10 @@ export function ExploreResult({
       render: (v: number) => <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text>,
     },
     {
-      title: t('explore.point_authority'),
+      // Quiet by default: a small "Approximate" tag only for a build that is not a proved optimum; the full wording is in the build's own Details.
+      title: '',
       dataIndex: 'physical_certificate',
-      render: (_: unknown, record: ExplorePoint) => (
-        <Space size={4} wrap>
-          <AuthorityTag result={record} />
-          <QualifierTags qualifiers={qualifiersOf(record)} />
-        </Space>
-      ),
+      render: (_: unknown, record: ExplorePoint) => <ApproximateTag result={record} />,
     },
     {
       title: '',
@@ -294,7 +286,6 @@ export function ExploreResult({
     )
   }
 
-  const singleRun = !comparing ? runs[0] : undefined
   const detailBuild = detailPoint ? pointAsBuild(detailPoint) : null
 
   return (
@@ -321,16 +312,6 @@ export function ExploreResult({
           cancelling={cancellingExplore}
           actionLabel={actionLabel}
         />
-        {singleRun !== undefined && settledResponseOf(singleRun) !== null && (
-          <Collapse
-            size="small"
-            items={[{
-              key: 'coverage',
-              label: <span style={{ userSelect: 'none' }}>{t('explore.coverage_details')}</span>,
-              children: <CoverageDetails response={settledResponseOf(singleRun) as ExploreResponse} fallbackReason={cancelReasonOf(singleRun)} />,
-            }]}
-          />
-        )}
       </div>
       {exploreResult.length > 0 && (
       <Card size="small" style={{ flex: '0 0 auto' }}>
@@ -363,7 +344,7 @@ export function ExploreResult({
                         <Text>{t('ui.chart_ergonomics')}: <Text strong style={{ color: token.colorPrimary }}>{data.ergo.toFixed(1)}</Text></Text>
                         <Text>{t('ui.chart_recoil_v')}: <Text strong style={{ color: token.colorSuccess }}>{data.recoil_v.toFixed(1)}</Text></Text>
                         <Text>{t('ui.chart_price')}: <Text strong style={{ color: token.colorWarning }}>₽{data.price.toLocaleString()}</Text></Text>
-                        <AuthorityTag result={data} />
+                        <ApproximateTag result={data} />
                       </div>
                     </Card>
                   )
@@ -431,8 +412,7 @@ export function ExploreResult({
                       <Text style={{ color: token.colorWarning }}>₽{p.price.toLocaleString()}</Text>
                     </div>
                     <div style={{ marginTop: 4, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                      <AuthorityTag result={p} style={{ fontSize: 11 }} />
-                      <QualifierTags qualifiers={qualifiersOf(p)} style={{ fontSize: 11 }} />
+                      <ApproximateTag result={p} style={{ fontSize: 11 }} />
                     </div>
                   </div>
                   <Button size="small" type="text" onClick={() => setPinned(null)}>
@@ -542,16 +522,15 @@ export function ExploreResult({
                 ),
               },
               {
-                title: t('explore.coverage'),
+                // The plain status of the weapon's sweep: a check when it is complete, else the same one-line message the banner uses.
+                title: t('explore.status'),
                 dataIndex: 'run',
-                render: (run: ExploreWeaponRun) => (
-                  <Space size={6} orientation="vertical">
-                    {run.response !== null && run.phase !== 'running' ? <CurveTag status={run.response.curve_status} /> : (
-                      <Tag color={run.phase === 'failed' ? 'error' : 'processing'} style={{ margin: 0 }}>{run.phase === 'failed' ? t('explore.failed') : t('explore.running')}</Tag>
-                    )}
-                    {settledResponseOf(run) !== null && <CoverageCounts response={settledResponseOf(run) as ExploreResponse} />}
-                  </Space>
-                ),
+                render: (run: ExploreWeaponRun) => {
+                  const line = runLineOf(run)
+                  if (line === null) return <CheckCircleOutlined style={{ color: token.colorSuccess }} />
+                  if (run.phase === 'running') return <Tag color="processing" style={{ margin: 0 }}>{t(line.key, line.params)}</Tag>
+                  return <Text type="secondary">{t(line.key, line.params)}</Text>
+                },
               },
               {
                 title: t('explore.frontier_points'),
@@ -631,10 +610,15 @@ export function ExploreResult({
       >
         {detailPoint && detailBuild && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <AuthorityTag result={detailPoint} />
-              <QualifierTags qualifiers={qualifiersOf(detailPoint)} />
-              <ReasonText reason={reasonViewOf(detailPoint.reason)} />
+            <div>
+              <ApproximateTag result={detailPoint} />
+              <DetailsPanel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <AuthorityTag result={detailPoint} />
+                  <QualifierTags qualifiers={qualifiersOf(detailPoint)} />
+                  <ReasonText reason={reasonViewOf(detailPoint.reason)} />
+                </div>
+              </DetailsPanel>
             </div>
             {detailPoint.selected_preset && (
               <UsingPresetCard

@@ -84,6 +84,36 @@ export function floorViewOf(r: MOAFloorResponse, options: { interrupted?: boolea
 }
 
 /**
+ * What the MOA control says by default, one short line (owner decision 2026-10-05: plain by default). `id` is the situation, `key` its message
+ * `moa_floor.<id>`, `floor` the two-decimal value for the two messages that show one.
+ *   proved       "Lowest MOA: 1.73"
+ *   witnessed    "Lowest MOA found: 1.80 (may go lower)"
+ *   unresolved   "Couldn't find the lowest MOA - using an estimate" (also a floor whose value is withheld, and a failed request)
+ *   infeasible   "No build meets your other constraints"
+ * `retry`: the search was cut short or failed, so asking again can help. The caveat that this is the provisional model's value, the proved lower
+ * end, the reason and any error text are not part of the line: they go in its info tooltip.
+ */
+export interface FloorLine {
+  id: FloorKind;
+  key: string;
+  floor: string | null;
+  tone: Tone;
+  retry: boolean;
+}
+
+const LINE_TONE: Record<FloorKind, Tone> = { proved: 'success', witnessed: 'warning', unresolved: 'warning', infeasible: 'error' };
+
+/** The line of a floor answer (or of a failed request: `error`), `null` before any answer. A value that is withheld is never shown: the line says "unresolved". */
+export function floorLineOf(view: FloorView | null, error: string | null): FloorLine | null {
+  if (view === null) return error === null ? null : { id: 'unresolved', key: 'moa_floor.unresolved', floor: null, tone: 'warning', retry: true };
+  const withheld = (view.kind === 'proved' || view.kind === 'witnessed') && view.display === null;
+  const id: FloorKind = withheld ? 'unresolved' : view.kind;
+  // A cancel is informational whatever the floor says, except a proved floor, whose proof is complete.
+  const tone: Tone = view.reason?.cancelled === true && id !== 'proved' ? 'info' : LINE_TONE[id];
+  return { id, key: `moa_floor.${id}`, floor: id === 'proved' || id === 'witnessed' ? view.display : null, tone, retry: error !== null || view.interrupted };
+}
+
+/**
  * The MOA control's range. `estimateMin` is the theoretical lower estimate (used only without a floor), `estimateMax` the theoretical upper end.
  * With a floor the lower end IS the floor (no rounding that could move it); the upper end never falls below the lower one.
  */

@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { Alert, Button, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons'
 import type { ExploreResponse } from '../../api/client'
-import { CancelButton, QualifierTags, ReasonText } from '../common/ResultStatus'
+import { CancelButton, DetailsPanel, MetaText, QualifierTags, ReasonText } from '../common/ResultStatus'
 import { TONE_TAG_COLOR, reasonViewOf } from '../common/resultView'
 import type { Tone } from '../common/resultView'
-import { CURVE_TONE, authorityCounts, coverageOf, curveMeaningKey, curveStatusKey, runQualifiers, settledResponseOf, summarizeRuns } from './exploreView'
+import { CURVE_TONE, authorityCounts, cancelReasonOf, coverageOf, curveMeaningKey, curveStatusKey, exploreLineOf, exploreMetaOf, runQualifiers, settledResponseOf, summarizeRuns } from './exploreView'
 import type { CurveStatus, ExploreWeaponRun, UnresolvedTarget } from './exploreView'
 
 const { Text } = Typography
@@ -18,7 +18,7 @@ const TONE_ICON: Record<Tone, ReactNode> = {
   error: <CloseCircleOutlined />,
 }
 
-/** The coverage status of one weapon's sweep, with what it means: discrete schedule coverage, never continuous Pareto optimality. */
+/** The coverage status of one weapon's sweep, with what it means: discrete schedule coverage, never continuous Pareto optimality. (Details only.) */
 export function CurveTag({ status }: { status: CurveStatus }) {
   const { t } = useTranslation()
   return (
@@ -28,7 +28,7 @@ export function CurveTag({ status }: { status: CurveStatus }) {
   )
 }
 
-/** The counts of witnessed (V), certified-empty (I), unresolved (U) and failed (E) targets of a response, as one line. */
+/** The counts of witnessed (V), certified-empty (I), unresolved (U) and failed (E) targets of a response, as one line. (Details only.) */
 export function CoverageCounts({ response }: { response: Pick<ExploreResponse, 'step_outcomes' | 'sweep_schedule'> }) {
   const { t } = useTranslation()
   const { counts, total } = coverageOf(response)
@@ -36,15 +36,18 @@ export function CoverageCounts({ response }: { response: Pick<ExploreResponse, '
 }
 
 /**
- * Per-target coverage of one sweep: the counts, and every unresolved or failed target with its reason. A reason of the closed set is localized;
- * the diagnostic of a failed (E) step is shown as it came, in a neutral style.
+ * Per-target coverage of one sweep: its coverage status, the counts, and every unresolved or failed target with its reason. A reason of the closed
+ * set is localized; the diagnostic of a failed (E) step is shown as it came, in a neutral style. (Details only.)
  */
 export function CoverageDetails({ response, fallbackReason }: { response: ExploreResponse; fallbackReason?: string }) {
   const { t } = useTranslation()
   const coverage = coverageOf(response, fallbackReason)
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <CoverageCounts response={response} />
+      <Space size={8} wrap>
+        <CurveTag status={response.curve_status} />
+        <CoverageCounts response={response} />
+      </Space>
       <Text type="secondary" style={{ fontSize: 12 }}>{t(curveMeaningKey(response.curve_status))}</Text>
       {coverage.unresolved.length === 0 ? (
         <Text type="secondary">{t('explore.coverage_all_resolved')}</Text>
@@ -75,6 +78,47 @@ export function CoverageDetails({ response, fallbackReason }: { response: Explor
   )
 }
 
+/** Everything the plain default line of the sweep(s) leaves out: coverage status, counts and table, authority counts, model notes, reasons, error text. */
+function ExploreDetails({ runs, runTotal }: { runs: readonly ExploreWeaponRun[]; runTotal: number }) {
+  const { t } = useTranslation()
+  const summary = summarizeRuns(runs, runTotal)
+  const single = runTotal <= 1
+  const first = runs[0]
+  const settled = single && first !== undefined ? settledResponseOf(first) : null
+  const points = runs.flatMap(r => r.response?.points ?? [])
+  const counts = authorityCounts(points)
+  const reason = single && first?.response?.reason !== undefined ? reasonViewOf(first.response.reason) : null
+  const failures = runs.filter(r => r.error !== undefined)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {settled !== null && first !== undefined && <CoverageDetails response={settled} fallbackReason={cancelReasonOf(first)} />}
+      {!single && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          <Text type="secondary">{t('explore.compare_status_v2', { complete: summary.byCurve.complete, total: runTotal })}</Text>
+          <Text type="secondary">
+            {t('explore.compare_breakdown', {
+              partial: summary.byCurve.partial, infeasible: summary.byCurve.infeasible, invalid: summary.byCurve.invalid,
+              failed: summary.failed, cancelled: summary.cancelled,
+            })}
+          </Text>
+        </div>
+      )}
+      <Space size={8} wrap>
+        <QualifierTags qualifiers={runQualifiers(runs)} />
+      </Space>
+      {points.length > 0 && (
+        <Text type="secondary">
+          {t('explore.points_authority', { proved: counts.certified_optimal, approximate: counts.approximate_optimal, feasible: counts.feasible })}
+        </Text>
+      )}
+      <ReasonText reason={reason} />
+      {failures.map(r => (
+        <Text key={r.weaponId} type="secondary">{single ? r.error : `${r.weaponName}: ${r.error}`}</Text>
+      ))}
+    </div>
+  )
+}
+
 interface ExploreStatusAlertProps {
   runs: readonly ExploreWeaponRun[]
   /** Weapons requested for the run (the denominator of the weapon counts). */
@@ -88,83 +132,39 @@ interface ExploreStatusAlertProps {
 }
 
 /**
- * The status of the sweep(s): live progress while running, then per sweep the coverage status (complete / partial / infeasible / invalid) with its
- * meaning, the per-target counts, the authority of the points and the model caveats. A cancelled or failed run says so and keeps the points it has.
+ * The status of the sweep(s), plain by default: the chart and its points are the result, and this banner says ONE plain line only when the sweep is
+ * not complete (running "Computing... n of m", partial, no builds, cancelled, failed), with the time and mode as quiet text. The coverage status,
+ * counts and table, the authority of the points and the model notes are in the collapsed Details.
  */
 export function ExploreStatusAlert({ runs, runTotal, solveTimeMs, exploring, onExplore, onCancel, cancelling = false, actionLabel }: ExploreStatusAlertProps) {
   const { t } = useTranslation()
-  const summary = summarizeRuns(runs, runTotal)
-  const single = runTotal <= 1
-  const first = runs[0]
-  const qualifiers = runQualifiers(runs)
-  const points = runs.flatMap(r => r.response?.points ?? [])
-  const counts = authorityCounts(points)
-
-  let headline: string
-  let tone: Tone = summary.tone
-  if (summary.running > 0) {
-    const live = runs.find(r => r.phase === 'running')
-    headline = live?.scheduled !== undefined && live.launched !== undefined
-      ? t('explore.running_progress', { launched: live.launched, scheduled: live.scheduled })
-      : t('explore.running')
-    tone = 'info'
-  } else if (single && first !== undefined) {
-    if (first.phase === 'failed' && first.response === null) headline = t('explore.failed')
-    else if (first.phase === 'cancelled') headline = t('explore.cancelled_kept', { count: first.response?.points.length ?? 0 })
-    else headline = first.response === null ? t('explore.failed') : t(curveStatusKey(first.response.curve_status))
-  } else {
-    headline = t('explore.compare_status_v2', { complete: summary.byCurve.complete, total: runTotal })
-  }
-  const reason = single && first?.response?.reason !== undefined ? reasonViewOf(first.response.reason) : null
-  const failures = runs.filter(r => r.error !== undefined)
+  const line = exploreLineOf(runs, runTotal)
+  const running = runs.some(r => r.phase === 'running')
+  // No line means every sweep is complete.
+  const tone: Tone = line?.tone ?? 'success'
 
   return (
-    <Alert
-      type={tone}
-      showIcon
-      icon={summary.running > 0 ? <LoadingOutlined /> : TONE_ICON[tone]}
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, width: '100%' }}>
-          <Space size={8} wrap>
-            <Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={onExplore}>{actionLabel}</Button>
-            {exploring && onCancel && <CancelButton onCancel={onCancel} cancelling={cancelling} />}
-          </Space>
-          <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <Text strong>{headline}</Text>
-            {single && first?.response && summary.running === 0 && <CurveTag status={first.response.curve_status} />}
-            <QualifierTags qualifiers={qualifiers} />
-            {solveTimeMs != null && <Tag color="blue" style={{ margin: 0 }}>{solveTimeMs.toFixed(0)} ms</Tag>}
-            {single && first?.response?.precision_request === 'auto' && first.response.precision_resolved && (
-              <Tag color="processing" style={{ margin: 0 }} title={t('sidebar.solver_precision_tooltip')}>
-                {t('results.precision_auto_ran', { mode: first.response.precision_resolved === 'precise' ? t('sidebar.precise') : t('sidebar.fast') })}
-              </Tag>
-            )}
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <Alert
+        type={tone}
+        showIcon
+        icon={running ? <LoadingOutlined /> : TONE_ICON[tone]}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, width: '100%' }}>
+            <Space size={8} wrap>
+              <Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={onExplore}>{actionLabel}</Button>
+              {exploring && onCancel && <CancelButton onCancel={onCancel} cancelling={cancelling} />}
+            </Space>
+            <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+              {line !== null && <Text>{t(line.key, line.params)}</Text>}
+              <MetaText meta={exploreMetaOf(runs, solveTimeMs)} />
+            </div>
           </div>
-        </div>
-      }
-      description={
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {single && first?.response && summary.running === 0 && <Text type="secondary">{t(curveMeaningKey(first.response.curve_status))}</Text>}
-          {single && first !== undefined && settledResponseOf(first) !== null && <CoverageCounts response={settledResponseOf(first) as ExploreResponse} />}
-          {!single && (
-            <Text type="secondary">
-              {t('explore.compare_breakdown', {
-                partial: summary.byCurve.partial, infeasible: summary.byCurve.infeasible, invalid: summary.byCurve.invalid,
-                failed: summary.failed, cancelled: summary.cancelled,
-              })}
-            </Text>
-          )}
-          {points.length > 0 && (
-            <Text type="secondary">
-              {t('explore.points_authority', { proved: counts.certified_optimal, approximate: counts.approximate_optimal, feasible: counts.feasible })}
-            </Text>
-          )}
-          <ReasonText reason={reason} />
-          {failures.map(r => (
-            <Text key={r.weaponId} type="secondary">{single ? r.error : `${r.weaponName}: ${r.error}`}</Text>
-          ))}
-        </div>
-      }
-    />
+        }
+      />
+      <DetailsPanel>
+        <ExploreDetails runs={runs} runTotal={runTotal} />
+      </DetailsPanel>
+    </div>
   )
 }
