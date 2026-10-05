@@ -18,15 +18,14 @@
 // Differential helper: may import production code (reference/independenceScan.ts); no non-differential file may import this one.
 
 import {
-  add, enumerateBuilds, fromBinary64, inspectBuild, mul, parseQ, projectBuild, projectionKey, resolveFixture, resolveRequest, roundHalfUp, runOracle,
-  toNumber, validateReference, ZERO,
+  enumerateBuilds, inspectBuild, parseQ, projectBuild, projectionKey, resolveFixture, resolveRequest, runOracle,
+  toNumber, validateReference,
   type BaseChoice, type ReferenceBuild, type ReferenceFixture, type ReferenceRequest,
 } from '../oracle/index';
 import {
   decodeSolution, preparePhysicalWeapon, prepareSubproblemDomain, specializeLP,
   type DecodedBuild, type SpatialNode, type SpecializedModel, type SpecializeRequest,
 } from '../../src/solver/physical';
-import type { ItemLookup, OfferInfo } from '../../src/solver/types';
 import type { LedgerCase } from '../ledger/index';
 import { detectUnsupported } from './toProduction.differential';
 import { productionLookup, subproblemRequestOf, type ProductionPhysical } from './blueprint.differential';
@@ -176,36 +175,11 @@ export interface Weights {
 }
 
 /**
- * The production extractor prices a barter lot as `Math.round` of a binary64 SUM of count x unit price; the reference rounds the exact
- * total half up (INTERPRETATIONS.md choice 3). The two differ at an exact .5 boundary (`F09-fractional-barter-count-is-decoded-exactly`) and
- * that is a data-layer repair (Stage 2 numerics), not a property of the LP. So the gates hand the LP the exactly rounded lot price of each
- * barter, recomputed from the requirements the mapped offer carries, and test the model, not the extractor.
+ * Blueprint and domain from the production lookup of a case. The mapper prices a barter lot with production's own exact `barterLotPrice`
+ * (the exact total rounded half up, INTERPRETATIONS.md choice 3), so no override of the prices is needed any more.
  */
-export function exactBarterPrices(lookup: ItemLookup): void {
-  const fix = (offers: OfferInfo[] | undefined): void => {
-    for (const offer of offers ?? []) {
-      if (!offer.source.startsWith('barter:') || !offer.barter_requirements) continue;
-      let total = ZERO;
-      for (const r of offer.barter_requirements) total = add(total, mul(fromBinary64(r.count), fromBinary64(r.unit_price)));
-      offer.price = toNumber(roundHalfUp(total));
-    }
-  };
-  const seen = new Set<object>();
-  for (const entry of Object.values(lookup)) {
-    fix(entry.stats.offers);
-    if (entry.type !== 'gun') continue;
-    for (const preset of [...entry.presets, ...entry.all_presets]) {
-      if (seen.has(preset)) continue;
-      seen.add(preset);
-      fix(preset.offers);
-    }
-  }
-}
-
-/** Blueprint and domain from the production lookup of a case, with exactly rounded barter lot prices. */
 export function preparePhysical(c: LedgerCase): ProductionPhysical {
   const lookup = productionLookup(c.fixture);
-  exactBarterPrices(lookup);
   const blueprint = preparePhysicalWeapon(lookup, c.request.weapon_id);
   return { lookup, blueprint, domain: prepareSubproblemDomain(blueprint, lookup, subproblemRequestOf(c.request)) };
 }

@@ -10,6 +10,10 @@ import type {
 import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
 import { barterIngredientCount, barterLotSize, presetComponentCount, SourceDataError } from './sourceErrors.ts';
+import { barterLotPrice } from './physical/barterPrice.ts';
+
+// A barter lot is priced by the exact total of its decoded binary64 leaves rounded half up (ADR 0010 section 2); see physical/barterPrice.ts.
+export { barterLotPrice };
 
 const API_URL = 'https://api.tarkov.dev/graphql';
 /**
@@ -678,7 +682,7 @@ function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): Off
       item?: { id?: string; name?: string; avg24hPrice?: number | null; basePrice?: number | null; iconLink?: string };
       count?: unknown;
     }>;
-    let totalCost = 0;
+    const ingredients: { count: number; unitPrice: number }[] = [];
     const reqs: import('./types').BarterRequirement[] = [];
     for (const ri of requiredItems) {
       // No default: an absent/null/negative ingredient quantity is a source error, never 1.
@@ -688,16 +692,17 @@ function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): Off
         itemName: ri.item?.name,
       });
       const price = ri.item?.avg24hPrice ?? ri.item?.basePrice ?? 0;
-      totalCost += count * price;
+      ingredients.push({ count, unitPrice: price });
       reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price, icon: ri.item?.iconLink || undefined });
     }
     // The lot size is validated for every barter record, like its ingredient counts: an unusable record is a source error even
     // when the barter is then skipped for a non-positive total. It is never defaulted.
     const lotSize = extractBarterLotSize(b, offeredItemId);
-    if (totalCost <= 0) continue;
+    const lotPrice = barterLotPrice(ingredients);
+    if (lotPrice === null) continue;
     const requiresDogtag = reqs.some(r => /dogtag/i.test(r.name));
     offers.push({
-      price: Math.round(totalCost),
+      price: lotPrice,
       source: `barter:${trader.normalizedName ?? trader.name ?? 'unknown'}`,
       vendor_name: trader.name ?? '',
       vendor_normalized: trader.normalizedName ?? '',

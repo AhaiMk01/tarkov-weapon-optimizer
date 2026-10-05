@@ -12,8 +12,18 @@
  *   AK-105 time limit at gap 47% vs optimal in 30.0 s; AK-74N gap 61% vs 54%; M4A1 no incumbent vs an incumbent at gap 83%.
  * Wherever both runs finished, the optima were identical. Presolve off is also the setting that cannot produce the false Infeasible.
  *
- * Rule that holds for every setting: no infeasibility verdict is ever accepted from a PRESOLVED solve. A first solve with presolve off is its
- * own confirmation. A first solve with presolve on that says Infeasible is CONFIRMED by re-solving the same text with presolve off:
+ * Presolve ON is also unsound for OPTIMALITY, not only for infeasibility (Phase 2.4c evidence, 2026-10-05, same pinned build): on the Fast
+ * template model of the random world of seed 123 (39 columns, 43 rows, tests/physical/solverDefects/fast_presolve_wrong_optimal.lp) HiGHS 1.15.1
+ * with presolve ON returns a SUBOPTIMAL point as `Optimal` with the dual bound equal to it (123.37, where the exact optimum, found with presolve
+ * off and by the Precise model, is 335.35): a wrong proof, not a missed incumbent. Over 400 seeded worlds presolve off matched the exact Precise
+ * optimum on all 173 nonempty ones and presolve on missed one; on the pinned guns presolve off is also faster (median 25 ms against 403 ms, total
+ * 45.6 s against 95.9 s). Both families therefore run with presolve OFF (`PRECISE_PRESOLVE`, `FAST_PRESOLVE`).
+ *
+ * Rule that holds for every setting: NO claim is accepted from a PRESOLVED solve, neither infeasibility nor optimality nor a bound. An
+ * `Infeasible` is CONFIRMED by a presolve-off solve (below); an `Optimal` or limit result of a presolved first solve is returned flagged
+ * `presolved`, and the proof layer (`nativeProof.ts`) qualifies only a solve whose effective presolve option is `off`, so such a result is a
+ * feasible witness at most: its build is validated exactly, its bound is withheld, nothing certifies. A first solve with presolve off is its own
+ * confirmation. A first solve with presolve on that says Infeasible is CONFIRMED by re-solving the same text with presolve off:
  *
  *   - the confirmation finds a solution: that solution is used (`presolveRescue`), the first verdict was the presolve defect;
  *   - the confirmation is infeasible too: the verdict stands (`infeasible`);
@@ -24,12 +34,15 @@
  */
 
 import { getNativeHighs, SolverError } from '../native';
-import type { HighsOptions, ModelStatusName, NativeResult } from '../native';
+import type { HighsOptions, ModelStatusName, NativeResult, SolveExtras } from '../native';
 
-/** The solve call, injectable so the policy is tested without a native build (production: the shared pinned instance). */
-export type SolveFn = (lpText: string, options: HighsOptions) => Promise<NativeResult>;
+/**
+ * The solve call, injectable so the policy is tested without a native build (production: the shared pinned instance). `extras` carries the
+ * structured-result requests (`includeReadback`: the parsed model of the model that was solved, which the proof layer compares with the text).
+ */
+export type SolveFn = (lpText: string, options: HighsOptions, extras?: SolveExtras) => Promise<NativeResult>;
 
-export const nativeSolve: SolveFn = (lpText, options) => getNativeHighs().solveStructured(lpText, options);
+export const nativeSolve: SolveFn = (lpText, options, extras) => getNativeHighs().solveStructured(lpText, options, extras);
 
 /** HiGHS statuses that claim the model has no feasible point. A model with all-finite columns is never unbounded. */
 const INFEASIBLE_STATUSES: ReadonlySet<string> = new Set<ModelStatusName>(['Infeasible', 'UnboundedOrInfeasible']);
@@ -72,8 +85,11 @@ export type PresolveSetting = 'off' | 'choose';
  */
 export const PRECISE_PRESOLVE: PresolveSetting = 'off';
 
-/** Presolve of the legacy template (Fast) model, which was not part of that measurement and keeps HiGHS's default until Phase 2.4c rewrites it. */
-export const FAST_PRESOLVE: PresolveSetting = 'choose';
+/**
+ * Presolve of the Fast (template-count) model: off, for the reasons in the header (a wrong `Optimal` with presolve on, measured on the rewritten
+ * Fast model by Phase 2.4c).
+ */
+export const FAST_PRESOLVE: PresolveSetting = 'off';
 
 /** A positive native time allowance, at least one millisecond, for the time that remains (callers check `remaining > 0` first). */
 export const nativeTimeLimitSeconds = (remainingMs: number): number => Math.max(0.001, remainingMs / 1000);
@@ -87,11 +103,19 @@ export interface PolicyContext {
   solve?: SolveFn;
   /** Presolve of the first solve (default {@link PRECISE_PRESOLVE}). */
   presolve?: PresolveSetting;
+  /**
+   * Ask every solve (the confirmation too) for the parsed model of the model it solved (`NativeResult.readback`). The Precise pipeline sets it:
+   * a bound or an infeasibility verdict is trusted only after the readback equals the emitted text (`nativeProof.ts`). Default false.
+   */
+  includeReadback?: boolean;
 }
 
 export type PolicyOutcome =
-  /** An optimal solve or a limit stop (inspect `result.modelStatus` and `result.colValues`). `presolveRescue`: presolve called it infeasible. */
-  | { kind: 'solved'; result: NativeResult; presolveRescue: boolean }
+  /**
+   * An optimal solve or a limit stop (inspect `result.modelStatus` and `result.colValues`). `presolveRescue`: presolve called it infeasible.
+   * `presolved`: the result is that of a solve with presolve on (a first solve the caller asked to presolve): a witness at most, never a proof.
+   */
+  | { kind: 'solved'; result: NativeResult; presolveRescue: boolean; presolved: boolean }
   /**
    * A verdict that no presolved solve decided alone: the first solve was presolve off (`confirmation` null), or it was presolve on and a
    * presolve-off re-solve was infeasible too.
@@ -113,9 +137,10 @@ export async function solveWithPresolvePolicy(lpText: string, context: PolicyCon
 
   if (remaining() <= 0) return { kind: 'unresolved', cause: 'deadline', first: null, detail: 'no time remained to start the solve' };
   const presolve = context.presolve ?? PRECISE_PRESOLVE;
-  const first = await solve(lpText, { ...context.options, presolve, time_limit: nativeTimeLimitSeconds(remaining()) });
+  const extras: SolveExtras = context.includeReadback === true ? { includeReadback: true } : {};
+  const first = await solve(lpText, { ...context.options, presolve, time_limit: nativeTimeLimitSeconds(remaining()) }, extras);
   const status = first.modelStatus.name;
-  if (status === 'Optimal' || isLimitStatus(status)) return { kind: 'solved', result: first, presolveRescue: false };
+  if (status === 'Optimal' || isLimitStatus(status)) return { kind: 'solved', result: first, presolveRescue: false, presolved: presolve !== 'off' };
   if (!isInfeasibleStatus(status)) throw unexpectedStatus(first);
   if (presolve === 'off') return { kind: 'infeasible', first, confirmation: null };
 
@@ -123,17 +148,17 @@ export async function solveWithPresolvePolicy(lpText: string, context: PolicyCon
   if (remaining() <= 0) return { kind: 'unresolved', cause: 'deadline', first, detail: 'no time remained to confirm the infeasibility with presolve off' };
   let confirmation: NativeResult;
   try {
-    confirmation = await solve(lpText, { ...context.options, presolve: 'off', time_limit: nativeTimeLimitSeconds(remaining()) });
+    confirmation = await solve(lpText, { ...context.options, presolve: 'off', time_limit: nativeTimeLimitSeconds(remaining()) }, extras);
   } catch (error) {
     if (error instanceof SolverError) return { kind: 'unresolved', cause: 'native_error', first, detail: `the presolve-off confirmation failed: ${error.message}` };
     throw error;
   }
   const confirmed = confirmation.modelStatus.name;
-  if (confirmed === 'Optimal') return { kind: 'solved', result: confirmation, presolveRescue: true };
+  if (confirmed === 'Optimal') return { kind: 'solved', result: confirmation, presolveRescue: true, presolved: false };
   if (isInfeasibleStatus(confirmed)) return { kind: 'infeasible', first, confirmation };
   if (isLimitStatus(confirmed)) {
     // A limit stop that holds a primal solution proves the model feasible; without one the verdict stays open.
-    if (confirmation.colValues !== null) return { kind: 'solved', result: confirmation, presolveRescue: true };
+    if (confirmation.colValues !== null) return { kind: 'solved', result: confirmation, presolveRescue: true, presolved: false };
     return {
       kind: 'unresolved',
       cause: confirmed === 'TimeLimit' ? 'deadline' : 'native_error',

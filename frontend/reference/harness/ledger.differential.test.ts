@@ -80,3 +80,13 @@ test('ratchet: every newly passing dimension is recorded in baseline.json', () =
     'IMPROVEMENT or drift: baseline.json is out of date. Update it in the same commit: UPDATE_HARNESS_BASELINE=1 npx tsx --test reference/harness/ledger.differential.test.ts',
   );
 });
+
+test('every ledger case the oracle has an optimum for is certified `optimal` on Precise at its case tolerance: the proof frame (Phase 2.5) withholds nothing', () => {
+  const withOptimum = board.filter(g => g.precise.scoreOptimal.verdict !== 'n/a');
+  assert.ok(withOptimum.length >= 130, `${withOptimum.length} cases have an oracle optimum`);
+  assert.deepEqual(
+    withOptimum.filter(g => g.observed.precise !== 'optimal').map(g => `${g.id}: ${g.observed.precise}`),
+    [],
+    'a case lost its certificate: the proved allowances are larger than the case tolerance, or a solve was unqualified',
+  );
+});

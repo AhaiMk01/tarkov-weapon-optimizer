@@ -3,10 +3,11 @@
  *
  * `specializeLP(blueprint, domain, request, node?)` emits the occurrence-level MIP of one request over the ACTIVE occurrences of a
  * prepared domain, as CPLEX-LP text plus the column map and the row/objective metadata a decoder and a proof layer need. Nothing
- * here prunes, reduces or rounds: every coefficient is a shortest round-trip `String(n)` of a binary64 input leaf, a small
- * declared integer constant, the declared constant K = 1000000/29089 (= 100/2.9089), or a documented product of those, and every
- * auxiliary column has a finite domain derived from the active raw bounds. Outward rounding of coefficients, allowances and
- * proofs is Phase 2.5; reductions (presence substitution, clamp regimes, axis deletion) are Stage 4.
+ * here prunes or reduces: every coefficient is a shortest round-trip `String(n)` of a binary64 input leaf, a small declared integer
+ * constant, or a CONSTRUCTED value (the declared constant K = 1000000/29089 = 100/2.9089, a weight over 10, a secant, a normalization
+ * quotient, a cap minus a recoil) whose exact rational target, directed rounding and proved construction error are recorded by
+ * `proof.ts` on `SpecializedModel.proof`; a constructed row is padded outward by the exact need, never a nominal margin, and every auxiliary
+ * column has a finite domain enclosing every physical value. Reductions (presence substitution, clamp regimes, axis deletion) are Stage 4.
  *
  * Variables (all columns finite):
  *   x_v          binary, one per active item occurrence v (the receiver, occurrence 0, has no column: it is always present)
@@ -20,20 +21,27 @@
  *
  * The objective value of the LP is the oracle score in the oracle frame (ADR 0010 section 2): `scale` 1, `offset` 0.
  *
- * Coefficient provenance (what Phase 2.5 must enclose):
+ * Coefficient provenance and proof (Phase 2.5; `proof.ts` holds the exact-rational arithmetic, `ModelProof` the record):
  *   - statistic rows (raw_ergo_def, rec_mod_def, weight_def, acc_def): the template's binary64 leaf, unscaled; the receiver's value is the
  *     right-hand side. The frames are separate one-coefficient rows (`rec_axis = 1000 rec_mod`, `ergo_axis = 10 x`), so no leaf is multiplied.
- *   - clamp rows: M = ceil(max(|lo|, |hi|, 100) + 100) from the ACTIVE raw bounds, and the cap 100; the gear row carries the factor
- *     max(0, 1 + modifier).
- *   - recoil caps: `naked x rec_mod <= cap - naked` (no division, any sign of naked); MOA rows: `coi x (10000/29089)` on the accuracy sum,
- *     `coi x K` in the right-hand side and `M_b = max(0, max over the accuracy range of c_b (1 - A/100) - L)`.
+ *     Construction error 0: the leaf IS the model.
+ *   - clamp rows: M = ceil(max(|lo|, |hi|, 100) + 100) from the ACTIVE raw bounds (an integer, any larger M is as valid) and the cap 100.
+ *   - gear: the factor f = max(0, 1 + modifier) in exact rationals; an unrepresentable f is emitted as the two inequalities
+ *     `low x capped <= gear <= high x capped` with the neighbouring doubles (the first clamp is never negative), a representable one as the
+ *     equality.
+ *   - recoil caps: `naked x rec_mod <= cap - naked` (no division, any sign of naked), the right-hand side the smallest double at least the
+ *     exact `cap - naked` (the sum cap pads by its coefficient deficit too).
+ *   - MOA rows: `c_b/100` on the accuracy sum is the nearest double of coi x 10000/29089, the right-hand side `c_b - L - M_b` is padded
+ *     downward by the coefficient deficit, `M_b = max(0, max over the accuracy range of c_b (1 - A/100) - L)` is the smallest double at least
+ *     the exact need (raised to a surviving size when positive).
  *   - objective: weighted `e / 10`, `-r`, `-p / 1000`; Tchebycheff `0.01 c_a` with `c_a = w_a / (sum max(range, 1))`, the deviation rows
- *     `c_a (z_a - f_a)`; see `ObjectiveMeta.coefficients`.
- *   - TED: the node's penalty line (closed-form secant, see spatial.ts), a node being rows on `weight`, not a tightened column bound.
+ *     `c_a (z_a - f_a)` padded; the coefficients' construction error times the axis magnitudes is `ObjectivePlan.frameError`; an axis whose
+ *     coefficient would be filtered is read through `column_n = column / 2^k` (exact; `ObjectivePlan.axisScales`).
+ *   - TED: the node's penalty line (a verified lower envelope, see spatial.ts), a node being rows on `weight`, not a tightened column bound.
  *
  * Text hygiene (the native readback of Phase 2.3 checks it, see tests/physical/lpHarness.ts): every name matches [A-Za-z_][A-Za-z0-9_]*
  * (never a `-` before a digit), the first line is exactly `Maximize`, and no matrix entry is at or below HiGHS's small_matrix_value (a positive
- * Big-M is floored at MIN_BIG_M for that reason).
+ * Big-M is raised to MIN_SURVIVING_COEFFICIENT and a tiny objective axis coefficient is scaled by a power of two, both in `proof.ts`).
  *
  * Solver note (see tests/physical/solverDefects.test.ts): the retired npm `highs` 1.8.0 returned wrong answers and aborted on models of this
  * family. The pinned native build (HiGHS 1.15.1) solves that corpus, but with PRESOLVE ON it still reports some feasible models 'Infeasible' (a
@@ -48,8 +56,15 @@ import { computeActiveBounds, type ActiveBounds } from './bounds';
 import type { SubproblemDomain, SupplyClass } from './domain';
 import { PhysicalModelError } from './errors';
 import { LpWriter, mergeTerms, type ColumnDeclaration, type RowSense } from './lpText';
-import { iAdd, iScale, nextUp, outward, sumEnclosure, type Interval } from './numeric';
-import { lineRange, penaltyLineIsValid, secantOfPenalty, type NodePenalty, type PenaltyLine } from './spatial';
+import { iAdd, iScale, nextUp, sumEnclosure, type Interval } from './numeric';
+import {
+  EMPTY_MODEL_PROOF, HIGHS_LARGE_MATRIX_VALUE, HIGHS_SMALL_MATRIX_VALUE, differenceEnclosure, gearEnclosure, gearFactor, moaFallbackRow, moaReplacementRow,
+  paddedRhs, planObjective, ratEnclosure, rowProof, tchebycheffCoefficients,
+  type GearFactor, type ModelProof, type ObjectivePlan, type PaddedRhs, type RowProof, type SecantProof,
+} from './proof';
+import { ratAbs, ratMagnitude, ratRoundUp } from './rational';
+import { RAT_ZERO, ratAdd, ratFromDouble, ratMax, ratMul, ratSub, ratToNumber, type Rat } from './exact';
+import { lineEnclosure, penaltyLineIsValid, secantOfPenalty, type NodePenalty, type PenaltyLine } from './spatial';
 
 // ---------------------------------------------------------------------------------------------
 // Declared constants (ADR 0010 section 2, ADR 0007)
@@ -63,12 +78,12 @@ export const RECOIL_SCALE = 1000;
 export const AUGMENTATION = 0.01;
 /** Both ergonomics clamps run over [0, ERGO_CLAMP_MAX]. */
 export const ERGO_CLAMP_MAX = 100;
-/** MOA per unit of centre of impact, K = 100 / 2.9089 = 1000000 / 29089 (one correctly rounded division of two exact integers). */
+/**
+ * MOA per unit of centre of impact, K = 100 / 2.9089 = 1000000 / 29089 as the nearest double of the exact quotient (for display and the Fast
+ * model; the Precise rows are built from the exact rational `MOA_K_RATIONAL` in `proof.ts`).
+ */
 export const MOA_K = 1000000 / 29089;
-/** Floor of a positive Big-M: well above HiGHS's `small_matrix_value` (1e-9), so the coefficient survives the read. */
-export const MIN_BIG_M = 1e-6;
-/** K / 100 = 10000 / 29089, the coefficient scale of the accuracy sum in a MOA row. */
-export const MOA_K_OVER_100 = 10000 / 29089;
+
 
 // ---------------------------------------------------------------------------------------------
 // Request, node
@@ -156,9 +171,17 @@ export interface RowFamilyRecord {
   count: number;
   /** Rows proven constant-true over the model's own domains and therefore not written. */
   vacuous: number;
+  /**
+   * Proved upward bound of the construction error of the family's constructed coefficients, in the family's own units: the largest coefficient
+   * deficit `sum |a'_i - a_i| B_i` of a padded row, the objective's frame error, the secant's shift in points. Zero for a family whose
+   * coefficients are exact binary64 leaves and small integers (the leaf is the model).
+   */
+  constructionError: number;
+  /** The largest outward padding the family's emitted right-hand sides carry beyond their exact targets (at least `constructionError` for a padded row). */
+  allowance: number;
 }
 
-const FAMILIES: readonly Omit<RowFamilyRecord, 'count' | 'vacuous'>[] = [
+const FAMILIES: readonly Omit<RowFamilyRecord, 'count' | 'vacuous' | 'constructionError' | 'allowance'>[] = [
   { id: 'base_choice', prefix: 'base_sum', keyedBy: '-', adr: 'ADR 0002 principle 2; ADR 0013 4A emit 1', description: 'exactly one accessible base; an empty base set is a domain contradiction, never a free fallback' },
   { id: 'slot', prefix: 'slot_<s>', keyedBy: 'physical slot', adr: 'ADR 0003 principle 3', description: 'slot mutex and parent activation: occupancy(s) <= x_owner (root: <= 1); the mutex is implied by activation for mod-owned slots' },
   { id: 'required_occupancy', prefix: 'req_<s>', keyedBy: 'physical slot', adr: 'ADR 0003 principle 3; ADR 0013 4A emit 2', description: 'required occupancy: root slot = 1, mod-owned slot = x_owner' },
@@ -246,7 +269,7 @@ export interface ObjectiveMeta {
   frame: { ergoScale: number; recoilScale: number; priceScale: number };
   ergoSource: 'capped_ergo' | 'ted';
   weights: { e: number; r: number; p: number };
-  /** The oracle score equals `scale` x (LP objective) + `offset`. */
+  /** The oracle score equals `scale` x (LP objective) + `offset`: the LP objective IS the oracle's (axis scaling changes columns, not the frame). */
   toOracle: { scale: 1; offset: 0 };
   coefficients: readonly ObjectiveCoefficient[];
   tchebycheff: null | {
@@ -265,11 +288,6 @@ export interface SpatialMeta {
   weightMax: number;
   penalty: NodePenalty | { line: PenaltyLine; kind: 'supplied'; exact: boolean };
 }
-
-/** HiGHS drops a matrix entry of magnitude at most this when it reads a model (its default `small_matrix_value`; `src/solver/native/options.ts`). */
-export const HIGHS_SMALL_MATRIX_VALUE = 1e-9;
-/** HiGHS rejects a matrix entry of magnitude at least this (its default `large_matrix_value`). */
-export const HIGHS_LARGE_MATRIX_VALUE = 1e15;
 
 export interface ModelStats {
   /** Smallest and largest magnitude of a written matrix coefficient. */
@@ -327,10 +345,12 @@ export interface SpecializedModel {
   /**
    * True when a written matrix coefficient is at or below HiGHS's `small_matrix_value` (it would be silently DROPPED on read, so HiGHS would
    * solve a different model; a very wide price normalization in a Tchebycheff request does this) or at or above `large_matrix_value` (the
-   * read fails). The text is still emitted unchanged: a legal rescaling with complete error evidence is Phase 2.5, and Phase 2.7 reads the
-   * model back and compares it with the text before it trusts a solve.
+   * read fails). A tiny objective axis coefficient is scaled exactly (`proof.objective.axisScales`) so this stays false for it; anything else is emitted
+   * unchanged, and the solve path reads the model back and compares it with the text before it trusts a solve (`nativeProof.ts`).
    */
   readonly matrixFilterRisk: boolean;
+  /** The exact-rational construction record: padded rows, the objective's frame error, the gear factor, the secant, the objective scale. */
+  readonly proof: ModelProof;
   readonly stats: ModelStats;
 }
 
@@ -365,7 +385,8 @@ interface ResolvedRequest {
   useTrueErgo: boolean;
   tchebycheff: IdealPoint | null;
   preventOverswing: boolean;
-  gearFactor: number;
+  /** The equipment ergonomics modifier as given (the factor max(0, 1 + modifier) is built exactly in `proof.ts`). */
+  gearModifier: number;
 }
 
 function number_(value: number | null | undefined, name: string): number | null {
@@ -400,7 +421,7 @@ function resolveRequest(request: SpecializeRequest): ResolvedRequest {
     useTrueErgo: request.useTrueErgo === true,
     tchebycheff,
     preventOverswing: request.preventOverswing === true,
-    gearFactor: Math.max(0, 1 + (number_(request.equipErgoModifier, 'equipErgoModifier') ?? 0)),
+    gearModifier: number_(request.equipErgoModifier, 'equipErgoModifier') ?? 0,
   };
 }
 
@@ -412,7 +433,14 @@ const clampErgo = (x: number): number => Math.min(ERGO_CLAMP_MAX, Math.max(0, x)
 
 class Specializer {
   readonly w = new LpWriter();
-  readonly families = new Map<RowFamilyId, RowFamilyRecord>(FAMILIES.map(f => [f.id, { ...f, count: 0, vacuous: 0 }]));
+  readonly families = new Map<RowFamilyId, RowFamilyRecord>(FAMILIES.map(f => [f.id, { ...f, count: 0, vacuous: 0, constructionError: 0, allowance: 0 }]));
+  /** Every constructed row with its padded right-hand side (`proof.ts`). */
+  readonly rowProofs: RowProof[] = [];
+  /** Why a proof input failed at construction, or null. */
+  withheld: string | null = null;
+  objectivePlan: ObjectivePlan | null = null;
+  gear: GearFactor | null = null;
+  secantProof: SecantProof | null = null;
   readonly contradictions: ModelContradiction[] = [];
   readonly notes: string[] = [];
   readonly templatePlans = new Map<number, TemplatePlan>();
@@ -477,6 +505,18 @@ class Specializer {
     }
     this.w.addMerged(name, merged, sense, rhs);
     record.count++;
+  }
+
+  /** Write a CONSTRUCTED row with its padded right-hand side, and keep the proof record of it (only when the row is actually written). */
+  emitPadded(family: RowFamilyId, name: string, terms: Iterable<readonly [string, number]>, relation: '>=' | '<=', padded: PaddedRhs, detail: string): void {
+    const record = this.family(family);
+    const before = record.count;
+    this.emit(family, name, terms, relation, padded.emitted, detail);
+    if (record.count > before) {
+      this.rowProofs.push(rowProof(name, family, relation, padded));
+      record.constructionError = Math.max(record.constructionError, padded.coefficientError);
+      record.allowance = Math.max(record.allowance, padded.allowance);
+    }
   }
 
   private occurrenceTerms(occurrences: Iterable<number>, coef = 1): [string, number][] {
@@ -759,11 +799,22 @@ class Specializer {
     let ergoSource: Interval = capped;
     let ergoColumn = 'capped_ergo';
     if (tedMode) {
-      const gear = iScale(req.gearFactor, capped);
+      // The factor f = max(0, 1 + modifier) is built exactly: a representable f is one equality, otherwise the two inequalities
+      // low x capped <= gear <= high x capped (the first clamp is never negative), which enclose f x capped for the real f.
+      const factor = gearFactor(req.gearModifier);
+      this.gear = factor;
+      const gear = gearEnclosure(factor, capped);
       const eff: Interval = { lo: clampErgo(gear.lo), hi: clampErgo(gear.hi) };
       this.declareAux('gearErgo', 'gear_ergo', gear.lo, gear.hi);
       this.declareAux('effErgo', 'eff_ergo', eff.lo, eff.hi);
-      this.emit('gear_clamp', 'gear_def', [['gear_ergo', 1], ['capped_ergo', -req.gearFactor]], '=', 0, 'gear factor');
+      if (factor.low === factor.high) {
+        this.emit('gear_clamp', 'gear_def', [['gear_ergo', 1], ['capped_ergo', -factor.low]], '=', 0, 'gear factor');
+      } else {
+        this.emit('gear_clamp', 'gear_def_lo', [['gear_ergo', 1], ['capped_ergo', -factor.low]], '>=', 0, 'gear factor (lower neighbour)');
+        this.emit('gear_clamp', 'gear_def_hi', [['gear_ergo', 1], ['capped_ergo', -factor.high]], '<=', 0, 'gear factor (upper neighbour)');
+        const record = this.family('gear_clamp');
+        record.constructionError = Math.max(record.constructionError, ratRoundUp(ratMul(ratSub(ratFromDouble(factor.high), ratFromDouble(factor.low)), ratFromDouble(capped.hi))));
+      }
       this.emitClamp('gear_clamp', 'c2', 'gear_ergo', 'eff_ergo', gear, ERGO_CLAMP_MAX);
       const { lo, hi } = this.weightInterval;
       if (lo <= hi) {
@@ -771,9 +822,11 @@ class Specializer {
           ? this.checkedPenalty(lo, hi, this.node.penalty)
           : secantOfPenalty(lo, hi);
         this.penalty = penalty;
-        const q = lineRange(penalty.line, lo, hi);
-        const qOut = outward(q);
-        const ted: Interval = outward({ lo: eff.lo - qOut.hi, hi: eff.hi - qOut.lo });
+        const ted = differenceEnclosure(eff, lineEnclosure(penalty.line, lo, hi));
+        const shift = 'shift' in penalty ? penalty.shift : 0;
+        this.secantProof = { kind: penalty.kind, weightMin: lo, weightMax: hi, line: penalty.line, shift, objectiveUnits: null, exact: penalty.exact };
+        this.family('ted').constructionError = shift;
+        this.family('ted').allowance = shift;
         this.declareAux('ted', 'ted', ted.lo, ted.hi);
         // ted = eff - (slope W + intercept)
         this.emit('ted', 'ted_def', [['ted', 1], ['eff_ergo', -1], ['weight', penalty.line.slope]], '=', -penalty.line.intercept, 'TED definition');
@@ -821,8 +874,19 @@ class Specializer {
     // final recoil = naked x (1 + modifier sum) <= cap  <=>  naked x modifier <= cap - naked; no division, any sign of naked.
     const nakedV = bp.receiverRecoilVertical;
     const nakedH = bp.receiverRecoilHorizontal;
-    if (req.maxRecoilV !== null) this.emit('cap_recoil', 'lim_recoil_v', [['rec_mod', nakedV]], '<=', req.maxRecoilV - nakedV, `max vertical recoil ${req.maxRecoilV}`);
-    if (req.maxRecoilSum !== null) this.emit('cap_recoil', 'lim_recoil_sum', [['rec_mod', nakedV + nakedH]], '<=', req.maxRecoilSum - (nakedV + nakedH), `max recoil sum ${req.maxRecoilSum}`);
+    const recoilMagnitude = ratMagnitude(this.bounds.recoil.lo, this.bounds.recoil.hi);
+    if (req.maxRecoilV !== null) {
+      // The coefficient is the leaf itself; only the right-hand side cap - naked is constructed, so it is the smallest double at least the exact value.
+      const padded = paddedRhs('<=', ratSub(ratFromDouble(req.maxRecoilV), ratFromDouble(nakedV)), [{ target: ratFromDouble(nakedV), emitted: nakedV, magnitude: recoilMagnitude }]);
+      this.emitPadded('cap_recoil', 'lim_recoil_v', [['rec_mod', nakedV]], '<=', padded, `max vertical recoil ${req.maxRecoilV}`);
+    }
+    if (req.maxRecoilSum !== null) {
+      // The coefficient naked V + naked H is the nearest double of the exact sum: its deficit times the modifier range pads the right-hand side.
+      const total = ratAdd(ratFromDouble(nakedV), ratFromDouble(nakedH));
+      const coefficient = ratToNumber(total);
+      const padded = paddedRhs('<=', ratSub(ratFromDouble(req.maxRecoilSum), total), [{ target: total, emitted: coefficient, magnitude: recoilMagnitude }]);
+      this.emitPadded('cap_recoil', 'lim_recoil_sum', [['rec_mod', coefficient]], '<=', padded, `max recoil sum ${req.maxRecoilSum}`);
+    }
     if (req.minMagCapacity !== null) this.emitMinimum('lim_mag', req.minMagCapacity, bp.templateCapacity, bp.templateCapacity[0], 'magazine capacity');
     if (req.minSightingRange !== null) this.emitMinimum('lim_sight', req.minSightingRange, bp.templateSightingRange, bp.templateSightingRange[0], 'sighting range');
     if (req.maxWeight !== null) this.emit('cap_weight', 'lim_weight', [['weight', 1]], '<=', req.maxWeight, `max weight ${req.maxWeight}`);
@@ -847,35 +911,25 @@ class Specializer {
     if (req.maxMoa === null) return;
     const limit = req.maxMoa;
     const a = bounds.accuracy;
-    /** The largest MOA value c (1 - A/100) over the accuracy range: linear in A, so an endpoint. An exact zero stays zero (no denormal). */
-    const up = (x: number): number => (x === 0 ? 0 : nextUp(x));
-    const moaUpper = (c: number): number => up(Math.max(c * (1 - a.lo / 100), c * (1 - a.hi / 100)));
-    /**
-     * M = max(0, MOA^max - L), enclosed upward. A positive M below MIN_BIG_M is raised to it: any larger M is just as valid (the row is
-     * non-binding when its barrel is absent), and HiGHS drops a matrix entry of magnitude at most 1e-9 when it reads the text, which
-     * would silently delete the coefficient.
-     */
-    const bigM = (c: number): number => {
-      const m = Math.max(0, up(moaUpper(c) - limit));
-      return m === 0 ? 0 : Math.max(m, MIN_BIG_M);
-    };
     const barrels: number[] = [];
     for (const v of this.activeList) if (bp.templateCenterOfImpact[bp.occTemplate[v]] > 0) barrels.push(v);
     const intrinsic = bp.templateCenterOfImpact[0];
-    const cBase = intrinsic * MOA_K;
     if (a.hi > 100 && barrels.length > 1) {
       this.notes.push('MOA rows assume an accuracy sum of at most 100 percent points when several barrels are installed (each installed barrel row binds; the oracle takes the largest COI)');
     }
     for (const v of barrels) {
       const coi = bp.templateCenterOfImpact[bp.occTemplate[v]];
-      const c = coi * MOA_K;
-      const m = bigM(c);
-      // (c/100) A - M x_b >= c - L - M
-      this.emit('moa', `moa_rep_${v}`, [['acc_total', coi * MOA_K_OVER_100], [xName(v), -m]], '>=', c - limit - m, `MOA of barrel ${v}`);
+      // (c/100) A - M x_b >= c - L - M: the coefficient is the nearest double of coi K/100, M the smallest double dominating the exact need,
+      // and the right-hand side is padded by the exact coefficient deficit (proof.ts).
+      const plan = moaReplacementRow(coi, limit, a);
+      this.emitPadded('moa', `moa_rep_${v}`, [['acc_total', plan.coefficient], [xName(v), -plan.bigM]], '>=', plan.rhs, `MOA of barrel ${v}`);
     }
-    const mFallback = barrels.length > 0 ? bigM(cBase) : 0;
     // (c0/100) A + M_fb sum_b x_b >= c0 - L; with no barrel the sum is empty and the row is the unconditional intrinsic one.
-    this.emit('moa', 'moa_fallback', [['acc_total', intrinsic * MOA_K_OVER_100], ...this.occurrenceTerms(barrels, mFallback)], '>=', cBase - limit, `intrinsic MOA ${cBase} exceeds the cap ${limit}`);
+    const fallback = moaFallbackRow(intrinsic, limit, a, barrels.length > 0);
+    this.emitPadded(
+      'moa', 'moa_fallback', [['acc_total', fallback.coefficient], ...this.occurrenceTerms(barrels, fallback.bigM)], '>=', fallback.rhs,
+      `intrinsic MOA ${intrinsic * MOA_K} exceeds the cap ${limit}`,
+    );
   }
 
   // --- objective ----------------------------------------------------------------------------
@@ -885,50 +939,103 @@ class Specializer {
     const { e, r, p } = req;
     const coefficients: ObjectiveCoefficient[] = [];
     const ergoSource: 'capped_ergo' | 'ted' = this.ergoColumn === 'ted' ? 'ted' : 'capped_ergo';
-    let objective: Interval;
-    let tch: ObjectiveMeta['tchebycheff'] = null;
-    const terms: [string, number][] = [['total_obj', 1]];
-    const add = (column: string, value: number, formula: string, axis: Interval): Interval => {
-      terms.push([column, -value]);
-      coefficients.push({ column, value, formula });
-      return iScale(value, axis);
+    // The exact targets, the emitted doubles, the proved frame error and the per-axis power-of-two scales (proof.ts).
+    const plan = planObjective({ e, r, p }, req.tchebycheff, { ergo: ranges.ergoAxis, rec: ranges.recAxis, price: ranges.priceAxis });
+    this.objectivePlan = plan;
+    if (plan.withheld !== null) this.withheld = plan.withheld;
+    type AxisColumn = 'ergo_axis' | 'rec_axis' | 'price_axis';
+    const axisRange: Record<AxisColumn, Interval> = { ergo_axis: ranges.ergoAxis, rec_axis: ranges.recAxis, price_axis: ranges.priceAxis };
+    const nameN: Record<AxisColumn, [string, string]> = { ergo_axis: ['ergoN', 'ergo_n'], rec_axis: ['recN', 'rec_n'], price_axis: ['priceN', 'price_n'] };
+    // An axis whose objective coefficient HiGHS would filter is read through `column_n = column / 2^k`: the link row is `column - 2^k column_n = 0`
+    // (exact), the objective rows carry `c 2^k` on `column_n`, and the objective itself stays in the oracle's units.
+    const readThrough: Record<AxisColumn, { column: string; range: Interval; factor: number }> = {
+      ergo_axis: { column: 'ergo_axis', range: ranges.ergoAxis, factor: 1 },
+      rec_axis: { column: 'rec_axis', range: ranges.recAxis, factor: 1 },
+      price_axis: { column: 'price_axis', range: ranges.priceAxis, factor: 1 },
     };
-    if (!req.tchebycheff) {
-      // score = (e / 10) fE - r fR - (p / 1000) fP
-      objective = add('ergo_axis', e / ERGO_SCALE, 'e / ERGO_SCALE', ranges.ergoAxis);
-      objective = iAdd(objective, add('rec_axis', -r, '-r', ranges.recAxis));
-      objective = iAdd(objective, add('price_axis', -(p / RECOIL_SCALE), '-p / SCALE', ranges.priceAxis));
-    } else {
-      const { zE, nadE, zR, nadR, zP, nadP } = req.tchebycheff;
-      const sum = e + r + p || 1;
-      const ce = e / (sum * Math.max(zE - nadE, 1));
-      const cr = r / (sum * Math.max(nadR - zR, 1));
-      const cp = p / (sum * Math.max(nadP - zP, 1));
+    for (const scale of plan.axisScales) {
+      if (scale.exponent === 0 || scale.withheld !== null) continue;
+      const [role, name] = nameN[scale.column];
+      const range = axisRange[scale.column];
+      // dividing by a power of two is exact (no denormal at these magnitudes), so the enclosure of the scaled column is the scaled enclosure
+      const scaled: Interval = { lo: range.lo / scale.factor, hi: range.hi / scale.factor };
+      this.declareAux(role, name, scaled.lo, scaled.hi);
+      this.emit('objective', `${name}_def`, [[scale.column, 1], [name, -scale.factor]], '=', 0, `${name} definition`);
+      readThrough[scale.column] = { column: name, range: scaled, factor: scale.factor };
+    }
+    const formulas: Record<AxisColumn, string> = req.tchebycheff
+      ? { ergo_axis: 'AUGMENTATION c_e', rec_axis: '-AUGMENTATION c_r', price_axis: '-AUGMENTATION c_p' }
+      : { ergo_axis: 'e / ERGO_SCALE', rec_axis: '-r', price_axis: '-p / SCALE' };
+    const terms: [string, number][] = [['total_obj', 1]];
+    let objective: Interval | null = null;
+    for (const t of plan.terms) {
+      const through = readThrough[t.column];
+      const value = t.emitted * through.factor; // an exact product: a power of two
+      terms.push([through.column, -value]);
+      coefficients.push({ column: through.column, value, formula: formulas[t.column] });
+      const part = iScale(value, through.range);
+      objective = objective === null ? part : iAdd(objective, part);
+    }
+    let tch: ObjectiveMeta['tchebycheff'] = null;
+    if (req.tchebycheff) {
+      const ideal = req.tchebycheff;
+      const { ce, cr, cp } = tchebycheffCoefficients({ e, r, p }, ideal);
       const active: ('e' | 'r' | 'p')[] = [];
       if (e > 0) active.push('e');
       if (r > 0) active.push('r');
       if (p > 0) active.push('p');
-      tch = { ideal: req.tchebycheff, ce, cr, cp, active };
-      objective = add('ergo_axis', AUGMENTATION * ce, 'AUGMENTATION c_e', ranges.ergoAxis);
-      objective = iAdd(objective, add('rec_axis', -(AUGMENTATION * cr), '-AUGMENTATION c_r', ranges.recAxis));
-      objective = iAdd(objective, add('price_axis', -(AUGMENTATION * cp), '-AUGMENTATION c_p', ranges.priceAxis));
+      tch = { ideal, ce: ratToNumber(ce), cr: ratToNumber(cr), cp: ratToNumber(cp), active };
       // t >= every active deviation d_a: d_e = c_e (zE - fE), d_r = c_r (fR - zR), d_p = c_p (fP - zP)
-      const deviations: { name: string; terms: [string, number][]; rhs: number; range: Interval }[] = [];
-      if (e > 0) deviations.push({ name: 'tch_e', terms: [['tch_t', 1], ['ergo_axis', ce]], rhs: ce * zE, range: iScale(ce, { lo: zE - ranges.ergoAxis.hi, hi: zE - ranges.ergoAxis.lo }) });
-      if (r > 0) deviations.push({ name: 'tch_r', terms: [['tch_t', 1], ['rec_axis', -cr]], rhs: -(cr * zR), range: iScale(cr, { lo: ranges.recAxis.lo - zR, hi: ranges.recAxis.hi - zR }) });
-      if (p > 0) deviations.push({ name: 'tch_p', terms: [['tch_t', 1], ['price_axis', -cp]], rhs: -(cp * zP), range: iScale(cp, { lo: ranges.priceAxis.lo - zP, hi: ranges.priceAxis.hi - zP }) });
-      const tRange: Interval = deviations.length === 0
+      const lows: Rat[] = [];
+      const highs: Rat[] = [];
+      const rows: { name: string; terms: [string, number][]; padded: PaddedRhs }[] = [];
+      for (const d of plan.deviations) {
+        const column: AxisColumn = d.axis === 'e' ? 'ergo_axis' : d.axis === 'r' ? 'rec_axis' : 'price_axis';
+        const sign = d.axis === 'e' ? 1 : -1;
+        const range = axisRange[column];
+        const z = ratFromDouble(d.ideal);
+        const lo = ratFromDouble(range.lo);
+        const hi = ratFromDouble(range.hi);
+        // the deviation's real range from the exact coefficient: c (zE - fE) falls with fE, c (fR - zR) and c (fP - zP) rise with it
+        if (d.axis === 'e') {
+          lows.push(ratMul(d.target, ratSub(z, hi)));
+          highs.push(ratMul(d.target, ratSub(z, lo)));
+        } else {
+          lows.push(ratMul(d.target, ratSub(lo, z)));
+          highs.push(ratMul(d.target, ratSub(hi, z)));
+        }
+        // c_a column_n 2^k = c_a column: the padded right-hand side is the same, in the oracle's units
+        const through = readThrough[column];
+        rows.push({ name: `tch_${d.axis}`, terms: [['tch_t', 1], [through.column, sign * d.emitted * through.factor]], padded: d.rhs });
+      }
+      const largest = (values: readonly Rat[]): Rat => values.reduce((x, y) => ratMax(x, y));
+      const tRange: Interval = plan.deviations.length === 0
         ? { lo: 0, hi: 0 }
-        : { lo: Math.max(...deviations.map(d => d.range.lo)), hi: Math.max(...deviations.map(d => d.range.hi)) };
+        : ratEnclosure(largest(lows), largest(highs));
       this.declareAux('tch', 'tch_t', tRange.lo, tRange.hi);
+      for (const row of rows) this.emitPadded('objective', row.name, row.terms, '>=', row.padded, row.name);
       terms.push(['tch_t', 1]);
       coefficients.push({ column: 'tch_t', value: -1, formula: '-1' });
-      objective = iAdd(objective, { lo: -tRange.hi, hi: -tRange.lo });
-      for (const d of deviations) this.emit('objective', d.name, d.terms, '>=', d.rhs, d.name);
+      objective = iAdd(objective as Interval, { lo: -tRange.hi, hi: -tRange.lo });
     }
-    this.declareAux('totalObj', 'total_obj', objective.lo, objective.hi);
+    const total = objective as Interval;
+    this.declareAux('totalObj', 'total_obj', total.lo, total.hi);
     this.emit('objective', 'obj_def', terms, '=', 0, 'objective definition');
     this.w.setObjective('total_obj');
+    const objectiveFamily = this.family('objective');
+    objectiveFamily.constructionError = Math.max(objectiveFamily.constructionError, plan.frameError);
+    if (this.secantProof !== null) {
+      // The secant's shift in TED points, carried through the actual coefficients on TED: the weighted e (= 10 x e/10), or Tchebycheff's
+      // 10 c_e (0.01 + the deviation's 1) when ergonomics is active. A shift is an objective effect only when TED is the ergonomics axis.
+      const termE = plan.terms.find(t => t.column === 'ergo_axis');
+      let gain = RAT_ZERO;
+      if (this.ergoColumn === 'ted' && termE) {
+        gain = ratMul(ratFromDouble(ERGO_SCALE), ratAbs(termE.target));
+        const deviation = plan.deviations.find(d => d.axis === 'e');
+        if (deviation) gain = ratAdd(gain, ratMul(ratFromDouble(ERGO_SCALE), deviation.target));
+      }
+      this.secantProof.objectiveUnits = ratRoundUp(ratMul(ratFromDouble(this.secantProof.shift), gain));
+    }
     return {
       sense: 'maximize',
       column: 'total_obj',
@@ -1000,7 +1107,7 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): Spe
   const reasons = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`));
   const lp = ['Maximize', '  obj: total_obj', 'Subject To', '  empty_domain: zero_col >= 1', 'Bounds', '  total_obj = 0', '  zero_col = 0', 'End'].join('\n');
   const none = (): null => null;
-  const families = FAMILIES.map(f => ({ ...f, count: f.id === 'contradiction' ? 1 : 0, vacuous: 0 }));
+  const families = FAMILIES.map(f => ({ ...f, count: f.id === 'contradiction' ? 1 : 0, vacuous: 0, constructionError: 0, allowance: 0 }));
   return {
     version: 1,
     blueprint,
@@ -1026,6 +1133,7 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): Spe
     exact: true,
     notes: ['the domain is empty: no build exists, so the model is the one-row contradiction'],
     matrixFilterRisk: false,
+    proof: EMPTY_MODEL_PROOF,
     stats: { minAbsCoefficient: 1, maxAbsCoefficient: 1, columns: 2, rows: 1, nonzeros: 1, binaries: 0, integers: 0, continuous: 2, lpChars: lp.length },
   };
 }
@@ -1084,6 +1192,14 @@ export function specializeLP(
     exact,
     notes: specializer.notes,
     matrixFilterRisk: w.minAbsCoefficient <= HIGHS_SMALL_MATRIX_VALUE || w.maxAbsCoefficient >= HIGHS_LARGE_MATRIX_VALUE,
+    proof: {
+      version: 1,
+      rows: specializer.rowProofs,
+      objective: specializer.objectivePlan,
+      gear: specializer.gear === null ? null : { target: specializer.gear.target, low: specializer.gear.low, high: specializer.gear.high },
+      secant: specializer.secantProof,
+      withheld: specializer.withheld,
+    },
     stats: {
       minAbsCoefficient: w.minAbsCoefficient,
       maxAbsCoefficient: w.maxAbsCoefficient,

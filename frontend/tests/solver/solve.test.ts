@@ -234,10 +234,10 @@ test('an endpoint that proves the request empty proves it for every objective: t
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// Fast: a template result is published only as a validated physical build
+// Fast: a count-model result is published only as a validated physical build
 // ---------------------------------------------------------------------------------------------------------------------------
 
-test('Fast publishes the same shape, mapped onto a rooted placement tree and validated', async () => {
+test('Fast publishes the same shape, decoded into a rooted placement tree and validated', async () => {
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('mount', ['host']), slot('stock', ['butt'])] }),
     ['host', mod('host', { ergo: 1, slots: [slot('rail', ['sight'])] })],
@@ -270,7 +270,7 @@ test('Fast no longer installs a part nobody sells and no preset supplies (no fou
   assert.equal(none.reason, 'Approximate model infeasible');
 });
 
-test('Fast never publishes a template result that is not a valid physical build: a boundary the solver tolerance admitted is cut out', async () => {
+test('Fast never publishes a result that is not a valid physical build: a boundary the solver tolerance admitted is cut out', async () => {
   // u + v weigh 3 + 2^-52 kg, over the cap of 3 exactly: HiGHS accepts the pair, the exact validator does not. v alone is valid.
   const lookup = lookupOf(
     gun(WEAPON, { weight: 1, slots: [slot('s1', ['u']), slot('s2', ['v'])] }),
@@ -282,7 +282,7 @@ test('Fast never publishes a template result that is not a valid physical build:
   assert.equal(response.status, 'optimal', response.reason);
   assert.deepEqual(response.selected_item_ids, ['v']);
   assert.equal(revalidate(params, response).ok, true);
-  // Required slots that the one-copy model counts twice: no valid build exists for it.
+  // Two required slots, one part capped at one copy by its self-conflict: the count model states the cap, so no point exists.
   const twice = lookupOf(
     gun(WEAPON, { slots: [slot('left', ['only'], true), slot('right', ['only'], true)] }),
     ['only', mod('only', { ergo: 4 })],
@@ -294,7 +294,7 @@ test('Fast never publishes a template result that is not a valid physical build:
   assert.equal((await solve(paramsOf(twice))).status, 'infeasible', 'the exact model agrees: one copy cannot fill two required slots');
 });
 
-test('Fast honours the stash for its one copy: an owned part has no offer to buy and is still installed, free', async () => {
+test('Fast honours the stash: an owned part has no offer to buy and is still installed, free', async () => {
   const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['rare'])] }), ['rare', mod('rare', { ergo: 9, offers: [] })]);
   const params = paramsOf(lookup, { preciseMode: false, ownedItems: ['rare'] });
   const response = await solve(params);
@@ -304,4 +304,38 @@ test('Fast honours the stash for its one copy: an owned part has no offer to buy
   assert.equal(response.selected_items[0].acquisition?.source, 'owned');
   const without = await solve(paramsOf(lookup, { preciseMode: false }));
   assert.deepEqual(without.selected_item_ids, [], 'without the stash the part has no source and is not installed');
+});
+
+test('Fast installs several copies of one part with the same provenance and spend as Precise: preset supply, stash, purchase, distinct instances', async () => {
+  const lookup = provenance();
+  const precise = await solve(paramsOf(lookup, { ownedItems: ['b'], priceWeight: 0.01 }));
+  const params = paramsOf(lookup, { preciseMode: false, ownedItems: ['b'], priceWeight: 0.01 });
+  const fast = await solve(params);
+  assert.equal(fast.status, 'optimal', fast.reason);
+  assert.deepEqual(fast.selected_item_ids, ['a', 'a', 'b', 'c'], 'duplicates are kept');
+  assert.equal(new Set(fast.selected_items.map(i => i.instanceId)).size, 4);
+  assert.deepEqual(fast.selected_items.map(i => [i.instanceId, i.acquisition, i.price]), precise.selected_items.map(i => [i.instanceId, i.acquisition, i.price]));
+  assert.deepEqual(fast.selected_preset?.id, 'pre');
+  assert.equal(fast.final_stats?.total_price, 1400);
+  assert.ok(Math.abs(fast.objective_value - precise.objective_value) < 1e-9);
+  assert.equal(revalidate(params, fast).ok, true);
+  assert.equal(fast.optimization, undefined, 'a request with no TED has no spatial search to report');
+});
+
+test('Fast emptiness after a rejected point is still emptiness, never infeasible: the cut loop ends in the approximate-model reason', async () => {
+  // A cyclic graph: the model optimum (A, B, A below B, M) repeats an ancestor and is cut; the next best point is valid, so this is a build.
+  const lookup = lookupOf(
+    gun(WEAPON, { slots: [slot('req', ['M'], true), slot('s0', ['A']), slot('s1', ['B'])] }),
+    ['M', mod('M', { conflictsSlots: ['s1'] })],
+    ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
+    ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
+  );
+  const fast = await solve(paramsOf(lookup, { preciseMode: false }));
+  assert.equal(fast.status, 'optimal', fast.reason);
+  assert.deepEqual([...(fast.selected_item_ids ?? [])].sort(), ['A', 'B', 'M']);
+  assert.equal(fast.final_stats?.ergonomics, 30);
+  // A minimum ergonomics that only the invalid chain reaches (50): the cut leaves no point, and Fast says so in the approximate-model terms.
+  const none = await solve(paramsOf(lookup, { preciseMode: false, minErgonomics: 50 }));
+  assert.equal(none.status, 'incomplete');
+  assert.equal(none.reason, 'Approximate model infeasible');
 });

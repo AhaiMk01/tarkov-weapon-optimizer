@@ -1,4 +1,10 @@
 /**
+ * LEGACY, NOT USED BY `solve()` (Phase 2.4c). The Fast model is `physical/specializeFast.ts` on the physical domain; this single-copy template
+ * LP survives only for its remaining readers, which Phase 2.9 migrates or deletes: `solver.worker.ts` (imports `MOA_K` only), the root scripts
+ * test_candidate_prune.ts, test_incumbent_gate.ts, test_multi_weapon_verification.ts, test_preset_quantities.ts and proto_tchebycheff.ts, and the
+ * benchmark experiments (benchmarks/compare_bound_strategies.ts, benchmarks/experiments/*). It still carries the pre-cutover approximations
+ * (found-in-raid and 100M price stand-ins, single-copy buy aliases, the `compatibilityMap` global visited set): do not build on it.
+ *
  * LP Builder — generates a CPLEX LP format string for the HiGHS WASM solver.
  *
  * Ported from the MiniZinc prototype (test_minizinc.ts buildMznData + generateMznModel)

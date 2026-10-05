@@ -63,6 +63,44 @@ export function sumEnclosure(lo: number, hi: number, terms: number, absSum: numb
   return { lo: nextDown(lo - slack), hi: nextUp(hi + slack) };
 }
 
+/**
+ * Exact error of the binary64 sum `s = fl(a + b)` (Knuth TwoSum): `a + b = s + err` with no rounding, for finite operands whose sum does not
+ * overflow. It decides the direction of a directed rounding without any change of the platform rounding mode.
+ */
+function twoSumError(a: number, b: number, s: number): number {
+  const bb = s - a;
+  return (a - (s - bb)) + (b - bb);
+}
+
+/** `a + b` rounded toward +Infinity: the smallest double that is at least the exact sum. */
+export function addUp(a: number, b: number): number {
+  const s = a + b;
+  if (!Number.isFinite(s)) return s;
+  return twoSumError(a, b, s) > 0 ? nextUp(s) : s;
+}
+
+/** `a + b` rounded toward -Infinity: the largest double that is at most the exact sum. */
+export function addDown(a: number, b: number): number {
+  const s = a + b;
+  if (!Number.isFinite(s)) return s;
+  return twoSumError(a, b, s) < 0 ? nextDown(s) : s;
+}
+
+/** `a - b` rounded toward +Infinity. */
+export const subUp = (a: number, b: number): number => addUp(a, -b);
+
+/** `a - b` rounded toward -Infinity. */
+export const subDown = (a: number, b: number): number => addDown(a, -b);
+
+/**
+ * The gap `upper - lower` of a bound pair, never below the true gap: rounded up, clamped at zero, `Infinity` when either end is not finite
+ * (an unknown bound is an unbounded gap, never a zero one).
+ */
+export function gapUpward(upper: number, lower: number): number {
+  if (!Number.isFinite(upper) || !Number.isFinite(lower)) return Infinity;
+  return Math.max(0, subUp(upper, lower));
+}
+
 /** Throws when a number that must appear in the model text is not finite. */
 export function finiteOrThrow(value: number, what: string): number {
   if (!Number.isFinite(value)) throw new RangeError(`${what} is not finite: ${String(value)}`);

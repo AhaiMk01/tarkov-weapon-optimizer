@@ -10,10 +10,9 @@
 //
 //  * Category chains. The mapped production lookup carries only the own `category_id`; the nested `data.bsgCategory` chain the blueprint and the
 //    validator read is rebuilt from the fixture's `categories` (own first, then ancestors) with `productionLookup` (blueprint.differential.ts).
-//  * Barter prices. The mapper prices a barter with `Math.round` of a float sum, the reference rounds the exact total of the decoded binary64
-//    leaves (INTERPRETATIONS.md choice 3); they differ by 1 RUB at an exact .5 boundary (one ledger case). That is a mapper defect Stage 2
-//    numerics repairs, not a validator difference, so the prices of the mapped barters are overwritten with the reference's exact lot price
-//    (`withExactBarterPrices`) before the validator runs; the number of offers changed is reported.
+//  * Barter prices. The mapper prices a barter with production's `barterLotPrice` (the exact total of the decoded binary64 leaves rounded half
+//    up, as the reference does, INTERPRETATIONS.md choice 3), so no price is overwritten any more: `barterPriceMismatches` counts the mapped
+//    offers whose price differs from the reference's exact lot price and the test requires it to be zero.
 //  * Offer order. The mapper sorts each offer list by price, the reference keeps the source order. Verdicts, spend and the per-occurrence
 //    SOURCE agree whatever the order; which of two equally cheap lot mixes covers a deficit, and so which occurrence is charged the lot price,
 //    can depend on it, so per-occurrence charges are compared by their sum (the spend), not one by one.
@@ -59,13 +58,13 @@ export function validatorUnsupported(fixture: ReferenceFixture, request: Referen
     .map(f => `${f.feature}: ${f.detail}`);
 }
 
-function patchBarterPrices(offers: OfferInfo[], resolved: readonly ResolvedOffer[]): number {
+function countBarterPriceMismatches(offers: OfferInfo[], resolved: readonly ResolvedOffer[]): number {
   const references = resolved
     .filter((o): o is Extract<ResolvedOffer, { kind: 'barter' }> => o.kind === 'barter')
     .map(o => ({ offer: o, total: barterRequirementTotal(o) }))
     .filter(r => gt(r.total, ZERO));
   const used = new Set<number>();
-  let changed = 0;
+  let mismatches = 0;
   for (const offer of offers) {
     if (!offer.source.startsWith('barter:')) continue;
     const requirements = JSON.stringify((offer.barter_requirements ?? []).map(r => [r.count, r.unit_price]));
@@ -76,27 +75,24 @@ function patchBarterPrices(offers: OfferInfo[], resolved: readonly ResolvedOffer
     if (k < 0) throw new Error(`no reference barter matches the mapped offer ${offer.source} level ${String(offer.trader_level)}`);
     used.add(k);
     const exact = toNumber(roundHalfUp(references[k].total));
-    if (exact !== offer.price) {
-      offer.price = exact;
-      changed++;
-    }
+    if (exact !== offer.price) mismatches++;
   }
-  return changed;
+  return mismatches;
 }
 
-/** Overwrite the mapped barter lot prices with the reference's exact rounding. Returns how many prices changed. */
-export function withExactBarterPrices(lookup: ItemLookup, fixture: ReferenceFixture): number {
+/** How many mapped barter lot prices differ from the reference's exact rounding (none is overwritten: the mapper must already agree). */
+export function barterPriceMismatches(lookup: ItemLookup, fixture: ReferenceFixture): number {
   const resolved: ResolvedFixture = resolveFixture(fixture);
   let changed = 0;
   for (const item of fixture.items) {
     const entry = lookup[item.id];
-    if (entry.type === 'mod') changed += patchBarterPrices(entry.stats.offers, resolved.items.get(item.id)!.offers);
+    if (entry.type === 'mod') changed += countBarterPriceMismatches(entry.stats.offers, resolved.items.get(item.id)!.offers);
   }
   for (const weapon of fixture.weapons) {
     const entry = lookup[weapon.id];
     if (entry.type !== 'gun') continue;
-    changed += patchBarterPrices(entry.stats.offers, resolved.weapons.get(weapon.id)!.offers);
-    for (const preset of entry.all_presets) changed += patchBarterPrices(preset.offers, resolved.presets.get(preset.id)!.offers);
+    changed += countBarterPriceMismatches(entry.stats.offers, resolved.weapons.get(weapon.id)!.offers);
+    for (const preset of entry.all_presets) changed += countBarterPriceMismatches(preset.offers, resolved.presets.get(preset.id)!.offers);
   }
   return changed;
 }
@@ -109,15 +105,15 @@ export interface ValidatorCase {
   /** Features the production inputs cannot carry; a case that lists any is not compared. */
   skipped: string[];
   lookup: ItemLookup;
-  /** Barter prices overwritten with the exact rounding. */
-  barterPricesPatched: number;
+  /** Mapped barter prices that differ from the reference rounding (the test requires zero). */
+  barterPriceMismatches: number;
 }
 
 export function prepareValidatorCase(c: LedgerCase): ValidatorCase {
   const skipped = validatorUnsupported(c.fixture, c.request);
-  if (skipped.length > 0) return { id: c.id, family: c.family, fixture: c.fixture, request: c.request, skipped, lookup: {}, barterPricesPatched: 0 };
+  if (skipped.length > 0) return { id: c.id, family: c.family, fixture: c.fixture, request: c.request, skipped, lookup: {}, barterPriceMismatches: 0 };
   const lookup = productionLookup(c.fixture);
-  return { id: c.id, family: c.family, fixture: c.fixture, request: c.request, skipped, lookup, barterPricesPatched: withExactBarterPrices(lookup, c.fixture) };
+  return { id: c.id, family: c.family, fixture: c.fixture, request: c.request, skipped, lookup, barterPriceMismatches: barterPriceMismatches(lookup, c.fixture) };
 }
 
 /** The production request of a reference request: the same fields under their `SolveParams` names. */

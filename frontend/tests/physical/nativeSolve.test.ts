@@ -41,9 +41,9 @@ const NOW = { now: () => 0, deadline: 10_000, options: {} satisfies HighsOptions
 /** The confirmation path only exists for a first solve with presolve on. */
 const ON = { ...NOW, presolve: 'choose' } as const;
 
-test('the physical models are solved with presolve off by default, the Fast model keeps the HiGHS default, and it is one named setting each', async () => {
+test('both model families are solved with presolve off by default (a presolved Optimal is as untrustworthy as a presolved Infeasible), one named setting each', async () => {
   assert.equal(PRECISE_PRESOLVE, 'off');
-  assert.equal(FAST_PRESOLVE, 'choose');
+  assert.equal(FAST_PRESOLVE, 'off');
   const { solve, calls } = scripted(fakeResult('Optimal', true));
   const outcome = await solveWithPresolvePolicy('lp', { ...NOW, solve });
   assert.equal(outcome.kind, 'solved');
@@ -168,4 +168,16 @@ test('the kept fixture: the pinned build calls a feasible model Infeasible with 
   const values = new Map(outcome.result.colNames!.map((name, k) => [name, outcome.result.colValues![k]]));
   assert.ok((values.get('x_3') ?? 0) + (values.get('x_7') ?? 0) > 0.5);
   assert.ok((values.get('price_axis') ?? Infinity) <= 5850 + 1e-6);
+});
+
+test('the policy flags a result of a presolved first solve; a presolve-off solve, and a rescue by one, are not presolved', async () => {
+  const off = await solveWithPresolvePolicy('lp', { ...NOW, solve: scripted(fakeResult('Optimal', true)).solve });
+  assert.equal(off.kind === 'solved' && off.presolved, false);
+  const on = await solveWithPresolvePolicy('lp', { ...ON, solve: scripted(fakeResult('Optimal', true)).solve });
+  assert.equal(on.kind === 'solved' && on.presolved, true, 'a presolved Optimal is a witness, never a proof');
+  const limited = await solveWithPresolvePolicy('lp', { ...ON, solve: scripted(fakeResult('TimeLimit', true)).solve });
+  assert.equal(limited.kind === 'solved' && limited.presolved, true);
+  const rescued = await solveWithPresolvePolicy('lp', { ...ON, solve: scripted(fakeResult('Infeasible'), fakeResult('Optimal', true)).solve });
+  assert.equal(rescued.kind === 'solved' && rescued.presolveRescue, true);
+  assert.equal(rescued.kind === 'solved' && rescued.presolved, false, 'the rescuing solve ran with presolve off');
 });

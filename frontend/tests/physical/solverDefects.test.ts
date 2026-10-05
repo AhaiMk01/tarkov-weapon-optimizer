@@ -107,3 +107,17 @@ test('the PINNED build (HiGHS 1.15.1) still reports a feasible 6-row model Infea
   const on = (await getNativeHighs().solveStructured(lp)).modelStatus.name; // every option at its default: no tolerance of ours is involved
   t.diagnostic(`all-default options, presolve on: ${on}${on === 'Infeasible' ? ' (wrong: the model is feasible)' : ''}`);
 });
+
+test('the Fast template model of random world 123 (fast_presolve_wrong_optimal.lp): presolve OFF finds the true optimum 335.35 and proves it; presolve ON may call a suboptimal point Optimal', async t => {
+  // 39 columns, 43 rows. Exact maximum 335.35 (the Precise model of the same request and the Fast model with presolve off agree: tests/physical/fastPresolve.test.ts).
+  // Phase 2.4c measured HiGHS 1.15.1 with presolve ON reporting Optimal 123.37 with a dual bound of 123.37: a wrong PROOF, which is why no claim is accepted from a
+  // presolved solve (nativeSolve.ts, nativeProof.ts) and why both model families run with presolve off.
+  const lp = model('fast_presolve_wrong_optimal.lp');
+  const off = await getNativeHighs().solveStructured(lp, { ...BASE, presolve: 'off' });
+  assert.equal(off.modelStatus.name, 'Optimal');
+  assert.ok(Math.abs((off.objectiveValue as number) - 335.35) < 1e-6, `presolve off: ${off.objectiveValue}`);
+  assert.ok(off.mipDualBound !== null && Math.abs(off.mipDualBound - 335.35) < 1e-6, `presolve off proves it: dual bound ${off.mipDualBound}`);
+  const on = await getNativeHighs().solveStructured(lp, { ...BASE });
+  const wrong = on.modelStatus.name === 'Optimal' && Math.abs((on.objectiveValue as number) - 335.35) > 1e-6;
+  t.diagnostic(`presolve on: ${on.modelStatus.name} ${on.objectiveValue}, dual bound ${on.mipDualBound}${wrong ? ' (wrong: the maximum is 335.35)' : ''}`);
+});

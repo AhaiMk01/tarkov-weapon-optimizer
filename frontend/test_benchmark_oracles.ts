@@ -8,8 +8,8 @@ import type { ItemLookup, ModLookupEntry, SlotInfo } from './src/solver/types.ts
 console.log('Running benchmark oracle correctness checks...');
 
 // 1. Interchangeable two-slot A + B counterexample:
-// Fast mode restricts both slots with sum(x_i) <= 1, missing A+B.
-// Precise mode allows exact placement [left->B, right->A].
+// The legacy single-copy template model restricted both slots with sum(x_i) <= 1 and missed A+B. The Fast model counts copies per template and per
+// slot edge (Phase 2.4c), so it finds A+B as well; Precise places [left->B, right->A] exactly.
 // Each part lists itself as conflicting, which caps it at one installed copy (ADR 0003): the exact model installs as many copies of a part
 // as it has slots for, so without the cap it would fill both slots with B (two copies, see 1b) and this fixture would not separate the models.
 {
@@ -30,14 +30,14 @@ console.log('Running benchmark oracle correctness checks...');
 
   const resFast = await solve({ ...p, preciseMode: false });
   assert.equal(resFast.status, 'optimal');
-  assert.deepEqual(resFast.selected_items.map(i => i.id), ['B']);
-  assert.equal(resFast.final_stats?.ergonomics, 20);
-  // Proof that Fast mode cannot validly upper-bound the exact optimum:
-  assert.ok(resFast.objective_value < resPrecise.objective_value, 'Fast mode optimum must not upper-bound exact optimum');
+  assert.deepEqual(resFast.selected_items.map(i => i.id).sort(), ['A', 'B']);
+  assert.equal(resFast.final_stats?.ergonomics, 30);
+  assert.deepEqual(physicalViolations(p, resFast), []);
+  assert.ok(Math.abs(resFast.objective_value - resPrecise.objective_value) < 1e-9, 'on this acyclic graph the Fast optimum is the exact optimum');
 }
 
-// 1b. No copy cap: the exact model installs two copies of the better part, one per slot, as distinct occurrences (the single-copy
-// assumption of the template model is gone). Fast still installs at most one.
+// 1b. No copy cap: the exact model installs two copies of the better part, one per slot, as distinct occurrences. So does the Fast model now:
+// the single-copy assumption of the template model is gone.
 {
   const p = choiceFixture([{ id: 'A', weight: 1.1, ergo: 10 }, { id: 'B', weight: 1.1, ergo: 20 }]);
   p.itemLookup.gun.slots = ['left', 'right'].map(id => ({
@@ -51,7 +51,9 @@ console.log('Running benchmark oracle correctness checks...');
   assert.deepEqual(res.selected_item_ids, ['B', 'B']);
   assert.equal(res.final_stats?.ergonomics, 40);
   const fast = await solve({ ...p, preciseMode: false });
-  assert.deepEqual(fast.selected_items.map(i => i.id), ['B']);
+  assert.deepEqual(fast.selected_items.map(i => i.id), ['B', 'B']);
+  assert.equal(new Set(fast.selected_items.map(i => i.instanceId)).size, 2, 'two copies are two instances');
+  assert.equal(fast.final_stats?.ergonomics, 40);
 }
 
 // 2. Required slot must be filled; empty required slot is infeasible

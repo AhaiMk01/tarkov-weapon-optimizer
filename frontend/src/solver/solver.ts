@@ -6,12 +6,13 @@
  *
  *  - Precise (`preciseMode: true`, forced by TrueErgo and Prevent Overswing): the exact occurrence-level model of `physical/`
  *    (`solvePrecise`). Multiple copies, physical slots, the exact wallet, preset/owned supply. TED requests run the spatial search.
- *  - Fast (everything else): the legacy template-level LP of `lpBuilder.ts`, solved on the same pinned native build. Its template result
- *    is mapped onto a rooted placement tree and validated; a result that is not a valid physical build is `incomplete`, never published.
- *    Phase 2.4c rewrites this model; until then it keeps its known approximations and is only gated, not repaired.
+ *  - Fast (everything else): the template-count model of `physical/specializeFast.ts` on the same physical domain, acquisition and request as
+ *    Precise (only placement is approximated: counts per template and per slot edge, no ancestor-repetition rule), solved on the same pinned
+ *    native build. Its counts are decoded into a rooted occurrence tree and judged by the same exact validator; a rejected point is cut out and
+ *    the model re-solved, and a result that is not a valid physical build is `incomplete`, never published (`physical/solveFast.ts`).
  *
  * Statuses and reasons are the minimal set of this phase (the full ADR 0013 sections 5 and 6 transport is Phase 2.6):
- *   optimal       the search completed with a justified gap within the tolerance (Fast: the native solve was optimal)
+ *   optimal       the search completed with a justified gap within the tolerance (Fast: the native solve was optimal, an approximate optimum)
  *   feasible      a verified build, search not complete or gap not justified
  *   infeasible    Precise, MOA-independent emptiness confirmed with presolve off (never a presolved verdict alone)
  *   incomplete    anything else: a Precise emptiness under a MOA cap, Fast emptiness, a limit with no verified build, a rejected build
@@ -21,24 +22,18 @@
 import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
 import type { SolveParams, GunLookupEntry, IdealPoint, ModLookupEntry } from './types';
 export type { SolveParams, IdealPoint } from './types';
-import { buildLP } from './lpBuilder';
 import { objectiveModel, objectiveScore, tedContribution } from './trueErgo';
 import type { ObjectiveAxes } from './trueErgo';
 import { canonicalizeTraderLevels } from './reuseKey';
 import { mergeComponents, presetSupply } from './presetSupply';
-import { MODEL_STATUS_TEXT, setHighsBaseUrl } from './native';
-import type { ModelStatusName } from './native';
+import { setHighsBaseUrl } from './native';
 import { legalOffers, resolveMarket } from './physical/acquisition';
-import { columnValuesFromStructured } from './physical/decode';
-import { FAST_PRESOLVE, isLimitStatus, nativeSolveOptions, solveWithPresolvePolicy } from './physical/nativeSolve';
 import { axesOfStats } from './physical/objective';
 import { inspectOwnedItems } from './physical/ownedItems';
 import { PUBLIC_REASONS } from './physical/reasons';
-import { insertRows, noGoodRow } from './physical/nogood';
-import { MAX_REJECTIONS_PER_NODE, resolveTolerance, solvePrecise } from './physical/solvePrecise';
+import { solveFast } from './physical/solveFast';
+import { solvePrecise } from './physical/solvePrecise';
 import type { PreciseSummary } from './physical/solvePrecise';
-import { buildFromTemplates } from './physical/templateBuild';
-import { preparePhysicalValidator } from './physical/validate';
 import type { PhysicalBuild, PhysicalBuildStats } from './physical/validate';
 
 /**
@@ -382,76 +377,16 @@ async function solveExact(params: SolveParams, deadline: number, start: number, 
 // Fast
 // ---------------------------------------------------------------------------------------------
 
-/** A template-model decision column read as 0 or 1; anything else is a decode failure, never a guess. */
-function readFlag(values: Record<string, number>, name: string): 0 | 1 | null {
-  const value = values[name];
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  const rounded = Math.round(value);
-  if ((rounded !== 0 && rounded !== 1) || Math.abs(value - rounded) > 1e-5) return null;
-  return rounded;
-}
-
-async function solveTemplate(params: SolveParams, deadline: number, start: number, extras: ResponseExtras): Promise<Detailed> {
-  const lp = buildLP({ ...params, preciseMode: false });
-  const options = nativeSolveOptions(resolveTolerance(params.objectiveTolerance));
-  const validator = preparePhysicalValidator(params.itemLookup, params, {
-    isAmmo: params.physicalOptions?.isAmmo,
-    categoryChainOf: params.physicalOptions?.categoryChainOf,
-    requirePathInstanceIds: true,
-  });
-  // Decision columns of the template model: the item and base binaries (purchase variables follow from them).
-  const decisionColumns: string[] = [];
-  for (let i = 1; i <= lp.nItems; i++) decisionColumns.push(`x_${i}`);
-  for (let b = 1; b <= lp.nBases; b++) decisionColumns.push(`base_${b}`);
-  const cuts: string[] = [];
-  for (;;) {
-    const outcome = await solveWithPresolvePolicy(insertRows(lp.lpString, cuts), { options, deadline, now, presolve: FAST_PRESOLVE });
-    if (outcome.kind === 'unresolved') {
-      return incomplete(outcome.cause === 'deadline' ? PUBLIC_REASONS.timeLimitReached : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, start, extras);
-    }
-    if (outcome.kind === 'infeasible') return emptyOutcome(params, 'fast', start, extras);
-
-    const result = outcome.result;
-    const status = result.modelStatus.name;
-    const optimal = status === 'Optimal';
-    const stopReason = status === 'TimeLimit' ? PUBLIC_REASONS.timeLimitReached
-      : status === 'SolutionLimit' ? PUBLIC_REASONS.nativeSolutionLimitReached
-        : (MODEL_STATUS_TEXT[status as ModelStatusName] ?? status);
-    if (result.colValues === null) return incomplete(isLimitStatus(status) ? stopReason : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, start, extras);
-
-    const values = columnValuesFromStructured(result.colNames, result.colValues);
-    const rejected = (): Detailed | null => {
-      // A solution that is not a valid physical build (the template model has known approximations, or the solver's tolerance admitted a
-      // boundary the exact validator does not) is cut out and the model solved again; only a repeated rejection ends the solve.
-      if (cuts.length >= MAX_REJECTIONS_PER_NODE || deadline - now() <= 0) return incomplete(PUBLIC_REASONS.independentBuildValidationFailed, start, extras);
-      cuts.push(noGoodRow(`nogood_${cuts.length}`, decisionColumns, values));
-      return null;
-    };
-    const selected: string[] = [];
-    let baseId: string | null = null;
-    let readable = true;
-    for (let i = 1; i <= lp.nItems && readable; i++) {
-      const flag = readFlag(values, `x_${i}`);
-      if (flag === null) readable = false;
-      else if (flag === 1) selected.push(lp.indexToItem[i]);
-    }
-    for (let b = 1; b <= lp.nBases && readable; b++) {
-      const flag = readFlag(values, `base_${b}`);
-      if (flag === null || (flag === 1 && baseId !== null)) readable = false;
-      else if (flag === 1) baseId = lp.baseIds[b - 1];
-    }
-    // A solution whose binaries cannot be read is a solver fault, not a build to cut: there is nothing to exclude it by.
-    if (!readable || baseId === null) return incomplete(PUBLIC_REASONS.independentBuildValidationFailed, start, extras);
-
-    const mapped = buildFromTemplates(params.itemLookup, params.weaponId, selected, baseId === 'naked' ? { kind: 'naked' } : { kind: 'preset', presetId: baseId });
-    const validation = mapped.unplaced.length === 0 ? validator.validate(mapped.build) : null;
-    if (validation === null || !validation.ok || validation.stats === null) {
-      const stop = rejected();
-      if (stop !== null) return stop;
-      continue;
-    }
-    return buildOutcome(params, mapped.build, validation.stats, optimal ? 'optimal' : 'feasible', start, optimal ? extras : { ...extras, reason: stopReason });
-  }
+/**
+ * The approximate model's outcome: a verified build is `optimal` when the native solve was (the build is the best point of the approximate
+ * model that the exact validator accepts), otherwise `feasible` with the solver's stop reason; emptiness is incomplete with the approximate-model
+ * reason, never infeasible.
+ */
+async function solveApproximate(params: SolveParams, deadline: number, start: number, extras: ResponseExtras): Promise<Detailed> {
+  const result = await solveFast({ params, deadline, now });
+  if (result.kind === 'empty') return emptyOutcome(params, 'fast', start, extras);
+  if (result.kind === 'incomplete') return incomplete(result.reason, start, extras);
+  return buildOutcome(params, result.best.build, result.best.stats, result.optimal ? 'optimal' : 'feasible', start, result.optimal ? extras : { ...extras, reason: result.reason });
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -484,6 +419,6 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   }
   if (now() >= deadline) return incomplete(PUBLIC_REASONS.timeLimitReached, start, { idealPoint: params.useTchebycheff ? params.idealPoint : undefined });
   const extras: ResponseExtras = { idealPoint: params.useTchebycheff ? params.idealPoint : undefined };
-  return params.preciseMode ? solveExact(params, deadline, start, extras) : solveTemplate(params, deadline, start, extras);
+  return params.preciseMode ? solveExact(params, deadline, start, extras) : solveApproximate(params, deadline, start, extras);
 }
 

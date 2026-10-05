@@ -12,5 +12,11 @@ export * from './reasons';
 export * from './search';
 export * from './objective';
 export * from './nogood';
-export * from './templateBuild';
-// nativeSolve.ts and solvePrecise.ts reach the native HiGHS surface, so they are imported by path, not through this barrel.
+export * from './templateGraph';
+export * from './specializeFast';
+export * from './decodeFast';
+export * from './fastCut';
+// nativeSolve.ts, solvePrecise.ts and solveFast.ts reach the native HiGHS surface, so they are imported by path, not through this barrel.
+export * from './proof';
+export * from './rational';
+export * from './display';

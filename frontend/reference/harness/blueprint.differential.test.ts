@@ -127,13 +127,11 @@ test('4. the domain is empty exactly when the oracle has no accessible base or n
 });
 
 /**
- * Production rounds the float barter total (`Math.round`), the oracle rounds the exact total of the decoded binary64 leaves (INTERPRETATIONS.md
- * choice 3). They can differ by 1 RUB at an exact .5 boundary; Stage 2 numerics (4C) repairs that, not this module. Only the one ledger case
- * built on such a boundary may differ, and only by 1.
+ * Production prices a barter lot with the exact total of the decoded binary64 leaves rounded half up (`barterLotPrice`, Phase 2.5), as the
+ * oracle does (INTERPRETATIONS.md choice 3): every price agrees, the exact .5 boundary of
+ * `F09-fractional-barter-count-is-decoded-exactly` included (the float sum used to differ there by 1 RUB).
  */
-const BARTER_ROUNDING_BOUNDARY_CASES = new Set(['F09-fractional-barter-count-is-decoded-exactly']);
-const priceMatches = (caseId: string, actual: number, expected: number): boolean =>
-  Math.abs(actual - expected) < 1e-9 || (BARTER_ROUNDING_BOUNDARY_CASES.has(caseId) && Math.abs(actual - expected) === 1);
+const priceMatches = (_caseId: string, actual: number, expected: number): boolean => Math.abs(actual - expected) < 1e-9;
 
 test('5. accessible bases, legal offers, owned stock and preset supply agree with the oracle acquisition model', () => {
   const mismatches: string[] = [];

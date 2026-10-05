@@ -5,8 +5,8 @@
 // reference reader separately (reference/source/*.differential.test.ts). Here the stats are written in the
 // units production stores them in, and the offers and preset components are written the way `extractModStats` /
 // `extractAllPresets` would have produced them from the equivalent raw data (positive prices only, barters priced
-// as a float sum and rounded, offers sorted by price, count-bearing preset components), so production sees what it
-// would see in the app.
+// by the exact total rounded half up through production's own `barterLotPrice`, offers sorted by price,
+// count-bearing preset components), so production sees what it would see in the app.
 //
 // A fixture or request feature that today's production inputs cannot carry is never dropped silently. It is
 // returned in `unsupported` (feature id plus detail) and the harness treats the case as a recorded failure
@@ -26,6 +26,7 @@ import type {
   PresetInfo, SlotInfo, SolveParams, TraderLevels,
 } from '../../src/solver/types';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
+import { barterLotPrice } from '../../src/solver/physical/barterPrice';
 import type {
   ReferenceBarterOffer, ReferenceFixture, ReferenceFleaOffer, ReferenceItem, ReferenceOffer, ReferencePreset, ReferenceRequest,
   ReferenceSlot, ReferenceWeapon,
@@ -120,17 +121,16 @@ export function detectUnsupported(fixture: ReferenceFixture, request: ReferenceR
 // ---------------------------------------------------------------------------------------------
 
 function barterOffer(offer: ReferenceBarterOffer): OfferInfo | null {
-  // extractBarterOffers: a plain float sum of count x (avg24hPrice ?? basePrice ?? 0), a total <= 0 is no offer,
-  // and the price is Math.round of the total.
-  let total = 0;
+  // extractBarterOffers: the exact total of count x (avg24hPrice ?? basePrice ?? 0), a total <= 0 is no offer, and the
+  // price is that total rounded half up (the production `barterLotPrice`, the same function the extractor calls).
   const requirements = offer.requirements.map((r, index) => {
     const unit = r.avg24hPrice ?? r.basePrice ?? 0;
-    total += r.count * unit;
     return { name: r.itemId ?? `ingredient ${index}`, count: r.count, unit_price: unit };
   });
-  if (total <= 0) return null;
+  const price = barterLotPrice(requirements.map(r => ({ count: r.count, unitPrice: r.unit_price })));
+  if (price === null) return null;
   return {
-    price: Math.round(total),
+    price,
     source: `barter:${offer.trader}`,
     vendor_name: offer.trader,
     vendor_normalized: offer.trader,

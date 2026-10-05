@@ -24,7 +24,7 @@ const FAR = (): number => performance.now() + 120_000;
 /** A solver that counts calls and records whether presolve was forced off, then delegates to the pinned build. */
 function counting(): { solve: SolveFn; calls: { presolveOff: boolean }[] } {
   const calls: { presolveOff: boolean }[] = [];
-  return { calls, solve: async (lp, options) => { calls.push({ presolveOff: options.presolve === 'off' }); return nativeSolve(lp, options); } };
+  return { calls, solve: async (lp, options, extras) => { calls.push({ presolveOff: options.presolve === 'off' }); return nativeSolve(lp, options, extras); } };
 }
 
 const fakeInfeasible = (real: NativeResult): NativeResult =>
@@ -104,9 +104,9 @@ test('with presolve on, an infeasible model is empty only after the presolve-off
 test('a false Infeasible from presolve is never used: the presolve-off solve finds the build and the rescue is recorded', async () => {
   const lookup = choice([{ id: 'a', weight: 2, ergo: 10 }, { id: 'b', weight: 2, ergo: 25 }]);
   let calls = 0;
-  const solve: SolveFn = async (lp, options) => {
+  const solve: SolveFn = async (lp, options, extras) => {
     calls++;
-    const real = await nativeSolve(lp, options);
+    const real = await nativeSolve(lp, options, extras);
     return options.presolve === 'off' ? real : fakeInfeasible(real);
   };
   const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve, presolve: 'choose' });
@@ -118,15 +118,15 @@ test('a false Infeasible from presolve is never used: the presolve-off solve fin
 
 test('an infeasibility that cannot be confirmed leaves the request incomplete, never infeasible', async () => {
   const lookup = choice([{ id: 'a', weight: 2, ergo: 10 }]);
-  const errored: SolveFn = async (lp, options) => {
+  const errored: SolveFn = async (lp, options, extras) => {
     if (options.presolve === 'off') throw new SolverError('solve', new Error('wasm trap'));
-    return fakeInfeasible(await nativeSolve(lp, options));
+    return fakeInfeasible(await nativeSolve(lp, options, extras));
   };
   const a = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve: errored, presolve: 'choose' });
   assert.equal(a.kind, 'incomplete');
   assert.equal(a.kind === 'incomplete' && a.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
-  const timedOut: SolveFn = async (lp, options) => {
-    const real = await nativeSolve(lp, options);
+  const timedOut: SolveFn = async (lp, options, extras) => {
+    const real = await nativeSolve(lp, options, extras);
     return options.presolve === 'off' ? ({ ...real, modelStatus: { code: 13, name: 'TimeLimit' }, colValues: null } as unknown as NativeResult) : fakeInfeasible(real);
   };
   const b = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve: timedOut, presolve: 'choose' });
@@ -193,7 +193,7 @@ test('a deadline that has passed starts nothing: incomplete with the time-limit 
 
 test('a read that HiGHS adjusted proves nothing: the verified build is still returned, the bound is withheld and the result is not certified', async () => {
   const lookup = choice([{ id: 'a', weight: 2, ergo: 10 }, { id: 'b', weight: 2, ergo: 25 }]);
-  const solve: SolveFn = async (lp, options) => ({ ...(await nativeSolve(lp, options)), readStatus: 'warning' }) as NativeResult;
+  const solve: SolveFn = async (lp, options, extras) => ({ ...(await nativeSolve(lp, options, extras)), readStatus: 'warning' }) as NativeResult;
   const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve });
   const { certified, reason, summary } = build(result);
   assert.deepEqual(installed(result), ['b']);

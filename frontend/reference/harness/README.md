@@ -43,7 +43,8 @@ the Fast `outcomeContract` cells of those cases cannot pass while `precision_res
 
 The `ItemLookup` is built directly from the fixture, in the units production stores (kg, ergonomics points, recoil
 modifier as a fraction, accuracy in percent points), with offers written as `extractModStats` / `extractAllPresets` would
-write them (positive prices only, barters as a float sum rounded with `Math.round`, offers sorted by price). The production
+write them (positive prices only, barters priced by production's own `barterLotPrice`, the exact total of the decoded binary64 leaves
+rounded half up, offers sorted by price). The production
 extractors are not exercised here; `../source/*.differential.test.ts` compares them with the reference reader. Notably
 `extractGunStats` drops the receiver's flea offers while the reference keeps them, a difference this harness bypasses.
 
@@ -123,3 +124,10 @@ githash, glue and wasm SHA-256), and the ledger test prints that identity with t
   both detectors are gone, and `blueprint.differential` compares each template's legal offer lot sizes with the oracle.
 * Every removed detector turns its cases from `unsupported` failures into real runs; the ratchet then demands the baseline
   update that records whatever they now score.
+* Exact barter rounding and the proof frame (phase 2.5, done): the mapper prices a barter with `barterLotPrice` (`src/solver/physical/barterPrice.ts`,
+  the function `dataService.ts`'s extractor calls), so the `exactBarterPrices` override of the LP gates, the 1 RUB tolerance of the blueprint test
+  and the price patching of the validator differential are gone: the `F09-fractional-barter-count-is-decoded-exactly` price agrees with the oracle
+  (775, not 776) and `validator.differential.test.ts` requires zero mismatches. The ledger test also requires every case the oracle has an optimum
+  for to come back `optimal` (certified) on Precise at its case tolerance (1e-9): the proved allowances (exact construction errors, `proof.ts`) are
+  orders of magnitude below it, and the certificate is decided on the exact gap, so an objective of 9e6 (`F05-expensive-legal-offer-is-used`, one ulp
+  1.9e-9) still certifies.

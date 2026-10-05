@@ -72,9 +72,8 @@ test('the harness compares nearly every ledger case and lists the rest', t => {
   for (const c of skipped) for (const s of c.skipped) reasons.set(s.split(':')[0], (reasons.get(s.split(':')[0]) ?? 0) + 1);
   t.diagnostic(`compared ${compared.length} of ${LEDGER.length} ledger cases; skipped ${skipped.length}: ${[...reasons].map(([k, n]) => `${k} x${n}`).join(', ') || 'none'}`);
   t.diagnostic(`skipped ids: ${skipped.map(c => c.id).join(', ') || 'none'}`);
-  const patched = compared.filter(c => c.barterPricesPatched > 0);
-  t.diagnostic(`barter lot prices overwritten with the exact rounding: ${patched.map(c => `${c.id} x${c.barterPricesPatched}`).join(', ') || 'none'}`);
-  assert.ok(patched.length <= 1, 'only the one documented boundary case may need the exact barter rounding');
+  const mismatched = compared.filter(c => c.barterPriceMismatches > 0);
+  assert.deepEqual(mismatched.map(c => c.id), [], 'every mapped barter lot price is the reference exact rounding (production barterLotPrice), the .5 boundary case included');
 });
 
 test('(a) every build the oracle enumerates gets the reference verdict, code set, statistics and sources', () => {

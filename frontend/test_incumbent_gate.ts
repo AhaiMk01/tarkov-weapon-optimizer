@@ -34,7 +34,8 @@ const sharedResult = await solve(shared);
 assert.equal(sharedResult.status, 'infeasible', sharedResult.reason);
 assert.equal(sharedResult.optimization?.termination, undefined);
 
-// Uncapped, the exact model installs the part twice: two required slots, two copies, two instances. The template model cannot.
+// Uncapped, the exact model installs the part twice: two required slots, two copies, two instances. So does the Fast count model (Phase 2.4c);
+// the legacy single-copy template model could not.
 {
   const uncapped = twoRequired(['Only']);
   const two = await solve(uncapped);
@@ -44,7 +45,9 @@ assert.equal(sharedResult.optimization?.termination, undefined);
   assert.ok(Math.abs((two.final_stats?.total_weight ?? 0) - 1.4) < 1e-9, 'receiver 1 kg plus two copies of 0.2 kg each (a choice weight is the build weight with that part)');
   assert.deepEqual(physicalViolations(uncapped, two), []);
   const fastTwo = await solve({ ...uncapped, preciseMode: false });
-  assert.equal(fastTwo.status, 'incomplete', 'the template model has one copy: it cannot fill both required slots');
+  assert.equal(fastTwo.status, 'optimal', fastTwo.reason);
+  assert.deepEqual(fastTwo.selected_item_ids, ['Only', 'Only']);
+  assert.deepEqual(physicalViolations(uncapped, fastTwo), []);
 }
 
 const fastShared = await solve({ ...shared, preciseMode: false });

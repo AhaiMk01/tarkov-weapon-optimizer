@@ -12,14 +12,19 @@
  * single root with no weight interval and an exact model, so the search is one native solve. A TED request starts from the active weight
  * range split at the 3 kg knee and refines nodes until the gap is within the requested tolerance or a limit is reached.
  *
- * The models are solved with presolve off (`PRECISE_PRESOLVE`); infeasibility is never taken from a presolved solve alone (`nativeSolve.ts`). A model whose proof inputs are not trustworthy (a
- * coefficient at risk of being filtered on read, or a read that HiGHS adjusted) still yields verified builds but proves nothing: its bounds
- * are withheld and its infeasibility verdicts are unresolved.
+ * The models are solved with presolve off (`PRECISE_PRESOLVE`); no claim is taken from a presolved solve (`nativeSolve.ts`).
+ *
+ * The proof frame (Phase 2.5, `proof.ts`, `nativeProof.ts`, `search.ts`). EVERY native solve is verified against its text: the parsed model must equal the
+ * emitted one (a filtered coefficient is a difference), the parsed padded right-hand sides must dominate their exact needs, the native tolerances must
+ * be the declared ones and presolve must be off. A qualified solve proves `UB = dual bound + the model's proved frame error` (exact rationals); an
+ * unqualified one still yields verified builds (published as witnesses) but proves nothing: its bound is unknown (null on the wire) and an
+ * infeasibility verdict from it is unresolved (`Required proof prerequisite unavailable`), never emptiness. The incumbent is scored as the exact rational
+ * of the validator's statistics: its downward enclosure is the lower bound, its exact score the incumbent's part of the upper bound, and the
+ * certificate compares the exact upper bound with the exact score.
  */
 
 import { MODEL_STATUS_TEXT } from '../native';
 import type { NativeResult } from '../native';
-import { objectiveModel, objectiveScore } from '../trueErgo';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { ItemLookup, PhysicalClassifiers, SolveParams } from '../types';
 import { preparePhysicalWeapon } from './blueprint';
@@ -30,13 +35,19 @@ import type { DecodedBuild } from './decode';
 import { prepareSubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
 import { nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
+import { assessNativeResult, boundEvidenceOf } from './nativeProof';
+import type { NativeAssessment } from './nativeProof';
 import { insertRows, noGoodRow } from './nogood';
 import type { PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
+import { exactAxes, exactObjectiveScore, scoreEnclosure, upperBoundExact } from './proof';
+import { ratCmp, ratSub, ratToNumber, type Rat } from './exact';
+import { ratRoundUp } from './rational';
 import { PUBLIC_REASONS } from './reasons';
-import { runSpatialSearch } from './search';
+import { runSpatialSearch, transportedBounds } from './search';
 import type { NodeEvaluation, SearchInterval, SearchNode } from './search';
 import { specializeLP } from './specialize';
+import type { SpecializedModel } from './specialize';
 import { preparePhysicalValidator, physicalBuildFromDecoded } from './validate';
 import type { PhysicalBuild, PhysicalBuildStats } from './validate';
 import { TED_FREE_WEIGHT_KG } from './spatial';
@@ -98,8 +109,11 @@ export interface VerifiedBuild {
   build: PhysicalBuild;
   stats: PhysicalBuildStats;
   axes: ObjectiveAxes;
-  /** Exact score in the objective frame (`scale` 1, `offset` 0), evaluated from the validator's statistics. */
+  /** Exact score in the objective frame (`scale` 1, `offset` 0), the exact rational of the validator's statistics rounded to nearest. */
   score: number;
+  /** The largest double at most the exact score (the proof lower bound) and the smallest at least it (the incumbent's part of the upper bound). */
+  scoreLower: number;
+  scoreUpper: number;
 }
 
 export interface SearchTelemetry {
@@ -113,16 +127,31 @@ export interface SearchTelemetry {
   provedEmptyNodes: number;
   /** Solver solutions the validator rejected and a no-good cut removed (see `nogood.ts`). */
   rejectedCandidates: number;
+  /** Solves whose parsed model was verified against the emitted text (`nativeProof.ts`): one per native solve, the confirmation included. */
+  readbackChecks: number;
+  /** Solves that failed a check and so proved nothing (no bound, no infeasibility verdict). */
+  unqualifiedSolves: number;
+  /** Time spent verifying parsed models, milliseconds (the cost of the every-solve policy). */
+  readbackMs: number;
+  /** The first few distinct reasons a solve was unqualified. */
+  unqualifiedReasons: string[];
+  /**
+   * The largest amount by which a qualified solve's proved upper bound fell BELOW the exact score of its own verified build: the native
+   * solver's floating-point noise (the pinned build exports no node duals, so no allowance can be proved for it). Zero when none was seen.
+   */
+  boundShortfall: number;
 }
 
 export interface PreciseSummary {
   /** Outer spatial calls, never native MIP nodes. */
   nodes: number;
-  /** Exact score of the incumbent, `null` without one. */
+  /** The downward enclosure of the incumbent's exact score, `null` without one. */
   lowerBound: number | null;
   /** Composed upper bound; `Infinity` when some live node has no proved bound. */
   upperBound: number;
   gap: number | null;
+  /** The same bounds as they travel: an unknown or unproved value is `null`, never `Infinity` and never zero. */
+  bounds: { lower: number | null; upper: number | null; gap: number | null };
   tolerance: number;
   /** The executed search finished. Search completion only, never proof authority. */
   completed: boolean;
@@ -156,6 +185,13 @@ export interface PreciseContext {
 // ---------------------------------------------------------------------------------------------
 
 export const DEFAULT_OBJECTIVE_TOLERANCE = 1e-5;
+/**
+ * How far a qualified node's proved upper bound may fall below the exact score of a build verified in that node before the bound is judged
+ * WRONG rather than noisy: the larger of the request tolerance and one part in 10^9 of the bound's magnitude (the observed solver noise is
+ * about 1e-15 relative, the ledger worst case 5e-12 absolute). A sanity guard on the proof inputs, not an allowance: it never widens a bound.
+ */
+export const BOUND_SANITY_RELATIVE = 1e-9;
+const boundShortfallLimit = (bound: Rat, tolerance: number): number => Math.max(tolerance, BOUND_SANITY_RELATIVE * Math.max(1, Math.abs(ratToNumber(bound))));
 /** Most solver solutions of one node the validator may reject (each is cut out and the node re-solved) before the node fails. */
 export const MAX_REJECTIONS_PER_NODE = 16;
 export const DEFAULT_MAX_SPATIAL_NODES = 512;
@@ -170,17 +206,6 @@ const limitReason = (status: string): string => {
   if (status === 'SolutionLimit') return PUBLIC_REASONS.nativeSolutionLimitReached;
   return (MODEL_STATUS_TEXT as Record<string, string>)[status] ?? status;
 };
-
-/** The node model's own upper bound: HiGHS's dual bound, or (an optimal solve without one) the objective plus the native gap in force. */
-function provedUpperBound(result: NativeResult): number | null {
-  const dual = result.mipDualBound;
-  if (dual !== null && Number.isFinite(dual)) return dual;
-  if (result.modelStatus.name === 'Optimal' && result.objectiveValue !== null && Number.isFinite(result.objectiveValue)) {
-    const gap = result.effectiveOptions.mip_abs_gap;
-    return result.objectiveValue + (typeof gap === 'number' ? gap : 0);
-  }
-  return null;
-}
 
 /** Root intervals: the active weight range clipped by the weight cap, split at the 3 kg knee where the penalty changes shape. */
 function rootIntervals(lo: number, hi: number, maxWeight: number | null | undefined): SearchInterval[] {
@@ -197,9 +222,12 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   const lookup = params.itemLookup;
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
   const tolerance = resolveTolerance(params.objectiveTolerance);
-  const telemetry: SearchTelemetry = { nativeSolves: 0, presolveRescues: 0, confirmedInfeasible: 0, provedEmptyNodes: 0, rejectedCandidates: 0 };
+  const telemetry: SearchTelemetry = {
+    nativeSolves: 0, presolveRescues: 0, confirmedInfeasible: 0, provedEmptyNodes: 0, rejectedCandidates: 0,
+    readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
+  };
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
-    lowerBound: null, upperBound: Infinity, gap: null, tolerance, completed: false, spatial: tedRequest, telemetry, ...partial,
+    lowerBound: null, upperBound: Infinity, gap: null, bounds: { lower: null, upper: null, gap: null }, tolerance, completed: false, spatial: tedRequest, telemetry, ...partial,
   });
 
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
@@ -214,51 +242,70 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     categoryChainOf: params.physicalOptions?.categoryChainOf,
     requirePathInstanceIds: true,
   });
-  const objective = objectiveModel(params);
   const useTrueErgo = params.useTrueErgo === true;
-  const nativeOptions = nativeSolveOptions(tolerance);
+
+  /** Verify one solve against the text it solved and the proof record of its model; the first reasons are kept for the report. */
+  const assess = (model: SpecializedModel, lpText: string, result: NativeResult): NativeAssessment => {
+    const started = now();
+    const assessment = assessNativeResult({ lpText, proof: model.proof }, result);
+    telemetry.readbackMs += now() - started;
+    telemetry.readbackChecks++;
+    if (!assessment.qualified) {
+      telemetry.unqualifiedSolves++;
+      for (const reason of assessment.reasons) if (telemetry.unqualifiedReasons.length < 3 && !telemetry.unqualifiedReasons.includes(reason)) telemetry.unqualifiedReasons.push(reason);
+    }
+    return assessment;
+  };
 
   const evaluate = async (node: SearchNode): Promise<NodeEvaluation<VerifiedBuild>> => {
     const spatialNode = node.interval === null ? undefined : { weightMin: node.interval.lo, weightMax: node.interval.hi };
     const model = specializeLP(blueprint, domain, params, spatialNode);
     if (model.provedEmpty !== null) {
       telemetry.provedEmptyNodes++;
-      return { verdict: 'infeasible', upperBound: null, candidate: null, exact: true };
+      return { verdict: 'infeasible', evidence: null, candidate: null, exact: true };
     }
+    const nativeOptions = nativeSolveOptions(tolerance);
     telemetry.nativeSolves++;
     const decisionColumns = [...model.columns.activeOccurrences].map(v => model.columns.occurrence(v) as string);
     for (let b = 0; b < domain.bases.length; b++) decisionColumns.push(model.columns.base(b));
     const cuts: string[] = [];
     for (;;) {
       const lpText = insertRows(model.lp, cuts);
-      const outcome = await solveWithPresolvePolicy(lpText, { options: nativeOptions, deadline: context.deadline, now, solve: context.solve ?? nativeSolve, presolve: context.presolve });
+      const outcome = await solveWithPresolvePolicy(lpText, {
+        options: nativeOptions, deadline: context.deadline, now, solve: context.solve ?? nativeSolve, presolve: context.presolve, includeReadback: true,
+      });
       if (outcome.kind === 'unresolved') {
         return {
           verdict: 'unresolved',
-          upperBound: null,
+          evidence: null,
           candidate: null,
           exact: model.exact,
           reason: outcome.cause === 'deadline' ? PUBLIC_REASONS.timeLimitReached : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable,
         };
       }
       if (outcome.kind === 'infeasible') {
-        // A model whose text may not be the model HiGHS solved proves nothing, emptiness included.
-        if (model.matrixFilterRisk || outcome.first.readStatus !== 'ok' || (outcome.confirmation !== null && outcome.confirmation.readStatus !== 'ok')) {
-          return { verdict: 'unresolved', upperBound: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
+        // An infeasibility verdict is evidence about the model HiGHS parsed: it counts only when the solve that DECIDES it (the presolve-off
+        // solve: the first one, or the confirmation of a presolved first one) was verified against the text (readback equal, allowances
+        // dominating, declared tolerances, presolve off), so a filtered coefficient can never prove emptiness.
+        const deciding = outcome.confirmation ?? outcome.first;
+        if (!assess(model, lpText, deciding).qualified) {
+          return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
         }
         telemetry.confirmedInfeasible++;
-        return { verdict: 'infeasible', upperBound: null, candidate: null, exact: model.exact };
+        return { verdict: 'infeasible', evidence: null, candidate: null, exact: model.exact };
       }
       if (outcome.presolveRescue) telemetry.presolveRescues++;
       const result = outcome.result;
       const status = result.modelStatus.name;
-      const trusted = !model.matrixFilterRisk && result.readStatus === 'ok';
-      const proved = trusted ? provedUpperBound(result) : null;
+      const assessment = assess(model, lpText, result);
+      const trusted = assessment.qualified;
+      // The bound of this solve: its dual bound, qualified or not (unqualified evidence proves nothing), plus the model's proved frame error.
+      const evidence = boundEvidenceOf(model.proof, result, assessment);
       const optimal = status === 'Optimal';
       const stopReason = optimal ? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable : limitReason(status);
 
       if (result.colValues === null) {
-        return { verdict: 'unresolved', upperBound: proved, candidate: null, exact: model.exact, reason: stopReason };
+        return { verdict: 'unresolved', evidence, candidate: null, exact: model.exact, reason: stopReason };
       }
       const values = columnValuesFromStructured(result.colNames, result.colValues);
       let decoded: DecodedBuild;
@@ -266,7 +313,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         decoded = decodeSolution(model, values);
       } catch (error) {
         if (error instanceof PhysicalModelError && error.code === 'DECODE_FAILED') {
-          return { verdict: 'failed', upperBound: proved, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed };
+          return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed };
         }
         throw error;
       }
@@ -275,18 +322,42 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       const stats = validation.stats;
       if (validation.ok && stats !== null) {
         const axes = axesOfStats(stats, useTrueErgo);
-        const score = objectiveScore(objective, axes);
-        const candidate = { score, payload: { decoded, build, stats, axes, score } };
-        if (optimal && trusted) return { verdict: 'solved', upperBound: proved, candidate, exact: model.exact, splitAt: stats.weight };
-        return { verdict: 'unresolved', upperBound: proved, candidate, exact: model.exact, reason: stopReason };
+        // The incumbent's score is the exact rational of the validator's statistics under the model's own resolved weights and payoff table,
+        // enclosed on both sides: the lower end is the proof lower bound, the upper end the incumbent's part of the upper bound.
+        const exactScore = exactObjectiveScore(model.objective.weights, model.objective.tchebycheff?.ideal ?? null, exactAxes(stats.exact, useTrueErgo));
+        const enclosure = scoreEnclosure(exactScore);
+        const candidate = {
+          score: enclosure.nominal,
+          scoreLower: enclosure.lower,
+          scoreUpper: enclosure.upper,
+          scoreExact: enclosure.exact,
+          payload: { decoded, build, stats, axes, score: enclosure.nominal, scoreLower: enclosure.lower, scoreUpper: enclosure.upper },
+        };
+        // A build verified in THIS node cannot score above the node's proved upper bound. The shortfall (how far the bound falls below the
+        // witness) is the native solver's own floating-point noise, which no proved allowance covers (the pinned build exports no node duals):
+        // it is REPORTED (`boundShortfall`), not hidden. A shortfall beyond `boundShortfallLimit` is no noise but a proof input that is wrong
+        // (the dual bound, the frame error, the padding): the bound is withheld rather than published next to a witness that contradicts it.
+        const proved = upperBoundExact(evidence);
+        if (trusted && proved !== null && ratCmp(enclosure.exact, proved) > 0) {
+          const shortfall = ratRoundUp(ratSub(enclosure.exact, proved));
+          telemetry.boundShortfall = Math.max(telemetry.boundShortfall, shortfall);
+          if (shortfall > boundShortfallLimit(proved, tolerance)) {
+            telemetry.unqualifiedSolves++;
+            const reason = `a verified build of the node scores ${shortfall} above the node's proved upper bound`;
+            if (telemetry.unqualifiedReasons.length < 3 && !telemetry.unqualifiedReasons.includes(reason)) telemetry.unqualifiedReasons.push(reason);
+            return { verdict: 'unresolved', evidence: { ...evidence, qualified: false }, candidate, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
+          }
+        }
+        if (optimal && trusted) return { verdict: 'solved', evidence, candidate, exact: model.exact, splitAt: stats.weight };
+        return { verdict: 'unresolved', evidence, candidate, exact: model.exact, reason: stopReason };
       }
       // The weight penalty of an inexact node is a lower envelope of q, so its optimum may be overswinging exactly: the relaxation is a valid
       // upper bound, the build is not a candidate, and the node is refined.
       const relaxationOnly = !model.exact && stats !== null && validation.violations.length > 0
         && validation.violations.every(v => v.code === 'OVERSWING_PREVENTED');
       if (relaxationOnly && stats !== null) {
-        if (optimal && trusted) return { verdict: 'solved', upperBound: proved, candidate: null, exact: false, splitAt: stats.weight };
-        return { verdict: 'unresolved', upperBound: proved, candidate: null, exact: false, reason: stopReason };
+        if (optimal && trusted) return { verdict: 'solved', evidence, candidate: null, exact: false, splitAt: stats.weight };
+        return { verdict: 'unresolved', evidence, candidate: null, exact: false, reason: stopReason };
       }
       // Any other rejection is a boundary the solver's tolerance admitted and exact arithmetic does not (or a fault). The rejected assignment is
       // cut out and the node solved again, so the valid builds beside it are still found; only a repeated rejection fails the node.
@@ -295,7 +366,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         cuts.push(noGoodRow(`nogood_${cuts.length}`, decisionColumns, values));
         continue;
       }
-      return { verdict: 'failed', upperBound: proved, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed };
+      return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed };
     }
   };
 
@@ -308,9 +379,10 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   const search = await runSpatialSearch<VerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline: context.deadline });
   const finished = summary({
     nodes: search.nodes,
-    lowerBound: search.incumbent?.score ?? null,
+    lowerBound: search.lowerBound,
     upperBound: search.upperBound,
     gap: search.gap,
+    bounds: transportedBounds(search),
     completed: search.completed,
   });
 

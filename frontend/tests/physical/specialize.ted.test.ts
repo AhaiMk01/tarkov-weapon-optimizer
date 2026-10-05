@@ -24,9 +24,10 @@ test('secants: exact closed forms on a concave piece, the zero line across the k
   assert.equal(chord.line.slope, 15);
   assert.equal(chord.line.intercept, -35);
   assert.equal(chord.exact, false);
-  assert.deepEqual(secantOfPenalty(1, 3), { line: { slope: 0, intercept: 0 }, kind: 'zero_exact', exact: true });
+  assert.deepEqual(secantOfPenalty(1, 3), { line: { slope: 0, intercept: 0 }, kind: 'zero_exact', exact: true, shift: 0 });
   assert.equal(secantOfPenalty(2, 5).kind, 'knee_zero_relaxation');
-  assert.deepEqual(secantOfPenalty(6, 6), { line: { slope: 0, intercept: 50 }, kind: 'constant_exact', exact: true });
+  assert.deepEqual(secantOfPenalty(6, 6), { line: { slope: 0, intercept: 50 }, kind: 'constant_exact', exact: true, shift: 0 });
+  assert.equal(chord.shift, 0, 'a chord that is exact in binary64 needs no shift');
   assert.equal(penaltyLineIsValid(4, 5, chord.line), true);
   assert.equal(penaltyLineIsValid(2, 5, chord.line), false, 'the chord of [4, 5] is above q at the knee of [2, 5]');
   assert.equal(penaltyLineIsValid(4, 5, { slope: 15, intercept: -34 }), false, 'a line above q at an endpoint is invalid');

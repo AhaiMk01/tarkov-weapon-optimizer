@@ -111,15 +111,54 @@ test('the normalization floor: a payoff range below one is clamped to one', asyn
   close(solution.objective, 1.1, 1e-9);
 });
 
-test('a very wide price normalization is a reported matrix-filter risk, and the readback shows HiGHS would drop the coefficient', async () => {
+/** The scale of one axis column of a model's objective plan. */
+const axisScaleOf = (proof: { objective: { axisScales: readonly { column: string; exponent: number; factor: number }[] } | null }, column: string) =>
+  proof.objective?.axisScales.find(s => s.column === column) as { exponent: number; factor: number };
+
+test('a very wide price normalization reads the price axis through an exact power of two, so HiGHS keeps every coefficient and the objective keeps its units', async () => {
   const lookup = oneMod(10, 2);
-  const wide = { zE: 100, nadE: 0, zR: -100, nadR: 0, zP: 0, nadP: 1e8 };
-  const { model } = prepare(lookup, WEAPON, { ergoWeight: 1, recoilWeight: 1, priceWeight: 1, useTchebycheff: true, idealPoint: wide });
-  assert.equal(model.matrixFilterRisk, true);
-  assert.ok(model.stats.minAbsCoefficient <= 1e-9, `smallest coefficient ${model.stats.minAbsCoefficient}`);
-  await assert.rejects(assertReadbackMatches(model.lp), /adjusted the model|different model/);
-  // a normal normalization keeps every coefficient
-  const normal = prepare(lookup, WEAPON, { ergoWeight: 1, recoilWeight: 1, priceWeight: 1, useTchebycheff: true, idealPoint: { zE: 100, nadE: 0, zR: -100, nadR: 0, zP: 0, nadP: 10000 } });
+  for (const [nadP, exponent] of [[1e8, 15], [1e12, 29]] as const) {
+    const wide = { zE: 100, nadE: 0, zR: -100, nadR: 0, zP: 0, nadP };
+    const { model } = prepare(lookup, WEAPON, { ergoWeight: 1, recoilWeight: 1, priceWeight: 1, useTchebycheff: true, idealPoint: wide });
+    assert.equal(model.matrixFilterRisk, false, `nadP ${nadP}`);
+    assert.equal(model.proof.withheld, null);
+    const price = axisScaleOf(model.proof, 'price_axis');
+    assert.equal(price.exponent, exponent, `nadP ${nadP}: the smallest coefficient 0.01 c_p is lifted just above 1e-6`);
+    assert.equal(price.factor, 2 ** exponent);
+    assert.equal(axisScaleOf(model.proof, 'ergo_axis').exponent, 0, 'an axis whose coefficients survive is left alone');
+    assert.equal(axisScaleOf(model.proof, 'rec_axis').exponent, 0);
+    assert.equal(model.objective.toOracle.scale, 1, 'the LP objective is the oracle objective: only a column is scaled');
+    assert.ok(model.lp.includes(`price_axis - ${2 ** exponent} price_n = 0`), 'the link row is exact');
+    assert.ok(model.objective.coefficients.some(c => c.column === 'price_n' && Math.abs(c.value) >= 1e-6));
+    assert.ok(model.stats.minAbsCoefficient >= 1e-6, `smallest coefficient ${model.stats.minAbsCoefficient}`);
+    assert.ok(model.stats.maxAbsCoefficient <= 2 ** 40, `largest coefficient ${model.stats.maxAbsCoefficient}`);
+    await assertReadbackMatches(model.lp);
+  }
+  // a small normalization keeps every coefficient above 1e-6 already: no scale, no extra column, the model exactly as before (at 1e4 the
+  // augmentation 0.01 c_p is 3.3e-7, which is lifted by 2^2: any coefficient below 1e-6 is scaled, not only the ones HiGHS would drop)
+  const normal = prepare(lookup, WEAPON, { ergoWeight: 1, recoilWeight: 1, priceWeight: 1, useTchebycheff: true, idealPoint: { zE: 100, nadE: 0, zR: -100, nadR: 0, zP: 0, nadP: 1000 } });
   assert.equal(normal.model.matrixFilterRisk, false);
+  assert.ok(normal.model.proof.objective?.axisScales.every(s => s.factor === 1));
+  assert.ok(!normal.model.lp.includes('price_n'));
   await assertReadbackMatches(normal.model.lp);
+});
+
+test('an axis no power of two up to 2^40 can bring into range keeps its text and withholds the proof, loudly', async () => {
+  const lookup = oneMod(10, 2);
+  // c_p = 1e-30: 0.01 c_p is 1e-32, and 2^40 x 1e-32 is still far below the filter: no legal scale.
+  const absurd = { zE: 100, nadE: 0, zR: -100, nadR: 0, zP: 0, nadP: 1e30 };
+  const { model } = prepare(lookup, WEAPON, { ergoWeight: 1, recoilWeight: 1, priceWeight: 1, useTchebycheff: true, idealPoint: absurd });
+  assert.equal(axisScaleOf(model.proof, 'price_axis').factor, 1, 'the model is left as written');
+  assert.match(model.proof.withheld ?? '', /no power-of-two scaling of the axis/);
+  assert.equal(model.matrixFilterRisk, true);
+  await assert.rejects(assertReadbackMatches(model.lp), /adjusted the model|different model/);
+});
+
+test('a tiny price weight of a WEIGHTED request is scaled the same way: p / 1000 below the filter is read through a power of two', async () => {
+  const lookup = oneMod(10, 2);
+  const { model } = prepare(lookup, WEAPON, { ergoWeight: 1, recoilWeight: 0, priceWeight: 1e-7 });
+  assert.equal(model.matrixFilterRisk, false, 'p / 1000 = 1e-10 would be dropped by HiGHS');
+  const price = axisScaleOf(model.proof, 'price_axis');
+  assert.ok(price.exponent > 0 && 1e-10 * price.factor >= 1e-6);
+  await assertReadbackMatches(model.lp);
 });
