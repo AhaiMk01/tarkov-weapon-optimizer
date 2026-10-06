@@ -76,6 +76,11 @@ is approximate. Decisions:
    balanced-weight optimum uses a repeated part; 10% of pure-recoil and 5% of pure-ergo optima do. The ledger harness and
    the research gates run Fast with repeats allowed, so they keep measuring the full count model. The toggle lives in a
    new power-user ("Advanced") menu that will host such options (owner, 2026-10-05).
+2d. **Part graphs are assumed acyclic (owner, 2026-10-06).** No pinned gun has a cycle (172 of 172: the no-ancestor-repetition
+   rule prunes nothing, `blueprint.stats.prunedAncestorEdges === 0`), and the owner believes the game does not allow one. The
+   cycle handling stays as is for now (Precise's ancestor rule keeps the occurrence tree finite; Fast adds its connectivity flow
+   only on a cyclic graph; cyclic test worlds stay). In Stage 4, when certified Fast lands, acyclicity becomes a checked
+   precondition: a cyclic gun is refused as unsupported data with a clear error, and the cycle code is removed with it.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.
