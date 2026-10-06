@@ -27,6 +27,12 @@
  * rejected only for overswinging is no fault: the node's penalty line is a relaxation, so its optimum may overswing exactly; the node is refined at that
  * build's weight instead (as in Precise). When the rejections reach the limit, or the time runs out, with no accepted point the outcome is `incomplete`.
  *
+ * Continuous slot edges first. Every node is solved first with the slot-edge counts e_s_c continuous (`FastModel.lpRelaxedEdges`, a relaxation):
+ * once the template counts are integer, the slot assignment is a flow over the template graph, and on every pinned gun its optimum came out integral,
+ * which then IS an optimum of the integer model. A fractional edge, a non-optimal stop or a point that must be cut falls back to the integer model of
+ * the node (the loop above, unchanged). HiGHS then works with about a tenth of the integer columns on the largest weapons. The integrality of that flow
+ * is measured, not proved: the fallback keeps every answer correct either way, and a certificate built on it needs the proof (Stage 4).
+ *
  * Every result carries its `outcome` (ADR 0013 section 6, `outcome.ts`). Fast has no proof frame: its native bound is the bound of the
  * approximate model, not a qualified bound of the physical problem, so a Fast result NEVER carries a physical certificate beyond
  * `approximate_optimal`, its upper bound and gap are unknown (null on the wire), and its lower bound is the downward enclosure of the exact
@@ -42,12 +48,13 @@ import type { ObjectiveAxes } from '../trueErgo';
 import type { SolveParams } from '../types';
 import { computeActiveBounds } from './bounds';
 import { columnValuesFromStructured } from './decode';
+import type { ColumnValues } from './decode';
 import { decodeFast } from './decodeFast';
 import { prepareSubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
 import { integerNoGood } from './fastCut';
 import type { IntegerNoGood } from './fastCut';
-import { FAST_PRESOLVE, isLimitStatus, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
+import { FAST_PRESOLVE, isLimitStatus, NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
 import type { PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
@@ -102,6 +109,9 @@ export interface FastSummary {
    * for tests and measurement: it is never transported (a Fast result has no physical upper bound) and never read as a certificate.
    */
   modelBound: number | null;
+  /** Node solves tried first with continuous slot-edge counts, and how many of them fell back to the integer model. */
+  relaxedEdgeSolves: number;
+  relaxedEdgeFallbacks: number;
 }
 
 export type FastResult =
@@ -129,6 +139,11 @@ export interface FastContext {
   presolve?: PresolveSetting;
   /** Override of {@link MAX_FAST_REJECTIONS} (the rejections one node may take), for tests. */
   maxRejections?: number;
+  /**
+   * 'relaxed-first' (default): every node is solved first with continuous slot-edge counts and falls back to the integer model when an edge comes out
+   * fractional or the point is rejected (same answers, fewer integer columns for HiGHS). 'integer': the integer model only (tests, measurement).
+   */
+  edgeIntegrality?: 'relaxed-first' | 'integer';
 }
 
 /**
@@ -153,6 +168,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
   const summary: FastSummary = {
     nativeSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, acyclic: true, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
+    relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0,
   };
   const moaDependent = isMoaDependent(params);
   /** A completed model search with no point: a Fast emptiness is never a physical proof (the classifier fences it). */
@@ -201,6 +217,97 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const useTrueErgo = params.useTrueErgo === true;
   const options = nativeSolveOptions(tolerance);
   const maxRejections = context.maxRejections ?? MAX_FAST_REJECTIONS;
+  const relaxEdges = context.edgeIntegrality !== 'integer';
+
+  /**
+   * Judge one native answer of a node: decode it, validate the build exactly and score it. Returns the node's evaluation, or `reject` when the point
+   * must be cut out and the node solved again (a decoded build the validator refused, or a count point that is no rooted tree).
+   */
+  type Judged = { evaluation: NodeEvaluation<FastVerifiedBuild> } | { reject: { values: ColumnValues; evidence: BoundEvidence; finished: boolean } };
+  const judge = (model: FastModel, result: NativeResult): Judged => {
+    const status = result.modelStatus.name;
+    const optimal = status === 'Optimal';
+    summary.modelObjective = result.objectiveValue;
+    const evidence = fastBoundEvidence(result);
+    const stopReason = isLimitStatus(status) ? reasonOfNativeLimit(status) : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable;
+    // A solve that ran to Optimal finished the search of an EXACT node whatever is then missing or rejected; an inexact node still needs refining and
+    // a limit stop has not finished.
+    const finished = optimal && model.exact;
+    if (result.colValues === null) {
+      return { evaluation: { verdict: 'unresolved', evidence, candidate: null, exact: model.exact, reason: stopReason, finished } };
+    }
+    const values = columnValuesFromStructured(result.colNames, result.colValues);
+
+    // A decision column that cannot be read as an integer is a solver fault: there is nothing to cut the point out by.
+    let decoded: ReturnType<typeof decodeFast>;
+    try {
+      decoded = decodeFast(model, values);
+    } catch (error) {
+      if (error instanceof PhysicalModelError && error.code === 'DECODE_FAILED') {
+        return { evaluation: { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished } };
+      }
+      throw error;
+    }
+    if (decoded.ok) {
+      const validation = validator.validate(decoded.build);
+      const stats = validation.stats;
+      if (validation.ok && stats !== null) {
+        const axes = axesOfStats(stats, useTrueErgo);
+        const exactScore = exactObjectiveScore(model.objective.weights, model.objective.tchebycheff?.ideal ?? null, exactAxes(stats.exact, useTrueErgo));
+        const enclosure = scoreEnclosure(exactScore);
+        const best: FastVerifiedBuild = { build: decoded.build, stats, axes, score: enclosure.nominal, scoreLower: enclosure.lower };
+        const candidate = { score: enclosure.nominal, scoreLower: enclosure.lower, scoreUpper: enclosure.upper, scoreExact: enclosure.exact, payload: best };
+        // A native limit stop with a verified build: a witness, searched no further (the model search of the node is unfinished).
+        if (optimal) return { evaluation: { verdict: 'solved', evidence, candidate, exact: model.exact, splitAt: stats.weight } };
+        return { evaluation: { verdict: 'unresolved', evidence, candidate, exact: model.exact, reason: stopReason, finished } };
+      }
+      // The penalty line of an inexact node is a lower envelope of q, so its optimum may be overswinging exactly: the relaxation is a valid bound, the
+      // build is not a candidate, and the node is refined at the weight of that build.
+      const relaxationOnly = !model.exact && stats !== null && validation.violations.length > 0 && validation.violations.every(v => v.code === 'OVERSWING_PREVENTED');
+      if (relaxationOnly && stats !== null) {
+        if (optimal) return { evaluation: { verdict: 'solved', evidence, candidate: null, exact: false, splitAt: stats.weight } };
+        return { evaluation: { verdict: 'unresolved', evidence, candidate: null, exact: false, reason: stopReason } };
+      }
+    }
+    return { reject: { values, evidence, finished } };
+  };
+
+  /**
+   * First try of a node with continuous slot-edge counts (`FastModel.lpRelaxedEdges`), a relaxation of the node's model. When its optimum has every
+   * edge integral, that point is feasible for the integer model and therefore optimal for it (the relaxation's optimum is at least the integer
+   * optimum), so the answer is judged exactly as an integer answer; its dual bound is still a valid bound of the node. Anything else (a fractional
+   * edge, a non-optimal stop) returns `null` and the caller solves the integer model as before; a point that must be cut returns `rejected` (the
+   * caller solves the integer model too, but the observed rejection outranks a coincident interrupt, ADR 0013 section 6). Only the deadline is final.
+   */
+  type RelaxedTry = NodeEvaluation<FastVerifiedBuild> | { rejected: BoundEvidence } | null;
+  const tryRelaxedEdges = async (model: FastModel): Promise<RelaxedTry> => {
+    if (model.edges.length === 0) return null;
+    const outcome = await solveWithPresolvePolicy(model.lpRelaxedEdges(), { options, deadline, now, solve: context.solve ?? nativeSolve, presolve });
+    summary.nativeSolves++;
+    summary.relaxedEdgeSolves++;
+    if (outcome.kind === 'unresolved') {
+      if (outcome.cause === 'deadline') return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.timeLimitReached };
+      summary.relaxedEdgeFallbacks++;
+      return null;
+    }
+    // The relaxation has no point, so the integer model has none either.
+    if (outcome.kind === 'infeasible') return { verdict: 'infeasible', evidence: null, candidate: null, exact: model.exact };
+    const result = outcome.result;
+    const fractional = result.modelStatus.name !== 'Optimal' || result.colValues === null || result.colNames === null
+      || model.edges.some(edge => {
+        const j = result.colIndexByName.get(edge.column);
+        const v = j === undefined ? Number.NaN : (result.colValues as Float64Array)[j];
+        return !(Math.abs(v - Math.round(v)) <= NATIVE_FEASIBILITY_TOLERANCE);
+      });
+    if (fractional) {
+      summary.relaxedEdgeFallbacks++;
+      return null;
+    }
+    const judged = judge(model, result);
+    if ('evaluation' in judged) return judged.evaluation;
+    summary.relaxedEdgeFallbacks++;
+    return { rejected: judged.reject.evidence };
+  };
 
   const evaluate = async (node: SearchNode): Promise<NodeEvaluation<FastVerifiedBuild>> => {
     const model = modelOf(node.interval);
@@ -208,6 +315,18 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     if (model.provedEmpty !== null) {
       requestReasons ??= model.provedEmpty.reasons;
       return { verdict: 'infeasible', evidence: null, candidate: null, exact: true };
+    }
+    if (relaxEdges) {
+      const relaxed = await tryRelaxedEdges(model);
+      if (relaxed !== null && !('rejected' in relaxed)) return relaxed;
+      // The integer re-solve is a stage of its own: yield so a cancel message is dispatched, then guard. A rejected point seen by the relaxed solve is
+      // an observed validation failure, which outranks the coincident interrupt (section 6); the integer model was never solved (unfinished).
+      await guard.yieldMacrotask();
+      const stop = guardStop(guard);
+      if (stop !== null) {
+        if (relaxed !== null) return { verdict: 'failed', evidence: relaxed.rejected, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished: false };
+        return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached };
+      }
     }
     const cuts: IntegerNoGood[] = [];
     let rejections = 0;
@@ -226,53 +345,9 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
         return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: outcome.cause === 'deadline' ? PUBLIC_REASONS.timeLimitReached : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
       }
       if (outcome.kind === 'infeasible') return { verdict: 'infeasible', evidence: null, candidate: null, exact: model.exact };
-
-      const result = outcome.result;
-      const status = result.modelStatus.name;
-      const optimal = status === 'Optimal';
-      summary.modelObjective = result.objectiveValue;
-      const evidence = fastBoundEvidence(result);
-      const stopReason = isLimitStatus(status) ? reasonOfNativeLimit(status) : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable;
-      // A solve that ran to Optimal finished the search of an EXACT node whatever is then missing or rejected; an inexact node still needs refining and
-      // a limit stop has not finished.
-      const finished = optimal && model.exact;
-      if (result.colValues === null) {
-        return { verdict: 'unresolved', evidence, candidate: null, exact: model.exact, reason: stopReason, finished };
-      }
-      const values = columnValuesFromStructured(result.colNames, result.colValues);
-
-      // A decision column that cannot be read as an integer is a solver fault: there is nothing to cut the point out by.
-      let decoded: ReturnType<typeof decodeFast>;
-      try {
-        decoded = decodeFast(model, values);
-      } catch (error) {
-        if (error instanceof PhysicalModelError && error.code === 'DECODE_FAILED') {
-          return { verdict: 'failed', evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished };
-        }
-        throw error;
-      }
-      let stats: PhysicalBuildStats | null = null;
-      if (decoded.ok) {
-        const validation = validator.validate(decoded.build);
-        stats = validation.stats;
-        if (validation.ok && stats !== null) {
-          const axes = axesOfStats(stats, useTrueErgo);
-          const exactScore = exactObjectiveScore(model.objective.weights, model.objective.tchebycheff?.ideal ?? null, exactAxes(stats.exact, useTrueErgo));
-          const enclosure = scoreEnclosure(exactScore);
-          const best: FastVerifiedBuild = { build: decoded.build, stats, axes, score: enclosure.nominal, scoreLower: enclosure.lower };
-          const candidate = { score: enclosure.nominal, scoreLower: enclosure.lower, scoreUpper: enclosure.upper, scoreExact: enclosure.exact, payload: best };
-          // A native limit stop with a verified build: a witness, searched no further (the model search of the node is unfinished).
-          if (optimal) return { verdict: 'solved', evidence, candidate, exact: model.exact, splitAt: stats.weight };
-          return { verdict: 'unresolved', evidence, candidate, exact: model.exact, reason: stopReason, finished };
-        }
-        // The penalty line of an inexact node is a lower envelope of q, so its optimum may be overswinging exactly: the relaxation is a valid bound, the
-        // build is not a candidate, and the node is refined at the weight of that build.
-        const relaxationOnly = !model.exact && stats !== null && validation.violations.length > 0 && validation.violations.every(v => v.code === 'OVERSWING_PREVENTED');
-        if (relaxationOnly && stats !== null) {
-          if (optimal) return { verdict: 'solved', evidence, candidate: null, exact: false, splitAt: stats.weight };
-          return { verdict: 'unresolved', evidence, candidate: null, exact: false, reason: stopReason };
-        }
-      }
+      const judged = judge(model, outcome.result);
+      if ('evaluation' in judged) return judged.evaluation;
+      const { values, evidence, finished } = judged.reject;
       // Any other rejection is a validation failure (it outranks a coincident clock stop): the rejected point is cut out and the node solved again, so
       // the valid builds beside it are still found; the node fails when the rejections reach the limit, or the time runs out.
       const deadlineHit = deadline - now() <= 0;

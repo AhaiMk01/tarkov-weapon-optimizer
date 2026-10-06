@@ -143,6 +143,12 @@ export interface FastModel {
   readonly provedEmpty: ProvedEmpty | null;
   /** The model text with the cuts of a rejected-point loop spliced in. */
   lp(cuts?: readonly IntegerNoGood[]): string;
+  /**
+   * The same model with every slot-edge count `e_s_c` continuous over its domain (counts, bases, lots and presence stay integer): a relaxation.
+   * Once the template counts are integer, the slot assignment is a flow over the template graph, and its optimum came out integral on every pinned
+   * gun, so `solveFast` tries this text first and falls back to {@link lp} when an edge is fractional or the point is rejected.
+   */
+  lpRelaxedEdges(): string;
   readonly edges: readonly FastEdge[];
   /** Name of the template-count column of an active template, or null. */
   count(t: number): string | null;
@@ -859,6 +865,7 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): Fas
     lpBase: lp,
     provedEmpty: { source: 'domain', reasons },
     lp: () => lp,
+    lpRelaxedEdges: () => lp,
     edges: [],
     count: () => null,
     base: baseName,
@@ -908,6 +915,7 @@ export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemD
   const objective = specializer.build();
   const w = specializer.w;
   const lpBase = w.toString();
+  let relaxedEdgesText: string | undefined;
   const proved = specializer.contradictionDetails.length > 0;
   const tedMode = resolved.useTrueErgo || resolved.preventOverswing;
   const penalty = specializer.penalty;
@@ -919,6 +927,7 @@ export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemD
     lpBase,
     provedEmpty: proved ? { source: 'request', reasons: specializer.contradictionDetails } : null,
     lp: (cuts = []) => appendCuts(lpBase, cuts),
+    lpRelaxedEdges: () => (relaxedEdgesText ??= w.toStringRelaxing(new Set(specializer.edges.map(edge => edge.column)))),
     edges: specializer.edges,
     count: t => (t > 0 && t < graph.templateCount && graph.active[t] ? countName(t) : null),
     base: baseName,

@@ -140,14 +140,27 @@ export class LpWriter {
   }
 
   toString(): string {
-    const lines: string[] = ['Maximize', `  obj: ${this.objective}`, 'Subject To', ...this.rowLines, 'Bounds', ...this.boundLines];
-    if (this.integerNames.length > 0) {
+    return this.write(this.integerNames, this.binaryNames, []);
+  }
+
+  /**
+   * The same model with the listed integer and binary columns made continuous over their declared domains: a relaxation of
+   * {@link toString} (every row, bound and objective unchanged; only the integrality declarations of those columns are dropped).
+   */
+  toStringRelaxing(relaxed: ReadonlySet<string>): string {
+    const binaryBounds = this.binaryNames.filter(name => relaxed.has(name)).map(name => `  0 <= ${name} <= 1`);
+    return this.write(this.integerNames.filter(name => !relaxed.has(name)), this.binaryNames.filter(name => !relaxed.has(name)), binaryBounds);
+  }
+
+  private write(integers: readonly string[], binaries: readonly string[], extraBounds: readonly string[]): string {
+    const lines: string[] = ['Maximize', `  obj: ${this.objective}`, 'Subject To', ...this.rowLines, 'Bounds', ...this.boundLines, ...extraBounds];
+    if (integers.length > 0) {
       lines.push('General');
-      chunk(this.integerNames, lines);
+      chunk(integers, lines);
     }
-    if (this.binaryNames.length > 0) {
+    if (binaries.length > 0) {
       lines.push('Binary');
-      chunk(this.binaryNames, lines);
+      chunk(binaries, lines);
     }
     lines.push('End');
     return lines.join('\n');
