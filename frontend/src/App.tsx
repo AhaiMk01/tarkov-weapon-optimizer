@@ -16,6 +16,7 @@ import { useRequestController } from './components/common/useRequestController'
 import { classifyFailure } from './components/common/failureView'
 import type { Failure } from './components/common/failureView'
 import { authorityOf, qualifierKey, reasonViewOf, resultViewOf, toastOf } from './components/common/resultView'
+import { ALLOW_REPEATED_PARTS_STORAGE_KEY, readAllowRepeatedParts } from './components/common/advancedDefaults'
 import { floorViewOf, moaSliderRange, retainedFloorOf } from './components/common/floorView'
 import type { FloorView } from './components/common/floorView'
 import { asExploreSnapshot, exploreToastOf, retainedExploreOf } from './components/explore/exploreView'
@@ -293,6 +294,8 @@ function AppContent({
     if (s === 'fast' || s === 'precise' || s === 'auto') return s
     return 'auto'
   })
+  /** Advanced menu, Fast only: allow several copies of one part (default off: one copy of each part). Precise ignores it. */
+  const [allowRepeatedParts, setAllowRepeatedParts] = useState<boolean>(() => readAllowRepeatedParts(localStorage.getItem(ALLOW_REPEATED_PARTS_STORAGE_KEY)))
   const [traderLevels, setTraderLevels] = useState(initialLevelConfig.traderLevels)
   const [activeTab, setActiveTab] = useState<string>('optimize')
   const [viewMode, setViewMode] = useState<'detailed' | 'compact' | 'table'>(() => {
@@ -352,6 +355,7 @@ function AppContent({
   }, [gameMode])
   useEffect(() => { localStorage.setItem('viewMode', viewMode) }, [viewMode])
   useEffect(() => { localStorage.setItem('solverPrecision', solverPrecision) }, [solverPrecision])
+  useEffect(() => { localStorage.setItem(ALLOW_REPEATED_PARTS_STORAGE_KEY, String(allowRepeatedParts)) }, [allowRepeatedParts])
   useEffect(() => { localStorage.setItem('useExactMOAFloor', String(useExactMOAFloor)) }, [useExactMOAFloor])
   useEffect(() => { localStorage.setItem('useTrueErgo', String(useTrueErgo)); localStorage.removeItem('useEvoErgo') }, [useTrueErgo])
   useEffect(() => { localStorage.setItem('useTchebycheff', String(useTchebycheff)) }, [useTchebycheff])
@@ -643,6 +647,7 @@ function AppContent({
         useTchebycheff,
         maxMoa: useMOA ? effectiveMaxMOA : null,
         precision: solverPrecision,
+        allowRepeatedParts,
       }), gameMode, i18n.language || 'en', { signal: controller.signal })
       setResult(res)
       announce(toastOf(resultViewOf(res), 'optimize'))
@@ -730,6 +735,7 @@ function AppContent({
           steps: exploreSteps,
           maxMoa: useMOA ? effectiveMaxMOA : null,
           precision: solverPrecision,
+          allowRepeatedParts,
           axisLimit: useExploreBudget ? exploreBudgetValue : null,
         })
         try {
@@ -788,6 +794,8 @@ function AppContent({
         barter_available: barterAvailable,
         barter_exclude_dogtags: barterExcludeDogtags,
         precise_mode: true,
+        // The Gunsmith call is always Precise, which ignores the option; it is carried so every request of the app reads the one setting.
+        allow_repeated_parts: allowRepeatedParts || undefined,
       }, gameMode, i18n.language || 'en', { signal: controller.signal })
       setGunsmithResult(res)
       announce(toastOf(resultViewOf(res), 'gunsmith'))
@@ -926,6 +934,10 @@ function AppContent({
     onPlayerLevelChange: setPlayerLevel,
     traderLevels,
     onTraderLevelsChange: setTraderLevels,
+    solverPrecision,
+    onSolverPrecisionChange: setSolverPrecision,
+    allowRepeatedParts,
+    onAllowRepeatedPartsChange: setAllowRepeatedParts,
   }
 
   const tabItems = [
@@ -1151,19 +1163,6 @@ function AppContent({
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <Button block icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing}>{t('ui.refresh_data')}</Button>
                     <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />
-                    <Tooltip title={t('sidebar.solver_precision_tooltip')}>
-                      <Segmented
-                        block
-                        size="small"
-                        value={solverPrecision}
-                        onChange={(v) => setSolverPrecision(v as PrecisionRequest)}
-                        options={[
-                          { label: t('sidebar.auto'), value: 'auto' },
-                          { label: t('sidebar.fast'), value: 'fast' },
-                          { label: t('sidebar.precise'), value: 'precise' },
-                        ]}
-                      />
-                    </Tooltip>
                     <Select
                       style={{ width: '100%' }}
                       popupMatchSelectWidth={false}
@@ -1183,19 +1182,6 @@ function AppContent({
                   <Button icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing} aria-label={t('ui.refresh_data')} />
                 </Tooltip>
                 <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />
-                <Tooltip title={t('sidebar.solver_precision_tooltip')}>
-                  <span style={{ display: 'inline-flex', verticalAlign: 'middle' }}>
-                    <Segmented
-                      value={solverPrecision}
-                      onChange={(v) => setSolverPrecision(v as PrecisionRequest)}
-                      options={[
-                        { label: t('sidebar.auto'), value: 'auto' },
-                        { label: t('sidebar.fast'), value: 'fast' },
-                        { label: t('sidebar.precise'), value: 'precise' },
-                      ]}
-                    />
-                  </span>
-                </Tooltip>
                 {/* Theme and language collapse to icon triggers: the two full
                     Selects cost ~430px of header width and wrapped the row on
                     narrow desktops. The current choice stays readable as the

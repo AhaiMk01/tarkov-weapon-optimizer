@@ -64,6 +64,7 @@ import type { BoundEvidence } from './proof';
 import { PUBLIC_REASONS, reasonOfNativeLimit } from './reasons';
 import { runSpatialSearch } from './search';
 import type { NodeEvaluation, SearchInterval, SearchNode } from './search';
+import type { SpecializeRequest } from './specialize';
 import { specializeFast } from './specializeFast';
 import type { FastModel } from './specializeFast';
 import { DEFAULT_MAX_SPATIAL_NODES, getPhysicalBlueprint, resolveTolerance, rootIntervals } from './solvePrecise';
@@ -112,6 +113,8 @@ export interface FastSummary {
   /** Node solves tried first with continuous slot-edge counts, and how many of them fell back to the integer model. */
   relaxedEdgeSolves: number;
   relaxedEdgeFallbacks: number;
+  /** The model allowed at most one copy of each part (`allowRepeatedParts` was not true). */
+  singleCopy: boolean;
 }
 
 export type FastResult =
@@ -123,7 +126,10 @@ export type FastResult =
   | { kind: 'incomplete'; reason: string; outcome: OptimizeOutcome; summary: FastSummary };
 
 export interface FastContext {
-  /** The normalized request. `useTchebycheff` needs an `idealPoint`. TrueErgo and Prevent Overswing run the weight search over the count model. */
+  /**
+   * The normalized request. `useTchebycheff` needs an `idealPoint`. TrueErgo and Prevent Overswing run the weight search over the count model.
+   * `allowRepeatedParts` (default false) decides whether the model may install several copies of one part: without it every part is capped at one copy.
+   */
   params: SolveParams;
   /**
    * The request epoch (ADR 0013 section 4D): one queue-inclusive deadline, the out-of-band cancel flag and the macrotask yield. Checked before
@@ -166,9 +172,12 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const presolve = context.presolve ?? FAST_PRESOLVE;
   const tolerance = resolveTolerance(params.objectiveTolerance);
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
+  /** Owner decision 2c: one copy of each part unless the request allows repeats. The cap is a model restriction, so it never changes what a Fast result claims. */
+  const singleCopy = params.allowRepeatedParts !== true;
+  const request: SpecializeRequest = { ...params, singleCopy };
   const summary: FastSummary = {
     nativeSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, acyclic: true, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
-    relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0,
+    relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, singleCopy,
   };
   const moaDependent = isMoaDependent(params);
   /** A completed model search with no point: a Fast emptiness is never a physical proof (the classifier fences it). */
@@ -193,8 +202,8 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   /** The model of one node; a request with no TED has one model, built once (a constant contradiction of the request is read from it before the search). */
   let rootModel: FastModel | null = null;
   const modelOf = (interval: SearchInterval | null): FastModel => {
-    if (interval === null) return (rootModel ??= specializeFast(blueprint, domain, params));
-    return specializeFast(blueprint, domain, params, { weightMin: interval.lo, weightMax: interval.hi });
+    if (interval === null) return (rootModel ??= specializeFast(blueprint, domain, request));
+    return specializeFast(blueprint, domain, request, { weightMin: interval.lo, weightMax: interval.hi });
   };
   const measure = (model: FastModel): void => {
     summary.columns = Math.max(summary.columns, model.stats.columns);

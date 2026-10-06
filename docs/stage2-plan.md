@@ -71,6 +71,11 @@ is approximate. Decisions:
 2b. **Fast supports TrueErgo and Prevent Overswing (owner, 2026-10-05).** A Fast request (or Auto resolving to Fast)
    with TED runs the weight search on the Fast count model and returns a Fast, approximate answer; it is never silently
    upgraded to Precise (Phase 2.6b). Precise keeps its own certified TED search.
+2c. **Fast uses one copy per part by default (owner, 2026-10-05).** A request option `allowRepeatedParts` (default false)
+   lets Fast install several copies of one template; Precise always allows repeats. Measured on the pinned snapshot: no
+   balanced-weight optimum uses a repeated part; 10% of pure-recoil and 5% of pure-ergo optima do. The ledger harness and
+   the research gates run Fast with repeats allowed, so they keep measuring the full count model. The toggle lives in a
+   new power-user ("Advanced") menu that will host such options (owner, 2026-10-05).
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.

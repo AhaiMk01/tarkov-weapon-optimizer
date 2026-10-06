@@ -77,8 +77,8 @@ test('relaxed-first equals integer-only on seeded worlds (acyclic, cyclic, TED),
   for (const { label, world } of worlds) {
     const { params } = world;
     const deadline = performance.now() + 60_000;
-    const relaxed = await solveFast({ params, deadline });
-    const integer = await solveFast({ params, deadline, edgeIntegrality: 'integer' });
+    const relaxed = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline });
+    const integer = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline, edgeIntegrality: 'integer' });
     sameAnswer(label, relaxed, integer);
     if (relaxed.kind === 'build') {
       builds++;
@@ -97,7 +97,7 @@ test('relaxed-first equals integer-only on seeded worlds (acyclic, cyclic, TED),
 test('a fractional edge falls back to the integer model and ends in the same build', async () => {
   const { params } = randomWorld(5, false);
   const deadline = performance.now() + 60_000;
-  const reference = await solveFast({ params, deadline, edgeIntegrality: 'integer' });
+  const reference = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline, edgeIntegrality: 'integer' });
   assert.equal(reference.kind, 'build');
   // The solver answers the RELAXED text (no e_ column declared integer) with one edge nudged to a fractional value.
   let nudged = 0;
@@ -112,7 +112,7 @@ test('a fractional edge falls back to the integer model and ends in the same bui
     values[j] += 0.5;
     return { ...result, colValues: values };
   };
-  const relaxed = await solveFast({ params, deadline, solve: fractional });
+  const relaxed = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline, solve: fractional });
   assert.ok(nudged >= 1, 'the relaxed text was solved');
   assert.equal(relaxed.summary.relaxedEdgeFallbacks, relaxed.summary.relaxedEdgeSolves, 'every relaxed answer fell back');
   sameAnswer('fractional fallback', relaxed, reference);
@@ -120,7 +120,7 @@ test('a fractional edge falls back to the integer model and ends in the same bui
 
 test('relaxed-first on a plain request: one relaxed solve, no fallback, the integer model untouched', async () => {
   const { params } = randomWorld(7, false);
-  const result = await solveFast({ params, deadline: performance.now() + 60_000 });
+  const result = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline: performance.now() + 60_000 });
   if (result.kind !== 'build') return;
   assert.equal(result.summary.relaxedEdgeSolves, 1);
   assert.equal(result.summary.relaxedEdgeFallbacks, 0);

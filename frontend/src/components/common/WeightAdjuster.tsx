@@ -19,8 +19,6 @@ interface WeightAdjusterProps {
   onWeightChange: (ergo: number, recoil: number, price: number) => void
   useTrueErgo: boolean
   onUseTrueErgoChange: (v: boolean) => void
-  useTchebycheff: boolean
-  onUseTchebycheffChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -113,8 +111,6 @@ export function WeightAdjuster({
   onWeightChange,
   useTrueErgo,
   onUseTrueErgoChange,
-  useTchebycheff,
-  onUseTchebycheffChange,
   useBudget,
   onUseBudgetChange,
   maxPrice,
@@ -192,15 +188,6 @@ export function WeightAdjuster({
                   </Tooltip>
                 </Space>
                 <Segmented size="small" value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
-              </div>
-              <div style={toggleRowStyle}>
-                <Space size={4}>
-                  <Text type="secondary" style={labelStyle}>{t('optimize.tchebycheff')}</Text>
-                  <Tooltip title={t('optimize.tchebycheff_tooltip')}>
-                    <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
-                  </Tooltip>
-                </Space>
-                <Segmented size="small" value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <Text type="secondary" style={labelStyle}>{t('optimize.weight_ui_label')}</Text>

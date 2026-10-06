@@ -325,6 +325,11 @@ export interface SolveParams {
   physicalOptions?: PhysicalClassifiers;
   preciseMode?: boolean;
   /**
+   * FAST ONLY (owner decision 2c). When the resolved mode is Fast and this is not exactly `true`, the Fast model installs at most ONE copy of
+   * each part (the default). `true` restores the full count model, which may repeat a part. Precise ignores it and always allows repeats.
+   */
+  allowRepeatedParts?: boolean;
+  /**
    * What the caller asked for, echoed as `precision_request` (an Auto request that the caller resolved into `preciseMode` is still 'auto').
    * Default: 'precise' when `preciseMode` is true, otherwise 'fast'. It never changes what runs: `preciseMode` does (a TrueErgo or Prevent
    * Overswing request is not upgraded to Precise: Fast runs the weight search on its own count model), and `precision_resolved` says what ran.

@@ -15,7 +15,7 @@ import { barter, flea, gun, gunWith, lookupOf, mod, modWith, slot, trader, WEAPO
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
   weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup),
-  ergoWeight: 1, recoilWeight: 0, priceWeight: 0, fleaAvailable: true, ...extra,
+  ergoWeight: 1, recoilWeight: 0, priceWeight: 0, fleaAvailable: true, allowRepeatedParts: true, ...extra,
 });
 
 const FAR = (): number => performance.now() + 120_000;

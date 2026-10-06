@@ -19,7 +19,7 @@ import { gun, lookupOf, mod, slot, WEAPON } from './lpFixtures';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
   weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup),
-  ergoWeight: 1, recoilWeight: 0, priceWeight: 0, ...extra,
+  ergoWeight: 1, recoilWeight: 0, priceWeight: 0, allowRepeatedParts: true, ...extra,
 });
 const FAR = (): number => performance.now() + 120_000;
 

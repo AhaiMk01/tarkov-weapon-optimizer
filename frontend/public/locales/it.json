@@ -23,6 +23,12 @@
     "precise": "Preciso",
     "solver_precision_tooltip": "Auto: Preciso con albero piccolo, Veloce con albero grande. Veloce: LP rapido per alberi di mod grandi. Preciso: variabili di posizionamento complete, più lento ma esatto su mod multi-slot."
   },
+  "advanced": {
+    "title": "Avanzate",
+    "solver_precision": "Precisione del solutore",
+    "allow_repeated_parts": "Consenti parti ripetute",
+    "allow_repeated_parts_tooltip": "In Fast mode, builds use at most one of each part unless this is on. Precise always allows repeated parts. Allowing repeats can find slightly better builds for extreme settings and is a little slower."
+  },
   "tabs": {
     "explore": "Esplora",
     "optimize": "Ottimizza",
@@ -147,6 +153,8 @@
     "qualifier_fast_model_tooltip": "Fast mode searches a template-count model of the weapon. It is quick but approximate: its answers are not proved optimal.",
     "qualifier_provisional_moa": "Modello MOA provvisorio",
     "qualifier_provisional_moa_tooltip": "This result depends on a MOA limit. MOA comes from a provisional model, so a result that uses it is never presented as proved.",
+    "one_copy_per_part": "Una copia per parte",
+    "one_copy_per_part_tooltip": "This Fast result uses at most one of each part. Turn on Allow repeated parts under Advanced to allow repeats.",
     "bound_unknown": "sconosciuto",
     "best_build": "Build migliore",
     "build_found": "Build trovato",
@@ -349,7 +357,7 @@
     "glossary_forge_desc": "Open a build in EFTForge with one click. EFTForge's format cannot name repeated parts or slots, so export is disabled for builds with several copies of one part, with the reason shown. The in-app list is never affected.",
     "precision_title": "5. Solver Precision Modes (Auto / Fast / Precise)",
     "precision_intro": "In weapon modding, accessories (such as flashlights, lasers, backup sights, and rail mounts) can fit into multiple candidate slots across different handguards and adapters. This is the multi-slot assignment problem:",
-    "precision_fast": "Fast mode: searches a template-count model of the weapon, usually in about a second. The result is approximate and is labelled so (also with TrueErgo and Prevent Overswing, which Fast supports with its own weight search); it is not proved optimal.",
+    "precision_fast": "Fast mode: searches a template-count model of the weapon, usually in about a second. The result is approximate and is labelled so (also with TrueErgo and Prevent Overswing, which Fast supports with its own weight search); it is not proved optimal. By default Fast uses at most one of each part; turn on Allow repeated parts under Advanced to allow repeats (Precise always allows them).",
     "precision_precise": "Precise mode: gives every installed copy of a part its own physical slot and returns a proved optimum or a proved infeasibility. TrueErgo and Prevent Overswing run an exact weight search. A large weapon may stop at the time limit, which gives a feasible build or no build, never a false proof.",
     "precision_auto": "Auto mode (default): chooses by weapon size. Weapons whose exact model is small enough (up to about 15,000 part placements: pistols, SMGs, shotguns, bolt guns, DMRs) run in Precise mode; very large ones (the AK and M4 families) run in Fast mode and are labelled approximate.",
     "glossary_precision_title": "Solver Precision (Auto / Fast / Precise)",

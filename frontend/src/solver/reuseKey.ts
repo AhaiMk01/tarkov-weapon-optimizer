@@ -153,6 +153,9 @@ export function computeExactSolveCacheKey(
   const base = JSON.parse(computeIdealPointCacheKey(lang, gameMode, req));
   return JSON.stringify({
     ...base,
+    // A full solve can be a Fast one, and Fast answers differ with the one-copy cap (owner decision 2c). The endpoint key above deliberately omits it:
+    // only certified Precise payoff tables are ever stored under it, and Precise ignores the option.
+    allow_repeated_parts: req.allow_repeated_parts === true,
     ergo_weight: Number(req.ergo_weight ?? 1),
     recoil_weight: Number(req.recoil_weight ?? 1),
     price_weight: Number(req.price_weight ?? 0),

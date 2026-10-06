@@ -324,7 +324,8 @@ test('Fast honours the stash: an owned part has no offer to buy and is still ins
 test('Fast installs several copies of one part with the same provenance and spend as Precise: preset supply, stash, purchase, distinct instances', async () => {
   const lookup = provenance();
   const precise = await solve(paramsOf(lookup, { ownedItems: ['b'], priceWeight: 0.01 }));
-  const params = paramsOf(lookup, { preciseMode: false, ownedItems: ['b'], priceWeight: 0.01 });
+  // Repeats allowed: Fast installs one copy of each part by default (owner decision 2c, fastSingleCopy.test.ts), and this test is about several copies.
+  const params = paramsOf(lookup, { preciseMode: false, allowRepeatedParts: true, ownedItems: ['b'], priceWeight: 0.01 });
   const fast = await solve(params);
   assert.equal(fast.status, 'optimal', fast.reason);
   assert.deepEqual(fast.selected_item_ids, ['a', 'a', 'b', 'c'], 'duplicates are kept');

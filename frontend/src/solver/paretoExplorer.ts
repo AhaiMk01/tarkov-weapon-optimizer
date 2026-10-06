@@ -51,6 +51,8 @@ export interface ParetoParams {
   /** Stash multiset (validated by the operation layer), forwarded to every target's solve. */
   ownedItems?: readonly string[];
   preciseMode?: boolean;
+  /** Fast only: allow several copies of one part (default false: one copy of each part). Forwarded to every target's solve. */
+  allowRepeatedParts?: boolean;
   /** What the caller asked for, echoed on every point's `precision_request`. */
   precisionRequest?: PrecisionRequest;
   boundsMode?: 'structural' | 'naive';
@@ -84,6 +86,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     playerLevel: p.playerLevel,
     ...(p.ownedItems === undefined ? {} : { ownedItems: p.ownedItems }),
     preciseMode: p.preciseMode,
+    ...(p.allowRepeatedParts === undefined ? {} : { allowRepeatedParts: p.allowRepeatedParts }),
     precisionRequest: p.precisionRequest,
     boundsMode: p.boundsMode,
     structuralBounds: p.structuralBounds,

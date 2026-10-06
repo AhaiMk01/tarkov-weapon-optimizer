@@ -288,6 +288,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     const params: SolveParams = {
       ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise),
       maxMOA: req.max_moa,
+      allowRepeatedParts: req.allow_repeated_parts === true,
       ergoWeight: req.ergo_weight ?? 1,
       recoilWeight: req.recoil_weight ?? 1,
       priceWeight: req.price_weight ?? 0,
@@ -346,7 +347,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       guard,
       precisionRequest,
       usePrecise,
-      baseParams: { ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise), maxMOA: req.max_moa },
+      baseParams: { ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise), maxMOA: req.max_moa, allowRepeatedParts: req.allow_repeated_parts === true },
       optimize: stepOptimizer(owned.items),
       publishSnapshot: snapshot => post('snapshot', id, snapshot),
     });
@@ -610,6 +611,7 @@ function paretoParamsOf(input: ExploreRunInput): ParetoParams {
     playerLevel: p.playerLevel,
     ownedItems: input.ownedItems,
     preciseMode: input.usePrecise,
+    allowRepeatedParts: p.allowRepeatedParts === true,
     precisionRequest: input.precisionRequest,
     boundsMode: p.boundsMode,
     structuralBounds: p.structuralBounds,

@@ -20,7 +20,7 @@ async function compare(seed: number, cyclic: boolean): Promise<{ outcome: string
   const deadline = performance.now() + 60_000;
   const precise = await solvePrecise({ params, deadline });
   // Presolve off, the setting the exactness claim is measured with: HiGHS presolve ON returns a wrong Optimal on seed 123 (fastPresolve.test.ts).
-  const fast = await solveFast({ params, deadline, presolve: 'off' });
+  const fast = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline, presolve: 'off' });
   const label = `seed ${seed} (${cyclic ? 'cyclic' : 'acyclic'})`;
   if (precise.kind === 'incomplete') return { outcome: 'precise incomplete' };
   if (precise.kind === 'empty') {
@@ -63,7 +63,7 @@ const near = (a: number, b: number): boolean => Math.abs(a - b) <= TED_SLACK + 1
 async function compareTed(seed: number, cyclic: boolean): Promise<{ outcome: string }> {
   const { params } = randomTedWorld(seed, cyclic);
   const precise = await solvePrecise({ params, deadline: performance.now() + 60_000 });
-  const fast = await solveFast({ params, deadline: performance.now() + 60_000, presolve: 'off' });
+  const fast = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline: performance.now() + 60_000, presolve: 'off' });
   const label = `seed ${seed} (${cyclic ? 'cyclic' : 'acyclic'}, TrueErgo ${String(params.useTrueErgo)}, Prevent Overswing ${String(params.preventOverswing)})`;
   assert.equal(fast.summary.spatial, true, label);
   if (fast.kind === 'build') {

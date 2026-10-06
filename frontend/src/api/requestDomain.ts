@@ -7,6 +7,9 @@
  * the budget, the filters) except the MOA cap it searches, plus no objective (its objective is a constant zero) and no precision (it is always
  * Precise). `owned_items` is deliberately absent: there is no stash input in this phase, and an omitted list means zero stock (ADR 0008).
  *
+ * `allow_repeated_parts` (the Advanced menu, Fast only) is NOT part of the domain: it is a model option of the Optimize and Explore requests
+ * (`OptimizeExtras`, `ExploreExtras`), so toggling it never re-asks the floor, which is always Precise and ignores it.
+ *
  * Pure: type-only imports, no DOM, no worker.
  */
 
@@ -76,6 +79,8 @@ export interface OptimizeExtras {
   /** The MOA cap; `null` for none. */
   maxMoa: number | null;
   precision: PrecisionRequest;
+  /** Fast only: allow several copies of one part (default false: one copy of each part). Precise ignores it. */
+  allowRepeatedParts?: boolean;
 }
 
 /** The Optimize request: the domain plus the objective, the cap and the precision. */
@@ -88,6 +93,7 @@ export function optimizeRequestOf(s: RequestDomainState, x: OptimizeExtras): Opt
     use_tchebycheff: x.useTchebycheff || undefined,
     max_moa: x.maxMoa ?? undefined,
     precise_mode: x.precision,
+    allow_repeated_parts: x.allowRepeatedParts || undefined,
   };
 }
 
@@ -96,6 +102,8 @@ export interface ExploreExtras {
   steps: number;
   maxMoa: number | null;
   precision: PrecisionRequest;
+  /** Fast only: allow several copies of one part (default false: one copy of each part). Precise ignores it. */
+  allowRepeatedParts?: boolean;
   /** A budget on the swept axis (set only when the axis is the one being limited): applied as `max_price`, `min_ergonomics` or `max_recoil_v`. */
   axisLimit: number | null;
 }
@@ -114,5 +122,6 @@ export function exploreRequestOf(s: RequestDomainState, x: ExploreExtras): Explo
     max_recoil_v: x.ignore === 'recoil' ? limit : undefined,
     max_moa: x.maxMoa ?? undefined,
     precise_mode: x.precision,
+    allow_repeated_parts: x.allowRepeatedParts || undefined,
   };
 }

@@ -259,6 +259,11 @@ export function authorityCounts(points: readonly AuthorityInput[]): Record<Autho
 }
 
 /** The model caveats of the sweep: the union over the runs of what each response says it ran on. */
+/** Did any sweep run in Fast with at most one copy of each part (Allow repeated parts off)? A quiet note for the Details panel. */
+export function runSingleCopy(runs: readonly ExploreWeaponRun[]): boolean {
+  return runs.some(run => run.response?.single_copy === true && run.response.precision_resolved === 'fast');
+}
+
 export function runQualifiers(runs: readonly ExploreWeaponRun[]): Qualifier[] {
   const found = new Set<Qualifier>();
   for (const run of runs) {

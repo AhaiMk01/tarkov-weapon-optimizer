@@ -113,6 +113,12 @@ export interface SpecializeRequest {
   idealPoint?: IdealPoint | null;
   preventOverswing?: boolean;
   equipErgoModifier?: number | null;
+  /**
+   * FAST ONLY (`specializeFast`; the Precise model never reads it): install at most ONE copy of every template. Counts and slot edges become
+   * binary and no presence column is needed. Default false at this level, so the pure model function and the research callers keep the full
+   * count model; the Fast solve passes `allowRepeatedParts !== true` (owner decision 2c).
+   */
+  singleCopy?: boolean;
 }
 
 /**

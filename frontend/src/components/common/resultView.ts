@@ -357,13 +357,18 @@ export interface ResultView {
   /** Tone of the alert: that of the headline (a cancel is informational whatever the level). */
   tone: Tone;
   meta: MetaView;
+  /** The result came from Fast with at most one copy of each part (Allow repeated parts off): a quiet note for the Details panel only. */
+  singleCopy: boolean;
 }
 
-export function resultViewOf(r: AuthorityInput & Pick<OptimizeResponse, 'optimization' | 'reason'> & Partial<Pick<OptimizeResponse, 'solve_time_ms' | 'precision_request'>>): ResultView {
+export function resultViewOf(r: AuthorityInput & Pick<OptimizeResponse, 'optimization' | 'reason'> & Partial<Pick<OptimizeResponse, 'solve_time_ms' | 'precision_request' | 'single_copy'>>): ResultView {
   const authority = authorityOf(r);
   const reason = reasonViewOf(r.reason);
   const headline = headlineOf(authority, reason);
-  return { authority, reason, bounds: boundsViewOf(r.optimization), cancelled: reason?.cancelled === true, headline, tone: headline.tone, meta: metaOf(r) };
+  return {
+    authority, reason, bounds: boundsViewOf(r.optimization), cancelled: reason?.cancelled === true, headline, tone: headline.tone, meta: metaOf(r),
+    singleCopy: r.single_copy === true && r.precision_resolved === 'fast',
+  };
 }
 
 // ---------------------------------------------------------------------------------------------

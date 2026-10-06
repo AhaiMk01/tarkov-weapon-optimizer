@@ -80,6 +80,12 @@ export interface OptimizeRequest {
   owned_items?: string[];
   /** Boolean values are normalized: true → precise, false → fast. */
   precise_mode?: boolean | PrecisionRequest;
+  /**
+   * Fast only (owner decision 2c, default false): when the request runs in Fast mode, `true` lets the model install several copies of one part. Without
+   * it Fast uses at most one copy of each part. Precise ignores it and always allows repeats. Reaches every Fast solve of the request: Optimize,
+   * the Tchebycheff payoff endpoints, every Explore step and the Gunsmith call. The MOA floor (always Precise) does not carry it.
+   */
+  allow_repeated_parts?: boolean;
   /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
   bounds_mode?: 'structural' | 'naive';
   /**
@@ -222,6 +228,8 @@ export interface OptimizeResponse {
   ideal_point?: IdealPoint;
   /** Observed ideal-point cache lookup for this request. Absent when Sweet Spot is off. */
   endpoint_cache?: 'hit' | 'miss';
+  /** Present (true) only when the Fast model ran with at most one copy of each part (`allow_repeated_parts` not set). Never present for Precise. */
+  single_copy?: true;
 }
 
 export type GameMode = 'regular' | 'pve';
@@ -303,6 +311,8 @@ export interface ExploreResponse {
   /** `provisional_model` when the sweep depends on the MOA model, otherwise `null`. */
   moa_qualification: MoaQualification;
   reason?: string;
+  /** Present (true) only when the sweep ran in Fast with at most one copy of each part (`allow_repeated_parts` not set). */
+  single_copy?: true;
 }
 
 /**
@@ -368,7 +378,7 @@ export interface WitnessBuild {
  * zero, the placement model is always Precise and the weights are irrelevant, so those fields are not part of it. `time_limit_ms` defaults
  * to 30 s.
  */
-export type MOAFloorRequest = Omit<OptimizeRequest, 'max_moa' | 'ergo_weight' | 'recoil_weight' | 'price_weight' | 'use_tchebycheff' | 'precise_mode'>;
+export type MOAFloorRequest = Omit<OptimizeRequest, 'max_moa' | 'ergo_weight' | 'recoil_weight' | 'price_weight' | 'use_tchebycheff' | 'precise_mode' | 'allow_repeated_parts'>;
 
 /** The MOA floor of a weapon under the provisional model (ADR 0013 section 6): a bracket on the minimum, not a game-physical minimum. */
 export interface MOAFloorResponse {

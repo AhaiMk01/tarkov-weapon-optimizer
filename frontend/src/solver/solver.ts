@@ -233,6 +233,8 @@ interface Assembly {
   /** The guard clock: `start` and `solve_time_ms` are read on it. */
   now: () => number;
   idealPoint?: IdealPoint;
+  /** The Fast model ran (or would have run) with at most one copy of each part: the response says so (`single_copy`). Never set for Precise. */
+  singleCopy?: boolean;
 }
 
 /** Bounds the search does not have: unknown, never 0. */
@@ -269,6 +271,7 @@ const outcomeFields = (assembly: Assembly, outcome: OptimizeOutcome) => ({
   moa_qualification: outcome.moa_qualification,
   physical_certificate: outcome.physical_certificate,
   ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+  ...(assembly.singleCopy === true ? { single_copy: true as const } : {}),
 });
 
 /** A response with no build: an emptiness, a limit or a refusal. The objective is `null`, the manifest empty. */
@@ -369,10 +372,12 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   let params: SolveParams = { ...input, precisionRequest, ownedItems: owned.items, guard, timeLimitMs: undefined };
   if (params.traderLevels) params.traderLevels = canonicalizeTraderLevels(params.traderLevels) as SolveParams['traderLevels'];
   const mode = params.preciseMode ? 'precise' : 'fast';
+  // Owner decision 2c: Fast installs at most one copy of each part unless the request allows repeats; Precise ignores the option.
+  const singleCopy = mode === 'fast' && params.allowRepeatedParts !== true;
   const tolerance = resolveTolerance(params.objectiveTolerance);
   /** A request that stopped before its search started: no build, no proof, the factual cause. */
   const unstarted = (observed: StopObservations, idealPoint?: IdealPoint): Detailed => noBuildResponse(
-    { precisionRequest, start, now, idealPoint },
+    { precisionRequest, start, now, idealPoint, singleCopy },
     classifyOptimize({ mode, moaDependent, end: 'unproved', witness: false, searchFinished: false, observed }),
     unknownOptimization(tolerance, 0, 'limit'),
   );
@@ -402,7 +407,7 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   const idealPoint = params.useTchebycheff ? params.idealPoint : undefined;
   const midStop = guardStop(guard);
   if (midStop !== null) return unstarted(guardObservation(midStop), idealPoint);
-  const assembly: Assembly = { precisionRequest, start, now, idealPoint };
+  const assembly: Assembly = { precisionRequest, start, now, idealPoint, singleCopy };
   const detailed = await (params.preciseMode ? solveExact(params, guard, assembly) : solveApproximate(params, guard, assembly));
   return payoff === undefined ? detailed : { ...detailed, payoff };
 }

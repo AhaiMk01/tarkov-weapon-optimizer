@@ -2,7 +2,8 @@ import { WeaponSelector } from '../common/WeaponSelector'
 import { WeightAdjuster } from '../common/WeightAdjuster'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
-import type { Gun, ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
+import { AdvancedOptions } from '../common/AdvancedOptions'
+import type { Gun, ModInfo, ModCompatibility, ModCategoryOption, PrecisionRequest } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
 import type { FloorView } from '../common/floorView'
 
@@ -16,8 +17,13 @@ interface OptimizePanelProps {
   onWeightChange: (ergo: number, recoil: number, price: number) => void
   useTrueErgo: boolean
   onUseTrueErgoChange: (v: boolean) => void
+  /** Sweet Spot Mode: shown in the Advanced menu. */
   useTchebycheff: boolean
   onUseTchebycheffChange: (v: boolean) => void
+  solverPrecision: PrecisionRequest
+  onSolverPrecisionChange: (v: PrecisionRequest) => void
+  allowRepeatedParts: boolean
+  onAllowRepeatedPartsChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -91,8 +97,6 @@ export function OptimizePanel(props: OptimizePanelProps) {
         onWeightChange={props.onWeightChange}
         useTrueErgo={props.useTrueErgo}
         onUseTrueErgoChange={props.onUseTrueErgoChange}
-        useTchebycheff={props.useTchebycheff}
-        onUseTchebycheffChange={props.onUseTchebycheffChange}
         useBudget={props.useBudget}
         onUseBudgetChange={props.onUseBudgetChange}
         maxPrice={props.maxPrice}
@@ -153,6 +157,14 @@ export function OptimizePanel(props: OptimizePanelProps) {
         onPlayerLevelChange={props.onPlayerLevelChange}
         traderLevels={props.traderLevels}
         onTraderLevelsChange={props.onTraderLevelsChange}
+      />
+      <AdvancedOptions
+        solverPrecision={props.solverPrecision}
+        onSolverPrecisionChange={props.onSolverPrecisionChange}
+        allowRepeatedParts={props.allowRepeatedParts}
+        onAllowRepeatedPartsChange={props.onAllowRepeatedPartsChange}
+        useTchebycheff={props.useTchebycheff}
+        onUseTchebycheffChange={props.onUseTchebycheffChange}
       />
     </div>
   )

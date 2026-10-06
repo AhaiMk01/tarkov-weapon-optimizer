@@ -350,6 +350,8 @@ function buildResponse(
     model_qualification: precision_resolved === 'precise' ? 'exact' : precision_resolved === 'fast' ? 'approximate' : null,
     moa_qualification: moaQualificationOf(request.base),
     ...(reason === undefined ? {} : { reason }),
+    // Fast with repeats off: every step ran the one-copy model (the sweep's own mode is uniform when it says 'fast').
+    ...(precision_resolved === 'fast' && request.base.allowRepeatedParts !== true ? { single_copy: true as const } : {}),
   };
 }
 

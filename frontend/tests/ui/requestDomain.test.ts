@@ -86,6 +86,24 @@ test('the floor request is the domain of Optimize and Explore: the same fields w
   assert.deepEqual([explore.ignore, explore.steps, explore.precise_mode], ['price', 12, 'precise']);
 });
 
+test('allow_repeated_parts (Advanced menu, Fast only): carried by Optimize and Explore, never by the floor domain; off is undefined, never false', () => {
+  const x = { ergoWeight: 1, recoilWeight: 1, priceWeight: 0, useTchebycheff: false, maxMoa: null, precision: 'fast' as const };
+  assert.equal(optimizeRequestOf(DEFAULT, x).allow_repeated_parts, undefined, 'off is the default and is not sent');
+  assert.equal(optimizeRequestOf(DEFAULT, { ...x, allowRepeatedParts: false }).allow_repeated_parts, undefined);
+  assert.equal(optimizeRequestOf(DEFAULT, { ...x, allowRepeatedParts: true }).allow_repeated_parts, true);
+  const e = { ignore: 'price' as const, steps: 10, maxMoa: null, precision: 'fast' as const, axisLimit: null };
+  assert.equal(exploreRequestOf(DEFAULT, e).allow_repeated_parts, undefined);
+  assert.equal(exploreRequestOf(DEFAULT, { ...e, allowRepeatedParts: false }).allow_repeated_parts, undefined);
+  assert.equal(exploreRequestOf(DEFAULT, { ...e, allowRepeatedParts: true }).allow_repeated_parts, true);
+  // Neither the domain nor the floor request has the field, so toggling it never asks the floor again.
+  assert.ok(!('allow_repeated_parts' in domainRequestOf(FULL)));
+  assert.ok(!('allow_repeated_parts' in floorRequestOf(FULL)));
+  // Nothing else of the Optimize or Explore request changes with the option.
+  const without = (r: object): object => Object.fromEntries(Object.entries(r).filter(([key]) => key !== 'allow_repeated_parts'));
+  assert.deepEqual(without(optimizeRequestOf(FULL, { ...x, allowRepeatedParts: true })), without(optimizeRequestOf(FULL, x)));
+  assert.deepEqual(without(exploreRequestOf(FULL, { ...e, allowRepeatedParts: true })), without(exploreRequestOf(FULL, e)));
+});
+
 test('the Explore axis limit lands on the swept axis; a control already set on that axis wins; a zero or absent limit sets nothing', () => {
   const x = { steps: 10, maxMoa: null, precision: 'auto' as const };
   const price = exploreRequestOf(DEFAULT, { ...x, ignore: 'price', axisLimit: 90000 });

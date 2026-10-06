@@ -3,10 +3,10 @@ import { useTranslation } from 'react-i18next'
 import { Alert, Button, Space, Table, Tag, Tooltip, Typography } from 'antd'
 import { BarChartOutlined, CheckCircleOutlined, CloseCircleOutlined, ExclamationCircleOutlined, InfoCircleOutlined, LoadingOutlined } from '@ant-design/icons'
 import type { ExploreResponse } from '../../api/client'
-import { CancelButton, DetailsPanel, MetaText, QualifierTags, ReasonText } from '../common/ResultStatus'
+import { CancelButton, DetailsPanel, MetaText, OneCopyTag, QualifierTags, ReasonText } from '../common/ResultStatus'
 import { TONE_TAG_COLOR, reasonViewOf } from '../common/resultView'
 import type { Tone } from '../common/resultView'
-import { CURVE_TONE, authorityCounts, cancelReasonOf, coverageOf, curveMeaningKey, curveStatusKey, exploreLineOf, exploreMetaOf, runQualifiers, settledResponseOf, summarizeRuns } from './exploreView'
+import { CURVE_TONE, authorityCounts, cancelReasonOf, coverageOf, curveMeaningKey, curveStatusKey, exploreLineOf, exploreMetaOf, runQualifiers, runSingleCopy, settledResponseOf, summarizeRuns } from './exploreView'
 import type { CurveStatus, ExploreWeaponRun, UnresolvedTarget } from './exploreView'
 
 const { Text } = Typography
@@ -105,6 +105,7 @@ function ExploreDetails({ runs, runTotal }: { runs: readonly ExploreWeaponRun[];
       )}
       <Space size={8} wrap>
         <QualifierTags qualifiers={runQualifiers(runs)} />
+        {runSingleCopy(runs) && <OneCopyTag />}
       </Space>
       {points.length > 0 && (
         <Text type="secondary">

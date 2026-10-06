@@ -620,7 +620,8 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
 
 async function productionPathGate(fixture: ReferenceFixture, request: ReferenceRequest, oracle: OracleResult, out: FastExactness, tolerance: number): Promise<void> {
   const lookup = productionLookup(fixture);
-  const params: SolveParams = { ...mapRequest(request), weaponId: request.weapon_id, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(request.weapon_id, lookup) };
+  // The full count model (repeats allowed): production's Fast default is one copy per part (owner decision 2c), which this gate does not describe.
+  const params: SolveParams = { ...mapRequest(request), weaponId: request.weapon_id, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(request.weapon_id, lookup), allowRepeatedParts: true };
   const saved = { error: console.error, warn: console.warn, log: console.log };
   let run: FastRun;
   try {

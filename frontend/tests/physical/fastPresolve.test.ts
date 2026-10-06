@@ -31,7 +31,7 @@ test('the Fast pipeline with presolve off returns the Precise optimum of that wo
   const { params } = randomWorld(123, false);
   const exact = await solvePrecise({ params, deadline: performance.now() + 60_000 });
   assert.equal(exact.kind, 'build');
-  const fast = await solveFast({ params, deadline: performance.now() + 60_000, presolve: 'off' });
+  const fast = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline: performance.now() + 60_000, presolve: 'off' });
   assert.equal(fast.kind, 'build');
   if (exact.kind === 'build' && fast.kind === 'build') {
     assert.ok(Math.abs(fast.best.score - exact.best.score) < 1e-6, `${fast.best.score} against ${exact.best.score}`);

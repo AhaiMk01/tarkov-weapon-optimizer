@@ -7,6 +7,12 @@
  * the oracle frame); only PLACEMENT is approximated. The model has a few thousand columns on every pinned gun (M4A1: 588 templates, 5,569
  * candidate edges), not one per occurrence (151,479).
  *
+ * SINGLE COPY (owner decision 2c, `SpecializeRequest.singleCopy`). With the option on, every template's copy bound is capped at one
+ * (`copies[t] = min(copies[t], 1)`): the model then allows at most ONE installed copy of each template, so every count and edge column is
+ * binary and a template that could repeat needs no presence column. Everything else is unchanged: self-conflicts, supply caps, a preset with
+ * several copies of supply (one copy installed, the rest unused), owned stock and whole lots all read the capped bound. The cap is a restriction
+ * of the count model (a physical build that repeats a part is not a point of it), so it can lose a build, never invent one. Default off here.
+ *
  * Decision columns (all integer, finite):
  *   n_t         copies of item template t installed (binary when at most one copy can exist)
  *   e_s_c       copies of template c installed directly in a slot of raw id s, over all copies of the slot's owner (binary when <= 1)
@@ -166,6 +172,8 @@ export interface FastModel {
    * (a secant or the knee line: the objective is then an UPPER bound and `prevent_overswing` is relaxed); the spatial search tightens it.
    */
   readonly exact: boolean;
+  /** At most one copy of each template (`SpecializeRequest.singleCopy`): the model is restricted, no build that repeats a part is a point of it. */
+  readonly singleCopy: boolean;
   readonly notes: readonly string[];
   /** A written coefficient is at or below HiGHS's `small_matrix_value` (it would be dropped on read) or at or above `large_matrix_value`. */
   readonly matrixFilterRisk: boolean;
@@ -195,6 +203,8 @@ interface ResolvedFast {
   preventOverswing: boolean;
   /** The equipment ergonomics modifier as given (the factor max(0, 1 + modifier) is built exactly by `gearFactor`). */
   gearModifier: number;
+  /** At most one copy of every template (the copy bound of each template is capped at 1). */
+  singleCopy: boolean;
 }
 
 function finite(value: number | null | undefined, name: string): number | null {
@@ -230,6 +240,7 @@ function resolveFastRequest(request: SpecializeRequest): ResolvedFast {
     useTrueErgo: request.useTrueErgo === true,
     preventOverswing: request.preventOverswing === true,
     gearModifier: finite(request.equipErgoModifier, 'equipErgoModifier') ?? 0,
+    singleCopy: request.singleCopy === true,
   };
 }
 
@@ -824,6 +835,7 @@ class FastSpecializer {
   }
 
   build(): ObjectiveMeta {
+    if (this.req.singleCopy) this.notes.push('single copy: every template is capped at one installed copy (counts and edges are binary); a build that repeats a part is outside this model');
     this.declareDecisionColumns();
     const priceUpper = this.emitSupply();
     this.emitBase();
@@ -842,7 +854,7 @@ class FastSpecializer {
 // Entry point
 // ---------------------------------------------------------------------------------------------
 
-function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): FastModel {
+function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain, singleCopy: boolean): FastModel {
   const reasons = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`));
   const lp = ['Maximize', '  obj: total_obj', 'Subject To', '  empty_domain: zero_col >= 1', 'Bounds', '  total_obj = 0', '  zero_col = 0', 'End'].join('\n');
   const graph: TemplateGraph = {
@@ -878,6 +890,7 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): Fas
     activeBounds: null,
     spatial: null,
     exact: true,
+    singleCopy,
     notes: ['the domain is empty: no build exists, so the model is the one-row contradiction'],
     matrixFilterRisk: false,
     stats: { minAbsCoefficient: 1, maxAbsCoefficient: 1, columns: 2, rows: 1, nonzeros: 1, binaries: 0, integers: 0, continuous: 2, lpChars: lp.length },
@@ -885,7 +898,12 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): Fas
 }
 
 /** What a domain determines about its Fast model whatever the request or the weight node: the template graph and the active ranges. */
-const structureMemo = new WeakMap<SubproblemDomain, { graph: TemplateGraph; bounds: ActiveBounds }>();
+const structureMemo = new WeakMap<SubproblemDomain, { graph: TemplateGraph; bounds: ActiveBounds; single?: TemplateGraph }>();
+
+/** The template graph with every copy bound capped at one: the same slots and edges, `maxCopies[t] = min(maxCopies[t], 1)`. */
+function singleCopyGraph(graph: TemplateGraph): TemplateGraph {
+  return { ...graph, maxCopies: graph.maxCopies.map(copies => Math.min(copies, 1)) };
+}
 
 /**
  * Specialize the Fast model of one request.
@@ -903,14 +921,15 @@ export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemD
     finite(node.weightMin, 'node.weightMin');
     finite(node.weightMax, 'node.weightMax');
   }
-  if (domain.empty) return emptyModel(blueprint, domain);
+  if (domain.empty) return emptyModel(blueprint, domain, resolved.singleCopy);
 
   let structure = structureMemo.get(domain);
   if (structure === undefined) {
     structure = { graph: buildTemplateGraph(blueprint, domain), bounds: computeActiveBounds(blueprint, domain) };
     structureMemo.set(domain, structure);
   }
-  const { graph, bounds } = structure;
+  const { bounds } = structure;
+  const graph = resolved.singleCopy ? (structure.single ??= singleCopyGraph(structure.graph)) : structure.graph;
   const specializer = new FastSpecializer(blueprint, domain, graph, resolved, bounds, node);
   const objective = specializer.build();
   const w = specializer.w;
@@ -937,6 +956,7 @@ export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemD
     activeBounds: bounds,
     spatial: tedMode && penalty ? { weightMin: specializer.weightInterval.lo, weightMax: specializer.weightInterval.hi, penalty } : null,
     exact: tedMode && penalty ? penalty.exact : true,
+    singleCopy: resolved.singleCopy,
     notes: specializer.notes,
     matrixFilterRisk: w.minAbsCoefficient <= HIGHS_SMALL_MATRIX_VALUE || w.maxAbsCoefficient >= HIGHS_LARGE_MATRIX_VALUE,
     stats: {

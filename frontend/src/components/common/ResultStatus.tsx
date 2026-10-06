@@ -107,6 +107,19 @@ export function QualifierTags({ qualifiers, style }: { qualifiers: readonly Qual
   )
 }
 
+/**
+ * The quiet note of a Fast result that installed at most one copy of each part (Allow repeated parts off, the Fast default). Details only: the plain
+ * result says nothing about it.
+ */
+export function OneCopyTag({ style }: { style?: CSSProperties }) {
+  const { t } = useTranslation()
+  return (
+    <Tooltip title={t('results.one_copy_per_part_tooltip')}>
+      <Tag style={{ margin: 0, ...style }}>{t('results.one_copy_per_part')}</Tag>
+    </Tooltip>
+  )
+}
+
 /** The full authority chip of a build (Details only): proved, approximate, feasible, ... with what it means in the tooltip. */
 export function AuthorityTag({ result, style }: { result: AuthorityInput; style?: CSSProperties }) {
   const { t } = useTranslation()
@@ -169,6 +182,7 @@ export function ResultDetails({ view }: { view: ResultView }) {
       <Space size={8} wrap>
         <Text strong>{t(authority.titleKey)}</Text>
         <QualifierTags qualifiers={authority.qualifiers} />
+        {view.singleCopy && <OneCopyTag />}
       </Space>
       <Text type="secondary">{t(`${authority.titleKey}_detail`)}</Text>
       <ReasonText reason={view.reason} />

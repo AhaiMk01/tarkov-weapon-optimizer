@@ -364,6 +364,9 @@ export function toProduction(fixture: ReferenceFixture, request: ReferenceReques
     itemLookup,
     compatibilityMap,
     preciseMode: options.preciseMode,
+    // The Fast column measures the FULL count model (owner decision 2c: production's Fast default is one copy per part, which this ledger does not
+    // describe). Precise ignores the option.
+    allowRepeatedParts: true,
     ...(options.timeLimitMs === undefined ? {} : { timeLimitMs: options.timeLimitMs }),
     ...(options.objectiveTolerance === undefined ? {} : { objectiveTolerance: options.objectiveTolerance }),
   };
