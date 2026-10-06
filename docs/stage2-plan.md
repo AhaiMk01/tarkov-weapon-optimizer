@@ -33,6 +33,7 @@ suite, harness ratchet) and committed by the orchestrator.
 | 2.5 Numerics | §4C: K = 100/2.9089, no Big-M literal, no `toFixed(6)`, signed accuracy, zero-intrinsic and constant MOA rows, outward secants, recoil caps with nonpositive denominators, finite auxiliary ranges, global UB including tolerance-fathomed bounds | 2.4, 2.3 |
 | 2.6 Solve and status | §5/§6 transport shapes, statuses, certificates, reasons and precedence; decoder; production validator matching every reference accept/reject; payoff-table reporting | 2.3–2.5 |
 | 2.6b Fast TED | Owner decision 2b: TrueErgo/Prevent Overswing on the Fast count model (weight search over its exact aggregate weight), approximate qualification, no silent Precise upgrade | 2.6 |
+| 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, acyclicity guard with occurrence-model fallback, infeasibility second opinion; occurrence model kept as a test cross-check | 2.6b, before 2.9 |
 | 2.7 Operations | §4D deadlines and macrotask yields, out-of-band cancel, `owned_items` validation and forwarding, floor discovery then bisection, Explore classification, metadata ops, cache invalidation, `preparePhysicalWeapon` / `prepareSubproblemDomain` / `specializeLP` | 2.6 |
 | 2.8 Consumers | §4E client, App and UI components, locales, EFTForge v1 export (supported-only), MethodologyModal | 2.6–2.7 |
 | 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere | all |
@@ -81,6 +82,12 @@ is approximate. Decisions:
    cycle handling stays as is for now (Precise's ancestor rule keeps the occurrence tree finite; Fast adds its connectivity flow
    only on a cyclic graph; cyclic test worlds stay). In Stage 4, when certified Fast lands, acyclicity becomes a checked
    precondition: a cyclic gun is refused as unsupported data with a clear error, and the cycle code is removed with it.
+2e. **Precise is rebuilt on the count model now, before 2.9 (owner, 2026-10-06; amends ADR 0013's order, Phase 2.10).**
+   On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
+   activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4
+   and 5), and every row goes through the proof layer, so Precise keeps its certificates. Adds the MOA larger-COI rows,
+   an acyclicity guard (a cyclic gun keeps the occurrence model) and a second opinion before any certified infeasibility.
+   The occurrence model stays in the tests as an independent cross-check. Stage 3 proves the rebuilt Precise.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
    only through the Stage 4 proof and comparative gates.
