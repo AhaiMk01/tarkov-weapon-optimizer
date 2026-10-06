@@ -13,6 +13,12 @@
  * several copies of supply (one copy installed, the rest unused), owned stock and whole lots all read the capped bound. The cap is a restriction
  * of the count model (a physical build that repeats a part is not a point of it), so it can lose a build, never invent one. Default off here.
  *
+ * CERTIFIED MODE (Phase 2.10, owner decision 2e, `FastModelOptions.certified`, entry `specializeCount.ts`). The same count model, built through the proof layer, is
+ * the model Precise solves on an acyclic part graph: the rows below are unchanged (they are integers and binary64 leaves), and the constructed ones are exactly
+ * those of `specializeLP` (recoil caps, MOA rows, objective, gear factor, weight-penalty secant: exact rationals, outward padding, `FastModel.proof`), plus the MOA
+ * larger-centre-of-impact terms that make the model state the oracle's rule. It is never single-copy, requires an acyclic template graph, and leaves the text of
+ * the plain Fast model (this file's default) byte for byte as it was. See `specializeCount.ts` for what makes it exact and what a certificate rests on.
+ *
  * Decision columns (all integer, finite):
  *   n_t         copies of item template t installed (binary when at most one copy can exist)
  *   e_s_c       copies of template c installed directly in a slot of raw id s, over all copies of the slot's owner (binary when <= 1)
@@ -79,7 +85,13 @@ import { PhysicalModelError } from './errors';
 import { appendCuts, type DecisionColumn, type IntegerNoGood } from './fastCut';
 import { LpWriter, mergeTerms, type RowSense } from './lpText';
 import { iAdd, iScale, nextUp, sumEnclosure, type Interval } from './numeric';
-import { differenceEnclosure, gearEnclosure, gearFactor } from './proof';
+import {
+  EMPTY_MODEL_PROOF, differenceEnclosure, gearEnclosure, gearFactor, moaFallbackRow, moaReplacementRow, paddedRhs, planObjective, ratEnclosure, rowProof,
+  tchebycheffCoefficients,
+  type GearFactor, type ModelProof, type ObjectivePlan, type PaddedRhs, type RowProof, type SecantProof,
+} from './proof';
+import { RAT_ZERO, ratAdd, ratFromDouble, ratMax, ratMul, ratSub, ratToNumber, type Rat } from './exact';
+import { ratAbs, ratMagnitude, ratRoundUp } from './rational';
 import { lineEnclosure, secantOfPenalty, type NodePenalty, type PenaltyLine } from './spatial';
 import {
   AUGMENTATION, ERGO_CLAMP_MAX, ERGO_SCALE, MOA_K, RECOIL_SCALE, checkedNodePenalty,
@@ -178,7 +190,110 @@ export interface FastModel {
   /** A written coefficient is at or below HiGHS's `small_matrix_value` (it would be dropped on read) or at or above `large_matrix_value`. */
   readonly matrixFilterRisk: boolean;
   readonly stats: ModelStats;
+  /**
+   * The model was built through the proof layer (`FastModelOptions.certified`, the certifiable count model of Precise, decision 2e). Then `proof` and
+   * `rowFamilies` are set; otherwise both are null and the rows are plain doubles (the Fast model).
+   */
+  readonly certified: boolean;
+  /** The exact-rational construction record `assessNativeResult` and the bound evidence read: padded rows, the objective's frame error, the gear factor, the secant. Null unless certified. */
+  readonly proof: ModelProof | null;
+  /** Rows, vacuous rows and proved construction error per row family. Null unless certified. */
+  readonly rowFamilies: readonly CountRowFamilyRecord[] | null;
+  /**
+   * How the MOA barrel rows were stated (certified models; null without a MOA cap or when not certified): `dominance` adds the larger-centre-of-impact terms
+   * (the cap binds only the installed barrel with the largest centre of impact, as the oracle states it), `plain` is the per-barrel row of the Fast model,
+   * which is exactly equivalent to it whenever the accuracy sum cannot pass 100 percent points or the cap is not negative (see `emitMoaCertified`).
+   */
+  readonly moaRows: 'plain' | 'dominance' | null;
 }
+
+/** Options of {@link specializeFast} that are not part of the request. */
+export interface FastModelOptions {
+  /**
+   * Build the model through the proof layer, for a certificate (decision 2e, Phase 2.10): every constructed coefficient is built in exact rationals with
+   * directed outward rounding (`proof.ts`), the recoil caps, the MOA rows (with the larger-centre-of-impact terms) and the objective are the rows of
+   * `specializeLP`, every auxiliary column has a finite enclosed domain, and the model carries its `proof`. Multiple copies of a part are always allowed
+   * (`singleCopy` is ignored, as in the Precise model), and the template graph must be acyclic: a cyclic graph throws (the connectivity flow is a
+   * relaxation whose points need a decoder, which a certificate cannot rest on; the caller keeps the occurrence model there). Default false: the plain
+   * Fast model, whose text this option leaves untouched.
+   */
+  certified?: boolean;
+  /**
+   * Certified models only. `auto` (default) states the larger-centre-of-impact terms exactly when the plain per-barrel rows could differ from the oracle's
+   * rule (a negative cap and an accuracy sum that can pass 100 percent points); `always` states them on every MOA model (tests: the two must agree).
+   */
+  moaDominance?: 'auto' | 'always';
+}
+
+export type CountRowFamilyId =
+  | 'base_choice'
+  | 'parentage'
+  | 'slot'
+  | 'required_occupancy'
+  | 'presence_link'
+  | 'template_conflict'
+  | 'slot_conflict'
+  | 'include_item'
+  | 'include_category'
+  | 'supply_cap'
+  | 'lot_cover'
+  | 'wallet'
+  | 'stat_definition'
+  | 'first_clamp'
+  | 'gear_clamp'
+  | 'ted'
+  | 'cap_price'
+  | 'cap_ergonomics'
+  | 'cap_recoil'
+  | 'cap_magazine_sighting'
+  | 'cap_weight'
+  | 'moa'
+  | 'objective'
+  | 'contradiction';
+
+export interface CountRowFamilyRecord {
+  id: CountRowFamilyId;
+  /** Row-name pattern of the family. */
+  prefix: string;
+  adr: string;
+  description: string;
+  /** Rows written. */
+  count: number;
+  /** Rows proven constant-true over the model's own domains and therefore not written. */
+  vacuous: number;
+  /** Proved upper bound of the construction error of the family's constructed coefficients, in the family's own units (0 when every coefficient is a binary64 leaf or a small integer). */
+  constructionError: number;
+  /** The largest outward padding the family's emitted right-hand sides carry beyond their exact targets. */
+  allowance: number;
+}
+
+/** The row families of the count model, matched by row name (the first match wins). */
+const COUNT_FAMILIES: readonly { id: CountRowFamilyId; test: RegExp; prefix: string; adr: string; description: string }[] = [
+  { id: 'base_choice', test: /^base_sum$/, prefix: 'base_sum', adr: 'ADR 0002 principle 2', description: 'exactly one accessible base; an empty base set is a contradiction, never a free fallback' },
+  { id: 'parentage', test: /^in_\d+$/, prefix: 'in_<t>', adr: 'research 5.1', description: 'n_t = the edges that install t: every installed copy has exactly one parent slot' },
+  { id: 'required_occupancy', test: /^req_\d+$/, prefix: 'req_<s>', adr: 'ADR 0003 principle 3; research 5.1', description: 'required occupancy: root slot = 1, mod-owned slot = n_owner' },
+  { id: 'slot', test: /^slot_\d+$/, prefix: 'slot_<s>', adr: 'ADR 0003 principle 3; research 5.1', description: 'slot capacity: occupancy(raw slot id) <= n_owner (root: <= 1), one child per physical slot' },
+  { id: 'presence_link', test: /^z(up|lo)_\d+$/, prefix: 'zup_<t>, zlo_<t>', adr: 'ADR 0003 principle 4', description: 'presence z_t = [n_t >= 1] of a template that can repeat and takes part in a conflict or MOA row' },
+  { id: 'template_conflict', test: /^tconf_\d+$/, prefix: 'tconf_<k>', adr: 'ADR 0003 principle 4; research 5.3', description: 'linked presence exclusion over a clique of pairwise-conflicting templates; copies of A stay legal without B' },
+  { id: 'slot_conflict', test: /^sconf_\d+_\d+$/, prefix: 'sconf_<t>_<s>', adr: 'ADR 0003 principle 4; INTERPRETATIONS 11, 14; research 5.5', description: 'a present blocker empties every physical slot of a blocked raw slot id, its own slot included' },
+  { id: 'include_item', test: /^incl_/, prefix: 'incl_<t>', adr: 'ADR 0003 principle 4; INTERPRETATIONS 12', description: 'an included template is installed at least once' },
+  { id: 'include_category', test: /^catreq_\d+$/, prefix: 'catreq_<g>', adr: 'ADR 0003 principle 4; INTERPRETATIONS 5', description: 'each include group needs an installed template whose category chain meets the group' },
+  { id: 'supply_cap', test: /^supcap_\d+$/, prefix: 'supcap_<t>', adr: 'ADR 0002 principle 8; ADR 0008 principle 5', description: 'a template with no legal standalone offer: n_t <= preset supply of the chosen base + owned stock' },
+  { id: 'lot_cover', test: /^cover_\d+$/, prefix: 'cover_<t>', adr: 'ADR 0009 principle 1; INTERPRETATIONS 1; research 5.8', description: 'whole lots cover the paid deficit n_t - preset supply - owned' },
+  { id: 'wallet', test: /^price_def$/, prefix: 'price_def', adr: 'ADR 0009 principle 3', description: 'the exact wallet: price_axis = base price + whole-lot purchase cost' },
+  { id: 'stat_definition', test: /^(raw_ergo_def|rec_mod_def|rec_axis_def|weight_def|acc_def|ergo_frame)$/, prefix: 'raw_ergo_def, weight_def, rec_mod_def, rec_axis_def, acc_def, ergo_frame', adr: 'ADR 0003 principle 5; ADR 0010 section 2', description: 'statistics summed over the template counts and the objective frames' },
+  { id: 'first_clamp', test: /^c1_/, prefix: 'c1_*', adr: 'ADR 0007 principle 5', description: 'the displayed ergonomics: clamp(raw ergonomics, 0, 100), the general three-regime disjunction' },
+  { id: 'gear_clamp', test: /^(gear_def|c2_)/, prefix: 'gear_def*, c2_*', adr: 'ADR 0007 principle 5', description: 'the gear factor and the second clamp, the general three-regime disjunction' },
+  { id: 'ted', test: /^(node_|ted_def$|lim_overswing$)/, prefix: 'node_*, ted_def, lim_overswing', adr: 'ADR 0007 principle 6', description: 'the weight node as rows, TED = eff - weight penalty on it (a lower envelope of q), and TED >= 0 when overswing is prevented' },
+  { id: 'cap_price', test: /^lim_price$/, prefix: 'lim_price', adr: 'ADR 0009 principle 3', description: 'max_price on the real spend' },
+  { id: 'cap_ergonomics', test: /^lim_min_ergo$/, prefix: 'lim_min_ergo', adr: 'INTERPRETATIONS 8', description: 'min_ergonomics on the first clamp' },
+  { id: 'cap_recoil', test: /^lim_recoil_(v|sum)$/, prefix: 'lim_recoil_v, lim_recoil_sum', adr: 'ADR 0009 principle 4; ADR 0013 4C', description: 'final recoil caps as naked x modifier <= cap - naked, padded by the coefficient deficit' },
+  { id: 'cap_magazine_sighting', test: /^lim_(mag|sight)$/, prefix: 'lim_mag, lim_sight', adr: 'INTERPRETATIONS 7', description: 'a magazine or sighting minimum is met by the receiver or by an installed template (maximum, not sum)' },
+  { id: 'cap_weight', test: /^lim_weight$/, prefix: 'lim_weight', adr: 'ADR 0010 section 4 item 4', description: 'max_weight on the total weight' },
+  { id: 'moa', test: /^moa_/, prefix: 'moa_rep_<t>, moa_fallback', adr: 'ADR 0007 principles 1 to 3; ADR 0006; research 5.7', description: 'exact Big-M replacement rows of the barrel with the largest centre of impact, and the intrinsic fallback row' },
+  { id: 'objective', test: /^(obj_def|tch_[erp]|ergo_n_def|rec_n_def|price_n_def)$/, prefix: 'obj_def, tch_<a>, *_n_def', adr: 'ADR 0010 section 2', description: 'the weighted score or the augmented Tchebycheff score over the three frames' },
+  { id: 'contradiction', test: /^contra_\d+$/, prefix: 'contra_<k>', adr: 'ADR 0003 principle 3', description: 'a row with no variables that is false: the model is infeasible by construction' },
+];
 
 // ---------------------------------------------------------------------------------------------
 // Request
@@ -203,8 +318,11 @@ interface ResolvedFast {
   preventOverswing: boolean;
   /** The equipment ergonomics modifier as given (the factor max(0, 1 + modifier) is built exactly by `gearFactor`). */
   gearModifier: number;
-  /** At most one copy of every template (the copy bound of each template is capped at 1). */
+  /** At most one copy of every template (the copy bound of each template is capped at 1). Never set on a certified model. */
   singleCopy: boolean;
+  /** Built through the proof layer (`FastModelOptions.certified`). */
+  certified: boolean;
+  moaDominance: 'auto' | 'always';
 }
 
 function finite(value: number | null | undefined, name: string): number | null {
@@ -213,7 +331,7 @@ function finite(value: number | null | undefined, name: string): number | null {
   return value;
 }
 
-function resolveFastRequest(request: SpecializeRequest): ResolvedFast {
+function resolveFastRequest(request: SpecializeRequest, options: FastModelOptions): ResolvedFast {
   const weight = (value: number | null | undefined, fallback: number, name: string): number => Math.max(0, finite(value, name) ?? fallback);
   let tchebycheff: IdealPoint | null = null;
   if (request.useTchebycheff === true) {
@@ -240,7 +358,10 @@ function resolveFastRequest(request: SpecializeRequest): ResolvedFast {
     useTrueErgo: request.useTrueErgo === true,
     preventOverswing: request.preventOverswing === true,
     gearModifier: finite(request.equipErgoModifier, 'equipErgoModifier') ?? 0,
-    singleCopy: request.singleCopy === true,
+    // A certified model allows every repeat, as the Precise model does: a restriction is no outer relaxation of the physical problem.
+    singleCopy: options.certified !== true && request.singleCopy === true,
+    certified: options.certified === true,
+    moaDominance: options.moaDominance ?? 'auto',
   };
 }
 
@@ -322,6 +443,12 @@ export function cliqueCover(pairs: ArrayLike<number>, active: ArrayLike<number>)
   return cliques;
 }
 
+/** The family of a row by its name; a name no family claims is a construction fault (the accounting must cover every row). */
+export function familyOfRow(name: string): CountRowFamilyId {
+  for (const family of COUNT_FAMILIES) if (family.test.test(name)) return family.id;
+  throw new PhysicalModelError('DOMAIN_INCONSISTENT', `The count model wrote the row ${name}, which belongs to no row family`, { row: name });
+}
+
 // ---------------------------------------------------------------------------------------------
 // The builder
 // ---------------------------------------------------------------------------------------------
@@ -347,6 +474,20 @@ class FastSpecializer {
   penalty: NodePenalty | { line: PenaltyLine; kind: 'supplied'; exact: boolean } | null = null;
   /** The column the ergonomics axis is read from: the first clamp, or TED. */
   ergoColumn: 'capped_ergo' | 'ted' = 'capped_ergo';
+  // --- certified mode: what the proof layer records (all unused, and empty, in the plain Fast model) ---
+  /** Every constructed row with its padded right-hand side (`proof.ts`). */
+  readonly rowProofs: RowProof[] = [];
+  /** Why a proof input failed at construction (an axis whose objective coefficient no power-of-two scale can lift above the filter), or null. */
+  withheld: string | null = null;
+  objectivePlan: ObjectivePlan | null = null;
+  gear: GearFactor | null = null;
+  secantProof: SecantProof | null = null;
+  moaRows: 'plain' | 'dominance' | null = null;
+  /** Names of every row written, and of every row dropped as constant-true, for the row-family accounting. */
+  private readonly rowNames: string[] = [];
+  private readonly vacuousNames: string[] = [];
+  /** Construction error and allowance a family carries beyond its padded rows (the objective's frame error, the secant's shift, the gear neighbours). */
+  private readonly extraFamilyError = new Map<CountRowFamilyId, { constructionError: number; allowance: number }>();
 
   readonly bp: PhysicalBlueprint;
   readonly domain: SubproblemDomain;
@@ -375,9 +516,21 @@ class FastSpecializer {
     if (merged.names.length === 0) {
       const holds = sense === '<=' ? 0 <= rhs : sense === '>=' ? 0 >= rhs : rhs === 0;
       if (!holds) this.contradict(name, detail);
+      else if (this.req.certified) this.vacuousNames.push(name);
       return;
     }
     this.w.addMerged(name, merged, sense, rhs);
+    if (this.req.certified) this.rowNames.push(name);
+  }
+
+  /**
+   * Certified mode: write a CONSTRUCTED row with its padded right-hand side and keep the proof record of it (only when the row is actually written),
+   * as `specializeLP` does: the emitted row is an outer relaxation of the exact target row.
+   */
+  private emitPadded(name: string, terms: Iterable<readonly [string, number]>, relation: '>=' | '<=', padded: PaddedRhs, detail: string): void {
+    const before = this.rowNames.length;
+    this.emit(name, terms, relation, padded.emitted, detail);
+    if (this.rowNames.length > before) this.rowProofs.push(rowProof(name, familyOfRow(name), relation, padded));
   }
 
   private contradict(row: string, detail: string): void {
@@ -385,8 +538,34 @@ class FastSpecializer {
       this.w.addColumn('zero_col', 'continuous', 0, 0);
       this.zeroColumn = true;
     }
-    this.w.addRow(`contra_${this.contradictionDetails.length}`, [['zero_col', 1]], '>=', 1);
+    const name = `contra_${this.contradictionDetails.length}`;
+    this.w.addRow(name, [['zero_col', 1]], '>=', 1);
+    if (this.req.certified) this.rowNames.push(name);
     this.contradictionDetails.push(`${row}: ${detail}`);
+  }
+
+  private noteFamilyError(id: CountRowFamilyId, constructionError: number, allowance = constructionError): void {
+    const before = this.extraFamilyError.get(id) ?? { constructionError: 0, allowance: 0 };
+    this.extraFamilyError.set(id, { constructionError: Math.max(before.constructionError, constructionError), allowance: Math.max(before.allowance, allowance) });
+  }
+
+  /** The row-family accounting of a certified model: rows and vacuous rows by name, the padded rows' proved errors, and the extra errors noted while building. */
+  familyRecords(): CountRowFamilyRecord[] {
+    const records = COUNT_FAMILIES.map(f => ({ id: f.id, prefix: f.prefix, adr: f.adr, description: f.description, count: 0, vacuous: 0, constructionError: 0, allowance: 0 }));
+    const byId = new Map(records.map(r => [r.id, r]));
+    for (const name of this.rowNames) (byId.get(familyOfRow(name)) as CountRowFamilyRecord).count++;
+    for (const name of this.vacuousNames) (byId.get(familyOfRow(name)) as CountRowFamilyRecord).vacuous++;
+    for (const row of this.rowProofs) {
+      const record = byId.get(row.family as CountRowFamilyId) as CountRowFamilyRecord;
+      record.constructionError = Math.max(record.constructionError, row.coefficientError);
+      record.allowance = Math.max(record.allowance, row.allowance);
+    }
+    for (const [id, extra] of this.extraFamilyError) {
+      const record = byId.get(id) as CountRowFamilyRecord;
+      record.constructionError = Math.max(record.constructionError, extra.constructionError);
+      record.allowance = Math.max(record.allowance, extra.allowance);
+    }
+    return records;
   }
 
   private integerColumn(name: string, hi: number): void {
@@ -682,17 +861,26 @@ class FastSpecializer {
       const eff: Interval = { lo: clampErgo(gear.lo), hi: clampErgo(gear.hi) };
       this.declareAux('gear_ergo', gear.lo, gear.hi);
       this.declareAux('eff_ergo', eff.lo, eff.hi);
+      if (this.req.certified) this.gear = factor;
       if (factor.low === factor.high) {
         this.emit('gear_def', [['gear_ergo', 1], ['capped_ergo', -factor.low]], '=', 0, 'gear factor');
       } else {
         this.emit('gear_def_lo', [['gear_ergo', 1], ['capped_ergo', -factor.low]], '>=', 0, 'gear factor (lower neighbour)');
         this.emit('gear_def_hi', [['gear_ergo', 1], ['capped_ergo', -factor.high]], '<=', 0, 'gear factor (upper neighbour)');
+        // The two neighbouring doubles enclose the exact factor: the gap times the largest displayed ergonomics is the construction error of the pair.
+        if (this.req.certified) this.noteFamilyError('gear_clamp', ratRoundUp(ratMul(ratSub(ratFromDouble(factor.high), ratFromDouble(factor.low)), ratFromDouble(capped.hi))));
       }
       this.emitClamp('c2', 'gear_ergo', 'eff_ergo', gear, ERGO_CLAMP_MAX);
       const { lo, hi } = this.weightInterval;
       if (lo <= hi) {
         const penalty = this.node?.penalty ? checkedNodePenalty(lo, hi, this.node.penalty) : secantOfPenalty(lo, hi);
         this.penalty = penalty;
+        if (this.req.certified) {
+          // The secant's shift (how far below the exact chord the emitted line sits, in points) is the construction error of the TED rows.
+          const shift = 'shift' in penalty ? penalty.shift : 0;
+          this.secantProof = { kind: penalty.kind, weightMin: lo, weightMax: hi, line: penalty.line, shift, objectiveUnits: null, exact: penalty.exact };
+          this.noteFamilyError('ted', shift);
+        }
         const ted = differenceEnclosure(eff, lineEnclosure(penalty.line, lo, hi));
         this.declareAux('ted', ted.lo, ted.hi);
         // ted = eff - (slope W + intercept)
@@ -731,8 +919,24 @@ class FastSpecializer {
     // final recoil = naked x (1 + modifier sum) <= cap  <=>  naked x modifier <= cap - naked; no division, any sign of naked.
     const nakedV = bp.receiverRecoilVertical;
     const nakedH = bp.receiverRecoilHorizontal;
-    if (req.maxRecoilV !== null) this.emit('lim_recoil_v', [['rec_mod', nakedV]], '<=', req.maxRecoilV - nakedV, `max vertical recoil ${req.maxRecoilV}`);
-    if (req.maxRecoilSum !== null) this.emit('lim_recoil_sum', [['rec_mod', nakedV + nakedH]], '<=', req.maxRecoilSum - (nakedV + nakedH), `max recoil sum ${req.maxRecoilSum}`);
+    if (req.certified) {
+      // The coefficient is the leaf itself (vertical) or the nearest double of the exact sum (sum cap); the right-hand side is the smallest double at least
+      // the exact cap - naked plus the coefficient deficit times the modifier range, so no build the exact cap admits is cut (`paddedRhs`, as `specializeLP`).
+      const recoilMagnitude = ratMagnitude(this.bounds.recoil.lo, this.bounds.recoil.hi);
+      if (req.maxRecoilV !== null) {
+        const padded = paddedRhs('<=', ratSub(ratFromDouble(req.maxRecoilV), ratFromDouble(nakedV)), [{ target: ratFromDouble(nakedV), emitted: nakedV, magnitude: recoilMagnitude }]);
+        this.emitPadded('lim_recoil_v', [['rec_mod', nakedV]], '<=', padded, `max vertical recoil ${req.maxRecoilV}`);
+      }
+      if (req.maxRecoilSum !== null) {
+        const total = ratAdd(ratFromDouble(nakedV), ratFromDouble(nakedH));
+        const coefficient = ratToNumber(total);
+        const padded = paddedRhs('<=', ratSub(ratFromDouble(req.maxRecoilSum), total), [{ target: total, emitted: coefficient, magnitude: recoilMagnitude }]);
+        this.emitPadded('lim_recoil_sum', [['rec_mod', coefficient]], '<=', padded, `max recoil sum ${req.maxRecoilSum}`);
+      }
+    } else {
+      if (req.maxRecoilV !== null) this.emit('lim_recoil_v', [['rec_mod', nakedV]], '<=', req.maxRecoilV - nakedV, `max vertical recoil ${req.maxRecoilV}`);
+      if (req.maxRecoilSum !== null) this.emit('lim_recoil_sum', [['rec_mod', nakedV + nakedH]], '<=', req.maxRecoilSum - (nakedV + nakedH), `max recoil sum ${req.maxRecoilSum}`);
+    }
     const minimum = (name: string, limit: number | null, values: Readonly<Float64Array>, what: string): void => {
       if (limit === null || values[0] >= limit) return; // the receiver meets it
       const reaching: [string, number][] = [];
@@ -744,9 +948,56 @@ class FastSpecializer {
     if (req.maxWeight !== null) this.emit('lim_weight', [['weight', 1]], '<=', req.maxWeight, `max weight ${req.maxWeight}`);
   }
 
+  /**
+   * The MOA rows of a certified model: the rows of `specializeLP` (the exact Big-M and padded right-hand side of `proof.ts`) on the template presence
+   * columns, with the larger-centre-of-impact terms (research section 5.7).
+   *
+   * The oracle prices MOA with the installed barrel of the LARGEST positive centre of impact, MOA = coi (1 - A / 100) K for the accuracy sum A. The plain
+   * Fast row of barrel t states the cap for EVERY installed barrel (`z_t = 1` implies `c_t (1 - A / 100) <= L`). The two rules agree whenever MOA is
+   * nondecreasing in the centre of impact, which holds for A <= 100 (the factor 1 - A / 100 is nonnegative); for A > 100 the factor is negative, MOA falls
+   * as the centre of impact grows, and a cap L < 0 can be missed by a smaller barrel that the oracle never prices while the largest meets it (for
+   * L >= 0 every barrel's MOA is at most 0, so every plain row holds and nothing differs). The plain row then loses a physical build.
+   *
+   * The dominance row relaxes the row of barrel t by M_t for every installed barrel with a STRICTLY larger centre of impact:
+   *   (c_t / 100) A - M_t z_t + M_t sum_{b: coi_b > coi_t} z_b  >=  c_t - L - M_t,
+   * so it binds exactly when t is present and no larger barrel is (barrels of equal centre of impact bind together, as the oracle's maximum does).
+   * M_t is the proof layer's exact need (at least c_t (1 - A / 100) - L over the active accuracy range), so a present larger barrel makes the row
+   * non-binding, and padding is unchanged (only nonnegative terms are added). It states the oracle's rule exactly. `auto` writes the terms only when the plain
+   * rows can differ from it: a negative cap, an accuracy sum whose ACTIVE upper bound (counted per copy, `computeActiveBounds`) passes 100, and barrels of
+   * different centres of impact. Everywhere else the plain rows are exactly equivalent (above), so the rows are the same text as the occurrence model's.
+   */
+  private emitMoaCertified(): void {
+    const { bp, req, bounds, graph } = this;
+    const limit = req.maxMoa as number;
+    const a = bounds.accuracy;
+    const barrels: number[] = [];
+    for (let t = 1; t < graph.templateCount; t++) if (graph.active[t] && bp.templateCenterOfImpact[t] > 0) barrels.push(t);
+    const coi = (t: number): number => bp.templateCenterOfImpact[t];
+    const intrinsic = coi(0);
+    const different = new Set(barrels.map(coi)).size > 1;
+    const dominance = different && (req.moaDominance === 'always' || (limit < 0 && a.hi > 100));
+    this.moaRows = dominance ? 'dominance' : 'plain';
+    for (const t of barrels) {
+      const plan = moaReplacementRow(coi(t), limit, a);
+      const terms: [string, number][] = [['acc_total', plan.coefficient], [this.presenceOf(t), -plan.bigM]];
+      if (dominance) for (const b of barrels) if (coi(b) > coi(t)) terms.push([this.presenceOf(b), plan.bigM]);
+      this.emitPadded(`moa_rep_${t}`, terms, '>=', plan.rhs, `MOA of barrel ${bp.templateIds[t]}`);
+    }
+    // (c0/100) A + M_fb sum_b z_b >= c0 - L; with no barrel the sum is empty and the row is the unconditional intrinsic one.
+    const fallback = moaFallbackRow(intrinsic, limit, a, barrels.length > 0);
+    this.emitPadded(
+      'moa_fallback', [['acc_total', fallback.coefficient], ...barrels.map(t => [this.presenceOf(t), fallback.bigM] as [string, number])], '>=', fallback.rhs,
+      `intrinsic MOA ${intrinsic * MOA_K} exceeds the cap ${limit}`,
+    );
+  }
+
   private emitMoa(): void {
     const { bp, req, bounds, graph } = this;
     if (req.maxMoa === null) return;
+    if (req.certified) {
+      this.emitMoaCertified();
+      return;
+    }
     const limit = req.maxMoa;
     const a = bounds.accuracy;
     const up = (x: number): number => (x === 0 ? 0 : nextUp(x));
@@ -773,7 +1024,123 @@ class FastSpecializer {
     this.emit('moa_fallback', [['acc_total', intrinsic * MOA_K_OVER_100], ...barrels.map(t => [this.presenceOf(t), mFallback] as [string, number])], '>=', cBase - limit, `intrinsic MOA ${cBase} exceeds the cap ${limit}`);
   }
 
+  /**
+   * The objective of a certified model: the weighted or augmented Tchebycheff score of `specializeLP`, constructed in exact rationals (`planObjective`):
+   * the emitted coefficients, the proved frame error, the exact ranges of the deviation columns, the padded deviation rows and the power-of-two read-through of
+   * an axis whose coefficient HiGHS would filter. The LP objective is the oracle's own score (`scale` 1, `offset` 0).
+   */
+  private emitObjectiveCertified(ranges: { ergoAxis: Interval; recAxis: Interval; priceAxis: Interval }): ObjectiveMeta {
+    const { req } = this;
+    const { e, r, p } = req;
+    const coefficients: ObjectiveCoefficient[] = [];
+    const plan = planObjective({ e, r, p }, req.tchebycheff, { ergo: ranges.ergoAxis, rec: ranges.recAxis, price: ranges.priceAxis });
+    this.objectivePlan = plan;
+    if (plan.withheld !== null) this.withheld = plan.withheld;
+    type AxisColumn = 'ergo_axis' | 'rec_axis' | 'price_axis';
+    const axisRange: Record<AxisColumn, Interval> = { ergo_axis: ranges.ergoAxis, rec_axis: ranges.recAxis, price_axis: ranges.priceAxis };
+    const nameN: Record<AxisColumn, string> = { ergo_axis: 'ergo_n', rec_axis: 'rec_n', price_axis: 'price_n' };
+    // An axis whose objective coefficient HiGHS would filter is read through `column_n = column / 2^k` (exact): the link row is `column - 2^k column_n = 0`, the
+    // objective rows carry `c 2^k` on `column_n`, and the objective itself stays in the oracle's units.
+    const readThrough: Record<AxisColumn, { column: string; range: Interval; factor: number }> = {
+      ergo_axis: { column: 'ergo_axis', range: ranges.ergoAxis, factor: 1 },
+      rec_axis: { column: 'rec_axis', range: ranges.recAxis, factor: 1 },
+      price_axis: { column: 'price_axis', range: ranges.priceAxis, factor: 1 },
+    };
+    for (const scale of plan.axisScales) {
+      if (scale.exponent === 0 || scale.withheld !== null) continue;
+      const name = nameN[scale.column];
+      const range = axisRange[scale.column];
+      // dividing by a power of two is exact (no denormal at these magnitudes), so the enclosure of the scaled column is the scaled enclosure
+      const scaled: Interval = { lo: range.lo / scale.factor, hi: range.hi / scale.factor };
+      this.declareAux(name, scaled.lo, scaled.hi);
+      this.emit(`${name}_def`, [[scale.column, 1], [name, -scale.factor]], '=', 0, `${name} definition`);
+      readThrough[scale.column] = { column: name, range: scaled, factor: scale.factor };
+    }
+    const formulas: Record<AxisColumn, string> = req.tchebycheff
+      ? { ergo_axis: 'AUGMENTATION c_e', rec_axis: '-AUGMENTATION c_r', price_axis: '-AUGMENTATION c_p' }
+      : { ergo_axis: 'e / ERGO_SCALE', rec_axis: '-r', price_axis: '-p / SCALE' };
+    const terms: [string, number][] = [['total_obj', 1]];
+    let objective: Interval | null = null;
+    for (const t of plan.terms) {
+      const through = readThrough[t.column];
+      const value = t.emitted * through.factor; // an exact product: a power of two
+      terms.push([through.column, -value]);
+      coefficients.push({ column: through.column, value, formula: formulas[t.column] });
+      const part = iScale(value, through.range);
+      objective = objective === null ? part : iAdd(objective, part);
+    }
+    let tch: ObjectiveMeta['tchebycheff'] = null;
+    if (req.tchebycheff) {
+      const ideal = req.tchebycheff;
+      const { ce, cr, cp } = tchebycheffCoefficients({ e, r, p }, ideal);
+      const active: ('e' | 'r' | 'p')[] = [];
+      if (e > 0) active.push('e');
+      if (r > 0) active.push('r');
+      if (p > 0) active.push('p');
+      tch = { ideal, ce: ratToNumber(ce), cr: ratToNumber(cr), cp: ratToNumber(cp), active };
+      // t >= every active deviation d_a: d_e = c_e (zE - fE), d_r = c_r (fR - zR), d_p = c_p (fP - zP)
+      const lows: Rat[] = [];
+      const highs: Rat[] = [];
+      const rows: { name: string; terms: [string, number][]; padded: PaddedRhs }[] = [];
+      for (const d of plan.deviations) {
+        const column: AxisColumn = d.axis === 'e' ? 'ergo_axis' : d.axis === 'r' ? 'rec_axis' : 'price_axis';
+        const sign = d.axis === 'e' ? 1 : -1;
+        const range = axisRange[column];
+        const z = ratFromDouble(d.ideal);
+        const lo = ratFromDouble(range.lo);
+        const hi = ratFromDouble(range.hi);
+        // the deviation's real range from the exact coefficient: c (zE - fE) falls with fE, c (fR - zR) and c (fP - zP) rise with it
+        if (d.axis === 'e') {
+          lows.push(ratMul(d.target, ratSub(z, hi)));
+          highs.push(ratMul(d.target, ratSub(z, lo)));
+        } else {
+          lows.push(ratMul(d.target, ratSub(lo, z)));
+          highs.push(ratMul(d.target, ratSub(hi, z)));
+        }
+        // c_a column_n 2^k = c_a column: the padded right-hand side is the same, in the oracle's units
+        const through = readThrough[column];
+        rows.push({ name: `tch_${d.axis}`, terms: [['tch_t', 1], [through.column, sign * d.emitted * through.factor]], padded: d.rhs });
+      }
+      const largest = (values: readonly Rat[]): Rat => values.reduce((x, y) => ratMax(x, y));
+      const tRange: Interval = plan.deviations.length === 0 ? { lo: 0, hi: 0 } : ratEnclosure(largest(lows), largest(highs));
+      this.declareAux('tch_t', tRange.lo, tRange.hi);
+      for (const row of rows) this.emitPadded(row.name, row.terms, '>=', row.padded, row.name);
+      terms.push(['tch_t', 1]);
+      coefficients.push({ column: 'tch_t', value: -1, formula: '-1' });
+      objective = iAdd(objective as Interval, { lo: -tRange.hi, hi: -tRange.lo });
+    }
+    const total = objective as Interval;
+    this.declareAux('total_obj', total.lo, total.hi);
+    this.emit('obj_def', terms, '=', 0, 'objective definition');
+    this.w.setObjective('total_obj');
+    this.noteFamilyError('objective', plan.frameError);
+    if (this.secantProof !== null) {
+      // The secant's shift in TED points, carried through the actual coefficients on TED: the weighted e (= 10 x e/10), or Tchebycheff's 10 c_e (0.01 + the
+      // deviation's 1) when ergonomics is active. A shift is an objective effect only when TED is the ergonomics axis.
+      const termE = plan.terms.find(t => t.column === 'ergo_axis');
+      let gain = RAT_ZERO;
+      if (this.ergoColumn === 'ted' && termE) {
+        gain = ratMul(ratFromDouble(ERGO_SCALE), ratAbs(termE.target));
+        const deviation = plan.deviations.find(d => d.axis === 'e');
+        if (deviation) gain = ratAdd(gain, ratMul(ratFromDouble(ERGO_SCALE), deviation.target));
+      }
+      this.secantProof.objectiveUnits = ratRoundUp(ratMul(ratFromDouble(this.secantProof.shift), gain));
+    }
+    return {
+      sense: 'maximize',
+      column: 'total_obj',
+      kind: req.tchebycheff ? 'tchebycheff' : 'weighted',
+      frame: { ergoScale: ERGO_SCALE, recoilScale: RECOIL_SCALE, priceScale: 1 },
+      ergoSource: this.ergoColumn,
+      weights: { e, r, p },
+      toOracle: { scale: 1, offset: 0 },
+      coefficients,
+      tchebycheff: tch,
+    };
+  }
+
   private emitObjective(ranges: { ergoAxis: Interval; recAxis: Interval; priceAxis: Interval }): ObjectiveMeta {
+    if (this.req.certified) return this.emitObjectiveCertified(ranges);
     const { req } = this;
     const { e, r, p } = req;
     const coefficients: ObjectiveCoefficient[] = [];
@@ -854,7 +1221,7 @@ class FastSpecializer {
 // Entry point
 // ---------------------------------------------------------------------------------------------
 
-function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain, singleCopy: boolean): FastModel {
+function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain, singleCopy: boolean, certified: boolean): FastModel {
   const reasons = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`));
   const lp = ['Maximize', '  obj: total_obj', 'Subject To', '  empty_domain: zero_col >= 1', 'Bounds', '  total_obj = 0', '  zero_col = 0', 'End'].join('\n');
   const graph: TemplateGraph = {
@@ -894,11 +1261,30 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain, sing
     notes: ['the domain is empty: no build exists, so the model is the one-row contradiction'],
     matrixFilterRisk: false,
     stats: { minAbsCoefficient: 1, maxAbsCoefficient: 1, columns: 2, rows: 1, nonzeros: 1, binaries: 0, integers: 0, continuous: 2, lpChars: lp.length },
+    certified,
+    proof: certified ? EMPTY_MODEL_PROOF : null,
+    rowFamilies: certified ? COUNT_FAMILIES.map(f => ({ id: f.id, prefix: f.prefix, adr: f.adr, description: f.description, count: f.id === 'contradiction' ? 1 : 0, vacuous: 0, constructionError: 0, allowance: 0 })) : null,
+    moaRows: null,
   };
 }
 
 /** What a domain determines about its Fast model whatever the request or the weight node: the template graph and the active ranges. */
 const structureMemo = new WeakMap<SubproblemDomain, { graph: TemplateGraph; bounds: ActiveBounds; single?: TemplateGraph }>();
+
+function structureEntry(blueprint: PhysicalBlueprint, domain: SubproblemDomain): { graph: TemplateGraph; bounds: ActiveBounds; single?: TemplateGraph } {
+  let structure = structureMemo.get(domain);
+  if (structure === undefined) {
+    structure = { graph: buildTemplateGraph(blueprint, domain), bounds: computeActiveBounds(blueprint, domain) };
+    structureMemo.set(domain, structure);
+  }
+  return structure;
+}
+
+/** The template graph and active ranges of a non-empty domain, computed once per (immutable) domain and shared by every model and node built from it. */
+export function templateStructureOf(blueprint: PhysicalBlueprint, domain: SubproblemDomain): { graph: TemplateGraph; bounds: ActiveBounds } {
+  const { graph, bounds } = structureEntry(blueprint, domain);
+  return { graph, bounds };
+}
 
 /** The template graph with every copy bound capped at one: the same slots and edges, `maxCopies[t] = min(maxCopies[t], 1)`. */
 function singleCopyGraph(graph: TemplateGraph): TemplateGraph {
@@ -911,24 +1297,26 @@ function singleCopyGraph(graph: TemplateGraph): TemplateGraph {
  * @param node Optional weight node (see `SpatialNode`); read only by requests that use TED. Without one, a TED request is specialized on the whole
  *   active weight range, which is a relaxation unless every build weighs at most 3 kg. A domain is immutable, so its template graph and active ranges
  *   are computed once and shared by the nodes of a spatial search.
+ * @param options `certified` builds the model through the proof layer (see {@link FastModelOptions}); the default is the plain Fast model.
  */
-export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemDomain, request: SpecializeRequest = {}, node?: SpatialNode): FastModel {
+export function specializeFast(
+  blueprint: PhysicalBlueprint, domain: SubproblemDomain, request: SpecializeRequest = {}, node?: SpatialNode, options: FastModelOptions = {},
+): FastModel {
   if (domain.blueprint !== blueprint) {
     throw new PhysicalModelError('FOREIGN_DOMAIN', `The domain was not prepared from the blueprint of ${blueprint.weaponId}`, { weaponId: blueprint.weaponId });
   }
-  const resolved = resolveFastRequest(request);
+  const resolved = resolveFastRequest(request, options);
   if (node) {
     finite(node.weightMin, 'node.weightMin');
     finite(node.weightMax, 'node.weightMax');
   }
-  if (domain.empty) return emptyModel(blueprint, domain, resolved.singleCopy);
+  if (domain.empty) return emptyModel(blueprint, domain, resolved.singleCopy, resolved.certified);
 
-  let structure = structureMemo.get(domain);
-  if (structure === undefined) {
-    structure = { graph: buildTemplateGraph(blueprint, domain), bounds: computeActiveBounds(blueprint, domain) };
-    structureMemo.set(domain, structure);
-  }
+  const structure = structureEntry(blueprint, domain);
   const { bounds } = structure;
+  if (resolved.certified && !structure.graph.acyclic) {
+    throw new PhysicalModelError('DOMAIN_INCONSISTENT', 'The certified count model needs an acyclic active template graph; a cyclic graph keeps the occurrence model', { weaponId: blueprint.weaponId });
+  }
   const graph = resolved.singleCopy ? (structure.single ??= singleCopyGraph(structure.graph)) : structure.graph;
   const specializer = new FastSpecializer(blueprint, domain, graph, resolved, bounds, node);
   const objective = specializer.build();
@@ -970,5 +1358,18 @@ export function specializeFast(blueprint: PhysicalBlueprint, domain: SubproblemD
       continuous: w.columnCount - w.binaryCount - w.integerCount,
       lpChars: lpBase.length,
     },
+    certified: resolved.certified,
+    proof: resolved.certified
+      ? {
+        version: 1,
+        rows: specializer.rowProofs,
+        objective: specializer.objectivePlan,
+        gear: specializer.gear === null ? null : { target: specializer.gear.target, low: specializer.gear.low, high: specializer.gear.high },
+        secant: specializer.secantProof,
+        withheld: specializer.withheld,
+      }
+      : null,
+    rowFamilies: resolved.certified ? specializer.familyRecords() : null,
+    moaRows: specializer.moaRows,
   };
 }

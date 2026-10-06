@@ -14,6 +14,7 @@ export * from './objective';
 export * from './nogood';
 export * from './templateGraph';
 export * from './specializeFast';
+export * from './specializeCount';
 export * from './decodeFast';
 export * from './fastCut';
 // nativeSolve.ts, solvePrecise.ts and solveFast.ts reach the native HiGHS surface, so they are imported by path, not through this barrel.

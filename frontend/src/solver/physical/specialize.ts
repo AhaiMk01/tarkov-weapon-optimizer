@@ -33,7 +33,9 @@
  *     exact `cap - naked` (the sum cap pads by its coefficient deficit too).
  *   - MOA rows: `c_b/100` on the accuracy sum is the nearest double of coi x 10000/29089, the right-hand side `c_b - L - M_b` is padded
  *     downward by the coefficient deficit, `M_b = max(0, max over the accuracy range of c_b (1 - A/100) - L)` is the smallest double at least
- *     the exact need (raised to a surviving size when positive).
+ *     the exact need (raised to a surviving size when positive). The oracle prices the installed barrel of the LARGEST centre of impact; the per-barrel
+ *     row states the cap for every installed barrel, the same rule when MOA is nondecreasing in the centre of impact. When a negative cap and an accuracy
+ *     sum above 100 percent points can meet, each row also carries `+ M_b` on every installed barrel of a strictly larger centre of impact (Phase 2.10).
  *   - objective: weighted `e / 10`, `-r`, `-p / 1000`; Tchebycheff `0.01 c_a` with `c_a = w_a / (sum max(range, 1))`, the deviation rows
  *     `c_a (z_a - f_a)` padded; the coefficients' construction error times the axis magnitudes is `ObjectivePlan.frameError`; an axis whose
  *     coefficient would be filtered is read through `column_n = column / 2^k` (exact; `ObjectivePlan.axisScales`).
@@ -924,15 +926,20 @@ class Specializer {
     const barrels: number[] = [];
     for (const v of this.activeList) if (bp.templateCenterOfImpact[bp.occTemplate[v]] > 0) barrels.push(v);
     const intrinsic = bp.templateCenterOfImpact[0];
-    if (a.hi > 100 && barrels.length > 1) {
-      this.notes.push('MOA rows assume an accuracy sum of at most 100 percent points when several barrels are installed (each installed barrel row binds; the oracle takes the largest COI)');
-    }
+    const coiOf = (v: number): number => bp.templateCenterOfImpact[bp.occTemplate[v]];
+    // The oracle prices MOA with the installed barrel of the LARGEST centre of impact. The per-barrel row below states the cap for EVERY installed barrel,
+    // which is the same rule exactly when MOA is nondecreasing in the centre of impact (an accuracy sum of at most 100 percent points) or when no cap below
+    // zero can be missed. With a negative cap and an accuracy sum that can pass 100 the two differ, so the row of barrel v is relaxed by M_v for every installed
+    // barrel of a STRICTLY larger centre of impact (research section 5.7; the same terms as the count model, `specializeFast.ts` emitMoaCertified).
+    const dominance = limit < 0 && a.hi > 100 && barrels.some(v => coiOf(v) !== coiOf(barrels[0]));
     for (const v of barrels) {
-      const coi = bp.templateCenterOfImpact[bp.occTemplate[v]];
+      const coi = coiOf(v);
       // (c/100) A - M x_b >= c - L - M: the coefficient is the nearest double of coi K/100, M the smallest double dominating the exact need,
       // and the right-hand side is padded by the exact coefficient deficit (proof.ts).
       const plan = moaReplacementRow(coi, limit, a);
-      this.emitPadded('moa', `moa_rep_${v}`, [['acc_total', plan.coefficient], [xName(v), -plan.bigM]], '>=', plan.rhs, `MOA of barrel ${v}`);
+      const terms: [string, number][] = [['acc_total', plan.coefficient], [xName(v), -plan.bigM]];
+      if (dominance) for (const u of barrels) if (coiOf(u) > coi) terms.push([xName(u), plan.bigM]);
+      this.emitPadded('moa', `moa_rep_${v}`, terms, '>=', plan.rhs, `MOA of barrel ${v}`);
     }
     // (c0/100) A + M_fb sum_b x_b >= c0 - L; with no barrel the sum is empty and the row is the unconditional intrinsic one.
     const fallback = moaFallbackRow(intrinsic, limit, a, barrels.length > 0);

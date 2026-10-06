@@ -24,8 +24,8 @@ import {
   type BaseChoice, type EnumerateOptions, type OracleResult, type ReferenceBuild, type ReferenceFixture, type ReferenceRequest,
 } from '../oracle/index';
 import {
-  appendCuts, buildTemplateGraph, decodeFast, preparePhysicalWeapon, prepareSubproblemDomain, specializeFast,
-  type FastModel, type IntegerNoGood, type SubproblemDomain, type PhysicalBlueprint,
+  appendCuts, buildTemplateGraph, decodeFast, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, specializeFast,
+  type FastModel, type IntegerNoGood, type SpecializeRequest, type SubproblemDomain, type PhysicalBlueprint,
 } from '../../src/solver/physical';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import type { SolveParams } from '../../src/solver/types';
@@ -126,8 +126,13 @@ export interface FastExactnessOptions {
    * REWRITTEN model against the oracle. The pinned and enumerated points are cut and decoded as usual.
    */
   lpTransform?: (lpBase: string, model: FastModel) => string;
-  /** Also run the production `solveFast` pipeline and compare its answer (kind, optimum, projection) with the oracle's. */
+  /** Also run the production `solveFast` pipeline and compare its answer (kind, optimum, projection) with the oracle's. Ignored for a certified model. */
   productionPath?: boolean;
+  /**
+   * Judge the CERTIFIABLE count model of Precise (`specializeCount`: built through the proof layer, MOA larger-centre-of-impact rows, eligibility verified on the
+   * data, repeats always allowed) instead of the plain Fast model. Its text must equal the oracle without any `lpTransform`, the MOA family included.
+   */
+  certified?: boolean;
   /** Enumerate Fast's feasible projections completely when the oracle has at most this many; above it, random directions sample instead. */
   maxEnumerate?: number;
   /** Cap on the oracle projections pinned for completeness (all of them when at most this many; every maximizer is always pinned). */
@@ -425,7 +430,8 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
 
   const tolerance = options.tolerance ?? 1e-7;
   const requestFast = specializeRequestOf(request);
-  const model = specializeFast(blueprint, domain, requestFast);
+  const specialize = (req: SpecializeRequest): FastModel => (options.certified === true ? specializeCount(blueprint, domain, req) : specializeFast(blueprint, domain, req));
+  const model = specialize(requestFast);
   const baseLp = options.lpTransform ? options.lpTransform(model.lpBase, model) : model.lpBase;
   const notes = out.mismatches;
 
@@ -507,7 +513,7 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
     // Too many projections to enumerate: deterministic random objective directions sample the vertices.
     const seen = new Set<string>();
     for (const weights of objectiveDirections(seedOf(id), options.randomDirections ?? 6)) {
-      const m = specializeFast(blueprint, domain, specializeRequestOf(request, weights));
+      const m = specialize(specializeRequestOf(request, weights));
       const solved = await solveText(options.lpTransform ? options.lpTransform(m.lpBase, m) : m.lpBase);
       out.solves++;
       if (solved.status !== 'Optimal') {
@@ -614,7 +620,7 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
       if (out.gateBMaximizers.status === 'fail') notes.push(String(out.gateBMaximizers.detail));
     }
   }
-  if (options.productionPath === true) await productionPathGate(fixture, request, oracle, out, tolerance);
+  if (options.productionPath === true && options.certified !== true) await productionPathGate(fixture, request, oracle, out, tolerance);
   return out;
 }
 

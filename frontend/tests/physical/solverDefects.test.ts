@@ -121,3 +121,24 @@ test('the Fast template model of random world 123 (fast_presolve_wrong_optimal.l
   const wrong = on.modelStatus.name === 'Optimal' && Math.abs((on.objectiveValue as number) - 335.35) > 1e-6;
   t.diagnostic(`presolve on: ${on.modelStatus.name} ${on.objectiveValue}, dual bound ${on.mipDualBound}${wrong ? ' (wrong: the maximum is 335.35)' : ''}`);
 });
+
+test('the COUNT model node [1.5, 3] of TED world 2105 (count_presolve_off_wrong_optimal.lp): presolve OFF, default seed, HiGHS 1.15.1 may report Optimal 93.6 with a dual bound of 93.6 although a build scoring 100 is a feasible point', async t => {
+  // Seeded world `randomTedWorld(2105, false)`, weight node [1.5, 3], request weights 1 / 0 / 0, TrueErgo, equipment modifier +0.2. Three templates (t1: 22 ergonomics and two
+  // slots, t3: 9, t2: 5). The physical build {t1, t1, t3, t3} (2.75 kg, raw ergonomics 87, x 1.2 = 104.4, clamped 100, no weight penalty below 3 kg) scores 100, and the
+  // occurrence model of the same request returns it (tests/physical/countVsOccurrence.test.ts). The truth below does not depend on the defect: the model pinned to that
+  // build is FEASIBLE and its objective is 100, so the maximum is at least 100. The root LP of the unpinned model is mis-solved with the default random seed:
+  // an Optimal verdict AND a dual bound, which is the number a certificate would be built on. A second seed (or presolve on) returns 100.
+  const lp = model('count_presolve_off_wrong_optimal.lp');
+  const at = lp.indexOf('\nBounds\n');
+  const pinned = `${lp.slice(0, at)}\n  pin_t1: n_1 = 2\n  pin_t3: n_2 = 2\n  pin_t2: n_3 = 0\n  pin_base: base_0 = 1${lp.slice(at)}`;
+  const truth = await native(pinned, { presolve: 'off' });
+  assert.equal(truth.status, 'Optimal');
+  assert.ok(Math.abs((truth.objective as number) - 100) < 1e-6, `the pinned build scores ${truth.objective}`);
+  const second = await native(lp, { presolve: 'off', random_seed: 11 });
+  assert.equal(second.status, 'Optimal');
+  assert.ok(Math.abs((second.objective as number) - 100) < 1e-6, `a second seed finds ${second.objective}`);
+  const first = await getNativeHighs().solveStructured(lp, { ...BASE, presolve: 'off' });
+  const wrong = first.modelStatus.name === 'Optimal' && (first.objectiveValue as number) < 100 - 1e-6;
+  t.diagnostic(`presolve off, default seed: ${first.modelStatus.name} ${first.objectiveValue}, dual bound ${first.mipDualBound}${wrong ? ' (WRONG: the maximum is at least 100, so this dual bound is not an upper bound)' : ''}`);
+  if (wrong) assert.ok(first.mipDualBound !== null && first.mipDualBound < 100, 'the wrong verdict carries a wrong bound, not only a wrong point');
+});

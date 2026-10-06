@@ -100,6 +100,20 @@ is approximate. Decisions:
 5. **No optimality or infeasibility claim from a presolved solve, on any model.** HiGHS 1.15.1 presolve produced
    both a false Infeasible (exact model) and a false Optimal (Fast model); fixtures in
    `tests/physical/solverDefects/`. Precise and Fast both solve with presolve off.
+5a. **A second opinion on every certificate (owner, 2026-10-06).** HiGHS 1.15.1 with presolve off also returned a wrong
+   Optimal with a wrong dual bound (about 1 in 10,000 solves, both models; fixture
+   `tests/physical/solverDefects/count_presolve_off_wrong_optimal.lp`). Every solve that backs a certificate is repeated with
+   another random seed: the upper bound is the larger of the two qualified bounds, the incumbent the best verified build,
+   an infeasibility needs both verdicts. On a disagreement a third seed breaks the tie (owner): the bound is the largest
+   qualified bound of all solves, a certificate needs two agreeing solves, and a timeout withholds the certificate.
+5b. **Integrality tolerance 1e-7, primal and dual 1e-9 (owner, 2026-10-06).** On that fixture only the integrality
+   tolerance matters (likely: HiGHS rounds a derived integer bound such as 1.9999999982 down under 1e-9 and cuts off the
+   optimum). A looser integrality tolerance can only enlarge a bound and every candidate is validated exactly, so the
+   certificates keep their footing; the dual tolerance that a bound depends on stays 1e-9. Always 1e-7, whatever the request
+   tolerance (owner): it removed every wrong-optimum disagreement in the Phase 2.10 campaigns (19,000 worlds, both models),
+   and a seed-only second opinion missed one case. Cost accepted by the owner: about 1% of solves report a bound up to 1e-7
+   high, so a ledger case at the 1e-9 runtime tolerance can drop from certified to feasible; those cases are recorded in the
+   baseline as owner-approved, never by editing a ledger expectation.
 6. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
    the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
 
