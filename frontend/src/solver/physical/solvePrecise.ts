@@ -53,6 +53,28 @@
  *     unresolved with the factual reason, its qualified bound and its verified builds kept), and so does a disagreement no two solves resolve.
  * `SearchTelemetry` counts the second and third solves, the disagreements and the time they cost.
  *
+ * Inconclusive solves (owner, 2026-10-12: "retry seeds, never throw"). HiGHS 1.15.1 returns `SolveError` under the production options on some small,
+ * valid count models for some seeds (reference/harness/countGates.nativeDefects.differential.test.ts). Such a solve (`SolveError`, `PresolveError`,
+ * `PostsolveError` on a text HiGHS read without error: `nativeSolve.ts`) is an INCONCLUSIVE opinion: it is no verdict, it is not counted among the
+ * (at most three, decision 5a) qualified opinions, and the node moves on to the next seed of `PRECISE_RANDOM_SEEDS`, for its first opinion as for
+ * its second and third. When the seeds run out before two qualified verdicts agree, the node is unresolved with `Required proof prerequisite
+ * unavailable`: no certificate, its verified builds and qualified bounds kept. A malformed text or a native call that throws still raises its typed error.
+ *
+ * Infeasibility needs the relaxation to agree (owner, 2026-10-12: "relaxation must agree"). HiGHS 1.15.1 also reported a FEASIBLE integer count text
+ * Infeasible under every production seed (fuzz world 30001860, TrueErgo, weight node [2.5, 2.5]) while the relaxed-edge text of the same node found the
+ * build, so two agreeing seeds are no sound guard for an Infeasible verdict of the INTEGER text. A node is therefore treated as infeasible (pruned by the
+ * spatial search, counted in a certified infeasibility, used by the MOA floor as an infeasibility proof) only when its RELAXED-edge text, with the same
+ * cuts, is settled Infeasible by two agreeing qualified verdicts: an infeasible relaxation leaves the integer model nothing, which is sound. Concretely:
+ *   - the relaxed text settled Infeasible (production's relaxed-first try, or the confirmation below): the node is infeasible;
+ *   - the integer text settled Infeasible: the relaxed text with the same cuts is solved (unless it was already solved in this node without settling
+ *     Infeasible, or a verified build of the node exists: then it cannot agree) and its own verdict decides: settled Infeasible, the node is infeasible; an integral point the validator accepts, that build is the node's candidate
+ *     (settled by the second opinion as any relaxed optimum); a fractional or rejected point, no verdict or a stop, the node is NOT infeasible but
+ *     unresolved (`Required proof prerequisite unavailable`, or the factual stop of the confirmation): no certificate, the best verified build kept;
+ *   - relaxed-first in production: an integer-text Infeasible normally FOLLOWS a feasible fractional (or rejected) relaxation of the same text, so it can
+ *     never certify the node infeasible: such a node is unresolved at once, without another solve (`relaxationVetoes`).
+ * A node model with no slot edge has a relaxed text equal to its integer text, so its settled Infeasible needs nothing more. This guard is sound but not
+ * complete: a relaxation can share a false Infeasible (the row-deleted minimal text of world 30001860 does), and then nothing here detects it.
+ *
  * Every result carries its `outcome` (ADR 0013 section 6, `outcome.ts`): the pipeline reports what the search established (an optimum, an
  * emptiness, or neither, whether a verified witness exists, whether the executed search finished, which stops it observed) and the pure
  * classifier chooses the status, certificate, qualifications, termination and reason.
@@ -73,7 +95,7 @@ import type { ColumnValues } from './decode';
 import { decodeFast } from './decodeFast';
 import { prepareSubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
-import { integerNoGood } from './fastCut';
+import { appendCuts, integerNoGood } from './fastCut';
 import type { IntegerNoGood } from './fastCut';
 import { NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
 import type { PolicyOutcome, PresolveSetting, SolveFn } from './nativeSolve';
@@ -214,6 +236,16 @@ export interface SearchTelemetry {
   /** Node solves tried first with continuous slot-edge counts, and how many of them fell back to the integer model (`edgeIntegrality`). */
   relaxedEdgeSolves: number;
   relaxedEdgeFallbacks: number;
+  /** Solves that reached no verdict (`SolveError`, `PresolveError`, `PostsolveError`): each was followed by the next seed while seeds remained. */
+  inconclusiveSolves: number;
+  /** Solves of a text made after an inconclusive solve of the same text (retries with the following seeds); 0 when nothing was inconclusive. */
+  extraSeedSolves: number;
+  /** Relaxed-edge first opinions solved only to confirm an integer-text Infeasible verdict ("relaxation must agree"). */
+  relaxationChecks: number;
+  /** Integer-text Infeasible verdicts the relaxation did NOT confirm (its text had a point, or reached no settled verdict): the node stayed unresolved. */
+  relaxationVetoes: number;
+  /** Integer-text Infeasible verdicts overturned by a verified build of the relaxed-edge text (a native false Infeasible caught). */
+  relaxationRescues: number;
   /** The largest count model of the search: columns and rows. */
   columns: number;
   rows: number;
@@ -293,15 +325,31 @@ export const DEFAULT_OBJECTIVE_TOLERANCE = 1e-5;
  * about 1e-15 relative, the ledger worst case 5e-12 absolute). A sanity guard on the proof inputs, not an allowance: it never widens a bound.
  */
 export const BOUND_SANITY_RELATIVE = 1e-9;
+/** The pure interrupts of ADR 0013 section 6: an observed proof-prerequisite failure outranks them. */
+const INTERRUPT_REASONS: ReadonlySet<string> = new Set<string>([
+  PUBLIC_REASONS.cancelledByUser, PUBLIC_REASONS.timeLimitReached, PUBLIC_REASONS.nodeLimitReached, PUBLIC_REASONS.nativeSolutionLimitReached,
+]);
 const boundShortfallLimit = (bound: Rat, tolerance: number): number => Math.max(tolerance, BOUND_SANITY_RELATIVE * Math.max(1, Math.abs(ratToNumber(bound))));
 /** Most solver solutions of one node the decoder or validator may reject (each is cut out and the node re-solved) before the node fails. */
 export const MAX_REJECTIONS_PER_NODE = 16;
 export const DEFAULT_MAX_SPATIAL_NODES = 512;
 /**
- * The `random_seed` of the first, second and third solve of a certificate-bearing verdict (owner decision 5a). The first is HiGHS's default; the
- * other two are arbitrary distinct values, fixed so that a run is reproducible.
+ * The `random_seed`s of the solves of one node text, in the order they are tried (owner decision 5a and the 2026-10-12 follow-up). The first is HiGHS's
+ * default, the second the second opinion, the third the tie-breaker of a disagreement: the first three are the decision-5a seeds, used exactly as before
+ * when no solve is inconclusive. The last three are tried only after an INCONCLUSIVE solve (`SolveError`, a solve that reached no verdict: see the
+ * header), so that two agreeing qualified verdicts can still be reached. Fixed, distinct and arbitrary (no seed was picked for an outcome), so every run
+ * is reproducible.
+ *
+ * Why six. A node needs at most three qualified opinions (decision 5a), so six seeds leave room for three inconclusive solves among them. On the minimal
+ * SolveError reproduction (countGates.nativeDefects.differential.test.ts) about one seed in three is inconclusive (9 of 29 seeds tried); if seeds failed
+ * independently at that rate, a node that needs two qualified verdicts would miss them within six seeds with probability about 1.3%
+ * (p^6 + 6 p^5 (1 - p) at p = 0.31), against 9% within four, and it then degrades to an unresolved node (no certificate), never to a wrong one or a thrown
+ * request. An inconclusive solve stops early, so the extra seeds are cheap, while an unbounded list would let one pathological text eat the whole budget.
+ * In the Stage 3 campaigns inconclusive solves were rare (4 of 3,200 seeded worlds, 2 ledger fixtures under the gates' objective directions).
  */
-export const PRECISE_RANDOM_SEEDS = [0, 11, 29] as const;
+export const PRECISE_RANDOM_SEEDS = [0, 11, 29, 47, 83, 131] as const;
+/** The most QUALIFIED opinions one node verdict may take (decision 5a): a first, a second and one tie-breaker. Inconclusive solves do not count. */
+export const MAX_QUALIFIED_OPINIONS = 3;
 /**
  * The node strategy of production Precise (see `PreciseContext.edgeIntegrality`): relaxed slot edges first. Certificate-safe: the relaxation's dual bound is a
  * valid bound of the integer model, an integral optimum is a point of it, and either passes the same readback, allowances, validator and second opinion.
@@ -345,6 +393,10 @@ export interface Opinion {
   finished: boolean;
   /** A decoded point the validator rejected for a reason the relaxation cannot explain, or that decodes to no build: the first solve cuts it out. */
   rejected?: ColumnValues;
+  /** The solve reached no verdict (`SolveError` and kin): no opinion at all; the caller tries the next seed. */
+  inconclusive?: boolean;
+  /** The solve returned a primal point (feasible within the native tolerances), so its text is not infeasible as far as this solve can tell. */
+  point?: boolean;
 }
 
 /** Two QUALIFIED verdicts agree: both Infeasible, or both Optimal with proved bounds within the tolerance of each other (exact comparison). */
@@ -409,7 +461,8 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     nativeSolves: 0, presolveRescues: 0, confirmedInfeasible: 0, provedEmptyNodes: 0, rejectedCandidates: 0,
     readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
     secondOpinions: 0, thirdOpinions: 0, disagreements: 0, unsettledDisagreements: 0, secondOpinionMs: 0,
-    relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, columns: 0, rows: 0,
+    relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, inconclusiveSolves: 0, extraSeedSolves: 0, relaxationChecks: 0, relaxationVetoes: 0, relaxationRescues: 0,
+    columns: 0, rows: 0,
   };
   const moaDependent = isMoaDependent(params);
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
@@ -489,7 +542,8 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     // An Optimal solve of an exact node is a finished search of it, whatever is then withheld (the bound, the build). An inexact node still
     // needs refining, and a limit stop has not finished.
     const finished = optimal && model.exact;
-    const none = (extra: Partial<Opinion> = {}): Opinion => ({ verdict: 'none', evidence, candidate: null, reason: stopReason, finished, ...extra });
+    const point = result.colValues !== null;
+    const none = (extra: Partial<Opinion> = {}): Opinion => ({ verdict: 'none', evidence, candidate: null, reason: stopReason, finished, point, ...extra });
     if (result.colValues === null) return none();
     // A relaxed-edge solve whose edges are not integral is no point of the integer model: its bound is still valid (a relaxation), its point is not judged.
     if (relaxed && model.edges.some(edge => {
@@ -497,7 +551,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       const v = j === undefined ? Number.NaN : (result.colValues as Float64Array)[j];
       return !(Math.abs(v - Math.round(v)) <= NATIVE_FEASIBILITY_TOLERANCE);
     })) {
-      return qualifiedOptimal ? { verdict: 'optimal', evidence, candidate: null, finished } : none();
+      return qualifiedOptimal ? { verdict: 'optimal', evidence, candidate: null, finished, point } : none();
     }
     const values = columnValuesFromStructured(result.colNames, result.colValues);
     let decoded: ReturnType<typeof decodeFast>;
@@ -539,7 +593,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
             return none({ evidence: { ...evidence, qualified: false }, candidate, splitAt: stats.weight, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable });
           }
         }
-        if (qualifiedOptimal) return { verdict: 'optimal', evidence, candidate, splitAt: stats.weight, finished };
+        if (qualifiedOptimal) return { verdict: 'optimal', evidence, candidate, splitAt: stats.weight, finished, point };
         return none({ candidate, splitAt: stats.weight });
       }
       // The weight penalty of an inexact node is a lower envelope of q, so its optimum may be overswinging exactly: the relaxation is a valid
@@ -547,13 +601,13 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       const relaxationOnly = !model.exact && stats !== null && validation.violations.length > 0
         && validation.violations.every(v => v.code === 'OVERSWING_PREVENTED');
       if (relaxationOnly && stats !== null) {
-        if (qualifiedOptimal) return { verdict: 'optimal', evidence, candidate: null, splitAt: stats.weight, finished };
+        if (qualifiedOptimal) return { verdict: 'optimal', evidence, candidate: null, splitAt: stats.weight, finished, point };
         return none({ splitAt: stats.weight, finished: false });
       }
     }
     // Any other rejection is a boundary the solver's tolerance admitted and exact arithmetic does not (or a fault): the first solve of a node cuts
     // the point out and solves again; a later opinion keeps only its bound.
-    return { verdict: qualifiedOptimal ? 'optimal' : 'none', evidence, candidate: null, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished, rejected: values };
+    return { verdict: qualifiedOptimal ? 'optimal' : 'none', evidence, candidate: null, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished, rejected: values, point };
   };
 
   /** One native solve of a node's text with a given seed, judged. Never cuts. */
@@ -563,6 +617,10 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       options: optionsOf(seed), deadline, now, solve: solveFn, presolve: context.presolve, includeReadback: true,
     });
     if (outcome.kind === 'unresolved') {
+      if (outcome.cause === 'inconclusive') {
+        telemetry.inconclusiveSolves++;
+        return { verdict: 'none', evidence: null, candidate: null, finished: false, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, inconclusive: true };
+      }
       return { verdict: 'none', evidence: null, candidate: null, finished: false, reason: outcome.cause === 'deadline' ? PUBLIC_REASONS.timeLimitReached : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
     }
     if (outcome.kind === 'infeasible') {
@@ -579,10 +637,24 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   };
 
   /**
-   * The second opinion of a certificate-bearing first verdict (decision 5a, see the header): another seed on the same text, a third on a
-   * disagreement, then `settleOpinions`.
+   * The first opinion of a text: seed after seed of `PRECISE_RANDOM_SEEDS` until a solve is not inconclusive (owner, 2026-10-12: retry seeds, never
+   * throw). `next` is the index of the first seed not yet used, where the second opinion starts. When every seed is inconclusive the last (inconclusive)
+   * opinion is returned: it proves nothing and its reason is `Required proof prerequisite unavailable`.
    */
-  const confirm = async (model: CountModel, lpText: string, first: Opinion, relaxed: boolean): Promise<NodeEvaluation<VerifiedBuild>> => {
+  const firstOpinion = async (model: CountModel, lpText: string, relaxed: boolean): Promise<{ opinion: Opinion; next: number }> => {
+    for (let i = 0; ; i++) {
+      if (i > 0) telemetry.extraSeedSolves++;
+      const opinion = await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[i], relaxed);
+      if (opinion.inconclusive !== true || i + 1 >= PRECISE_RANDOM_SEEDS.length) return { opinion, next: i + 1 };
+    }
+  };
+
+  /**
+   * The second opinion of a certificate-bearing first verdict (decision 5a, see the header): the next seed on the same text, one more on a disagreement
+   * (at most `MAX_QUALIFIED_OPINIONS` qualified opinions), then `settleOpinions`. An inconclusive solve is no opinion: it is skipped and the next seed is
+   * tried while seeds remain. Seeds that run out before two verdicts agree withhold the certificate (`Required proof prerequisite unavailable`).
+   */
+  const confirm = async (model: CountModel, lpText: string, first: Opinion, relaxed: boolean, next: number): Promise<NodeEvaluation<VerifiedBuild>> => {
     // The first-witness policy of a MOA floor query takes the first verified build and stops: no certificate is asked of it, so no second opinion is
     // spent on it (ADR 0013 section 6). An infeasibility verdict of a floor query is still confirmed: it is what raises the proved lower bound.
     if (context.stopAtFirstWitness === true && first.candidate !== null) {
@@ -592,19 +664,31 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       };
     }
     const started = now();
-    const opinions = [first];
+    const opinions: Opinion[] = [first];
     telemetry.secondOpinions++;
-    const second = await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[1], relaxed);
-    opinions.push(second);
-    if (second.verdict !== 'none' && !opinionsAgree(first, second, tolerance)) {
+    let skipped = next - 1;
+    let lastInconclusive = false;
+    for (let i = next; i < PRECISE_RANDOM_SEEDS.length; i++) {
+      if (skipped > 0) telemetry.extraSeedSolves++;
+      const opinion = await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[i], relaxed);
+      lastInconclusive = opinion.inconclusive === true;
+      if (lastInconclusive) {
+        skipped++;
+        continue;
+      }
+      if (opinions.length === 2) telemetry.thirdOpinions++;
+      opinions.push(opinion);
+      // A solve that proved nothing (a timeout, a limit, an unqualified solve) settles nothing and is not retried: the certificate is withheld.
+      if (opinion.verdict === 'none') break;
+      if (opinions.slice(0, -1).some(earlier => opinionsAgree(earlier, opinion, tolerance))) break;
+      if (opinions.length >= MAX_QUALIFIED_OPINIONS) break;
       telemetry.disagreements++;
-      telemetry.thirdOpinions++;
-      opinions.push(await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[2], relaxed));
     }
     telemetry.secondOpinionMs += now() - started;
     const { evaluation, settled } = settleOpinions(opinions, tolerance, model.exact);
-    if (!settled && opinions.length === 3) telemetry.unsettledDisagreements++;
-    if (evaluation.verdict === 'infeasible') telemetry.confirmedInfeasible++;
+    if (!settled && opinions.length >= MAX_QUALIFIED_OPINIONS && opinions.every(o => o.verdict !== 'none')) telemetry.unsettledDisagreements++;
+    // Seeds that ran out on inconclusive solves: the second opinion never finished.
+    if (!settled && lastInconclusive) return { ...evaluation, finished: false };
     return evaluation;
   };
 
@@ -626,31 +710,110 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached,
   });
 
+  /**
+   * "Relaxation must agree" (owner, 2026-10-12; see the header). `integerInfeasible` is the settled Infeasible evaluation of the INTEGER text of a node with
+   * `cuts`; the node is infeasible only when the relaxed-edge text with the same cuts is settled Infeasible too. `knownPoint`: the relaxed text with these
+   * cuts was already solved in this node without settling Infeasible, or a verified build of the node exists, so the relaxation cannot agree and no solve
+   * is spent (its evidence, a qualified relaxed bound, still bounds the node).
+   */
+  const relaxationAgrees = async (
+    model: CountModel, cuts: readonly IntegerNoGood[], integerInfeasible: NodeEvaluation<VerifiedBuild>, knownPoint: { evidence: BoundEvidence | null } | null,
+  ): Promise<NodeEvaluation<VerifiedBuild>> => {
+    // A model with no slot edge: its relaxed-edge text IS its integer text, so the settled verdict already is the relaxation's.
+    if (model.edges.length === 0) return integerInfeasible;
+    if (knownPoint !== null) {
+      telemetry.relaxationVetoes++;
+      // Both native searches of an exact node ran to completion; only the infeasibility is withheld. An inexact node still needs refining.
+      return { verdict: 'unresolved', evidence: knownPoint.evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: model.exact };
+    }
+    telemetry.relaxationChecks++;
+    const lpText = appendCuts(model.lpRelaxedEdges(), cuts);
+    const { opinion: first, next } = await firstOpinion(model, lpText, true);
+    if (first.verdict === 'infeasible') {
+      const evaluation = await confirm(model, lpText, first, true, next);
+      if (evaluation.verdict !== 'infeasible') {
+        telemetry.relaxationVetoes++;
+        if (evaluation.candidate !== null) telemetry.relaxationRescues++;
+      }
+      return evaluation;
+    }
+    if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) {
+      // An integral relaxed optimum is a point of the integer text: its Infeasible verdict was false. The point is settled like any relaxed optimum.
+      telemetry.relaxationRescues++;
+      return confirm(model, lpText, first, true, next);
+    }
+    telemetry.relaxationVetoes++;
+    if (first.candidate !== null) telemetry.relaxationRescues++;
+    // A fractional or rejected relaxed point, no verdict, or a stop: the node is not infeasible, and it is not settled either.
+    const interrupt = first.verdict === 'none' && first.reason !== undefined && INTERRUPT_REASONS.has(first.reason);
+    return {
+      verdict: 'unresolved', evidence: first.evidence, candidate: first.candidate, exact: model.exact,
+      reason: interrupt ? (first.reason as string) : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: first.finished,
+      ...(first.splitAt === undefined ? {} : { splitAt: first.splitAt }),
+    };
+  };
+
   const evaluate = async (node: SearchNode): Promise<NodeEvaluation<VerifiedBuild>> => {
     const model = modelOf(node.interval);
     if (model.provedEmpty !== null) {
       telemetry.provedEmptyNodes++;
       return { verdict: 'infeasible', evidence: null, candidate: null, exact: true };
     }
+    const evaluation = await evaluateNative(model);
+    if (evaluation.verdict === 'infeasible') telemetry.confirmedInfeasible++;
+    return evaluation;
+  };
 
-    // Relaxed slot edges first (opt-in): an integral optimum of the relaxation is an optimum of the integer model, judged and confirmed exactly as
-    // one, and an infeasible relaxation leaves the integer model nothing either. Anything else falls back to the integer model of the node.
+  const evaluateNative = async (model: CountModel): Promise<NodeEvaluation<VerifiedBuild>> => {
+    // Relaxed slot edges first: an integral optimum of the relaxation is an optimum of the integer model, judged and confirmed exactly as one, and an
+    // infeasible relaxation leaves the integer model nothing either. Anything else falls back to the integer model of the node.
     let relaxedRejection: Opinion | null = null;
+    /**
+     * What the relaxed first try observed that must survive the fallback (defect D1, ADR 0013 section 6): a verified build of the node, or a factual
+     * reason that is not an interrupt (an observed proof-prerequisite failure outranks a coincident interrupt).
+     */
+    let kept: Opinion | null = null;
+    /**
+     * The relaxed-edge text WITHOUT cuts was solved and did not settle Infeasible (it had a point, or no verdict): an Infeasible verdict of the uncut
+     * integer text cannot be confirmed by it, and solving the same text with the same seeds again would only repeat the answer.
+     */
+    let relaxedUncut: { evidence: BoundEvidence | null } | null = null;
     if (relaxEdges && model.edges.length > 0) {
       const lpText = model.lpRelaxedEdges();
       telemetry.relaxedEdgeSolves++;
-      const first = await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[0], true);
-      if (first.verdict === 'infeasible') return confirm(model, lpText, first, true);
-      if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) return confirm(model, lpText, first, true);
+      const { opinion: first, next } = await firstOpinion(model, lpText, true);
+      if (first.verdict === 'infeasible') return confirm(model, lpText, first, true, next);
+      if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) return confirm(model, lpText, first, true, next);
       if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.timeLimitReached && first.evidence === null) return unconfirmed(model, first);
       telemetry.relaxedEdgeFallbacks++;
+      relaxedUncut = { evidence: first.verdict === 'optimal' ? first.evidence : null };
       if (first.rejected !== undefined) relaxedRejection = first;
-      // The integer re-solve is a stage of its own: yield so a cancel message is dispatched, then guard. A rejected point seen by the relaxed solve
-      // is an observed validation failure, which outranks the coincident interrupt (section 6); the integer model was never solved (unfinished).
+      else if (first.candidate !== null || (first.reason !== undefined && !INTERRUPT_REASONS.has(first.reason))) kept = first;
+      // The integer re-solve is a stage of its own: yield so a cancel message is dispatched, then guard. What the relaxed solve observed outranks the
+      // coincident interrupt (section 6): a rejected point (a validation failure), or a verified build and a withheld proof (D1: the build is kept and the
+      // status follows it); the integer model was never solved (unfinished).
       await guard.yieldMacrotask();
       const stop = guardStop(guard);
-      if (stop !== null) return relaxedRejection !== null ? { ...failed(model, relaxedRejection), finished: false } : interrupted(model, stop);
+      if (stop !== null) {
+        if (relaxedRejection !== null) return { ...failed(model, relaxedRejection), finished: false };
+        if (kept !== null) return { ...unconfirmed(model, kept), finished: false };
+        return interrupted(model, stop);
+      }
     }
+
+    /** The integer model's evaluation, with what the relaxed try kept: the better verified build, and its observed prerequisite failure over an interrupt. */
+    const withKept = (evaluation: NodeEvaluation<VerifiedBuild>): NodeEvaluation<VerifiedBuild> => {
+      if (kept === null || evaluation.verdict === 'infeasible') return evaluation;
+      const candidate = betterCandidate(evaluation.candidate, kept.candidate);
+      const overrides = evaluation.verdict === 'unresolved' && kept.reason === PUBLIC_REASONS.requiredProofPrerequisiteUnavailable
+        && (evaluation.reason === undefined || INTERRUPT_REASONS.has(evaluation.reason));
+      return {
+        ...evaluation,
+        candidate,
+        ...(overrides ? { reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable } : {}),
+        ...(evaluation.splitAt === undefined && candidate !== null ? { splitAt: candidate.payload.stats.weight } : {}),
+      };
+    };
 
     const cuts: IntegerNoGood[] = [];
     for (;;) {
@@ -658,23 +821,29 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         // A re-solve after a rejected candidate is a stage of its own: yield so a cancel message is dispatched, then guard.
         await guard.yieldMacrotask();
         const stop = guardStop(guard);
-        if (stop !== null) return interrupted(model, stop);
+        if (stop !== null) return withKept(interrupted(model, stop));
       }
       const lpText = model.lp(cuts);
-      const first = await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[0], false);
+      const { opinion: first, next } = await firstOpinion(model, lpText, false);
       if (first.rejected !== undefined) {
         // The rejected point is cut out and the node solved again, so the valid builds beside it are still found; only a repeated rejection
         // (or no time to try again) fails the node.
         const trusted = first.evidence?.qualified === true;
         const cut = trusted && cuts.length < MAX_REJECTIONS_PER_NODE && deadline - now() > 0 ? integerNoGood(`nogood_${cuts.length}`, model.decision, first.rejected) : null;
-        if (cut === null) return failed(model, first);
+        if (cut === null) return withKept(failed(model, first));
         telemetry.rejectedCandidates++;
         cuts.push(cut);
         continue;
       }
-      if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.independentBuildValidationFailed) return failed(model, first);
-      if (first.verdict === 'none') return unconfirmed(model, first);
-      return confirm(model, lpText, first, false);
+      if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.independentBuildValidationFailed) return withKept(failed(model, first));
+      if (first.verdict === 'none') return withKept(unconfirmed(model, first));
+      const evaluation = await confirm(model, lpText, first, false, next);
+      if (evaluation.verdict !== 'infeasible') return withKept(evaluation);
+      // A settled Infeasible of the INTEGER text: only the relaxation can make it the node's verdict. A verified build of the node (kept from the relaxed
+      // try; cuts only ever remove rejected points) refutes the agreement, and so does the uncut relaxed text that was already solved without settling
+      // Infeasible (production's relaxed-first try: its point, or its lack of a verdict, would only be repeated).
+      const knownPoint = kept?.candidate != null ? { evidence: null } : cuts.length === 0 ? relaxedUncut : null;
+      return withKept(await relaxationAgrees(model, cuts, evaluation, knownPoint));
     }
   };
 

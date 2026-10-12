@@ -139,6 +139,21 @@ is approximate. Decisions:
    another random seed: the upper bound is the larger of the two qualified bounds, the incumbent the best verified build,
    an infeasibility needs both verdicts. On a disagreement a third seed breaks the tie (owner): the bound is the largest
    qualified bound of all solves, a certificate needs two agreeing solves, and a timeout withholds the certificate.
+   **Two follow-up decisions (owner, 2026-10-12, Stage 3 gates findings):**
+   - **SolveError: retry seeds, never throw.** HiGHS 1.15.1 returns `SolveError` under the production options on some small, valid count models
+     for some seeds (F07-stock-empty and F11-active-recoil-axis-weighted under the gates' weights, adversarial worlds 41000215 and 40000206). A
+     `SolveError`, `PresolveError` or `PostsolveError` on a text HiGHS read without error is an inconclusive solve: it is no opinion, the node moves on
+     to the next seed of `PRECISE_RANDOM_SEEDS` (now six: 0, 11, 29, 47, 83, 131; at most three qualified opinions per verdict as above), and Fast
+     retries the same way. A certificate still needs two agreeing qualified verdicts; when the seeds run out the node is unresolved with `Required proof
+     prerequisite unavailable` and the best verified build is kept. A load or model error, an empty model, a status the build does not name and a native
+     call that throws still raise their typed errors.
+   - **Integer Infeasible needs the relaxation to agree.** The integer count text of fuzz world 30001860 (TrueErgo, node [2.5, 2.5] kg) is reported
+     Infeasible under every seed although a validated build exists; its relaxed-edge text finds it. A node is treated as infeasible (pruned by the
+     spatial search, counted in a certified infeasibility, used as a MOA floor infeasibility proof) only when its relaxed-edge text with the same cuts is
+     also settled Infeasible (two agreeing qualified verdicts); an infeasible relaxation implies an infeasible integer model, which is sound. An
+     integral relaxed point that validates is used as the node's build; a fractional or rejected relaxed point, or no settled relaxed verdict, leaves the
+     node unresolved (no certificate, best verified build kept). Production solves relaxed-first, so an integer-text Infeasible that follows a feasible
+     relaxation of the same text is never certified. The guard is sound but not complete: a relaxation that shares the false verdict is not detected.
 5b. **Integrality tolerance 1e-7, primal and dual 1e-9 (owner, 2026-10-06).** On that fixture only the integrality
    tolerance matters (likely: HiGHS rounds a derived integer bound such as 1.9999999982 down under 1e-9 and cuts off the
    optimum). A looser integrality tolerance can only enlarge a bound and every candidate is validated exactly, so the

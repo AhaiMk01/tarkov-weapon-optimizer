@@ -56,7 +56,7 @@ import { PhysicalModelError } from './errors';
 import { integerNoGood } from './fastCut';
 import type { IntegerNoGood } from './fastCut';
 import { FAST_PRESOLVE, isLimitStatus, NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
-import type { PresolveSetting, SolveFn } from './nativeSolve';
+import type { PolicyOutcome, PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
 import { classifyOptimize, isMoaDependent, observationsOfReason, unsupportedPartGraphOutcome } from './outcome';
 import type { OptimizeOutcome } from './outcome';
@@ -68,7 +68,7 @@ import type { NodeEvaluation, SearchInterval, SearchNode } from './search';
 import type { SpecializeRequest } from './specialize';
 import { specializeFast } from './specializeFast';
 import type { FastModel } from './specializeFast';
-import { DEFAULT_MAX_SPATIAL_NODES, getPhysicalBlueprint, resolveTolerance, rootIntervals } from './solvePrecise';
+import { DEFAULT_MAX_SPATIAL_NODES, getPhysicalBlueprint, PRECISE_RANDOM_SEEDS, resolveTolerance, rootIntervals } from './solvePrecise';
 import { preparePhysicalValidator } from './validate';
 import type { PhysicalBuild, PhysicalBuildStats } from './validate';
 
@@ -87,8 +87,13 @@ export interface FastVerifiedBuild {
 }
 
 export interface FastSummary {
-  /** Native solves made (the first of every node and one per cut). */
+  /** Native solves made (the first of every node, one per cut, and one per seed retried after an inconclusive solve). */
   nativeSolves: number;
+  /**
+   * Solves that reached no verdict (`SolveError`, `PresolveError`, `PostsolveError` on a text HiGHS read: `nativeSolve.ts`). Each is retried with the next
+   * seed of `PRECISE_RANDOM_SEEDS` while seeds remain (owner, 2026-10-12: retry seeds, never throw); when they run out the node is unresolved.
+   */
+  inconclusiveSolves: number;
   /** Points a cut removed: decoded to no tree, or rejected by the validator. */
   rejectedPoints: number;
   /** Size of the model: columns, rows, candidate edges (the largest model of the search). */
@@ -176,7 +181,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const singleCopy = params.allowRepeatedParts !== true;
   const request: SpecializeRequest = { ...params, singleCopy };
   const summary: FastSummary = {
-    nativeSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
+    nativeSolves: 0, inconclusiveSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, singleCopy,
   };
   const moaDependent = isMoaDependent(params);
@@ -231,6 +236,22 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const options = nativeSolveOptions(tolerance);
   const maxRejections = context.maxRejections ?? MAX_FAST_REJECTIONS;
   const relaxEdges = context.edgeIntegrality !== 'integer';
+  const solveFn = context.solve ?? nativeSolve;
+
+  /**
+   * One native solve of a text under the presolve policy, retried with the next seed of `PRECISE_RANDOM_SEEDS` while HiGHS reaches no verdict (an
+   * inconclusive `SolveError` and kin; owner, 2026-10-12: retry seeds, never throw). The first try keeps the default seed. When every seed is
+   * inconclusive the last outcome is returned (`unresolved`, cause `inconclusive`): the caller treats it as a node that proved nothing.
+   */
+  const solveText = async (text: string): Promise<PolicyOutcome> => {
+    for (let i = 0; ; i++) {
+      const outcome = await solveWithPresolvePolicy(text, { options: i === 0 ? options : { ...options, random_seed: PRECISE_RANDOM_SEEDS[i] }, deadline, now, solve: solveFn, presolve });
+      summary.nativeSolves++;
+      if (outcome.kind !== 'unresolved' || outcome.cause !== 'inconclusive') return outcome;
+      summary.inconclusiveSolves++;
+      if (i + 1 >= PRECISE_RANDOM_SEEDS.length) return outcome;
+    }
+  };
 
   /**
    * Judge one native answer of a node: decode it, validate the build exactly and score it. Returns the node's evaluation, or `reject` when the point
@@ -295,8 +316,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   type RelaxedTry = NodeEvaluation<FastVerifiedBuild> | { rejected: BoundEvidence } | null;
   const tryRelaxedEdges = async (model: FastModel): Promise<RelaxedTry> => {
     if (model.edges.length === 0) return null;
-    const outcome = await solveWithPresolvePolicy(model.lpRelaxedEdges(), { options, deadline, now, solve: context.solve ?? nativeSolve, presolve });
-    summary.nativeSolves++;
+    const outcome = await solveText(model.lpRelaxedEdges());
     summary.relaxedEdgeSolves++;
     if (outcome.kind === 'unresolved') {
       if (outcome.cause === 'deadline') return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.timeLimitReached };
@@ -352,8 +372,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
           return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached };
         }
       }
-      const outcome = await solveWithPresolvePolicy(model.lp(cuts), { options, deadline, now, solve: context.solve ?? nativeSolve, presolve });
-      summary.nativeSolves++;
+      const outcome = await solveText(model.lp(cuts));
       if (outcome.kind === 'unresolved') {
         return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: outcome.cause === 'deadline' ? PUBLIC_REASONS.timeLimitReached : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable };
       }

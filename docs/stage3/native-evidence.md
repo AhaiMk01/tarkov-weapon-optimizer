@@ -26,9 +26,11 @@ and the shared loader `tests/native/evidence/pinned.ts`. Everything else cited e
 | 6 | Bound-error statement (`NATIVE_FRAME.assumptions`, `boundShortfall`, `BOUND_SANITY_RELATIVE`, per-tolerance qualification, defect fixture) | PASS (observation O2 fixed 2026-10-12: the gate requires integrality exactly 1e-7) |
 | 7 | Second-opinion paths | PASS (existing tests) |
 | 8 | Pinned loader only, no stock HiGHS | PASS (existing tests) |
+| 9 | Native defects the count-model gates found (workstream 3.1): `SolveError` made a valid request throw; a false integer-text `Infeasible` the seed-only second opinion would certify | FIXED 2026-10-12 (owner decisions under 5a: retry seeds, never throw; relaxation must agree), section 9 |
 
 No production defect was found that makes a published certificate or bound wrong. Two observations for the owner are listed
-at the end.
+at the end. The two native defects of row 9 (a thrown request, and a verdict a node could have been certified on) are handled since
+the 2026-10-12 follow-up.
 
 ## 1. Parser/readback verification on the pinned build
 
@@ -167,6 +169,51 @@ qualified, so only the second opinion can catch them. Verdict: **PASS** (no new 
 | `tests/native/loader.test.ts` "ABI failure: …" (4 tests), "wrong artifact hashes are refused before the glue runs …", "a stock or foreign build cannot pass …", "a missing artifact directory is a typed load error, not a silent fallback", "the option table matches the build …" | The loader refuses anything but the pinned build. |
 
 Verdict: **PASS**.
+
+## 9. Inconclusive solves and relaxation agreement (Stage 3 follow-up, 2026-10-12)
+
+Owner decisions (docs/stage2-plan.md, under 5a): "retry seeds, never throw" and "relaxation must agree".
+
+**SolveError.** `nativeSolve.ts` returns `unresolved` with cause `inconclusive` for `SolveError`, `PresolveError` and `PostsolveError` on a text HiGHS
+read without error (before: a typed `SolverError`, so the request threw). Load and model errors, an empty model, `NotSet`, `Unbounded` and a native call
+that throws still raise. `solvePrecise` treats an inconclusive solve as no opinion and moves to the next seed, for the first opinion and for the second
+and third: `PRECISE_RANDOM_SEEDS` is now `[0, 11, 29, 47, 83, 131]` (the first three unchanged and used exactly as before when nothing is inconclusive;
+at most three qualified opinions per verdict, `MAX_QUALIFIED_OPINIONS`). Why six: on the minimal reproduction about one seed in three is inconclusive
+(9 of 29 seeds tried); at that rate two qualified verdicts are missed within six seeds with probability about 1.3% (against 9% within four), and the node
+then degrades to unresolved with `Required proof prerequisite unavailable`, never to a throw or a wrong certificate. `solveFast` retries the same seeds.
+Telemetry: `inconclusiveSolves`, `extraSeedSolves` (Precise), `inconclusiveSolves` (Fast summary).
+
+**Relaxation must agree.** A node is infeasible (pruned, counted in a certified infeasibility, a floor infeasibility proof) only when its relaxed-edge
+text with the same cuts is settled `Infeasible` by two agreeing qualified verdicts (sound: an infeasible relaxation leaves the integer model nothing).
+A settled integer-text `Infeasible` triggers a relaxation check (`relaxationChecks`) unless the relaxed text of the node was already solved without
+settling `Infeasible` or a verified build of the node exists (then `relaxationVetoes`, no solve); an integral validated relaxed point becomes the node's
+build (`relaxationRescues`), anything else leaves the node unresolved. A model with no slot edge needs nothing more (its relaxed text is its integer
+text). Not complete: the row-deleted minimal text keeps the false `Infeasible` on its relaxation too, which nothing detects (stated in
+`NATIVE_FRAME.assumptions`).
+
+| Test | What it asserts |
+|---|---|
+| `tests/physical/nativeSolve.test.ts` "SolveError, PresolveError and PostsolveError on a model HiGHS read are INCONCLUSIVE …", "a model status that is neither … nor inconclusive is a typed native error …", "a confirmation that times out, errors, or ends without an answer …" | The policy: inconclusive, never thrown; faults still raise. |
+| `tests/physical/solvePrecise.secondOpinion.test.ts` "a SolveError on the first two seeds is no opinion …", "every seed inconclusive: the request never throws …", "Fast: a SolveError on the default seed is retried …" (new) | Seeds 0 and 11 inconclusive: seeds 29 and 47 decide and certify. Every seed inconclusive: `incomplete` with the proof-prerequisite reason, at most two passes over the seed list (relaxed and integer text), an infeasible request not proved empty. Fast retries with the next seed and returns the build; with every seed inconclusive it is `incomplete`, never a throw. |
+| `reference/harness/countGates.nativeDefects.differential.test.ts` "native defect 1 (characterization) …" | The minimal text is `SolveError` for seeds 0 and 11, `Optimal` for 29 and other settings. |
+| same file, "production Precise returns the certified optimum of F07-stock-empty / F11-active-recoil-axis-weighted … instead of throwing" (were `todo`) | The optimum, never a throw, inconclusive solves recorded and further seeds used. At the default tolerance 1e-5 both certify. At 1e-9, F11 certifies; F07 returns the optimum `feasible` with the proof-prerequisite reason (seeds 29 and 47 give bounds 1e-7 apart, decision 5b, and 83 and 131 are inconclusive). |
+| same file, "production Precise answers the own request of adversarial MOA world 41000215 / 40000206 …" (41000215 was `todo`, 40000206 new) | Both return a build or a certified emptiness. |
+| same file, "native defect 2 on the real node text …" (replaces the `todo`) | World 30001860 at [2.5, 2.5]: the integer text is `Infeasible` under all six production seeds, the relaxed-edge text `Optimal` under all six, so production does not prune the node. |
+| same file, "native defect 2 (characterization of the limit of the guard) …" | The row-deleted minimal text's relaxation is falsely `Infeasible` under seeds 0, 11, 29 (feasible with presolve on). |
+| same file, "relaxation must agree: with every integer text answered Infeasible, integer-only Precise on world 30001860 …" | A solver that answers `Infeasible` for every integer text: Precise (integer edges) still returns the certified optimum 228.1 through relaxation rescues, never emptiness. Before the fix this run returned a certified emptiness. |
+| same file, "relaxation must agree: an integer-text Infeasible after a FRACTIONAL relaxation …" | Relaxed-first with fractional relaxed answers and lying integer texts: never `empty`, never `certified_infeasible`, reason `Required proof prerequisite unavailable`, vetoes recorded, no extra solve, `confirmedInfeasible` 0. |
+| `reference/harness/countGates.differential.ts` | The gates mirror the new production rules: seeds in order with inconclusive solves skipped; a false integer-text `Infeasible` whose relaxed text is not settled `Infeasible` is neutralized (`relaxationCaught`), and a truly infeasible integer node whose relaxation is not settled infeasible is counted as a withheld certificate (`relaxationVetoed`). Default run: ledger `native` 139/139 (was 137/139 with the two SolveError cells), 9 inconclusive solves, 0 caught, 0 vetoed; lpFuzz and adversarial MOA worlds 0 inconclusive, 0 caught, 0 vetoed. |
+
+**Long gates campaign** (`COUNT_GATES_LONG=1`, 2026-10-12, after the fix): ledger 149 cases (144 gated, 5 refused), lpFuzz 2,000 worlds (1,126 gated,
+868 cyclic refused, 6 skipped), adversarial MOA 600 worlds (558 gated, 42 skipped): every gate passes (`native` 139/139, 1,055/1,055 and 546/546), the
+precision cells are the known decision-5b ones (7 ledger, 1 lpFuzz, 1 MOA). 19 inconclusive solves (9 ledger, 6 lpFuzz, 4 MOA), all retried to a
+verdict; 1 false integer-text `Infeasible` neutralized by the relaxation rule; 0 certificates withheld by it.
+
+**Measured cost on the 172 pinned guns** (Precise, 60 s, 12 processes; `frontend/benchmarks/phase210m2/results/s3fix-*.jsonl`, compared with the
+Phase 2.10 production run `afterrelaxed-*.jsonl`): plain 153 certified optimal + 19 certified infeasible (unchanged), 109 s total (was 111 s), max 5.7 s;
+TrueErgo 153 + 19 (unchanged), 1,041 s total (was 1,050 s), max 47 s (was 49 s). Same optimum on every gun, same native solve counts (310 and 1,474),
+no inconclusive solve, no extra seed, no relaxation check, veto or rescue: the 19 infeasible guns are empty by domain, and the one native infeasible
+node of the TrueErgo run was settled on its relaxed text. No certificate was lost or gained.
 
 ## Observations for the owner
 

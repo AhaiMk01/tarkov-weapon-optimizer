@@ -206,7 +206,8 @@ for (const op of SEARCH_OPERATIONS) {
         const result = await real();
         if (call.index !== 0) return result;
         r.clock.t = LATE;
-        return asTimeLimit(result);
+        // No primal: "before any verified build". A native time limit that returns a verified primal keeps that build (defect D1, fixed; see the D1 row).
+        return asTimeLimit(result, false);
       },
     });
     if (op.kind === 'optimize') {
@@ -448,7 +449,7 @@ for (const op of SEARCH_OPERATIONS) {
         if (call.index !== 0) return result;
         r.clock.t = LATE;
         r.send(cancelOf(1));
-        return asTimeLimit(result);
+        return asTimeLimit(result, false);
       },
     });
     if (op.kind === 'optimize') {
@@ -614,10 +615,10 @@ test('Explore precedence at entry — invalid stash before an invalid schedule; 
 });
 
 // -------------------------------------------------------------------------------------------------------------------------------------
-// The one precedence gap (a production defect, reported, not fixed here): see docs/stage3/operations-evidence.md "Defect D1".
+// The one precedence gap Stage 3 found (defect D1, fixed in the 2026-10-12 follow-up): see docs/stage3/operations-evidence.md "Defect D1".
 // -------------------------------------------------------------------------------------------------------------------------------------
 
-test('DEFECT D1 (todo): a verified build of a withheld relaxed-edge solve is dropped when the deadline stops the integer re-solve', { todo: 'production solvePrecise relaxed-edge fallback discards the candidate and the observed prerequisite failure (Stage 3 report)' }, async () => {
+test('D1 (fixed): a verified build of a withheld relaxed-edge solve is kept when the deadline stops the integer re-solve, with the prerequisite reason', async () => {
   // Expected by ADR 0013 section 6: a verified witness exists and an observed proof-prerequisite failure coincides with the deadline, so the request is
   // feasible / feasible with "Required proof prerequisite unavailable" (the failure outranks the interrupt; the retained witness decides the status).
   const failures: string[] = [];
@@ -639,6 +640,29 @@ test('DEFECT D1 (todo): a verified build of a withheld relaxed-edge solve is dro
   const sweep = asExplore((await run(EXPLORE, { setup: r => async (call, real) => { const x = withheld(await real()); if (call.index === 0) r.clock.t = LATE; return x; } })).response);
   if (sweep.step_outcomes[0]?.outcome !== 'V' || sweep.curve_status !== 'partial') failures.push(`Explore: ${sweep.curve_status}, first target ${sweep.step_outcomes[0]?.outcome} ${sweep.step_outcomes[0]?.reason ?? ''}`);
   const floor = asFloor((await run(FLOOR, { setup: r => async (call, real) => { const x = withheld(await real()); if (call.index === 0) r.clock.t = LATE; return x; } })).response);
+  if (floor.status !== 'model_witnessed') failures.push(`MOA floor: ${floor.status} ${floor.reason ?? ''}`);
+  assert.deepEqual(failures, []);
+});
+
+test('D1 (fixed), second case: a relaxed-edge solve stopped at its native time limit WITH a verified primal keeps that build, with the factual Time limit reached', async () => {
+  // The deadline of "deadline during the solve before any verified build", but the native time limit returns its primal and the relaxed point is integral
+  // and validates: a verified current witness exists, so the request is feasible with the stop's factual reason (ADR 0013 section 6).
+  const failures: string[] = [];
+  const late = (r: Rig): NativeHook => async (call, real) => {
+    const result = await real();
+    if (call.index !== 0) return result;
+    r.clock.t = LATE;
+    return asTimeLimit(result);
+  };
+  for (const op of [OPTIMIZE_PRECISE, OPTIMIZE_AUTO, GUNSMITH]) {
+    const res = asOptimize((await run(op, { setup: late })).response);
+    if (res.status !== 'feasible' || res.reason !== R.timeLimitReached || res.selected_items.length === 0) {
+      failures.push(`${op.name}: ${res.status} / ${res.physical_certificate} / ${res.reason} / ${res.selected_items.length} items`);
+    }
+  }
+  const sweep = asExplore((await run(EXPLORE, { setup: late })).response);
+  if (sweep.step_outcomes[0]?.outcome !== 'V' || sweep.curve_status !== 'partial') failures.push(`Explore: ${sweep.curve_status}, first target ${sweep.step_outcomes[0]?.outcome} ${sweep.step_outcomes[0]?.reason ?? ''}`);
+  const floor = asFloor((await run(FLOOR, { setup: late })).response);
   if (floor.status !== 'model_witnessed') failures.push(`MOA floor: ${floor.status} ${floor.reason ?? ''}`);
   assert.deepEqual(failures, []);
 });

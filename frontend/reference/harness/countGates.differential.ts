@@ -10,15 +10,20 @@
 //     1e-7, primal and dual feasibility 1e-9, decision 5b) plus the `random_seed` of `PRECISE_RANDOM_SEEDS`, readback requested, and every solve assessed
 //     with production's `assessNativeResult` (readback equal, allowances dominating, declared tolerances): an unqualified solve is a failing cell;
 //   - second opinion (decision 5a): a verdict a gate relies on (the model's optimum, an infeasibility, the maximizer exclusion) is settled like production
-//     settles a node: seed 0 and seed 11, a third seed 29 on a disagreement, and only two agreeing qualified verdicts settle it;
+//     settles a node: the seeds of `PRECISE_RANDOM_SEEDS` in order, an INCONCLUSIVE solve (SolveError and kin, owner 2026-10-12: retry seeds, never throw)
+//     skipped, the first two qualified answers compared, a third on a disagreement, and only two agreeing qualified verdicts settle it;
 //   - decode with production's `decodeFast`, validate with BOTH the reference validator (`validateReference`, the oracle's) and the production validator
 //     (`preparePhysicalValidator(..., requirePathInstanceIds: true)`, as solvePrecise prepares it); the two must agree on every decoded build;
 //   - gate-side cross-check (never a production setting): a verdict the production seeds settle as Infeasible, or leave unsettled, is solved once more with
 //     presolve on and the same strict tolerances; when that finds a point BOTH validators accept, the verdict was a native defect (a false Infeasible
-//     the second opinion misses, or a SolveError production raises as SolverError). The gates then judge the model by that point and record the defect in
-//     the `native` cell, which also fails on any unqualified production solve. Two such defects are kept with minimal reproductions as TODO tests in
-//     countGates.nativeDefects.differential.test.ts. Three qualified Optimal verdicts whose bounds disagree beyond the tolerance (production withholds the
-//     certificate, decision 5a/5b) are counted, not failed;
+//     the second opinion misses, or seeds that ran out on inconclusive solves). The gates then judge the model by that point. Such a defect fails the
+//     `native` cell, which also fails on any unqualified production solve and on a native call that throws, EXCEPT a false Infeasible of a node's
+//     INTEGER text that production's "relaxation must agree" rule (owner, 2026-10-12) neutralizes: production treats a node as infeasible only when its
+//     relaxed-edge text is settled Infeasible too, so an integer-text Infeasible whose relaxed text is not is never a certificate (counted as
+//     `relaxationCaught`). Gate C still judges the MODEL (the integer text); a node whose integer text is truly infeasible while its relaxed text is not
+//     settled Infeasible is a certificate production withholds under that rule, counted as `relaxationVetoed` (a measured cost, not a failure). The
+//     minimal reproductions are in countGates.nativeDefects.differential.test.ts. Three qualified Optimal verdicts whose bounds disagree beyond the
+//     tolerance (production withholds the certificate, decision 5a/5b) are counted, not failed;
 //   - rejected points: as production does, a decoded point a validator rejects is cut out with production's `integerNoGood` over `model.decision` and the
 //     node solved again (at most `MAX_REJECTIONS_PER_NODE`). The gates accept such a cut only when the rejection is a request cap missed by at most the
 //     solver tolerance (`isToleranceBoundary`, the numerical layer); any other rejection of an integer point is a soundness failure of the model.
@@ -121,6 +126,7 @@ interface SolvePreciseModule {
   resolveTolerance(requested: number | undefined): number;
   solvePrecise(context: { params: SolveParams; deadline: number }): Promise<PreciseRunLike>;
   PRECISE_RANDOM_SEEDS: readonly number[];
+  MAX_QUALIFIED_OPINIONS: number;
   PRECISE_EDGE_INTEGRALITY: 'relaxed-first' | 'integer';
   MAX_REJECTIONS_PER_NODE: number;
 }
@@ -189,6 +195,12 @@ export interface CountCaseGates extends Record<CountGateName, Verdict> {
   solves: number;
   /** Infeasible pins or verdicts that a later seed overturned with a validated point (a solver defect, not a model one). */
   seedOverrides: number;
+  /** Solves that reached no verdict (SolveError and kin): skipped, the next seed tried, as production does. */
+  inconclusive: number;
+  /** False Infeasible verdicts of a node's integer text that production's relaxation rule neutralizes (its relaxed text is not settled Infeasible). */
+  relaxationCaught: number;
+  /** Nodes whose integer text is settled Infeasible (and no cross-check overturned it) while the relaxed text is not: production withholds that certificate. */
+  relaxationVetoed: number;
   /** Points rejected as tolerance boundaries and cut out, as production does. */
   boundaryCuts: number;
   /** Relaxed-first solves whose edges came out fractional (production then falls back to the integer text). */
@@ -207,7 +219,7 @@ export interface CountCaseGates extends Record<CountGateName, Verdict> {
 }
 
 const blank = (id: string, family: number): CountCaseGates => ({
-  id, family, scope: 'gated', scopeDetail: '', refusal: na('acyclic'), oracleProjections: 0, oracleEmpty: false, nodes: 0, solves: 0, seedOverrides: 0,
+  id, family, scope: 'gated', scopeDetail: '', refusal: na('acyclic'), oracleProjections: 0, oracleEmpty: false, nodes: 0, solves: 0, seedOverrides: 0, inconclusive: 0, relaxationCaught: 0, relaxationVetoed: 0,
   boundaryCuts: 0, relaxedFractional: 0, relaxedSolves: 0, boundDisagreements: 0, maxObjectiveDelta: 0, maxDualGap: 0, validated: 0, pinned: 0,
   gateC: na('not run'), gateBObjective: na('not run'), gateBBuild: na('not run'), gateBPinned: na('not run'), gateBExclusion: na('not run'),
   gateAComplete: na('not run'), gateASound: na('not run'), relaxedFirst: na('not run'), validators: na('not run'), native: na('not run'),
@@ -233,7 +245,7 @@ export interface CountGateOptions {
 // One native solve, as production makes it
 // ---------------------------------------------------------------------------------------------
 
-type Status = 'Optimal' | 'Infeasible' | 'Stopped';
+type Status = 'Optimal' | 'Infeasible' | 'Stopped' | 'Inconclusive';
 
 interface Solved {
   status: Status;
@@ -287,13 +299,17 @@ async function solveOnce(ctx: Context, model: CountModel, lpText: string, seed: 
       includeReadback: true,
     });
   } catch (error) {
-    // Production raises a typed SolverError here and the request fails: recorded as a failing cell, with the text kept for diagnosis.
+    // A native call that throws (a real fault: production raises a typed SolverError and the request fails): a failing cell, the text kept for diagnosis.
     const message = error instanceof Error ? error.message : String(error);
     ctx.nativeErrors.push(`seed ${seed}: ${message.slice(0, 160)}`);
     if (process.env.COUNT_GATES_DUMP) writeFileSync(join(process.env.COUNT_GATES_DUMP, `native-error-${ctx.counters.id}-${ctx.counters.solves}-seed${seed}.lp`), lpText);
     return { status: 'Stopped', rawStatus: `native error (${message.slice(0, 80)})`, objective: Number.NaN, dualBound: null, values: {}, qualified: false, reasons: [message] };
   }
-  if (outcome.kind === 'unresolved') return { status: 'Stopped', rawStatus: `unresolved (${outcome.cause}: ${outcome.detail})`, objective: Number.NaN, dualBound: null, values: {}, qualified: false, reasons: [outcome.detail] };
+  if (outcome.kind === 'unresolved') {
+    // An inconclusive solve (SolveError and kin) is no verdict: production skips it and tries the next seed.
+    if (outcome.cause === 'inconclusive') ctx.counters.inconclusive++;
+    return { status: outcome.cause === 'inconclusive' ? 'Inconclusive' : 'Stopped', rawStatus: `unresolved (${outcome.cause}: ${outcome.detail})`, objective: Number.NaN, dualBound: null, values: {}, qualified: false, reasons: [outcome.detail] };
+  }
   const result = outcome.kind === 'solved' ? outcome.result : (outcome.confirmation ?? outcome.first);
   const assessment = proof.assessNativeResult({ lpText, proof: model.proof }, result);
   if (!assessment.qualified) ctx.unqualified.push(assessment.reasons.join('; ').slice(0, 200));
@@ -348,9 +364,20 @@ async function settle(ctx: Context, model: CountModel, lpText: string, accepts?:
 
 async function settleSeeds(ctx: Context, model: CountModel, lpText: string): Promise<Settled> {
   const seeds = ctx.prod.precise.PRECISE_RANDOM_SEEDS;
-  const solves = [await solveOnce(ctx, model, lpText, seeds[0])];
-  solves.push(await solveOnce(ctx, model, lpText, seeds[1]));
-  if (!agree(solves[0], solves[1], ctx.tolerance)) solves.push(await solveOnce(ctx, model, lpText, seeds[2]));
+  // Production's seed policy: seeds in order, an inconclusive solve skipped; the first two answers compared, a third (at most) on a disagreement.
+  const solves: Solved[] = [];
+  let lastInconclusive: Solved | null = null;
+  for (const seed of seeds) {
+    const solved = await solveOnce(ctx, model, lpText, seed);
+    if (solved.status === 'Inconclusive') {
+      lastInconclusive = solved;
+      continue;
+    }
+    solves.push(solved);
+    if (solves.length === 2 && agree(solves[0], solves[1], ctx.tolerance)) break;
+    if (solves.length >= ctx.prod.precise.MAX_QUALIFIED_OPINIONS) break;
+  }
+  if (solves.length === 0) return { verdict: 'unsettled', solves: [lastInconclusive as Solved], first: lastInconclusive as Solved, detail: `every one of ${seeds.length} seeds was inconclusive` };
   for (let i = 0; i < solves.length; i++) {
     for (let j = i + 1; j < solves.length; j++) {
       if (agree(solves[i], solves[j], ctx.tolerance)) {
@@ -617,13 +644,24 @@ export async function runCountGates(input: CaseInput, options: CountGateOptions 
       continue;
     }
     const ctx = contextFor(model);
+    const before = falseInfeasible.length;
     const answer = await solveInteger(ctx, world, model, [], validatorIssues);
+    const afterInteger = falseInfeasible.length;
     for (const p of answer.problems) soundness.push(`main${node ? ` node ${node.weightMin}` : ''}: ${p}`);
     let relaxed: Settled | null = null;
     if (relaxEdges && model.edges.length > 0) {
       out.relaxedSolves++;
       relaxed = await settle(ctx, model, model.lpRelaxedEdges(), s => edgesIntegral(ctx, model, s.values) && judgePoint(ctx, world, model, s.values, s.objective, []).kind === 'accepted');
       if (relaxed.verdict === 'optimal' && !edgesIntegral(ctx, model, relaxed.first.values)) out.relaxedFractional++;
+      if (relaxed.verdict !== 'infeasible') {
+        // "Relaxation must agree" (production, owner 2026-10-12): a false Infeasible of this node's integer text cannot become a certificate, because the
+        // relaxed text of the same node is not settled Infeasible. Neutralized, counted, not failed.
+        const integerFalse = falseInfeasible.slice(before, afterInteger);
+        const caught = integerFalse.filter(entry => entry.startsWith('infeasible '));
+        out.relaxationCaught += caught.length;
+        falseInfeasible.splice(before, afterInteger - before, ...integerFalse.filter(entry => !entry.startsWith('infeasible ')));
+        if (answer.settled.verdict === 'infeasible') out.relaxationVetoed++;
+      }
     }
     nodeResults.push({ node, model, answer, relaxed, provedEmpty: false });
   }
@@ -857,7 +895,7 @@ export async function runCountGates(input: CaseInput, options: CountGateOptions 
     : soundness.length === 0 ? pass(`${decodedCount} decoded point(s) over ${directions.length} direction(s) and both texts are oracle-feasible and accepted by both validators`) : fail(soundness.slice(0, 3).join(' | '));
   out.validators = validatorIssues.length === 0 ? pass(`${out.validated} decoded build(s): the reference and production validators agree`) : fail(validatorIssues.slice(0, 3).join(' | '));
   out.native = nativeErrors.length + falseInfeasible.length + unqualified.length === 0 ? pass(`${out.solves} solve(s): no native error, no false Infeasible, every production solve qualified by assessNativeResult`)
-    : fail(`${unqualified.length} unqualified solve(s); ${nativeErrors.length} native SolveError(s) raised as SolverError; ${falseInfeasible.length} Infeasible or unsettled verdict(s) overturned by a validated point${[...unqualified, ...nativeErrors, ...falseInfeasible].slice(0, 2).map(x => ` | ${x}`).join('')}`);
+    : fail(`${unqualified.length} unqualified solve(s); ${nativeErrors.length} native call(s) that threw (SolverError); ${falseInfeasible.length} Infeasible or unsettled verdict(s) overturned by a validated point${[...unqualified, ...nativeErrors, ...falseInfeasible].slice(0, 2).map(x => ` | ${x}`).join('')}`);
   if (precisionNotes.length > 0 && out.gateBObjective.status === 'pass') out.gateBObjective = { status: 'pass', detail: `${out.gateBObjective.detail}; notes: ${precisionNotes.slice(0, 2).join('; ')}` };
   return out;
 }
@@ -880,6 +918,9 @@ export interface CountTally {
   pinned: number;
   boundaryCuts: number;
   seedOverrides: number;
+  inconclusive: number;
+  relaxationCaught: number;
+  relaxationVetoed: number;
   relaxedSolves: number;
   relaxedFractional: number;
   boundDisagreements: number;
@@ -894,7 +935,8 @@ export function newCountTally(): CountTally {
   const gate = Object.fromEntries(COUNT_GATES.map(g => [g, { pass: 0, fail: 0, na: 0, precision: 0 }])) as CountTally['gate'];
   return {
     cases: 0, gated: 0, refused: 0, refusalFailures: [], skipped: {}, empty: 0, nonEmpty: 0, ted: 0, solves: 0, validated: 0, pinned: 0, boundaryCuts: 0,
-    seedOverrides: 0, relaxedSolves: 0, relaxedFractional: 0, boundDisagreements: 0, maxObjectiveDelta: 0, maxDualGap: 0, gate, failures: [], precision: [],
+    seedOverrides: 0, inconclusive: 0, relaxationCaught: 0, relaxationVetoed: 0, relaxedSolves: 0, relaxedFractional: 0, boundDisagreements: 0, maxObjectiveDelta: 0, maxDualGap: 0,
+    gate, failures: [], precision: [],
   };
 }
 
@@ -919,6 +961,9 @@ export function addCount(t: CountTally, r: CountCaseGates): void {
   t.pinned += r.pinned;
   t.boundaryCuts += r.boundaryCuts;
   t.seedOverrides += r.seedOverrides;
+  t.inconclusive += r.inconclusive;
+  t.relaxationCaught += r.relaxationCaught;
+  t.relaxationVetoed += r.relaxationVetoed;
   t.relaxedSolves += r.relaxedSolves;
   t.relaxedFractional += r.relaxedFractional;
   t.boundDisagreements += r.boundDisagreements;
@@ -941,6 +986,6 @@ export function formatCountTally(label: string, t: CountTally): string {
   const gates = COUNT_GATES.map(g => `${g} ${t.gate[g].pass}/${t.gate[g].pass + t.gate[g].fail + t.gate[g].precision}${t.gate[g].precision > 0 ? ` (+${t.gate[g].precision} precision)` : ''}`).join(', ');
   const skipped = Object.entries(t.skipped).map(([k, n]) => `${k} x${n}`).join(', ') || 'none';
   return `${label}: ${t.cases} case(s), ${t.gated} gated (${t.nonEmpty} nonempty, ${t.empty} empty, ${t.ted} TED), ${t.refused} refused (cyclic, ${t.refused - t.refusalFailures.length} refused correctly), skipped: ${skipped}; `
-    + `pinned ${t.pinned}, validated ${t.validated}, boundary cuts ${t.boundaryCuts}, seed overrides ${t.seedOverrides}, relaxed solves ${t.relaxedSolves} (${t.relaxedFractional} fractional), unsettled bound disagreements ${t.boundDisagreements}, `
+    + `pinned ${t.pinned}, validated ${t.validated}, boundary cuts ${t.boundaryCuts}, seed overrides ${t.seedOverrides}, inconclusive solves ${t.inconclusive}, integer false Infeasible caught by the relaxation ${t.relaxationCaught}, certificates withheld by the relaxation rule ${t.relaxationVetoed}, relaxed solves ${t.relaxedSolves} (${t.relaxedFractional} fractional), unsettled bound disagreements ${t.boundDisagreements}, `
     + `max objective delta ${t.maxObjectiveDelta.toExponential(2)}, max dual gap ${t.maxDualGap.toExponential(2)}; native solves ${t.solves}; passing gates: ${gates}`;
 }

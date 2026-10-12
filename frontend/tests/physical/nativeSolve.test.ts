@@ -106,7 +106,7 @@ test('a confirmation that times out, errors, or ends without an answer leaves th
   assert.equal(b.kind === 'unresolved' && b.cause, 'native_error');
   const odd = scripted(fakeResult('Infeasible'), fakeResult('SolveError'));
   const c = await solveWithPresolvePolicy('lp', { ...ON, solve: odd.solve });
-  assert.equal(c.kind === 'unresolved' && c.cause, 'native_error');
+  assert.equal(c.kind === 'unresolved' && c.cause, 'inconclusive', 'a confirmation that reaches no verdict is inconclusive, never infeasible');
   // A limit stop that holds a solution proves the model feasible after all.
   const found = scripted(fakeResult('Infeasible'), fakeResult('TimeLimit', true));
   const d = await solveWithPresolvePolicy('lp', { ...ON, solve: found.solve });
@@ -124,8 +124,18 @@ test('no time left: nothing is solved to begin with, and an infeasibility that l
   assert.equal(late.kind === 'unresolved' && late.cause, 'deadline');
 });
 
-test('a model status that is neither optimal, a limit nor an infeasibility claim is a typed native error, not a result', async () => {
-  for (const status of ['SolveError', 'ModelError'] as const) {
+test('SolveError, PresolveError and PostsolveError on a model HiGHS read are INCONCLUSIVE (owner 2026-10-12: retry seeds, never throw)', async () => {
+  for (const status of ['SolveError', 'PresolveError', 'PostsolveError'] as const) {
+    const { solve } = scripted(fakeResult(status));
+    const outcome = await solveWithPresolvePolicy('lp', { ...NOW, solve });
+    assert.equal(outcome.kind, 'unresolved', status);
+    assert.equal(outcome.kind === 'unresolved' && outcome.cause, 'inconclusive', status);
+    assert.equal(outcome.kind === 'unresolved' && outcome.first?.modelStatus.name, status);
+  }
+});
+
+test('a model status that is neither optimal, a limit, an infeasibility claim nor inconclusive is a typed native error, not a result', async () => {
+  for (const status of ['ModelError', 'LoadError', 'ModelEmpty', 'NotSet', 'Unbounded'] as const) {
     const { solve } = scripted(fakeResult(status));
     await assert.rejects(solveWithPresolvePolicy('lp', { ...NOW, solve }), (error: unknown) => error instanceof SolverError && /unexpected model status/.test(error.message));
   }

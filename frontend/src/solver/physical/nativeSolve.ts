@@ -29,8 +29,14 @@
  *   - the confirmation is infeasible too: the verdict stands (`infeasible`);
  *   - the confirmation times out or the native call fails: the verdict is UNRESOLVED (`unresolved`), never infeasible.
  *
- * Any other model status that is neither optimal, a limit stop nor an infeasibility claim (a model or solve error, an unbounded
- * report on a model whose columns are all finite) is a native failure and raises the typed `SolverError`: it never becomes a normal result.
+ * A solve that ends with `SolveError`, `PresolveError` or `PostsolveError` reached NO verdict on a model HiGHS read without complaint: HiGHS 1.15.1
+ * returns `SolveError` under the production options on some small, valid count models for some random seeds and `Optimal` for others
+ * (reference/harness/countGates.nativeDefects.differential.test.ts). Owner decision (2026-10-12, docs/stage2-plan.md decision 5a): "retry seeds, never
+ * throw". Such a solve is INCONCLUSIVE (`unresolved` with cause `inconclusive`): it proves nothing and claims nothing, and the caller moves on to the next
+ * seed (`solvePrecise`, `solveFast`). Every other model status that is neither optimal, a limit stop nor an infeasibility claim (a load or model error,
+ * an empty model, an unbounded report on a model whose columns are all finite, a status the build does not name) is a fault of the model text or the
+ * native build and still raises the typed `SolverError`, and so does a native call that throws (a wasm trap) or a text HiGHS cannot read
+ * (`ModelReadError`): those never become a normal result.
  */
 
 import { getNativeHighs, SolverError } from '../native';
@@ -52,7 +58,14 @@ const LIMIT_STATUSES: ReadonlySet<string> = new Set<ModelStatusName>([
   'TimeLimit', 'IterationLimit', 'SolutionLimit', 'ObjectiveBound', 'ObjectiveTarget', 'Interrupt', 'MemoryLimit', 'HighsInterrupt', 'Unknown',
 ]);
 
+/**
+ * Statuses that report that the solver itself failed to reach a verdict on a model it read without error: an inconclusive opinion, never a fault of
+ * the model (see the header). A load, model or empty-model error is NOT here: those are faults of the text and raise.
+ */
+const INCONCLUSIVE_STATUSES: ReadonlySet<string> = new Set<ModelStatusName>(['SolveError', 'PresolveError', 'PostsolveError']);
+
 export const isInfeasibleStatus = (name: string): boolean => INFEASIBLE_STATUSES.has(name);
+export const isInconclusiveStatus = (name: string): boolean => INCONCLUSIVE_STATUSES.has(name);
 export const isLimitStatus = (name: string): boolean => LIMIT_STATUSES.has(name);
 
 /** Native primal and dual feasibility tolerance of every solve: the model text carries exact coefficients, so the solver is held to them. */
@@ -139,8 +152,12 @@ export type PolicyOutcome =
    * presolve-off re-solve was infeasible too.
    */
   | { kind: 'infeasible'; first: NativeResult; confirmation: NativeResult | null }
-  /** The infeasibility verdict could not be confirmed (or there was no time to start); never an infeasibility claim. */
-  | { kind: 'unresolved'; cause: 'deadline' | 'native_error'; first: NativeResult | null; detail: string };
+  /**
+   * No verdict: the infeasibility verdict could not be confirmed, there was no time to start, or the deciding solve was INCONCLUSIVE (cause
+   * `inconclusive`: `SolveError`, `PresolveError` or `PostsolveError` on a model HiGHS read without error; another seed may well decide it). Never an
+   * infeasibility claim and never a bound.
+   */
+  | { kind: 'unresolved'; cause: 'deadline' | 'native_error' | 'inconclusive'; first: NativeResult | null; detail: string };
 
 const defaultNow = (): number => performance.now();
 
@@ -159,6 +176,9 @@ export async function solveWithPresolvePolicy(lpText: string, context: PolicyCon
   const first = await solve(lpText, { ...context.options, presolve, time_limit: nativeTimeLimitSeconds(remaining()) }, extras);
   const status = first.modelStatus.name;
   if (status === 'Optimal' || isLimitStatus(status)) return { kind: 'solved', result: first, presolveRescue: false, presolved: presolve !== 'off' };
+  if (isInconclusiveStatus(status)) {
+    return { kind: 'unresolved', cause: 'inconclusive', first, detail: `HiGHS reached no verdict (model status ${status}) on a model it read without error` };
+  }
   if (!isInfeasibleStatus(status)) throw unexpectedStatus(first);
   if (presolve === 'off') return { kind: 'infeasible', first, confirmation: null };
 
@@ -183,6 +203,9 @@ export async function solveWithPresolvePolicy(lpText: string, context: PolicyCon
       first,
       detail: `the presolve-off confirmation ended with ${confirmed} and no solution`,
     };
+  }
+  if (isInconclusiveStatus(confirmed)) {
+    return { kind: 'unresolved', cause: 'inconclusive', first, detail: `the presolve-off confirmation reached no verdict (model status ${confirmed})` };
   }
   return { kind: 'unresolved', cause: 'native_error', first, detail: `the presolve-off confirmation returned the model status ${confirmed}` };
 }

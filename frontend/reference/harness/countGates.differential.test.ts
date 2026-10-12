@@ -36,20 +36,16 @@ const EXPECTED_PRECISION_CELLS: readonly string[] = [
 ];
 
 /**
- * The one production defect the gates found (countGates.solveError.differential.test.ts keeps it as a TODO with its minimal reproduction): a native
- * `SolveError` under the decision-5b options, which production raises as SolverError (the request fails). Recognized by the gate and the message, so
- * it is reported, never hidden among passes, and any OTHER failure fails the test.
+ * Native defects the gates found and production now handles (Stage 3 follow-up, owner 2026-10-12; countGates.nativeDefects.differential.test.ts keeps the
+ * minimal reproductions): a SolveError is an inconclusive solve and the next seed is tried, and a false Infeasible of a node's integer text is neutralized
+ * by the "relaxation must agree" rule. Neither is a failing cell any more; both are counted in the tally. Every failing cell is unexpected.
  */
-const isKnownSolveErrorDefect = (gate: string, detail: string): boolean => gate === 'native' && detail.startsWith('0 unqualified solve(s);');
-
-function report(t: { diagnostic: (message: string) => void }, label: string, tally: CountTally): { unexpected: string[]; known: string[] } {
+function report(t: { diagnostic: (message: string) => void }, label: string, tally: CountTally): { unexpected: string[] } {
   t.diagnostic(formatCountTally(label, tally));
-  const known = tally.failures.filter(f => isKnownSolveErrorDefect(f.gate, f.detail)).map(f => `${f.id} ${f.gate}`);
-  const unexpected = tally.failures.filter(f => !isKnownSolveErrorDefect(f.gate, f.detail)).map(f => `${f.id} ${f.gate}: ${f.detail.slice(0, 300)}`);
-  if (known.length > 0) t.diagnostic(`${label}: known production defect (native SolveError raised as SolverError): ${known.join(', ')}`);
+  const unexpected = tally.failures.map(f => `${f.id} ${f.gate}: ${f.detail.slice(0, 300)}`);
   if (tally.precision.length > 0) t.diagnostic(`${label}: precision cells (decision 5b): ${tally.precision.map(p => `${p.id} ${p.gate} [${p.detail.slice(0, 120)}]`).join('; ')}`);
   if (tally.refusalFailures.length > 0) t.diagnostic(`${label}: refusal failures: ${tally.refusalFailures.join('; ')}`);
-  return { unexpected, known };
+  return { unexpected };
 }
 
 test('ledger: Gates A, B and C on production Precise (certified count model) for every acyclic case; the cyclic cases are refused', { timeout: 30 * 60_000 }, async t => {

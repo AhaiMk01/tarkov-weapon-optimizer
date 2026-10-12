@@ -226,3 +226,61 @@ test('an infeasibility needs both verdicts: a timed-out second opinion leaves th
   assert.equal(empty.summary.telemetry.thirdOpinions, 1);
   assert.equal(empty.summary.telemetry.confirmedInfeasible, 1);
 });
+
+// ---------------------------------------------------------------------------------------------
+// Inconclusive solves (owner, 2026-10-12: retry seeds, never throw)
+// ---------------------------------------------------------------------------------------------
+
+/** The pinned solve, except that the listed seeds reach no verdict: HiGHS's `SolveError` with no primal (the defect of countGates.nativeDefects). */
+function inconclusiveOn(seeds: readonly (number | undefined)[]): SolveFn & { seeds: (number | undefined)[] } {
+  const asked: (number | undefined)[] = [];
+  const solve = async (lp: string, options: Parameters<SolveFn>[1], extras?: Parameters<SolveFn>[2]): Promise<NativeResult> => {
+    const seed = options.random_seed === undefined ? undefined : Number(options.random_seed);
+    asked.push(seed);
+    const real = await nativeSolve(lp, options, extras);
+    if (!seeds.includes(seed)) return real;
+    return { ...real, modelStatus: { code: 4, name: 'SolveError' }, colValues: null, objectiveValue: null, mipDualBound: null } as unknown as NativeResult;
+  };
+  return Object.assign(solve, { seeds: asked });
+}
+
+test('a SolveError on the first two seeds is no opinion: the node moves on to the next seeds, two agreeing qualified verdicts still certify', async () => {
+  const lookup = choice([{ id: 'a', ergo: 10 }, { id: 'b', ergo: 25 }]);
+  const solve = inconclusiveOn([PRECISE_RANDOM_SEEDS[0], PRECISE_RANDOM_SEEDS[1]]);
+  const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve });
+  assert.deepEqual(solve.seeds, PRECISE_RANDOM_SEEDS.slice(0, 4), 'seeds 0 and 11 inconclusive, 29 the first opinion, 47 the second');
+  assert.deepEqual(installed(result), ['b']);
+  const { certified, summary } = built(result);
+  assert.equal(certified, true);
+  assert.equal(summary.telemetry.inconclusiveSolves, 2);
+  assert.equal(summary.telemetry.extraSeedSolves, 3, 'the solves of seeds 11, 29 and 47 followed an inconclusive solve of the same text');
+  assert.equal(summary.telemetry.disagreements, 0);
+});
+
+test('every seed inconclusive: the request never throws; it is unresolved with the proof-prerequisite reason and nothing is certified', async () => {
+  const lookup = choice([{ id: 'a', ergo: 10 }, { id: 'b', ergo: 25 }]);
+  const solve = inconclusiveOn([...PRECISE_RANDOM_SEEDS]);
+  const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve });
+  assert.equal(result.kind, 'incomplete');
+  assert.equal(result.outcome.status, 'incomplete');
+  assert.equal(result.outcome.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
+  assert.equal(result.summary.telemetry.inconclusiveSolves, solve.seeds.length, 'every solve was inconclusive');
+  assert.ok(solve.seeds.length <= 2 * PRECISE_RANDOM_SEEDS.length, 'a bounded number of tries: the relaxed text and the integer text, each over the seed list');
+  // An infeasible request whose solves are all inconclusive is not proved empty either.
+  const capped = await solvePrecise({ params: paramsOf(lookup, { maxPrice: 1 }), deadline: FAR(), solve: inconclusiveOn([...PRECISE_RANDOM_SEEDS]) });
+  assert.notEqual(capped.kind, 'empty');
+  assert.notEqual(capped.outcome.physical_certificate, 'certified_infeasible');
+});
+
+test('Fast: a SolveError on the default seed is retried with the next seed instead of failing the request', async () => {
+  const { solveFast } = await import('../../src/solver/physical/solveFast');
+  const lookup = choice([{ id: 'a', ergo: 10 }, { id: 'b', ergo: 25 }]);
+  const solve = inconclusiveOn([undefined]);
+  const result = await solveFast({ params: paramsOf(lookup), deadline: FAR(), solve });
+  assert.equal(result.kind, 'build');
+  assert.deepEqual((result as Extract<typeof result, { kind: 'build' }>).best.build.placements.map(p => p.itemId), ['b']);
+  assert.ok(result.summary.inconclusiveSolves >= 1);
+  assert.ok(solve.seeds.includes(PRECISE_RANDOM_SEEDS[1]), 'the retry used the next seed of the list');
+  const never = await solveFast({ params: paramsOf(lookup), deadline: FAR(), solve: inconclusiveOn([undefined, ...PRECISE_RANDOM_SEEDS]) });
+  assert.equal(never.kind, 'incomplete', 'every seed inconclusive: no build, no throw');
+});

@@ -10,8 +10,8 @@ Branch `impl/stage2-correctness-cutover`. All paths are under `frontend/`.
 | File | What it proves |
 | :--- | :--- |
 | `tests/runtime/operationsMatrix.harness.ts` | The rig: the **real** worker runtime (`createWorkerRuntime`) with the real solve, the real Explore and MOA floor drivers and the pinned native build. The only seams are ones a worker has anyway: the data load, the epoch clock, and the native solve of the shared pinned instance. A test can wrap that solve to report a native time limit, withhold a proof (a read warning), tamper with the primal (a point the validator rejects), throw a typed failure, or deliver a cancel. |
-| `tests/runtime/operationsMatrix.test.ts` | The transition matrix below: 106 tests, 105 pass and 1 `todo` (defect D1). |
-| `tests/solver/relaxedFallback.defect.test.ts` | Minimal reproduction of defect D1 on `solvePrecise`: 1 control passes, 2 `todo`. |
+| `tests/runtime/operationsMatrix.test.ts` | The transition matrix below: 106 tests, all pass (the former `todo` of defect D1 passes since the 2026-10-12 fix). |
+| `tests/solver/relaxedFallback.defect.test.ts` | Minimal reproduction of defect D1 on `solvePrecise`, now its regression test: the control and both D1 cases pass (fixed 2026-10-12). |
 | `reference/harness/validatorLedgerBuilds.differential.test.ts` | 3.6a: the two validators agree on every hand-derived ledger build, every rejection code, the strict production configuration and the production-only codes (6 pass). |
 | `tests/solver/determinism.test.ts` | 3.6b: the same response on repeated runs (fresh state, warm caches, worker runtime) and across permutations of the second-opinion seeds, on the ledger and on pinned guns (5 pass). |
 
@@ -89,7 +89,7 @@ Observed envelopes (all asserted in M):
 | Explore: invalid stash + invalid schedule; queue expiry + invalid schedule; invalid schedule + cyclic; invalid schedule + passed deadline | stash; queue; schedule; schedule | | | | | PASS | | M "Explore precedence at entry…" |
 | validation failure + deadline | validation | PASS | PASS | PASS | PASS | PASS⁸ | PASS | M "precedence — an observed validation failure…"; `tests/physical/outcome.test.ts` precedence 2; `solveOutcome.test.ts` (Fast); `moaFloor.test.ts` "a stop reason is reconciled with the guard" |
 | validation failure + cancel | validation | PASS | PASS | PASS | PASS | PASS⁸ | PASS | M (same test); `searchGuard.test.ts` "a pure interrupt reported by a node loses to a coincident cancel, a validation failure does not" |
-| withheld proof + deadline | prerequisite, witness kept | N/A | **GAP (D1)** | **GAP (D1)** | **GAP (D1)** | **GAP (D1)** | **GAP (D1)** | M "DEFECT D1 (todo)…"; `relaxedFallback.defect.test.ts`; the classifier itself is right: `outcome.test.ts` precedence 3, `moaFloor.test.ts` reconcile |
+| withheld proof + deadline | prerequisite, witness kept | N/A | PASS (D1 fixed) | PASS (D1 fixed) | PASS (D1 fixed) | PASS (D1 fixed) | PASS (D1 fixed) | M "D1 (fixed)…"; `relaxedFallback.defect.test.ts`; the classifier: `outcome.test.ts` precedence 3, `moaFloor.test.ts` reconcile |
 | cancel + deadline (pure interrupts) | cancel | PASS | PASS | PASS | PASS | PASS | PASS | M "precedence — pure simultaneous interrupts…"; `outcome.test.ts` precedence 4; `solveGuard.test.ts`; `searchGuard.test.ts`; `runtimeGuard.guardStop` |
 | deadline + node limit + native solution limit | cancel, deadline, node limit, solution limit | — | PASS | PASS | — | — | PASS | `outcome.test.ts` precedence 4; `searchGuard.test.ts` "simultaneous interrupts…"; `solveOutcome.test.ts` node cap; `moaFloor.test.ts` / `moaFloor.native.test.ts` solution limit |
 | completed proof + late cancel and deadline | proof, never downgraded | PASS | PASS | PASS | PASS | PASS | PASS | M "precedence — a completed qualified proof…" (Optimize family, flags raised in the last native call), M "Explore and MOA floor: precedence — a completed schedule and a completed bracket proof survive…"; `solveGuard.test.ts`; `searchGuard.test.ts`; `exploreSweep.test.ts` completed-schedule precedence; `moaFloor.test.ts` "a completed bracket proof survives…" |
@@ -115,7 +115,7 @@ observation O1.
 | model_infeasible | `moaFloor.test.ts` "model_infeasible: only a QUALIFIED seed emptiness…"; `moaFloor.e2e.test.ts`; M "MOA floor through the runtime: a qualified seed emptiness is model_infeasible…" |
 | Zero and negative caps, display floor, native first-witness stop | `moaFloor.test.ts`, `moaFloor.e2e.test.ts`, `moaFloor.native.test.ts` |
 
-### Defect D1 (production; reported, not fixed)
+### Defect D1 (production; FIXED 2026-10-12, Stage 3 follow-up)
 
 **Where.** In `src/solver/physical/solvePrecise.ts` `evaluate`, the relaxed-edge first try of a Precise node judges its answer exactly. When the
 relaxed optimum is integral and the validator accepts its build, the build is **verified**, even if the solve is not qualified (a read warning) or
@@ -132,15 +132,18 @@ same loss happens in an Explore step (U instead of V) and in a floor seed (`unre
 warning, and the clock passes the deadline during call 0, the relaxed solve:
 
 - the control passes: with time left, the same tampering yields the build `b` as feasible;
-- the first `todo` gets `incomplete` / `Time limit reached` after one native call;
-- the second `todo` shows the same loss for a relaxed solve that stopped at `TimeLimit` with a primal.
+- before the fix, the first D1 case got `incomplete` / `Time limit reached` after one native call;
+- before the fix, the second D1 case showed the same loss for a relaxed solve that stopped at `TimeLimit` with a primal.
 
-Through the runtime: M "DEFECT D1 (todo)" (OP, OA, GS, EX, FL).
+Through the runtime: M "D1 (fixed)" (OP, OA, GS, EX, FL).
 
-**Minimal fix direction (for the owner or the orchestrator).** On the relaxed fallback, keep `first` when it has a candidate or a non-interrupt
-reason. If the guard then stops, return it as `unconfirmed(model, first)` with `finished: false` and let the classifier apply the precedence. If no
-stop occurs, the integer model is solved as today. The candidate may also be offered to the search as an incumbent. The two `todo` tests then pass and
-lose their `todo` mark.
+**Fix (2026-10-12).** `solvePrecise.ts` `evaluateNative` keeps the relaxed first opinion (`kept`) when it holds a verified build or a reason that is
+not a pure interrupt. On a guard stop before the integer re-solve it returns `unconfirmed(model, kept)` with `finished: false` (a rejected relaxed
+point still takes precedence as a validation failure); the classifier then applies the section 6 precedence. When no stop occurs the integer model is
+solved as before and its evaluation is merged with `kept` (`withKept`): the better verified build is the node's candidate (offered to the search as an
+incumbent), and an observed proof-prerequisite failure replaces a coincident interrupt reason. Results: both D1 cases and the runtime matrix row pass
+without a `todo` mark (OP, OA, GS: `feasible` / `Required proof prerequisite unavailable` with the build; EX: the first target is V and the curve
+partial; FL: `model_witnessed`). The second case keeps its factual `Time limit reached` (the relaxed solve's own native stop) with the build.
 
 ### Owner question Q1 (not a defect)
 

@@ -1,12 +1,13 @@
-// DEFECT D1 (Stage 3 workstream 3.5, reported, not fixed here: production is out of scope for this workstream). Minimal reproduction on solvePrecise.
+// DEFECT D1 (Stage 3 workstream 3.5; fixed in the Stage 3 follow-up of 2026-10-12): regression tests on solvePrecise.
 //
-// The relaxed-edge first try of a Precise node (`solvePrecise.ts` `evaluate`) judges its answer exactly: an integral relaxed optimum whose build the
+// The relaxed-edge first try of a Precise node (`solvePrecise.ts` `evaluateNative`) judges its answer exactly: an integral relaxed optimum whose build the
 // independent validator accepts is a VERIFIED build even when the solve is not qualified (a read warning, a native time limit), and `judge` returns it
-// as `none({ candidate })`. `evaluate` then falls back to the integer model, yields and reads the guard, and on a stop returns `interrupted(model, stop)`:
-// the verified candidate and the observed proof-prerequisite failure are both dropped, so the request is incomplete / none with "Time limit reached".
-// ADR 0013 section 6 requires feasible / feasible (a verified current witness) with "Required proof prerequisite unavailable" (an observed prerequisite
-// failure outranks a coincident interrupt). Nothing false is published (the answer is conservative), but the witness and the factual cause are lost.
-// The same path drops the build of a relaxed solve that stopped at a native time limit with a primal (the second case).
+// as `none({ candidate })`. Before the fix, `evaluate` then fell back to the integer model, yielded and read the guard, and on a stop returned
+// `interrupted(model, stop)`: the verified candidate and the observed proof-prerequisite failure were both dropped, so the request was incomplete / none
+// with "Time limit reached". ADR 0013 section 6 requires feasible / feasible (a verified current witness) with "Required proof prerequisite unavailable"
+// (an observed prerequisite failure outranks a coincident interrupt). The fix keeps the relaxed opinion when it holds a verified build or a non-interrupt
+// reason, returns it unconfirmed (unfinished) on a guard stop, and merges it into the integer model's evaluation otherwise.
+// The second case: the build of a relaxed solve that stopped at a native time limit with a primal is kept too, with its factual reason.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
@@ -48,7 +49,7 @@ test('control: the relaxed-edge answer of this node is integral and verified (wi
   assert.equal(honest.result.summary.telemetry.relaxedEdgeFallbacks, 0, 'the honest relaxed answer is integral and accepted as is');
 });
 
-test('D1: a withheld relaxed-edge solve + the deadline before the integer re-solve keeps the verified build, feasible with the prerequisite reason', { todo: 'production defect D1 (Stage 3 report): solvePrecise relaxed-edge fallback' }, async () => {
+test('D1: a withheld relaxed-edge solve + the deadline before the integer re-solve keeps the verified build, feasible with the prerequisite reason', async () => {
   const { result, calls } = await runWith(warned, true);
   assert.equal(calls, 1, 'the integer model was never solved');
   assert.equal(result.kind, 'build', `got ${result.kind}: ${result.outcome.status} / ${result.outcome.reason}`);
@@ -57,7 +58,7 @@ test('D1: a withheld relaxed-edge solve + the deadline before the integer re-sol
   assert.equal(result.outcome.termination, 'limit');
 });
 
-test('D1: a relaxed-edge solve stopped at a native time limit with a verified primal keeps that build when the deadline stops the integer re-solve', { todo: 'production defect D1 (Stage 3 report): solvePrecise relaxed-edge fallback' }, async () => {
+test('D1: a relaxed-edge solve stopped at a native time limit with a verified primal keeps that build when the deadline stops the integer re-solve', async () => {
   const { result } = await runWith(timeLimited, true);
   assert.equal(result.kind, 'build', `got ${result.kind}: ${result.outcome.status} / ${result.outcome.reason}`);
   assert.equal(result.outcome.status, 'feasible');
