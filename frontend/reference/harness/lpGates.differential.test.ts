@@ -1,4 +1,5 @@
-// Model-level gates A, B and C of the physical LP against the Stage 1 oracle, for every ledger case (Stage 2, phase 2.4b-2).
+// Model-level gates A, B and C of the OCCURRENCE model against the Stage 1 oracle, for every ledger case (Stage 2, phase 2.4b-2): the independent
+// cross-check of production Precise, which solves the certified count model since Phase 2.10 (its formal gates: countGates.differential.test.ts).
 // See lpGates.differential.ts for the gate definitions and the exact handling of TED. The per-family table is printed as diagnostics.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -10,7 +11,7 @@ type GateName = (typeof GATES)[number];
 
 const results: CaseGates[] = [];
 
-test('every ledger case passes gates A, B and C on the physical LP', { timeout: 20 * 60 * 1000 }, async t => {
+test('cross-check: every ledger case passes gates A, B and C on the occurrence model', { timeout: 20 * 60 * 1000 }, async t => {
   for (const c of LEDGER) results.push(await runGates(c));
 
   const failures: string[] = [];

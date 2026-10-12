@@ -1,7 +1,15 @@
-// Model-level gates of the physical LP (Stage 2, phase 2.4b-2) against the Stage 1 oracle.
+// Model-level gates of the OCCURRENCE model against the Stage 1 oracle: the independent CROSS-CHECK of production Precise (Stage 2, phase 2.4b-2; kept
+// in Stage 3, workstream 3.1).
 //
-// For one ledger case this builds blueprint -> domain -> `specializeLP`, solves the emitted text with the Node `highs` package, decodes
-// with `decodeSolution` and checks the three gates of ADR 0010 section 3 on the case's exhaustive fixture:
+// Production Precise no longer solves this model: since Phase 2.10 (owner decisions 2d as amended and 2e) it solves the certified COUNT model
+// (`src/solver/physical/specializeCount.ts` through `solvePrecise.ts`), and the formal gates on THAT model are countGates.differential.ts. The
+// occurrence model (`tests/physical/occurrence/specializeOccurrence.ts`, path-qualified occurrence variables, no acyclicity precondition) stays here as
+// an independent second formulation: the same gates on a different model, so a defect shared by the count model and its gates would have to be
+// shared by this one too. It also still gates the 5 cyclic ledger cases production refuses (the occurrence model handles cycles).
+//
+// For one ledger case this builds blueprint -> domain -> `specializeLP` (the occurrence model), solves the emitted text on the PINNED native HiGHS
+// build (`src/solver/native`, HiGHS 1.15.1; the npm `highs` package these gates were first written against was retired in Phase 2.3) with the gate
+// options below, decodes with `decodeSolution` and checks the three gates of ADR 0010 section 3 on the case's exhaustive fixture:
 //
 //   Gate C  the model is infeasible exactly when the oracle's feasible set is empty;
 //   Gate B  the optimal objective equals the oracle's exact maximum within the case tolerance; the decoded build is accepted by the reference
@@ -390,7 +398,7 @@ const notApplicable = (detail: string): GateVerdict => ({ status: 'n/a', detail 
 export const DEFAULT_RANDOM_DIRECTIONS = 3;
 
 /** Distinct total weights, as doubles, of every enumerated rooted build (feasible or not): the singleton nodes that partition the build space. */
-function structuralWeights(fixture: ReferenceFixture, request: ReferenceRequest): number[] {
+export function structuralWeights(fixture: ReferenceFixture, request: ReferenceRequest): number[] {
   const rf = resolveFixture(fixture);
   const rr = resolveRequest(fixture, request);
   const seen = new Map<string, number>();
