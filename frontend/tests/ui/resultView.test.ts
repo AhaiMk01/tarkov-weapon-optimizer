@@ -137,7 +137,7 @@ test('qualifiers: only the model facts, in a stable order', () => {
 
 test('every public reason maps to its own i18n key, keyed by the reason constant', () => {
   const names = Object.keys(PUBLIC_REASONS) as (keyof typeof PUBLIC_REASONS)[];
-  assert.equal(names.length, 12, 'the closed set has twelve reasons');
+  assert.equal(names.length, 13, 'the closed set has thirteen reasons');
   const keys = new Set<string>();
   for (const name of names) {
     const view = reasonViewOf(PUBLIC_REASONS[name]);
@@ -161,7 +161,7 @@ test('retry advice comes only from the three factual limit reasons, never from a
   for (const reason of [PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, PUBLIC_REASONS.queueTimeoutBeforeDispatch, PUBLIC_REASONS.cancelledByUser, PUBLIC_REASONS.approximateModelInfeasible]) {
     assert.equal(reasonViewOf(reason)?.adviceKey, null, reason);
   }
-  assert.equal(allReasonKeys().length, 12 + 3, 'twelve messages and three advice lines');
+  assert.equal(allReasonKeys().length, 13 + 3, 'thirteen messages and three advice lines');
 });
 
 test('"limit" termination alone never produces timeout advice: only the factual reason does', () => {
@@ -363,6 +363,7 @@ test('the sentence of a result that is off, by level and reason (a table; retry 
     [incomplete, T.provisionalMoaModelInfeasible, 'moa_empty', false],
     [incomplete, T.invalidOwnedItems, 'invalid_owned', false],
     [incomplete, T.invalidExploreSchedule, 'invalid_schedule', false],
+    [incomplete, T.unsupportedCyclicPartGraph, 'unsupported_data', false],
     [incomplete, T.queueTimeoutBeforeDispatch, 'queue_timeout', true],
     [incomplete, T.cancelledByUser, 'cancelled_none', false],
     // an emptiness without its certificate claims nothing: it is "no build", never "none exists"

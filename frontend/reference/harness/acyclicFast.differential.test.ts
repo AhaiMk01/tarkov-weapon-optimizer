@@ -53,7 +53,7 @@ const mine = (population: string, k: number): boolean => {
 const fixedSkip: false | string = SHARD === 0 ? false : 'fixed tests run in shard 0';
 const progress = (population: string, k: number, r: FastExactness): void => {
   const file = process.env.ACYCLIC_FAST_PROGRESS;
-  if (file !== undefined) appendFileSync(file, `${population} ${k} ${r.skipped ?? (r.mismatches.length > 0 ? 'MISMATCH' : r.acyclic ? 'ok' : 'cyclic')}\n`);
+  if (file !== undefined) appendFileSync(file, `${population} ${k} ${r.skipped ?? (r.mismatches.length > 0 ? 'MISMATCH' : 'ok')}\n`);
 };
 const record = (testName: string, data: Record<string, unknown>): void => {
   const file = process.env.ACYCLIC_FAST_RESULTS;
@@ -74,23 +74,24 @@ const summary = (t: { diagnostic: (message: string) => void }, label: string, ta
 // 1. The ledger
 // =============================================================================================================
 
-test('ledger: every case whose active graph is acyclic and that Fast accepts equals the oracle (A, B, C, and the production solveFast path)', { skip: fixedSkip, timeout: 20 * 60_000 }, async t => {
+test('ledger: every case whose part graph is acyclic and that Fast accepts equals the oracle (A, B, C, and the production solveFast path); a cyclic one is refused', { skip: fixedSkip, timeout: 20 * 60_000 }, async t => {
   const tally = newTally();
   const cyclic: string[] = [];
   const failures: string[] = [];
   for (const c of LEDGER) {
     if (c.todo !== undefined) continue;
-    const r = await runFastExactness(c.id, c.fixture, c.request, { productionPath: true, includeCyclic: true });
-    if (r.skipped === null && !r.acyclic) {
-      cyclic.push(`${c.id} (${r.mismatches.length > 0 ? 'Fast disagrees with the oracle' : 'Fast agrees'})`);
+    const r = await runFastExactness(c.id, c.fixture, c.request, { productionPath: true });
+    if (r.skipped === 'cyclic_part_graph') {
+      cyclic.push(c.id);
+      if (r.mismatches.length > 0) failures.push(`${c.id}: ${r.mismatches[0].slice(0, 220)}`);
       continue;
     }
     addToTally(tally, r);
     if (r.mismatches.length > 0) failures.push(`${c.id}: ${r.mismatches[0].slice(0, 220)}`);
   }
-  summary(t, 'ledger (acyclic active graph)', tally);
+  summary(t, 'ledger (acyclic part graph)', tally);
   record('ledger', { tally, cyclic, failures });
-  t.diagnostic(`ledger cases with a CYCLIC active graph (out of scope, run for information): ${cyclic.join('; ') || 'none'}`);
+  t.diagnostic(`ledger cases with a CYCLIC part graph (unsupported data, refused by production; owner decision 2d as amended): ${cyclic.join('; ') || 'none'}`);
   t.diagnostic(`solver: ${JSON.stringify(checkedSolverStats)}`);
   assert.deepEqual(failures, [], `${failures.length} ledger case(s) differ`);
   assert.ok(tally.gated >= 120, `${tally.gated} ledger cases were gated`);
@@ -101,7 +102,7 @@ test('ledger: every case whose active graph is acyclic and that Fast accepts equ
 // =============================================================================================================
 
 test('random acyclic worlds (lpFuzz): projections, objective and emptiness equal the oracle', { timeout: 120 * 60_000 }, async t => {
-  const cases = size(40, 1500);
+  const cases = size(60, 1500);
   const tally = newTally();
   const failures: string[] = [];
   let shardCases = 0;
@@ -119,7 +120,8 @@ test('random acyclic worlds (lpFuzz): projections, objective and emptiness equal
   summary(t, `lpFuzz (${cases} seeds from ${20261004 + SEED}, shard ${SHARD}/${SHARDS})`, tally);
   record('fuzz', { cases, tally, failures });
   assert.deepEqual(failures, [], `${failures.length} random case(s) differ`);
-  assert.ok(tally.gated >= shardCases / 2, `${tally.gated} of ${shardCases} cases were gated`);
+  // lpFuzz often draws a part graph with a cycle (a back edge), which is now refused as unsupported data (decision 2d as amended) and skipped here.
+  assert.ok(tally.gated >= shardCases / 3, `${tally.gated} of ${shardCases} cases were gated`);
 });
 
 // =============================================================================================================
@@ -346,30 +348,25 @@ test('real-gun slices (pinned raw documents, oracle-enumerable): Fast equals the
 });
 
 // =============================================================================================================
-// 7. Information only: cyclic active graphs (out of scope; ADR 0011 bounds the claim)
+// 7. Cyclic part graphs are unsupported data (owner decision 2d as amended, 2026-10-12)
 // =============================================================================================================
+// Until the amendment this section measured, for information, how often Fast differed from the oracle on a cyclic active graph (18 of 43 worlds: research
+// report section 8, kept as history). A gun whose part graph has a cycle is now refused before any model is built: the gate checks that production does so.
 
-test('cyclic active graphs are out of scope: how often Fast differs from the oracle there (information, long run only)', { skip: LONG ? false : 'set ACYCLIC_FAST_LONG=1', timeout: 120 * 60_000 }, async t => {
-  let cases = 0;
-  let differs = 0;
-  const reasons = new Map<string, number>();
-  let index = -1;
+test('cyclic part graphs are refused: production solveFast returns the unsupported-data reason and solves nothing (back-edge profiles, 60 worlds)', { timeout: 20 * 60_000 }, async t => {
+  let refused = 0;
+  const failures: string[] = [];
   for (const profile of [PROFILES[2], PROFILES[4]]) {
-    for (let k = 0; k < 150; k++) {
-      index++;
-      if (!mine('cyc', index)) continue;
+    for (let k = 0; k < 30; k++) {
       const world = adversarialCase(900_000 + k + (profile === PROFILES[2] ? 0 : 1000), profile.options);
-      const r = await runFastExactness(`cyc-${k}`, world.fixture, world.request, { includeCyclic: true });
-      progress('cyc', index, r);
-      if (r.skipped !== null || r.acyclic) continue;
-      cases++;
-      if (r.mismatches.length > 0) {
-        differs++;
-        const why = r.mismatches[0].includes('does not decode') ? 'a Fast point does not decode to a rooted tree' : r.mismatches[0].startsWith('completeness') ? 'Fast loses a physical projection' : r.mismatches[0].split(':')[0];
-        reasons.set(why, (reasons.get(why) ?? 0) + 1);
-      }
+      const r = await runFastExactness(`cyc-${k}`, world.fixture, world.request, { productionPath: true });
+      if (r.skipped !== 'cyclic_part_graph') continue;
+      refused++;
+      if (r.productionPath.status !== 'pass') failures.push(`cyc-${k}: ${r.productionPath.detail}`);
     }
   }
-  t.diagnostic(`cyclic active graphs run: ${cases}; Fast differs from the oracle in ${differs}: ${JSON.stringify([...reasons])}`);
-  record('cyc', { cases, differs, reasons: Object.fromEntries(reasons) });
+  t.diagnostic(`cyclic part graphs refused: ${refused}`);
+  record('cyc', { refused, failures });
+  assert.deepEqual(failures, []);
+  assert.ok(refused >= 5, `the back-edge profiles reach cyclic part graphs: ${refused}`);
 });

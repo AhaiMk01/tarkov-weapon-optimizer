@@ -1,7 +1,8 @@
 // decodeSolution: robust binary reads, typed decode errors, exact allocation (preset, owned, paid in code-unit instanceId order) and spend.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cheapestLotCover, columnValuesFromStructured, decodeSolution, PhysicalModelError, type AcquisitionOffer } from '../../src/solver/physical';
+import { columnValuesFromStructured, PhysicalModelError, type AcquisitionOffer } from '../../src/solver/physical';
+import { cheapestLotCover, decodeSolution } from './occurrence/decodeOccurrence';
 import { barter, gun, lookupOf, mod, slot, trader, WEAPON } from './lpFixtures';
 import { prepare } from './lpHarness';
 

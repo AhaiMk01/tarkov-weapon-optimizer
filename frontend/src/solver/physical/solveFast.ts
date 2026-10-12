@@ -17,11 +17,11 @@
  *   - the bound of a node is the native dual bound of the APPROXIMATE model (plain double rows, no proof frame): it orders and fathoms the search and
  *     decides when to split, it never becomes a physical upper bound. It is also only used when the solve ran with presolve off, the one setting whose
  *     dual bound HiGHS 1.15.1 can be trusted for (`nativeSolve.ts`);
- *   - the count model carries total weight exactly (weight = receiver + sum of n_t x weight_t) and, on an acyclic template graph, decodes every point
+ *   - the count model carries total weight exactly (weight = receiver + sum of n_t x weight_t) and, on the acyclic part graph of every supported gun, decodes every point
  *     to a physical build of the same installed multiset, so the weight of the decoded build is the weight of the model point and a node's rows state
  *     what the node means (docs/research/acyclic-fast-exactness.md section 9).
  *
- * A point the validator rejects, or that decodes to no rooted tree (cyclic graphs only), or that sits on a boundary the solver's tolerance admitted and
+ * A point the validator rejects, or that decodes to no rooted tree, or that sits on a boundary the solver's tolerance admitted and
  * exact arithmetic does not, is cut out with an integer no-good over the model's own decision columns (`fastCut.ts`) and the node is solved again, within
  * the deadline. The cut removes exactly that point, so the first accepted point is the best of the points left. A point of an INEXACT node that is
  * rejected only for overswinging is no fault: the node's penalty line is a relaxation, so its optimum may overswing exactly; the node is refined at that
@@ -46,6 +46,7 @@ import { guardStop } from '../runtimeGuard';
 import type { RuntimeGuard } from '../runtimeGuard';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { SolveParams } from '../types';
+import { partGraphIsAcyclic } from './blueprint';
 import { computeActiveBounds } from './bounds';
 import { columnValuesFromStructured } from './decode';
 import type { ColumnValues } from './decode';
@@ -57,7 +58,7 @@ import type { IntegerNoGood } from './fastCut';
 import { FAST_PRESOLVE, isLimitStatus, NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
 import type { PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
-import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
+import { classifyOptimize, isMoaDependent, observationsOfReason, unsupportedPartGraphOutcome } from './outcome';
 import type { OptimizeOutcome } from './outcome';
 import { exactAxes, exactObjectiveScore, scoreEnclosure } from './proof';
 import type { BoundEvidence } from './proof';
@@ -90,11 +91,10 @@ export interface FastSummary {
   nativeSolves: number;
   /** Points a cut removed: decoded to no tree, or rejected by the validator. */
   rejectedPoints: number;
-  /** Size of the model: columns, rows, candidate edges, whether the template graph is acyclic (the largest model of the search). */
+  /** Size of the model: columns, rows, candidate edges (the largest model of the search). */
   columns: number;
   rows: number;
   edges: number;
-  acyclic: boolean;
   /** The presolve setting of the first solve of every round. */
   presolve: PresolveSetting;
   /** Solver-reported objective of the last native solve, `null` without one. */
@@ -176,7 +176,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const singleCopy = params.allowRepeatedParts !== true;
   const request: SpecializeRequest = { ...params, singleCopy };
   const summary: FastSummary = {
-    nativeSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, acyclic: true, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
+    nativeSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, singleCopy,
   };
   const moaDependent = isMoaDependent(params);
@@ -193,6 +193,11 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   }
 
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
+  // Owner decision 2d as amended: a gun whose part graph has a cycle is refused as unsupported data, nothing solved.
+  if (!partGraphIsAcyclic(blueprint)) {
+    const outcome = unsupportedPartGraphOutcome(moaDependent);
+    return { kind: 'incomplete', reason: outcome.reason as string, outcome, summary };
+  }
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
   if (domain.empty) {
     const detail = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`)).join('; ');
@@ -209,7 +214,6 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     summary.columns = Math.max(summary.columns, model.stats.columns);
     summary.rows = Math.max(summary.rows, model.stats.rows);
     summary.edges = Math.max(summary.edges, model.edges.length);
-    summary.acyclic = model.graph.acyclic;
   };
   let requestReasons: readonly string[] | null = null;
   if (!tedRequest) {

@@ -27,16 +27,17 @@
  *             reachable by a verified witness. A point that fails the decode or the exact validator (a tolerance boundary) is cut out and the node re-solved,
  *             and a witness is published only after the independent validator accepted it, so a projection failure can lose a witness, never fake a certificate.
  *
- * Eligibility (`countModelEligibility`) is a per-request check of the data, not only of the theorem: the ACTIVE template graph is acyclic (`buildTemplateGraph`)
- * AND the conclusion of Lemma 1 is verified on this very domain (the candidate templates of every active occurrence's slot equal the graph's union set). A
- * cyclic or unverified domain keeps the occurrence model.
+ * Preconditions (owner decision 2d as amended, 2026-10-12). Acyclicity is a checked property of the gun's data: the part graph reachable from the receiver has no
+ * cycle (`partGraphIsAcyclic`), and a gun that fails it is refused as unsupported data before any model is built, so the active graph of every domain is acyclic
+ * too. Lemma 1 then holds by theorem; its conclusion is still verified on every domain (`assertCountModelApplies`: the candidate templates of every active
+ * occurrence's slot equal the graph's union set) as an internal assertion, and a failure is a solver error, never a fallback to another model.
  *
  * TrueErgo and Prevent Overswing: the weight is an aggregate the count model carries exactly (`weight = receiver + sum n_t x weight_t`), a weight node is rows on
  * it, and the node's penalty line is a function of the weight only. Node by node the model's integer points project onto exactly the physical builds whose weight
  * lies in the node, with the same objective function of the projection as the occurrence model, so the spatial search over weight transfers unchanged.
  */
 
-import type { PhysicalBlueprint } from './blueprint';
+import { partGraphIsAcyclic, type PhysicalBlueprint } from './blueprint';
 import type { SubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
 import type { ModelProof } from './proof';
@@ -50,50 +51,36 @@ export interface CountModel extends FastModel {
   readonly rowFamilies: readonly CountRowFamilyRecord[];
 }
 
-export interface CountEligibility {
-  /** The certified count model may be built and certified for this domain. */
-  eligible: boolean;
-  /** Why not; null when eligible. */
-  reason: string | null;
-  /** The ACTIVE template graph (after the domain masks) is acyclic. */
-  acyclic: boolean;
-  /** The whole closure is acyclic: the blueprint pruned no ancestor edge (request independent, and sufficient for `acyclic`). */
-  closureAcyclic: boolean;
+export interface CountModelCheck {
   /** Slots of active occurrences whose candidate templates were compared with the graph's union set (Lemma 1, checked on the data). */
   slotsChecked: number;
 }
 
-const eligibilityMemo = new WeakMap<SubproblemDomain, CountEligibility>();
+const checkMemo = new WeakMap<SubproblemDomain, CountModelCheck>();
 
 /**
- * Decide whether the count model is exact for a prepared domain (see the module comment). Memoized per (immutable) domain. An empty domain is not eligible:
- * it has no template graph, and its emptiness is decided by the domain itself.
+ * Assert that the count model is exact for a prepared, nonempty domain (see the module comment): the part graph reachable from the receiver is acyclic
+ * (`partGraphIsAcyclic`, a precondition every operation checks first, so a failure here throws `CYCLIC_PART_GRAPH`) and the conclusion of Lemma 1 holds on
+ * this very domain (a failure throws `DOMAIN_INCONSISTENT`: it would contradict the theorem, so it is a fault, and the caller reports it as a solver error,
+ * never by falling back to another model). Memoized per (immutable) domain.
  */
-export function countModelEligibility(blueprint: PhysicalBlueprint, domain: SubproblemDomain): CountEligibility {
+export function assertCountModelApplies(blueprint: PhysicalBlueprint, domain: SubproblemDomain): CountModelCheck {
   if (domain.blueprint !== blueprint) {
     throw new PhysicalModelError('FOREIGN_DOMAIN', `The domain was not prepared from the blueprint of ${blueprint.weaponId}`, { weaponId: blueprint.weaponId });
   }
-  const cached = eligibilityMemo.get(domain);
+  const cached = checkMemo.get(domain);
   if (cached !== undefined) return cached;
-  const closureAcyclic = blueprint.stats.prunedAncestorEdges === 0;
-  const verdict = (partial: Pick<CountEligibility, 'eligible' | 'reason'> & Partial<CountEligibility>): CountEligibility => ({
-    acyclic: false, closureAcyclic, slotsChecked: 0, ...partial,
-  });
-  let result: CountEligibility;
-  if (domain.empty) {
-    result = verdict({ eligible: false, reason: 'the domain is empty' });
-  } else {
-    const { graph } = templateStructureOf(blueprint, domain);
-    if (!graph.acyclic) {
-      result = verdict({ eligible: false, reason: 'the active template graph has a cycle' });
-    } else {
-      const check = candidateSetsAgree(blueprint, domain, graph.slots);
-      result = check.disagreement === null
-        ? verdict({ eligible: true, reason: null, acyclic: true, slotsChecked: check.checked })
-        : verdict({ eligible: false, reason: `the active candidates of a slot depend on the path: ${check.disagreement}`, acyclic: true, slotsChecked: check.checked });
-    }
+  if (!partGraphIsAcyclic(blueprint)) {
+    throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The part graph of ${blueprint.weaponId} has a cycle: unsupported data`, { weaponId: blueprint.weaponId });
   }
-  eligibilityMemo.set(domain, result);
+  if (domain.empty) throw new PhysicalModelError('DOMAIN_INCONSISTENT', 'An empty domain has no count model to check: its emptiness is decided by the domain', { weaponId: blueprint.weaponId });
+  const { graph } = templateStructureOf(blueprint, domain);
+  const check = candidateSetsAgree(blueprint, domain, graph.slots);
+  if (check.disagreement !== null) {
+    throw new PhysicalModelError('DOMAIN_INCONSISTENT', `Lemma 1 fails on an acyclic part graph: the active candidates of a slot depend on the path (${check.disagreement})`, { weaponId: blueprint.weaponId });
+  }
+  const result = { slotsChecked: check.checked };
+  checkMemo.set(domain, result);
   return result;
 }
 
@@ -137,8 +124,8 @@ function candidateSetsAgree(
 }
 
 /**
- * Specialize the certified count model of one request (see the module comment). Throws `DOMAIN_INCONSISTENT` when the domain is not eligible
- * (`countModelEligibility`): the caller decides eligibility first and keeps the occurrence model otherwise; a certificate is never built on an unverified graph.
+ * Specialize the certified count model of one request (see the module comment). Asserts first that the model applies (`assertCountModelApplies`):
+ * a certificate is never built on an unverified graph.
  *
  * @param node Optional weight node, read only by requests that use TED (`SpatialNode`).
  * @param options `moaDominance: 'always'` states the larger-centre-of-impact MOA terms on every MOA model (tests); the default states them when they can matter.
@@ -146,12 +133,7 @@ function candidateSetsAgree(
 export function specializeCount(
   blueprint: PhysicalBlueprint, domain: SubproblemDomain, request: SpecializeRequest = {}, node?: SpatialNode, options: Pick<FastModelOptions, 'moaDominance'> = {},
 ): CountModel {
-  if (!domain.empty) {
-    const eligibility = countModelEligibility(blueprint, domain);
-    if (!eligibility.eligible) {
-      throw new PhysicalModelError('DOMAIN_INCONSISTENT', `The certified count model does not apply: ${eligibility.reason}`, { weaponId: blueprint.weaponId, reason: eligibility.reason });
-    }
-  }
+  if (!domain.empty) assertCountModelApplies(blueprint, domain);
   const model = specializeFast(blueprint, domain, request, node, { certified: true, moaDominance: options.moaDominance });
   if (!model.certified || model.proof === null || model.rowFamilies === null) {
     throw new PhysicalModelError('DOMAIN_INCONSISTENT', 'The certified count model came back without its proof record', { weaponId: blueprint.weaponId });

@@ -139,7 +139,13 @@ test('the native time allowance is positive and at least a millisecond; the opti
   const strict = nativeSolveOptions(1e-9);
   assert.equal(strict.mip_abs_gap, 2.5e-10, 'a 1e-9 request is not floored at 1e-7');
   assert.equal(strict.mip_rel_gap, 0);
-  assert.equal(strict.mip_feasibility_tolerance, 1e-9);
+  // owner decision 5b: integrality 1e-7 for EVERY request tolerance, primal and dual feasibility 1e-9
+  for (const tau of [0, 1e-9, 1e-7, 1e-5, 1]) {
+    const options = nativeSolveOptions(tau);
+    assert.equal(options.mip_feasibility_tolerance, 1e-7, `integrality at tolerance ${tau}`);
+    assert.equal(options.primal_feasibility_tolerance, 1e-9);
+    assert.equal(options.dual_feasibility_tolerance, 1e-9);
+  }
   assert.equal(nativeSolveOptions(1e-5).mip_abs_gap, 1e-9, 'a loose request never loosens the native search past the pre-cutover value');
   assert.equal(nativeSolveOptions(0).mip_abs_gap, 0);
   assert.equal(nativeSolveOptions(-1).mip_abs_gap, 0, 'a negative tolerance is read as zero');

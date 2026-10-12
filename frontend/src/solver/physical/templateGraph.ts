@@ -10,15 +10,17 @@
  *    otherwise), so the owner of a slot is a function of its id, and the physical slots of one raw id are exactly the slots of the copies of
  *    its owner.
  *  - A candidate edge (slot, child template) exists when some ACTIVE occurrence of the owner has an ACTIVE candidate occurrence of that child
- *    in that slot. The union over occurrences is taken because ancestor pruning can make two occurrences of one template list different
- *    candidates.
- *  - `maxCopies[t]` bounds how many copies of a template any physical tree can hold (conflicts and caps ignored). On an acyclic graph it is
- *    the exact maximum over trees (a longest-choice dynamic program over the template DAG, so far smaller than the occurrence count: a rail
- *    segment that fits twelve rails can have thousands of occurrences and still at most a dozen copies). On a cyclic graph it is the active
- *    occurrence count, which also bounds it because every copy takes its own occurrence.
- *  - `region` marks, on a cyclic graph, the templates that lie on a cycle or below one. Only those can be held by a part that no rooted
- *    chain holds, so only they need the connectivity flow of the model; on an acyclic graph the region is empty, which is the whole pinned
- *    capture (172 guns: zero ancestor-pruned edges, zero cycles).
+ *    in that slot. The union over occurrences is taken; on an acyclic part graph every active occurrence of a template has the same active
+ *    candidates (Lemma 1 of docs/research/acyclic-fast-exactness.md, asserted on every domain by `assertCountModelApplies`), so the union is
+ *    what each of them sees.
+ *  - `maxCopies[t]` bounds how many copies of a template any physical tree can hold (conflicts and caps ignored): the exact maximum over trees
+ *    (a longest-choice dynamic program over the template DAG, so far smaller than the occurrence count: a rail segment that fits twelve rails
+ *    can have thousands of occurrences and still at most a dozen copies).
+ *
+ * The graph is ACYCLIC by precondition (owner decision 2d as amended, 2026-10-12): a gun whose part graph reachable from the receiver has a cycle
+ * is refused as unsupported data before any model is built (`partGraphIsAcyclic`), and the active graph of a domain is a subgraph of that graph.
+ * A cyclic active graph is therefore an internal fault and throws `CYCLIC_PART_GRAPH`; the connectivity flow and the backtracking decoder that
+ * a cyclic graph needed are gone with it.
  */
 
 import type { PhysicalBlueprint } from './blueprint';
@@ -51,11 +53,8 @@ export interface TemplateGraph {
   readonly slotsHolding: readonly (readonly TemplateSlot[])[];
   /** Total candidate edges. */
   readonly edgeCount: number;
-  readonly acyclic: boolean;
-  /** Topological order of the active templates, the receiver first (parents before children). Empty when the graph has a cycle. */
+  /** Topological order of the active templates, the receiver first (parents before children). */
   readonly topological: Int32Array;
-  /** 1 for the templates on a cycle or below one (cyclic graphs only; all zero when acyclic). */
-  readonly region: Uint8Array;
   /** Upper bound on the copies of each template in any physical tree (0 for an inactive template; the receiver has 1). */
   readonly maxCopies: Int32Array;
 }
@@ -130,10 +129,9 @@ export function buildTemplateGraph(blueprint: PhysicalBlueprint, domain: Subprob
   }
   let activeCount = 0;
   for (let t = 0; t < T; t++) activeCount += active[t];
-  const acyclic = order.length === activeCount;
-
-  const region = new Uint8Array(T);
-  if (!acyclic) markCyclicRegion(T, active, slotsOf, region);
+  if (order.length !== activeCount) {
+    throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The active part graph of ${blueprint.weaponId} has a cycle: unsupported data, refused before any model is built`, { weaponId: blueprint.weaponId });
+  }
 
   return {
     templateCount: T,
@@ -142,79 +140,13 @@ export function buildTemplateGraph(blueprint: PhysicalBlueprint, domain: Subprob
     slotsOf,
     slotsHolding,
     edgeCount,
-    acyclic,
-    topological: acyclic ? Int32Array.from(order) : new Int32Array(0),
-    region,
-    maxCopies: copyBounds(blueprint, domain, active, slotsOf, acyclic ? order : null),
+    topological: Int32Array.from(order),
+    maxCopies: copyBounds(blueprint, domain, active, slotsOf, order),
   };
 }
 
-/** Templates on a cycle (a strongly connected component of more than one template, or a self-loop) and everything reachable from them. */
-function markCyclicRegion(T: number, active: Uint8Array, slotsOf: readonly (readonly TemplateSlot[])[], region: Uint8Array): void {
-  const successors: number[][] = Array.from({ length: T }, () => []);
-  for (let t = 0; t < T; t++) for (const slot of slotsOf[t]) for (const c of slot.candidates) successors[t].push(c);
-  // Iterative Tarjan.
-  const index = new Int32Array(T).fill(-1);
-  const low = new Int32Array(T);
-  const onStack = new Uint8Array(T);
-  const component = new Int32Array(T).fill(-1);
-  const stack: number[] = [];
-  let counter = 0;
-  let components = 0;
-  for (let root = 0; root < T; root++) {
-    if (!active[root] || index[root] >= 0) continue;
-    const work: [number, number][] = [[root, 0]];
-    index[root] = low[root] = counter++;
-    stack.push(root);
-    onStack[root] = 1;
-    while (work.length > 0) {
-      const top = work[work.length - 1];
-      const v = top[0];
-      if (top[1] < successors[v].length) {
-        const w = successors[v][top[1]++];
-        if (index[w] < 0) {
-          index[w] = low[w] = counter++;
-          stack.push(w);
-          onStack[w] = 1;
-          work.push([w, 0]);
-        } else if (onStack[w]) low[v] = Math.min(low[v], index[w]);
-      } else {
-        if (low[v] === index[v]) {
-          for (;;) {
-            const w = stack.pop() as number;
-            onStack[w] = 0;
-            component[w] = components;
-            if (w === v) break;
-          }
-          components++;
-        }
-        work.pop();
-        if (work.length > 0) low[work[work.length - 1][0]] = Math.min(low[work[work.length - 1][0]], low[v]);
-      }
-    }
-  }
-  const size = new Int32Array(components);
-  for (let t = 0; t < T; t++) if (component[t] >= 0) size[component[t]]++;
-  const frontier: number[] = [];
-  for (let t = 0; t < T; t++) {
-    if (component[t] < 0) continue;
-    if (size[component[t]] > 1 || successors[t].includes(t)) {
-      region[t] = 1;
-      frontier.push(t);
-    }
-  }
-  for (let i = 0; i < frontier.length; i++) {
-    for (const c of successors[frontier[i]]) {
-      if (!region[c]) {
-        region[c] = 1;
-        frontier.push(c);
-      }
-    }
-  }
-}
-
 /**
- * Upper bound on the copies of each template. Acyclic graph: the exact maximum over physical trees, K_c(t) = [t = c] + sum over the slots r of t
+ * Upper bound on the copies of each template: the exact maximum over physical trees, K_c(t) = [t = c] + sum over the slots r of t
  * of max over the candidates d of K_c(d), evaluated children first for every target c (each slot of a copy holds one child, whatever else holds
  * the others), then the receiver's value. Capped by the active occurrence count and by 1 for a self-conflicting template.
  */
@@ -223,7 +155,7 @@ function copyBounds(
   domain: SubproblemDomain,
   active: Uint8Array,
   slotsOf: readonly (readonly TemplateSlot[])[],
-  topological: readonly number[] | null,
+  topological: readonly number[],
 ): Int32Array {
   const T = blueprint.templateCount;
   const bounds = new Int32Array(T);
@@ -233,7 +165,7 @@ function copyBounds(
     if (!active[c]) continue;
     let bound = domain.templateActiveCount[c];
     if (blueprint.templateSelfConflict[c] === 1) bound = Math.min(bound, 1);
-    if (topological !== null && bound > 1) {
+    if (bound > 1) {
       k.fill(0);
       for (let i = topological.length - 1; i >= 0; i--) {
         const t = topological[i];

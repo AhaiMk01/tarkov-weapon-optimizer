@@ -224,7 +224,7 @@ export interface IdealPoint {
 export type PrecisionRequest = 'fast' | 'precise' | 'auto';
 /** What actually ran; `null` before any model work (an invalid request). */
 export type PrecisionResolved = 'fast' | 'precise' | null;
-/** `exact`: the occurrence-level model; `approximate`: the Fast template-count model; `null`: no model ran. */
+/** `exact`: the Precise model (the certified count model, owner decision 2e); `approximate`: the Fast template-count model; `null`: no model ran. */
 export type ModelQualification = 'exact' | 'approximate' | null;
 /** `provisional_model` when the result depends on the provisional MOA model (a MOA cap), otherwise `null` (never 'n/a'). */
 export type MoaQualification = 'provisional_model' | null;

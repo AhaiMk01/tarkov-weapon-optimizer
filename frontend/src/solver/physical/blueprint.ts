@@ -114,7 +114,10 @@ export interface PhysicalBlueprintStats {
   itemOccurrences: number;
   slots: number;
   templates: number;
-  /** Allowlist entries skipped because the template was an ancestor (no-ancestor-repetition rule). */
+  /**
+   * Allowlist entries skipped because the template was an ancestor (no-ancestor-repetition rule). Nonzero exactly when the part graph reachable from
+   * the receiver has a cycle: the rule is kept only as that detector (`partGraphIsAcyclic`), since a gun with a cycle is refused as unsupported data.
+   */
   prunedAncestorEdges: number;
   /** Item occurrences that can never be built, whatever the request: a receiver-banned template, or an empty required slot below. */
   structurallyImpossibleOccurrences: number;
@@ -731,4 +734,15 @@ export function preparePhysicalWeapon(
   };
   preparedFrom.set(blueprint, lookup);
   return Object.freeze(blueprint);
+}
+
+/**
+ * The per-gun data check of owner decision 2d as amended (2026-10-12): the part graph reachable from the receiver has no cycle. The unrolling above
+ * never repeats a template on one root path; it cuts an allowlist entry exactly when the entry names a template already on the path, which on the
+ * reachable graph happens iff that graph has a cycle (a self-listing part included). A part graph that has a loop only among parts the receiver cannot
+ * reach is acyclic here. Request independent, so it is decided once per prepared blueprint. Every operation refuses a gun that fails it as unsupported
+ * data before any solve (`Unsupported data: cyclic part graph`): the count model and its decoder are exact only on an acyclic graph.
+ */
+export function partGraphIsAcyclic(blueprint: PhysicalBlueprint): boolean {
+  return blueprint.stats.prunedAncestorEdges === 0;
 }

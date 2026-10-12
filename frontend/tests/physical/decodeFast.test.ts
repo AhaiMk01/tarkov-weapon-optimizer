@@ -78,27 +78,24 @@ test('an empty domain has nothing to decode', () => {
   assert.throws(() => decodeFast(fast(lookup), {}), /domain is empty/);
 });
 
-test('a count point that is no tree is rejected, not repaired: a floating cycle, and a chain that would repeat an ancestor', () => {
-  // A and B can host each other; the root fits both.
+test('a count point the slot rows forbid is rejected, not repaired: two children in a slot of one copy, and a child whose owner is not installed', () => {
+  // The part graph is acyclic (a gun with a cycle is refused before any model is built, owner decision 2d as amended); such points can still reach the
+  // decoder as a solver fault or a tampered answer, and leave edge counts unplaced.
   const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['A', mod('A', { slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { slots: [slot('toA', ['A'])] })],
+    gun(WEAPON, { slots: [slot('s0', ['A', 'B'])] }),
+    ['A', mod('A', { slots: [slot('a1', ['C'])] })],
+    ['B', mod('B')],
+    ['C', mod('C')],
   );
   const model = fast(lookup);
-  // Floating cycle: B below A and A below B with nothing at the root.
-  const floating = decodeFast(model, point(model, { 'toB>B': 1, 'toA>A': 1 }));
-  assert.equal(floating.ok, false);
-  assert.match(floating.ok ? '' : floating.reason, /not reachable from the receiver/);
-  // Chain root -> A -> B -> A: the second A repeats its ancestor.
-  const chain = decodeFast(model, point(model, { 's0>A': 1, 'toB>B': 1, 'toA>A': 1 }));
-  assert.equal(chain.ok, false);
-  // The valid arrangement of the same two parts decodes: A at the root with B below, B at the root with A below.
-  const valid = decodeFast(model, point(model, { 's0>A': 1, 's1>B': 1, 'toB>B': 1, 'toA>A': 1 }));
+  const crowded = decodeFast(model, point(model, { 's0>A': 1, 's0>B': 1 }));
+  assert.equal(crowded.ok, false);
+  const orphan = decodeFast(model, point(model, { 'a1>C': 1 }));
+  assert.equal(orphan.ok, false);
+  assert.match(orphan.ok ? '' : orphan.reason, /not reachable from the receiver/);
+  const valid = decodeFast(model, point(model, { 's0>A': 1, 'a1>C': 1 }));
   assert.equal(valid.ok, true);
-  assert.deepEqual(valid.ok && valid.build.placements.map(p => p.childInstanceId).sort(), [
-    'weapon_0/s0:A', 'weapon_0/s0:A/toB:B', 'weapon_0/s1:B', 'weapon_0/s1:B/toA:A',
-  ]);
+  assert.deepEqual(valid.ok && valid.build.placements.map(p => p.childInstanceId).sort(), ['weapon_0/s0:A', 'weapon_0/s0:A/a1:C']);
 });
 
 test('the decode is deterministic: the same point gives the same placements in the same order', () => {

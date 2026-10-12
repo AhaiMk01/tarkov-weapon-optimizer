@@ -85,10 +85,12 @@ test('the floor pipeline asks every native solve for the single improving soluti
   const normal = await solvePrecise({ params, guard: generous(), solve: ordinaryRecorder });
   assert.equal(normal.kind, 'build');
   assert.equal(normal.kind === 'build' && normal.certified, true);
-  assert.equal(ordinary.length, 1);
-  assert.equal(ordinary[0].effective, UNSET, 'not scoped to the floor call: nothing leaked');
-  assert.equal(ordinary[0].status, 'Optimal');
-  assert.equal(ordinary[0].runtime, seen[0].runtime, 'the same engine served the floor and the ordinary solve');
+  assert.equal(ordinary.length, 2, 'the solve and its second opinion (decision 5a)');
+  for (const call of ordinary) {
+    assert.equal(call.effective, UNSET, 'not scoped to the floor call: nothing leaked');
+    assert.equal(call.status, 'Optimal');
+    assert.equal(call.runtime, seen[0].runtime, 'the same engine served the floor and the ordinary solve');
+  }
 });
 
 // ---------------------------------------------------------------------------------------------

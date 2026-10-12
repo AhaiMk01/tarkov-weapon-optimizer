@@ -67,10 +67,13 @@ test('a coefficient HiGHS filters (at or below small_matrix_value) is a differen
   const evidence = boundEvidenceOf(prepared.model.proof, result, assessment);
   assert.equal(evidence.qualified, false);
   assert.equal(upperBoundOf(evidence), null, 'an unqualified bound is unknown, never a finite guess');
-  // and the model HiGHS solved really is a different one: it sees `a` as worthless and returns the 0.5 of `b`, where the exact optimum is `a` (about 1)
-  const picked = result.colNames?.map((name, i) => [name, (result.colValues as Float64Array)[i]] as const).filter(([n, v]) => n.startsWith('x_') && v > 0.5).map(([n]) => n);
-  assert.equal(picked?.length, 1);
-  assert.ok(Math.abs((result.objectiveValue as number) - 0.5) < 1e-9, `HiGHS optimum ${result.objectiveValue} is the 0.5 of the wrong part`);
+  // and the model HiGHS solved really is a different one: without the coefficient `a` is worthless and `rec_mod` is free within its domain, so HiGHS returns
+  // either the 0.5 of `b` or a recoil benefit with nothing installed, never the exact optimum (`a` installed, about 1)
+  const blueprint = prepared.blueprint;
+  const aColumns = new Set([...blueprint.instancesOf(blueprint.templateIndexOf('a'))].map(v => prepared.model.columns.occurrence(v)));
+  const picked = result.colNames?.map((name, i) => [name, (result.colValues as Float64Array)[i]] as const).filter(([n, v]) => n.startsWith('x_') && v > 0.5).map(([n]) => n) ?? [];
+  assert.ok(picked.length <= 1);
+  assert.ok(!picked.some(n => aColumns.has(n)), `HiGHS installed ${picked.join(', ')}: the part it cannot see`);
 });
 
 test('a parsed right-hand side that does not dominate the exact need of a constructed row is caught: the allowance that counts is the parsed one', async () => {

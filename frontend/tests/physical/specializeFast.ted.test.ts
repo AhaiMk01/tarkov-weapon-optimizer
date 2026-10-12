@@ -5,9 +5,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLpText } from '../../src/solver/native';
 import {
-  preparePhysicalWeapon, prepareSubproblemDomain, secantOfPenalty, specializeFast, specializeLP, weightPenalty,
-  type FastModel, type SpatialNode, type SpecializeRequest, type SubproblemRequest,
+  preparePhysicalWeapon, prepareSubproblemDomain, secantOfPenalty, specializeFast, weightPenalty, type FastModel, type SpatialNode, type SpecializeRequest, type SubproblemRequest,
 } from '../../src/solver/physical';
+import { specializeLP } from './occurrence/specializeOccurrence';
 import type { ItemLookup } from '../../src/solver/types';
 import { gun, lookupOf, mod, slot, WEAPON } from './lpFixtures';
 import { assertReadbackMatches, assertTextIsStrict, solveLp } from './lpHarness';

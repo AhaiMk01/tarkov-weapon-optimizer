@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import {
-  computeActiveBounds, countModelEligibility, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, validatePhysicalBuild,
+  assertCountModelApplies, computeActiveBounds, partGraphIsAcyclic, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, validatePhysicalBuild,
   type SpatialNode, type SpecializeRequest, type SubproblemRequest,
 } from '../../src/solver/physical';
 import { assessNativeResult } from '../../src/solver/physical/nativeProof';
@@ -18,7 +18,7 @@ import { nativeSolve, nativeSolveOptions } from '../../src/solver/physical/nativ
 import { HIGHS_LARGE_MATRIX_VALUE, HIGHS_SMALL_MATRIX_VALUE } from '../../src/solver/physical/proof';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { ItemLookup, SolveParams } from '../../src/solver/types';
-import { solveCount } from './countHarness';
+import { solveOccurrence } from './occurrence/solveOccurrence';
 
 const SNAPSHOT_PATH = fileURLToPath(new URL('../../benchmarks/snapshot.json', import.meta.url));
 const SNAPSHOT_SHA256 = '219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c';
@@ -50,7 +50,7 @@ const VARIANTS: Record<string, { request: Request; node?: SpatialNode }> = {
   overswing: { request: { preventOverswing: true, maxWeight: 9 }, node: { weightMin: 4, weightMax: 5 } },
 };
 
-test('all 172 guns: every nonempty default domain is eligible, and its certified model carries a proof with nothing withheld and no filtered coefficient', { skip, timeout: 900_000 }, t => {
+test('all 172 guns: every part graph is acyclic, every nonempty default domain passes the count-model assertion, and its certified model carries a proof with nothing withheld and no filtered coefficient', { skip, timeout: 900_000 }, t => {
   assert.equal(guns.length, 172);
   let eligible = 0, empty = 0, columns = 0, rows = 0, widest = 0, narrowest = Infinity;
   const started = performance.now();
@@ -58,9 +58,8 @@ test('all 172 guns: every nonempty default domain is eligible, and its certified
     const blueprint = preparePhysicalWeapon(lookup, gun.id, { isAmmo });
     const domain = prepareSubproblemDomain(blueprint, lookup, {});
     if (domain.empty) { empty++; continue; }
-    const verdict = countModelEligibility(blueprint, domain);
-    assert.equal(verdict.eligible, true, `${gun.shortName}: ${verdict.reason}`);
-    assert.equal(verdict.closureAcyclic, true, `${gun.shortName}: the closure of every pinned gun is acyclic`);
+    assert.equal(partGraphIsAcyclic(blueprint), true, `${gun.shortName}: the part graph of every pinned gun is acyclic`);
+    assertCountModelApplies(blueprint, domain); // throws on a failure of Lemma 1
     eligible++;
     const model = specializeCount(blueprint, domain, { ergoWeight: 1, recoilWeight: 1, priceWeight: 0.5 });
     assert.equal(model.proof.withheld, null, gun.shortName);
@@ -111,7 +110,7 @@ const measured = (id: string, extra: Partial<SolveParams> = {}): SolveParams => 
   traderLevels: { prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4, ref: 4 }, equipErgoModifier: 0, objectiveTolerance: 1e-8, ...extra,
 });
 
-test('guns the occurrence model can still prove: the count model certifies the same optimum, plain and TrueErgo, and its build validates', { skip, timeout: 1_800_000 }, async t => {
+test('guns the occurrence model can still prove: production Precise (the count model, with its second opinion) certifies the same optimum, plain and TrueErgo, and its build validates', { skip, timeout: 1_800_000 }, async t => {
   const cases: [string, Partial<SolveParams>][] = [
     ['MP5K-N', {}], ['MP5K-N', { useTrueErgo: true }], ['MP5K-N', { preventOverswing: true }],
     ['MP9-N', {}], ['SA58', {}], ['MP5', {}], ['MP9-N', { useTrueErgo: true, preventOverswing: true }],
@@ -120,18 +119,19 @@ test('guns the occurrence model can still prove: the count model certifies the s
     const params = measured(gunId(name), extra);
     const label = `${name} ${JSON.stringify(extra)}`;
     const started = performance.now();
-    const precise = await solvePrecise({ params, deadline: performance.now() + 120_000 });
+    const precise = await solveOccurrence({ params, deadline: performance.now() + 120_000 });
     const preciseMs = performance.now() - started;
-    const count = await solveCount(params, { budgetMs: 120_000 });
+    const count = await solvePrecise({ params, deadline: performance.now() + 120_000 });
     const countMs = performance.now() - started - preciseMs;
     assert.equal(precise.kind, 'build', `${label}: occurrence model ${precise.kind}`);
     assert.equal(count.kind, 'build', `${label}: count model ${count.kind}`);
     if (precise.kind !== 'build' || count.kind !== 'build') continue;
     assert.equal(precise.certified, true, label);
     assert.equal(count.certified, true, `${label}: ${count.reason ?? ''}`);
+    assert.equal(count.summary.telemetry.disagreements, 0, `${label}: the second opinion agreed`);
     assert.ok(Math.abs(count.best.score - precise.best.score) <= 3e-8 * Math.max(1, Math.abs(precise.best.score)), `${label}: count ${count.best.score} vs occurrence ${precise.best.score}`);
-    assert.equal(count.telemetry.unqualifiedSolves, 0, label);
+    assert.equal(count.summary.telemetry.unqualifiedSolves, 0, label);
     assert.equal(validatePhysicalBuild(lookup, params, count.best.build, { requirePathInstanceIds: true, isAmmo }).ok, true, label);
-    t.diagnostic(`${label}: score ${count.best.score}; occurrence ${preciseMs.toFixed(0)} ms (${precise.summary.nodes} nodes), count ${countMs.toFixed(0)} ms (${count.nodes} nodes, ${count.telemetry.nativeSolves} solves)`);
+    t.diagnostic(`${label}: score ${count.best.score}; occurrence ${preciseMs.toFixed(0)} ms (${precise.summary.nodes} nodes), count ${countMs.toFixed(0)} ms (${count.summary.nodes} nodes, ${count.summary.telemetry.nativeSolves} solves)`);
   }
 });

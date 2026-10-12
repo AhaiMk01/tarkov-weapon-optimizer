@@ -15,9 +15,10 @@ import { buildItemLookup } from '../../src/solver/dataService';
 import { compareReadback, getNativeHighs, parseLpText, readbackModel, type HighsOptions } from '../../src/solver/native';
 import type { ItemLookup } from '../../src/solver/types';
 import {
-  columnValuesFromStructured, decodeSolution, preparePhysicalWeapon, prepareSubproblemDomain, specializeLP,
-  type PhysicalBlueprint, type SpecializedModel, type SubproblemDomain,
+  columnValuesFromStructured, preparePhysicalWeapon, prepareSubproblemDomain, type PhysicalBlueprint, type SubproblemDomain,
 } from '../../src/solver/physical';
+import { specializeLP, type SpecializedModel } from './occurrence/specializeOccurrence';
+import { decodeSolution } from './occurrence/decodeOccurrence';
 
 const SNAPSHOT_PATH = fileURLToPath(new URL('../../benchmarks/snapshot.json', import.meta.url));
 const SNAPSHOT_SHA256 = '219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c';

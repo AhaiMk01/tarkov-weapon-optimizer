@@ -1,5 +1,5 @@
 // The Fast model text and metadata (src/solver/physical/specializeFast.ts): strict LP text that HiGHS reads back as written, template-sized columns,
-// the per-template acquisition modes and the exact reductions behind them, presence columns, the connectivity flow of a cyclic graph, the conflict
+// the per-template acquisition modes and the exact reductions behind them, presence columns, the refusal of a cyclic part graph, the conflict
 // clique cover, and the refusals.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
 import {
-  cliqueCover, integerNoGood, nonDominatedLots, preparePhysicalWeapon, prepareSubproblemDomain, specializeFast,
+  cliqueCover, integerNoGood, nonDominatedLots, PhysicalModelError, preparePhysicalWeapon, prepareSubproblemDomain, specializeFast,
   type FastModel, type SpecializeRequest, type SubproblemRequest,
 } from '../../src/solver/physical';
 import type { ItemLookup } from '../../src/solver/types';
@@ -118,18 +118,14 @@ test('presence: a template that can repeat and takes part in a conflict or MOA r
   assert.ok(!/ z_\d+/.test(fast(lookupOf(gun(WEAPON, { slots: [slot('s', ['a', 'a'])] }), ['a', mod('a')])).lpBase));
 });
 
-test('a cyclic template graph carries a connectivity flow on the cycle and below it, and says so; an acyclic one carries none', () => {
+test('a gun whose part graph has a cycle builds no model (unsupported data, owner decision 2d as amended); an acyclic one carries no connectivity row', () => {
   const cyclic = lookupOf(
     gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
     ['A', mod('A', { slots: [slot('toB', ['B'])] })],
     ['B', mod('B', { slots: [slot('toA', ['A'])] })],
   );
-  const model = fast(cyclic);
-  assert.equal(model.graph.acyclic, false);
-  assert.ok(model.notes.some(n => /cycle/.test(n)));
-  assert.ok(/ f_\d+_\d+/.test(model.lpBase) && hasRow(model, 'fc_1') && hasRow(model, 'fc_2'));
+  assert.throws(() => fast(cyclic), (e: unknown) => e instanceof PhysicalModelError && e.code === 'CYCLIC_PART_GRAPH');
   const acyclic = fast(lookupOf(gun(WEAPON, { slots: [slot('s0', ['A'])] }), ['A', mod('A')]));
-  assert.equal(acyclic.graph.acyclic, true);
   assert.ok(!/ f_\d+_\d+/.test(acyclic.lpBase) && !hasRow(acyclic, 'fc_1'));
 });
 
@@ -231,7 +227,7 @@ test('real guns: the Fast text of the default, Tchebycheff, MOA and capped reque
       await assertReadbackMatches(model.lp());
       if (name === 'M4A1' && variant === 'default') {
         assert.ok(model.stats.columns < 8000, `M4A1: ${model.stats.columns} columns against ${blueprint.occurrenceCount - 1} occurrences`);
-        assert.equal(model.graph.acyclic, true);
+        assert.equal(model.graph.topological.length, model.graph.active.reduce((a, b) => a + b, 0), 'every active template is ordered (the graph is acyclic)');
         t.diagnostic(`M4A1 Fast model: ${model.stats.columns} columns (${model.stats.binaries} binary, ${model.stats.integers} integer), ${model.stats.rows} rows, ${model.stats.nonzeros} nonzeros, ${model.edges.length} edges`);
       }
     }

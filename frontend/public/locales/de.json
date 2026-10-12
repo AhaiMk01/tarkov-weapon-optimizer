@@ -174,6 +174,7 @@
     "cancelled_none": "Abgebrochen.",
     "invalid_owned": "Deine Lagerliste ist ungültig — korrigiere sie und versuche es erneut.",
     "invalid_schedule": "Die Explore-Einstellungen sind ungültig — ändere sie und versuche es erneut.",
+    "unsupported_data": "Die Teiledaten dieser Waffe werden nicht unterstützt, daher kann kein Build dafür erstellt werden.",
     "queue_timeout": "Die Anfrage hat zu lange gewartet und wurde verworfen — versuche es erneut.",
     "error": "Etwas ist schiefgelaufen — versuche es erneut."
   },
@@ -416,6 +417,7 @@
     "fastProvisionalMoaModelInfeasible": "Das Näherungsmodell (Schnell) hat unter dem MOA-Limit keinen Build gefunden. Das beweist nicht, dass keiner existiert; versuche Präzise oder lockere das MOA-Limit.",
     "invalidOwnedItems": "Die Lagerliste ist ungültig, daher wurde nichts berechnet.",
     "invalidExploreSchedule": "Der Explore-Plan ist leer oder ungültig, daher wurde nichts berechnet.",
+    "unsupportedCyclicPartGraph": "Die Daten dieser Waffe enthalten Teile, die sich im Kreis ineinander montieren lassen; der Optimierer unterstützt solche Daten nicht, daher wurde nichts berechnet.",
     "queueTimeoutBeforeDispatch": "Die Zeit der Anfrage ist in der Warteschlange abgelaufen, daher wurde nichts berechnet. Versuche es erneut.",
     "independentBuildValidationFailed": "Ein vom Solver erzeugter Build hat die unabhängige Prüfung nicht bestanden und wurde zurückgehalten.",
     "requiredProofPrerequisiteUnavailable": "Eine Voraussetzung für einen Beweis war nicht verfügbar, daher wird kein Beweis behauptet.",

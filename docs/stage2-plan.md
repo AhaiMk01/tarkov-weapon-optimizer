@@ -104,6 +104,13 @@ is approximate. Decisions:
    - Consequences to settle after Phase 2.10's measurement: Auto's size rule counts occurrences
      (`AUTO_PRECISE_MAX_OCCURRENCES`), which no longer measures Precise's cost; and Stage 4 candidate 2a (certified Fast)
      shrinks to what Fast still lacks: the proof layer, the second opinion and the MOA rows.
+   **Phase 2.10 result (2026-10-12, 172 pinned guns, 60 s):** Precise on the count model (relaxed-first slot edges, second
+   opinion) certifies every gun in both profiles: plain 153 optimal + 19 infeasible in 111 s total (max 5.7 s), TrueErgo
+   153 + 19 in 1,050 s (max 49 s); before, the occurrence model left 17 plain and 43 TrueErgo guns uncertified (1,608 s and
+   3,453 s). Same optimum on every gun certified by both. The second opinion costs about half the solve time; one
+   disagreement in 883 second solves (AK-104 TrueErgo), settled by the third seed. Data and scripts:
+   `frontend/benchmarks/phase210m2/`. Auto's new rule is pending an owner decision (proposal: Precise for every plain request;
+   for TrueErgo or Prevent Overswing, Precise up to about 3,000 count-model integer columns, Fast above).
 2e. **Precise is rebuilt on the count model now, before 2.9 (owner, 2026-10-06; amends ADR 0013's order, Phase 2.10).**
    On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
    activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4
@@ -137,6 +144,14 @@ is approximate. Decisions:
    and a seed-only second opinion missed one case. Cost accepted by the owner: about 1% of solves report a bound up to 1e-7
    high, so a ledger case at the 1e-9 runtime tolerance can drop from certified to feasible; those cases are recorded in the
    baseline as owner-approved, never by editing a ledger expectation.
+   **Correction (Phase 2.10 measurement, owner, 2026-10-12): the shift is two-sided.** A point within 1e-7 of integral is
+   accepted as integral, so a dual bound can also land BELOW the exact optimum, by up to the column's objective sensitivity
+   times 1e-7 (observed once: F04-near-cap-min-ergonomics-gap-2e-20, 1.1e-5 low, n = 1 + 4.4e-8 read as 1). The bound
+   shortfall guard (decision 4) withholds such a bound when a verified build of the same node beats it; a lowered bound that no
+   verified build exposes is not detected. The owner accepts this as a stated assumption, like decision 4's arithmetic noise:
+   it is recorded in `NATIVE_FRAME.assumptions`, no extra guard is added, and Stage 4 revisits it together with decision 4.
+   Seven ledger cases drop from certified to feasible at the 1e-9 runtime tolerance (six with a proved gap about 1e-7, plus
+   that one withheld bound); each still returns the exact optimum.
 6. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
    the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
 

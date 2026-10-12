@@ -1,5 +1,4 @@
-// The proof frame of the certifiable count model end to end, through the same qualification, bound evidence and search Precise uses (tests/physical/countHarness.ts
-// drives them with the count model; the counterpart for the occurrence model is solvePrecise.proof.test.ts): a filtered coefficient withholds the bound and any
+// The proof frame of production Precise on the certified count model, end to end (`solvePrecise`, Phase 2.10): a filtered coefficient withholds the bound and any
 // infeasibility verdict while the verified build is still published, a wide Tchebycheff price normalization is rescaled exactly and certified, a bound that
 // contradicts a verified witness is withheld, a tampered readback or a presolved solve proves nothing, and unknown bounds travel as null.
 import { test } from 'node:test';
@@ -9,8 +8,9 @@ import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import { nativeSolve } from '../../src/solver/physical/nativeSolve';
 import type { SolveFn } from '../../src/solver/physical/nativeSolve';
 import type { ItemLookup, SolveParams } from '../../src/solver/types';
-import { solveCount } from './countHarness';
-import type { CountRun } from './countHarness';
+import { preparePhysicalWeapon, prepareSubproblemDomain, specializeCount } from '../../src/solver/physical';
+import { solvePrecise } from '../../src/solver/physical/solvePrecise';
+import type { PreciseContext, PreciseResult } from '../../src/solver/physical/solvePrecise';
 import { gun, gunWith, lookupOf, mod, modWith, slot, trader, WEAPON } from './lpFixtures';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
@@ -18,16 +18,22 @@ const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolvePa
   ergoWeight: 1, recoilWeight: 0, priceWeight: 0, objectiveTolerance: 1e-9, ...extra,
 });
 
-const built = (r: CountRun) => {
-  assert.equal(r.kind, 'build', JSON.stringify(r.kind === 'ineligible' ? r : { kind: r.kind, reason: 'reason' in r ? r.reason : undefined }));
-  return r as Extract<CountRun, { kind: 'build' }>;
+type Run = PreciseResult & { telemetry: PreciseResult['summary']['telemetry']; bounds: PreciseResult['summary']['bounds'] };
+/** Production Precise with a generous deadline; the telemetry and bounds are lifted to the top for the assertions below. */
+const solveCount = async (params: SolveParams, options: Omit<PreciseContext, 'params'> = {}): Promise<Run> => {
+  const result = await solvePrecise({ params, deadline: performance.now() + 120_000, ...options });
+  return Object.assign(result, { telemetry: result.summary.telemetry, bounds: result.summary.bounds });
 };
-const installed = (r: CountRun): string[] => built(r).best.build.placements.map(p => p.itemId).sort();
+const built = (r: Run) => {
+  assert.equal(r.kind, 'build', JSON.stringify({ kind: r.kind, reason: 'reason' in r ? r.reason : undefined }));
+  return r as Extract<PreciseResult, { kind: 'build' }> & Run;
+};
+const installed = (r: Run): string[] => built(r).best.build.placements.map(p => p.itemId).sort();
 
 test('every native solve is qualified: none unqualified on a plain request and on a spatial search, and a certificate follows', async () => {
   const lookup = lookupOf(gun(WEAPON, { weight: 1, ergo: 0, slots: [slot('choice', ['a', 'b'], true)] }), ['a', mod('a', { weight: 1, ergo: 10 })], ['b', mod('b', { weight: 4, ergo: 40 })]);
   const plain = await solveCount(paramsOf(lookup));
-  assert.equal(plain.kind === 'ineligible' ? 0 : plain.telemetry.unqualifiedSolves, 0);
+  assert.equal(plain.telemetry.unqualifiedSolves, 0);
   assert.equal(built(plain).certified, true);
   const spatial = await solveCount(paramsOf(lookup, { useTrueErgo: true }));
   assert.ok(built(spatial).telemetry.nativeSolves >= 2);
@@ -44,14 +50,16 @@ test('a filtered coefficient: the verified build is published, the bound and the
   );
   const run = await solveCount(paramsOf(lookup, { recoilWeight: 1e7 }));
   const { certified, telemetry, bounds, best } = built(run);
-  assert.deepEqual(installed(run), ['b'], 'HiGHS solved a different model: it sees `a` as worthless');
-  assert.ok(Math.abs(best.score - 0.5) < 1e-12);
-  assert.equal(certified, false, 'a naive pipeline would certify b; the exact optimum is a, 1.0');
-  assert.equal(telemetry.unqualifiedSolves, 1);
+  // HiGHS solved a different model: without the coefficient `a` buys nothing and `rec_mod` is free within its domain, so its "optimum" (about 1.0) installs
+  // nothing; the published build is the verified empty one (score 0), and it is not called optimal (the exact optimum is `a`, 1.0)
+  assert.deepEqual(installed(run), []);
+  assert.ok(Math.abs(best.score) < 1e-12);
+  assert.equal(certified, false, 'a naive pipeline would certify it; the exact optimum is a, 1.0');
+  assert.ok(telemetry.unqualifiedSolves >= 1, 'the relaxed-edge try and the integer fallback read the same filtered coefficient');
   assert.ok(telemetry.unqualifiedReasons.some(r => /different model/.test(r)), telemetry.unqualifiedReasons.join(' | '));
   assert.equal(bounds.upper, null);
   assert.equal(bounds.gap, null);
-  assert.ok(bounds.lower !== null && Math.abs(bounds.lower - 0.5) < 1e-12);
+  assert.ok(bounds.lower !== null && Math.abs(bounds.lower) < 1e-12);
 });
 
 test('an infeasibility verdict from a solve whose parsed model differs from the text is not emptiness; with an honest solver the request is proved empty', async () => {
@@ -66,10 +74,11 @@ test('an infeasibility verdict from a solve whose parsed model differs from the 
   };
   const verdict = await solveCount(paramsOf(lookup, { maxPrice: 10 }), { solve: tampered });
   assert.equal(verdict.kind, 'incomplete');
-  assert.equal(verdict.kind === 'incomplete' && verdict.telemetry.confirmedInfeasible, 0);
+  assert.equal(verdict.telemetry.confirmedInfeasible, 0);
   const honest = await solveCount(paramsOf(lookup, { maxPrice: 10 }));
   assert.equal(honest.kind, 'empty');
-  assert.equal(honest.kind === 'empty' && honest.telemetry.confirmedInfeasible, 1);
+  assert.equal(honest.telemetry.confirmedInfeasible, 1);
+  assert.equal(honest.telemetry.secondOpinions, 1, 'the infeasibility was confirmed by a second seed');
   const blind: SolveFn = async (lp, options) => nativeSolve(lp, options);
   assert.equal((await solveCount(paramsOf(lookup, { maxPrice: 10 }), { solve: blind })).kind, 'incomplete', 'no readback, no emptiness');
 });
@@ -83,13 +92,16 @@ const priceTie = () => lookupOf(
 
 test('a wide Tchebycheff price normalization is rescaled by an exact power of two and certified: the cheaper part wins by the 4.5e-8 the naive model could not see', async () => {
   const ideal = { zE: 100, nadE: 0, zR: 0, nadR: 0, zP: 0, nadP: 1e8 };
-  const run = await solveCount(paramsOf(priceTie(), { priceWeight: 1, useTchebycheff: true, idealPoint: ideal }));
-  const { certified, best, telemetry, model, bounds } = built(run);
+  const params = paramsOf(priceTie(), { priceWeight: 1, useTchebycheff: true, idealPoint: ideal });
+  const run = await solveCount(params);
+  const { certified, best, telemetry, bounds } = built(run);
   assert.deepEqual(installed(run), ['a']);
   assert.equal(certified, true);
   assert.equal(telemetry.unqualifiedSolves, 0, 'HiGHS kept every coefficient');
   assert.ok(bounds.gap !== null && bounds.gap <= 1e-9);
-  assert.ok(model !== null && model.proof.objective !== null && model.proof.objective.axisScales.some(s => s.exponent > 0), 'the price axis is read through a power-of-two scale');
+  const blueprint = preparePhysicalWeapon(params.itemLookup, WEAPON);
+  const model = specializeCount(blueprint, prepareSubproblemDomain(blueprint, params.itemLookup, params), params);
+  assert.ok(model.proof.objective !== null && model.proof.objective.axisScales.some(s => s.exponent > 0), 'the price axis is read through a power-of-two scale');
   const expected = 0.01 * (50 / 200 - 5100 / 2e8) - Math.max((100 - 50) / 200, 5100 / 2e8);
   assert.ok(Math.abs(best.score - expected) < 1e-15, `${best.score} vs ${expected}`);
 });

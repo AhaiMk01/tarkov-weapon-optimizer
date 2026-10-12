@@ -51,16 +51,17 @@ test('a filtered coefficient: the verified build is published, the bound and the
   );
   const result = await solvePrecise({ params: paramsOf(lookup, { recoilWeight: 1e7 }), deadline: FAR() });
   const { certified, reason, summary, best } = built(result);
-  // HiGHS solved a different model (it sees `a` as worthless), so what it calls optimal is `b`: a verified build, but NOT a proved optimum
-  assert.deepEqual(installed(result), ['b']);
-  assert.ok(Math.abs(best.score - 0.5) < 1e-12);
-  assert.equal(certified, false, 'a naive pipeline would certify b as optimal; the exact optimum is a, 1.0');
+  // HiGHS solved a different model: without the coefficient `a` buys nothing and the count model's `rec_mod` is free within its domain, so what it calls
+  // optimal (about 1.0) installs nothing: the verified empty build (score 0) is published, but NOT as a proved optimum
+  assert.deepEqual(installed(result), []);
+  assert.ok(Math.abs(best.score) < 1e-12);
+  assert.equal(certified, false, 'a naive pipeline would certify it as optimal; the exact optimum is a, 1.0');
   assert.equal(reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
-  assert.equal(summary.telemetry.unqualifiedSolves, 1);
+  assert.ok(summary.telemetry.unqualifiedSolves >= 1, 'the relaxed-edge try and the integer fallback read the same filtered coefficient');
   assert.ok(summary.telemetry.unqualifiedReasons.some(r => /different model/.test(r)), summary.telemetry.unqualifiedReasons.join(' | '));
   assert.equal(summary.bounds.upper, null, 'an unknown upper bound is null on the wire, never zero or infinite');
   assert.equal(summary.bounds.gap, null);
-  assert.ok(summary.bounds.lower !== null && Math.abs(summary.bounds.lower - 0.5) < 1e-12, 'the lower bound is the downward enclosure of the verified build');
+  assert.ok(summary.bounds.lower !== null && Math.abs(summary.bounds.lower) < 1e-12, 'the lower bound is the downward enclosure of the verified build');
   assert.equal(summary.upperBound, Infinity);
   // The native search of the one exact node ran to Optimal and only its PROOF was withheld: the executed search finished (ADR 0013 section 6, "a completed
   // search followed by failed validation/proof qualification remains optimal"), whatever the certificate says.

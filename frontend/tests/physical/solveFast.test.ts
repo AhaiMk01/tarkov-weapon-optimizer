@@ -12,6 +12,7 @@ import type { FastResult } from '../../src/solver/physical/solveFast';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { barter, flea, gun, gunWith, lookupOf, mod, modWith, slot, trader, WEAPON } from './lpFixtures';
+import { overfillEdges } from './tamper';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
   weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup),
@@ -291,47 +292,55 @@ test('a deadline that has passed is incomplete with the time-limit reason', asyn
 // ---------------------------------------------------------------------------------------------------------------------------
 
 /**
- * A cyclic template graph with a count point that is no physical tree. A and B each fit a root slot and each can host the other (below the root
- * neither repeats an ancestor), so the active template graph has the cycle A <-> B. The mandatory part M blocks the root slot `s1`, so B can only be
- * installed below A. The count model may then install A twice through the chain root -> A -> B -> A (every count row holds), which the validator
- * rejects because the second A repeats its ancestor; that chain (A, B, A, M = 50) is the model optimum. The best physical build is A with B below it
- * and M (30).
+ * One slot, two candidates: A (20) and B (10). The tampered solver (`overfillEdges`) answers with both edges at 1, a count point the decoder cannot
+ * place (two children in a slot of one copy): it is rejected and cut out, and the next point is the real optimum A. Until Phase 2.10 this path was
+ * reached with a cyclic part graph, which is now refused before any solve (owner decision 2d as amended).
  */
-const cyclic = () => lookupOf(
-  gun(WEAPON, { slots: [slot('req', ['M'], true), slot('s0', ['A']), slot('s1', ['B'])] }),
-  ['M', mod('M', { conflictsSlots: ['s1'] })],
-  ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
-  ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
+const rejectable = () => lookupOf(
+  gun(WEAPON, { slots: [slot('s0', ['A', 'B'])] }),
+  ['A', mod('A', { ergo: 20 })],
+  ['B', mod('B', { ergo: 10 })],
 );
 
-test('approximation: the Fast optimum fails validation, the cut loop removes it, and the next best point is a valid build', async () => {
-  const params = paramsOf(cyclic());
-  const result = await solveFast({ params, deadline: FAR() });
-  assert.equal(result.summary.acyclic, false);
-  assert.ok(result.summary.rejectedPoints >= 1, 'the first model optimum (A, B, A, M) is not a physical build');
+test('rejection: a point the decoder cannot place is cut out, and the next best point is a valid build, the exact optimum', async () => {
+  const params = paramsOf(rejectable());
+  const result = await solveFast({ params, deadline: FAR(), solve: overfillEdges(1), edgeIntegrality: 'integer' });
+  assert.ok(result.summary.rejectedPoints >= 1, 'the tampered point is not a physical build');
   assert.equal(result.kind, 'build');
   assertValid(params, result);
   const exact = await solvePrecise({ params, deadline: FAR() });
   assert.equal(exact.kind, 'build');
   const optimum = exact.kind === 'build' ? exact.best.score : Number.NaN;
-  assert.equal(optimum, 30);
+  assert.equal(optimum, 20);
   assert.equal(built(result).best.score, optimum, 'the cut loop reaches the exact optimum here');
-  assert.deepEqual(installed(result), ['A', 'B', 'M']);
+  assert.deepEqual(installed(result), ['A']);
 });
 
-test('when every candidate is rejected the request is incomplete, never a guess: a solver stuck on one invalid point stops at the rejection limit', async () => {
-  const params = paramsOf(cyclic());
-  // A solver that ignores the cuts and keeps returning the first model optimum (the invalid chain).
-  let first: Awaited<ReturnType<SolveFn>> | null = null;
-  const stuck: SolveFn = async (lp, options) => {
-    if (first === null) first = await nativeSolve(lp, options);
-    return first;
-  };
-  const result = await solveFast({ params, deadline: FAR(), solve: stuck, maxRejections: 3 });
+test('when every candidate is rejected the request is incomplete, never a guess: a solver stuck on invalid points stops at the rejection limit', async () => {
+  const params = paramsOf(rejectable());
+  const result = await solveFast({ params, deadline: FAR(), solve: overfillEdges(), maxRejections: 3, edgeIntegrality: 'integer' });
   assert.equal(result.kind, 'incomplete');
   assert.equal(result.kind === 'incomplete' && result.reason, 'Independent build validation failed');
   assert.equal(result.summary.rejectedPoints, 3);
   assert.ok(MAX_FAST_REJECTIONS >= 16);
+});
+
+test('a gun whose part graph has a cycle is refused before any solve, Fast and Precise alike: unsupported data, no build, no proof', async () => {
+  const cyclic = lookupOf(
+    gun(WEAPON, { slots: [slot('s0', ['A'])] }),
+    ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
+    ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
+  );
+  const params = paramsOf(cyclic);
+  const fast = await solveFast({ params, deadline: FAR() });
+  const precise = await solvePrecise({ params, deadline: FAR() });
+  for (const result of [fast, precise]) {
+    assert.equal(result.kind, 'incomplete');
+    assert.equal(result.outcome.reason, 'Unsupported data: cyclic part graph');
+    assert.equal(result.outcome.physical_certificate, 'none');
+  }
+  assert.equal(fast.summary.nativeSolves, 0);
+  assert.equal(precise.summary.telemetry.nativeSolves, 0);
 });
 
 test('a limit stop with a primal solution that the validator accepts is a build with the stop reason, not an optimum', async () => {

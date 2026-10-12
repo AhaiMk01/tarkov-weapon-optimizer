@@ -179,7 +179,7 @@ test('a native solve is never started with no time left, and a positive allowanc
   // 0.4 ms remain: positive time, so the solve starts, with the minimum allowance of 0.001 s.
   const guard = drivenGuard({ deadline: 0.4 });
   await solvePrecise({ params: paramsOf(lookup), guard, solve: spy });
-  assert.deepEqual(limits, [0.001]);
+  assert.ok(limits.length >= 1 && limits.every(limit => limit === 0.001), `every solve gets the minimum allowance: ${limits.join(', ')}`);
 });
 
 test('a native exception is a typed SolverError carrying the completion metadata captured before it, never a result', async () => {
@@ -187,7 +187,7 @@ test('a native exception is a typed SolverError carrying the completion metadata
   let calls = 0;
   const failing: SolveFn = (text, options, extras) => {
     calls++;
-    if (calls === 2) throw new SolverError('solve', new Error('wasm trap'));
+    if (calls === 3) throw new SolverError('solve', new Error('wasm trap')); // node 1 took two solves (its verdict and the second opinion)
     return nativeSolve(text, options, extras);
   };
   await assert.rejects(

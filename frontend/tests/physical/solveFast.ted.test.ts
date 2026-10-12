@@ -14,6 +14,7 @@ import type { FastResult } from '../../src/solver/physical/solveFast';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { gun, lookupOf, mod, slot, WEAPON } from './lpFixtures';
+import { overfillEdges } from './tamper';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
   weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup),
@@ -254,23 +255,17 @@ test('a presolved solve gives no bound: an inexact node is never fathomed on it,
 });
 
 test('rejected points are cut per node and a solver that keeps returning them ends in the validation reason, with the TED node loop', async () => {
-  const cyclic = lookupOf(
-    gun(WEAPON, { weight: 1, slots: [slot('req', ['M'], true), slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['M', mod('M', { conflictsSlots: ['s1'], weight: 0.5 })],
-    ['A', mod('A', { ergo: 20, weight: 0.5, slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { ergo: 10, weight: 0.5, slots: [slot('toA', ['A'])] })],
+  // One slot, two candidates; the tampered solver answers with both edges at 1, a point the decoder cannot place (tamper.ts).
+  const rejectable = lookupOf(
+    gun(WEAPON, { weight: 1, slots: [slot('s0', ['A', 'B'])] }),
+    ['A', mod('A', { ergo: 20, weight: 0.5 })],
+    ['B', mod('B', { ergo: 10, weight: 0.5 })],
   );
-  const params = paramsOf(cyclic, { useTrueErgo: true, ergoWeight: 10 });
-  const ok = await solveFast({ params, deadline: FAR() });
-  assert.equal(ok.summary.acyclic, false);
-  assert.ok(ok.summary.rejectedPoints >= 1, 'the model optimum (A, B, A, M) is no physical tree');
+  const params = paramsOf(rejectable, { useTrueErgo: true, ergoWeight: 10 });
+  const ok = await solveFast({ params, deadline: FAR(), solve: overfillEdges(1), edgeIntegrality: 'integer' });
+  assert.ok(ok.summary.rejectedPoints >= 1, 'the tampered point is no physical tree');
   assertValid(params, ok);
-  let first: NativeResult | null = null;
-  const stuck: SolveFn = async (lp, options, extras) => {
-    if (first === null) first = await nativeSolve(lp, options, extras);
-    return first;
-  };
-  const rejected = await solveFast({ params, deadline: FAR(), solve: stuck, maxRejections: 2 });
+  const rejected = await solveFast({ params, deadline: FAR(), solve: overfillEdges(), maxRejections: 2, edgeIntegrality: 'integer' });
   assert.equal(rejected.kind, 'incomplete');
   assert.equal(rejected.outcome.reason, PUBLIC_REASONS.independentBuildValidationFailed);
   assert.equal(rejected.summary.rejectedPoints, 2);

@@ -28,6 +28,11 @@ export type PhysicalModelErrorCode =
   | 'FOREIGN_DOMAIN'
   /** The masks of a domain contradict each other (an active owner with a required slot nobody can fill). An internal fault. */
   | 'DOMAIN_INCONSISTENT'
+  /**
+   * The part graph reachable from the receiver has a cycle (owner decision 2d as amended): unsupported data, refused before any solve. Thrown by the
+   * model builders as an internal guard; the operations refuse such a gun with a public reason before they get there.
+   */
+  | 'CYCLIC_PART_GRAPH'
   /** A solution vector cannot be read as a physical build: a missing or non-integral decision column, an unrooted placement. */
   | 'DECODE_FAILED';
 

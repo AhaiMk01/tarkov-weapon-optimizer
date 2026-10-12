@@ -16,6 +16,7 @@ import type { FastResult } from '../../src/solver/physical/solveFast';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { PreciseResult } from '../../src/solver/physical/solvePrecise';
 import { gun, lookupOf, mod, slot, WEAPON } from './lpFixtures';
+import { overfillEdges } from './tamper';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
   weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup),
@@ -156,7 +157,8 @@ test('Precise: candidates the validator keeps rejecting end in the validation re
     if (first === null) first = await nativeSolve(lp, options, extras);
     return first;
   };
-  const result = await solvePrecise({ params: paramsOf(lookup, { maxWeight: 3 }), deadline: FAR(), solve: stuck });
+  // The integer cut loop (no relaxed-edge try: a stuck answer to the relaxed text would not even read back as the integer text).
+  const result = await solvePrecise({ params: paramsOf(lookup, { maxWeight: 3 }), deadline: FAR(), solve: stuck, edgeIntegrality: 'integer' });
   assert.equal(result.kind, 'incomplete');
   assert.equal(result.outcome.status, 'incomplete');
   assert.equal(result.outcome.physical_certificate, 'none');
@@ -244,31 +246,26 @@ test('Fast: a deadline that has passed starts nothing (limit); candidates the va
   assert.equal(late.outcome.reason, PUBLIC_REASONS.timeLimitReached);
   assert.equal(late.outcome.termination, 'limit');
   assert.equal(late.outcome.physical_certificate, 'none');
-  // A cyclic graph whose model optimum is no physical tree, with a solver that ignores the cuts: the rejection limit ends the loop.
-  const cyclic = lookupOf(
-    gun(WEAPON, { slots: [slot('req', ['M'], true), slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['M', mod('M', { conflictsSlots: ['s1'] })],
-    ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
+  // A solver whose every answer is a point the decoder cannot place (tamper.ts): the rejection limit ends the loop.
+  const rejectable = lookupOf(
+    gun(WEAPON, { slots: [slot('s0', ['A', 'B'])] }),
+    ['A', mod('A', { ergo: 20 })],
+    ['B', mod('B', { ergo: 10 })],
   );
-  let first: NativeResult | null = null;
-  const stuck: SolveFn = async (lp, options) => {
-    if (first === null) first = await nativeSolve(lp, options);
-    return first;
-  };
-  const rejected = await solveFast({ params: fastParams(cyclic), deadline: FAR(), solve: stuck, maxRejections: 2 });
+  const rejected = await solveFast({ params: fastParams(rejectable), deadline: FAR(), solve: overfillEdges(), maxRejections: 2 });
   assert.equal(rejected.kind, 'incomplete');
   assert.equal(rejected.outcome.reason, PUBLIC_REASONS.independentBuildValidationFailed);
   assert.equal(rejected.outcome.termination, 'optimal', 'the last native solve was Optimal: a completed search followed by failed validation');
   // The same rejection coinciding with the deadline: the failure outranks the clock, and the cut model was never solved (unfinished).
   let t = 0;
   const clock = (): number => t;
-  const ticking: SolveFn = async (lp, options) => {
-    if (first === null) first = await nativeSolve(lp, options);
+  const overfill = overfillEdges();
+  const ticking: SolveFn = async (lp, options, extras) => {
+    const answer = await overfill(lp, options, extras);
     t += 1_000;
-    return first;
+    return answer;
   };
-  const coincident = await solveFast({ params: fastParams(cyclic), deadline: 500, now: clock, solve: ticking });
+  const coincident = await solveFast({ params: fastParams(rejectable), deadline: 500, now: clock, solve: ticking });
   assert.equal(coincident.kind, 'incomplete');
   assert.equal(coincident.outcome.reason, PUBLIC_REASONS.independentBuildValidationFailed);
   assert.equal(coincident.outcome.termination, 'limit');

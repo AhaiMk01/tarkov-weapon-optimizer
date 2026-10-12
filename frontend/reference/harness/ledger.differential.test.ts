@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEDGER } from '../ledger/index';
 import { gradeCase, probeNativeLoader, type GradedCase } from './compare.differential';
-import { compareToBaseline, formatSummary, parseBaseline, serializeBaseline, summarize, toBaseline } from './scoreboard';
+import { compareToBaseline, formatSummary, OWNER_APPROVED_CERTIFICATE_LOSSES, OWNER_APPROVED_REFUSALS, parseBaseline, serializeBaseline, summarize, toBaseline } from './scoreboard';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const baselinePath = join(here, 'baseline.json');
@@ -81,12 +81,29 @@ test('ratchet: every newly passing dimension is recorded in baseline.json', () =
   );
 });
 
-test('every ledger case the oracle has an optimum for is certified `optimal` on Precise at its case tolerance: the proof frame (Phase 2.5) withholds nothing', () => {
-  const withOptimum = board.filter(g => g.precise.scoreOptimal.verdict !== 'n/a');
-  assert.ok(withOptimum.length >= 130, `${withOptimum.length} cases have an oracle optimum`);
+test('every ledger case the oracle has an optimum for is certified `optimal` on Precise at its case tolerance, except the owner-approved scope', () => {
+  // Owner-approved scope (README.md): the cases refused as unsupported data (decision 2d as amended) and the certificates lost to the 1e-7 integrality
+  // tolerance at the 1e-9 case tolerance (decision 5b), which still return the validated optimum as `feasible`.
+  const withOptimum = board.filter(g => g.precise.scoreOptimal.verdict !== 'n/a' && g.precise.scoreOptimal.verdict !== 'refused');
+  assert.ok(withOptimum.length >= 125, `${withOptimum.length} cases have an oracle optimum`);
   assert.deepEqual(
-    withOptimum.filter(g => g.observed.precise !== 'optimal').map(g => `${g.id}: ${g.observed.precise}`),
+    withOptimum.filter(g => g.observed.precise !== 'optimal' && !Object.hasOwn(OWNER_APPROVED_CERTIFICATE_LOSSES, g.id)).map(g => `${g.id}: ${g.observed.precise}`),
     [],
     'a case lost its certificate: the proved allowances are larger than the case tolerance, or a solve was unqualified',
   );
+  for (const id of Object.keys(OWNER_APPROVED_CERTIFICATE_LOSSES)) {
+    const graded = board.find(g => g.id === id);
+    assert.ok(graded !== undefined, id);
+    assert.ok(graded.observed.precise === 'feasible' || graded.observed.precise === 'optimal', `${id}: ${graded.observed.precise} (an approved loss still returns the validated optimum)`);
+    assert.equal(graded.precise.scoreOptimal.verdict, 'pass', `${id}: the returned build is the exact optimum`);
+  }
+});
+
+test('the cases refused as unsupported data are exactly the owner-approved cyclic cases, refused in both modes; no other case is refused', () => {
+  const refused = board.filter(g => [g.precise, g.fast].some(r => Object.values(r).some(d => d.verdict === 'refused'))).map(g => g.id);
+  assert.deepEqual(refused, Object.keys(OWNER_APPROVED_REFUSALS));
+  for (const id of refused) {
+    const graded = board.find(g => g.id === id) as GradedCase;
+    assert.deepEqual([graded.observed.precise, graded.observed.fast], ['incomplete', 'incomplete'], id);
+  }
 });

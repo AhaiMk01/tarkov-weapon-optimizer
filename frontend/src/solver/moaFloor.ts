@@ -41,7 +41,7 @@ import { outwardGridCeil, outwardSafeCeil, submissionIsSafe } from './physical/d
 import { ratFromString, ratRoundUp } from './physical/rational';
 import { PUBLIC_REASONS } from './physical/reasons';
 import type { SolveFn } from './physical/nativeSolve';
-import { solvePrecise } from './physical/solvePrecise';
+import { partGraphRefusal, solvePrecise } from './physical/solvePrecise';
 import type { PreciseResult } from './physical/solvePrecise';
 import { SolverError } from './native/errors';
 import { floorEnvelope } from './operationEnvelopes';
@@ -319,8 +319,8 @@ export function preciseFloorQuery(request: MoaFloorRequest, solve?: SolveFn): Fl
 // The search
 // ---------------------------------------------------------------------------------------------
 
-function inputEnvelope(started: number, guard: RuntimeGuard): MoaFloorRun {
-  return { response: floorEnvelope('invalid_owned_items', { elapsedMs: guard.now() - started }), trace: [], trials: 0, ended: 'invalid_input' };
+function inputEnvelope(started: number, guard: RuntimeGuard, stop: 'invalid_owned_items' | 'unsupported_part_graph' = 'invalid_owned_items'): MoaFloorRun {
+  return { response: floorEnvelope(stop, { elapsedMs: guard.now() - started }), trace: [], trials: 0, ended: 'invalid_input' };
 }
 
 /** The floor search with its trace. See the file header for the algorithm; `runMoaFloor` returns the response alone. */
@@ -328,6 +328,8 @@ export async function runMoaFloorDetailed(request: MoaFloorRequest, guard: Runti
   const started = guard.now();
   const owned = inspectOwnedItems(request.ownedItems);
   if (!owned.ok) return inputEnvelope(started, guard);
+  // A gun whose part graph has a cycle is unsupported data (owner decision 2d as amended): no seed, no trial, no witness.
+  if (partGraphRefusal(request) !== null) return inputEnvelope(started, guard, 'unsupported_part_graph');
   const rawQuery = deps.query ?? preciseFloorQuery(request, deps.solve);
   const precisionRequest: PrecisionRequest = request.precisionRequest ?? 'precise';
   const trace: FloorTraceEntry[] = [];

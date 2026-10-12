@@ -44,7 +44,7 @@ test('ledger: every case with an acyclic active graph equals the oracle on the c
 });
 
 test('random acyclic worlds (lpFuzz): projections, objective and emptiness equal the oracle on the certified count model', { timeout: 120 * 60_000 }, async t => {
-  const cases = size(40, 1500);
+  const cases = size(60, 1500);
   const tally = newTally();
   const failures: string[] = [];
   for (let k = 0; k < cases; k++) {
@@ -57,7 +57,8 @@ test('random acyclic worlds (lpFuzz): projections, objective and emptiness equal
   }
   summary(t, `lpFuzz (${cases} seeds from ${20261004 + SEED})`, tally);
   assert.deepEqual(failures, [], `${failures.length} random case(s) differ`);
-  assert.ok(tally.gated >= cases / 2, `${tally.gated} of ${cases} cases were gated`);
+  // lpFuzz often draws a part graph with a cycle (a back edge), which is now refused as unsupported data (decision 2d as amended) and skipped here.
+  assert.ok(tally.gated >= cases / 3, `${tally.gated} of ${cases} cases were gated`);
 });
 
 const PROFILES: { name: string; options: AdversarialOptions; cases: [number, number] }[] = [

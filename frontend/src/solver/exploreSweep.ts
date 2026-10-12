@@ -26,7 +26,7 @@
 
 import type { ExplorePoint, ExploreResponse, ExploreSnapshot, ExploreStepOutcome, OptimizationMetadata, OptimizeResponse } from '../api/client';
 import { PUBLIC_REASONS } from './physical/reasons';
-import { resolveTolerance } from './physical/solvePrecise';
+import { partGraphRefusal, resolveTolerance } from './physical/solvePrecise';
 import { guardStop } from './runtimeGuard';
 import type { RuntimeGuard } from './runtimeGuard';
 import type { MoaQualification, PrecisionRequest, PrecisionResolved, SolveParams } from './types';
@@ -365,6 +365,9 @@ export async function runExplore(
 ): Promise<ExploreResponse> {
   const started = guard.now();
   if (scheduleProblem(schedule) !== null) return envelope(request, started, guard, PUBLIC_REASONS.invalidExploreSchedule);
+  // A gun whose part graph has a cycle is unsupported data (owner decision 2d as amended): refused before any target is solved.
+  const refusal = partGraphRefusal(request.base);
+  if (refusal !== null) return envelope(request, started, guard, refusal);
 
   const targets: SweepTarget[] = [...schedule.targets];
   const settled: SettledTarget[] = [];

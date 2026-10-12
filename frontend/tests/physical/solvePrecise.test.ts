@@ -42,14 +42,16 @@ const build = (r: PreciseResult) => {
 };
 const installed = (r: PreciseResult): string[] => build(r).best.build.placements.map(p => p.itemId).sort();
 
-test('a plain request is one native solve, a verified build and a certificate; the score and the statistics are the exact recomputation', async () => {
+test('a plain request is one native solve and its second opinion (decision 5a), a verified build and a certificate; the score and the statistics are the exact recomputation', async () => {
   const lookup = choice([{ id: 'a', weight: 2, ergo: 10 }, { id: 'b', weight: 2, ergo: 25 }]);
   const { solve, calls } = counting();
   const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve });
   assert.deepEqual(installed(result), ['b']);
   const { best, certified, summary } = build(result);
   assert.equal(certified, true);
-  assert.equal(calls.length, 1);
+  assert.equal(calls.length, 2, 'the first solve and the second opinion on the same text');
+  assert.equal(summary.telemetry.secondOpinions, 1);
+  assert.equal(summary.telemetry.disagreements, 0);
   assert.equal(summary.nodes, 1);
   assert.equal(summary.spatial, false);
   assert.equal(summary.completed, true);
@@ -76,14 +78,15 @@ test('a request the model text proves false is empty with no native call: an inc
   assert.equal(result.summary.telemetry.provedEmptyNodes, 1);
 });
 
-test('every solve of the physical models runs with presolve off, so an infeasible model is empty on that one solve', async () => {
+test('every solve of the physical models runs with presolve off, so an infeasible model is empty on that solve and its second opinion', async () => {
   const lookup = choice([{ id: 'a', weight: 2, ergo: 10 }]);
   const { solve, calls } = counting();
   const result = await solvePrecise({ params: paramsOf(lookup, { maxPrice: 10 }), deadline: FAR(), solve });
   assert.equal(result.kind, 'empty');
   assert.equal(result.kind === 'empty' && result.source, 'native');
-  assert.deepEqual(calls, [{ presolveOff: true }]);
+  assert.deepEqual(calls, [{ presolveOff: true }, { presolveOff: true }]);
   assert.equal(result.summary.telemetry.confirmedInfeasible, 1);
+  assert.equal(result.summary.telemetry.secondOpinions, 1);
   assert.equal(result.summary.completed, true);
   const tedCalls = counting();
   const ted = lookupOf(gun(WEAPON, { weight: 1, slots: [slot('choice', ['a', 'b'], true)] }), ['a', mod('a', { weight: 1, ergo: 10 })], ['b', mod('b', { weight: 4, ergo: 40 })]);
@@ -91,13 +94,13 @@ test('every solve of the physical models runs with presolve off, so an infeasibl
   assert.ok(tedCalls.calls.length >= 2 && tedCalls.calls.every(c => c.presolveOff), 'every spatial node too');
 });
 
-test('with presolve on, an infeasible model is empty only after the presolve-off confirmation: two solves, the second with presolve off', async () => {
+test('with presolve on, an infeasible model is empty only after the presolve-off confirmation: two solves, the second with presolve off, for the first verdict and its second opinion', async () => {
   const lookup = choice([{ id: 'a', weight: 2, ergo: 10 }]);
   const { solve, calls } = counting();
   const result = await solvePrecise({ params: paramsOf(lookup, { maxPrice: 10 }), deadline: FAR(), solve, presolve: 'choose' });
   assert.equal(result.kind, 'empty');
   assert.equal(result.kind === 'empty' && result.source, 'native');
-  assert.deepEqual(calls, [{ presolveOff: false }, { presolveOff: true }]);
+  assert.deepEqual(calls, [{ presolveOff: false }, { presolveOff: true }, { presolveOff: false }, { presolveOff: true }]);
   assert.equal(result.summary.telemetry.confirmedInfeasible, 1);
 });
 
@@ -112,8 +115,8 @@ test('a false Infeasible from presolve is never used: the presolve-off solve fin
   const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve, presolve: 'choose' });
   assert.deepEqual(installed(result), ['b']);
   assert.equal(build(result).certified, true);
-  assert.equal(calls, 2);
-  assert.equal(result.summary.telemetry.presolveRescues, 1);
+  assert.equal(calls, 4, 'the presolved solve and its rescue, for the first verdict and for its second opinion');
+  assert.equal(result.summary.telemetry.presolveRescues, 2);
 });
 
 test('an infeasibility that cannot be confirmed leaves the request incomplete, never infeasible', async () => {

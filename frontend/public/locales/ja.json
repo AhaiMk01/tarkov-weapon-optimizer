@@ -174,6 +174,7 @@
     "cancelled_none": "キャンセルしました。",
     "invalid_owned": "所持品リストが無効です — 修正してもう一度お試しください。",
     "invalid_schedule": "探索の設定が無効です — 設定を変更してもう一度お試しください。",
+    "unsupported_data": "この武器のパーツデータには対応していないため、ビルドを作成できません。",
     "queue_timeout": "リクエストの待機時間が長すぎたため破棄されました — もう一度お試しください。",
     "error": "問題が発生しました — もう一度お試しください。"
   },
@@ -416,6 +417,7 @@
     "fastProvisionalMoaModelInfeasible": "近似（高速）モデルでは、MOA 上限の下で構成が見つかりませんでした。存在しないことの証明ではありません。精密モードを試すか、MOA 上限を緩めてください。",
     "invalidOwnedItems": "所持品リストが無効なため、計算は行われませんでした。",
     "invalidExploreSchedule": "探索スケジュールが空または無効なため、計算は行われませんでした。",
+    "unsupportedCyclicPartGraph": "この武器のデータには、互いに取り付け合ってループになるパーツがあります。オプティマイザーはこのデータに対応していないため、計算は行われませんでした。",
     "queueTimeoutBeforeDispatch": "リクエストが待機中に時間切れになったため、計算は行われませんでした。もう一度お試しください。",
     "independentBuildValidationFailed": "ソルバーが出した構成は独立した検証に通らなかったため、表示されません。",
     "requiredProofPrerequisiteUnavailable": "証明に必要な前提が得られなかったため、証明済みとは主張しません。",

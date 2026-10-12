@@ -135,3 +135,28 @@ githash, glue and wasm SHA-256), and the ledger test prints that identity with t
   for to come back `optimal` (certified) on Precise at its case tolerance (1e-9): the proved allowances (exact construction errors, `proof.ts`) are
   orders of magnitude below it, and the certificate is decided on the exact gap, so an objective of 9e6 (`F05-expensive-legal-offer-is-used`, one ulp
   1.9e-9) still certifies.
+
+## Owner-approved scope (Phase 2.10, 2026-10-12)
+
+Two owner decisions narrow what production must do on a few ledger cases. Neither edits a ledger expectation or the oracle: the oracle still enumerates
+and solves every case, and the harness records the owner's scope next to it, in `scoreboard.ts` (pure data) and `baseline.json`.
+
+* **Cyclic part graphs are refused as unsupported data** (owner decision 2d as amended, 2026-10-12, docs/stage2-plan.md). A gun whose part graph
+  reachable from the receiver has a cycle is refused in every mode before any solve, with `Unsupported data: cyclic part graph`, no build and nothing
+  resolved. Exactly five ledger cases have such a graph, the ones the decision names: `F03-self-loop`, `F03-ancestor-loop-with-sibling-repetition`,
+  `F03-memoization-context-ancestor`, `F03-memoization-context-required-slot` and `F10-cycle-behind-deactivated-owner` (measured: no other case trips
+  the check; `F10-no-disconnected-assembly`, whose loop the receiver cannot reach, keeps its certified optimum). They are listed in
+  `OWNER_APPROVED_REFUSALS`. `gradeOutcome` grades such a case `refused` on every applicable dimension, in both modes, only when production returns
+  exactly that refusal; anything else is graded as usual, so a change of scope shows in the ratchet. `refused` is outside every pass/applicable count of
+  the summary, and the baseline records it as `"refused"` (a fifth verdict, by hand: the update path refuses to write over cells that passed before).
+* **Integrality tolerance 1e-7** (owner decision 5b, 2026-10-06). Precise always solves with a native integrality tolerance of 1e-7 (primal and dual
+  feasibility 1e-9). At the ledger's runtime tolerance of 1e-9 seven cases keep their exact, validated optimum but lose the certificate (`feasible`,
+  `Required proof prerequisite unavailable`): six with a proved gap of about 1.0e-7 (`F01-self-copy-cap`, `F04-recoil-final-cap-sum`,
+  `F04-max-price-cap-boundary`, `F04-max-weight-cap-boundary`, `F08-optional-barrel-fallback`, `F12-near-cap-weight-one-ulp-over-cap`) and one,
+  `F04-near-cap-min-ergonomics-gap-2e-20`, whose native dual bound came out 1.1e-5 BELOW its own verified build (an integer column read 1 + 4.4e-8):
+  the bound-shortfall guard withheld it. With the integrality tolerance at 1e-9 all seven certify (measured on the same code), so the losses are this
+  decision's and nothing else's. They are listed in `OWNER_APPROVED_CERTIFICATE_LOSSES`; only `precise.outcomeContract` fails for them, set by hand in
+  `baseline.json`, and the certified-optimum test exempts exactly these cases (it still requires their build to be the exact optimum).
+
+The Precise column is the count model since Phase 2.10 (the occurrence model is a test-only cross-check, `tests/physical/occurrence/`), and every
+certificate-bearing verdict has a second opinion with another random seed (owner decision 5a).

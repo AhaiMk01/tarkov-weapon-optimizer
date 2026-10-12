@@ -14,9 +14,9 @@
  * of the count model (a physical build that repeats a part is not a point of it), so it can lose a build, never invent one. Default off here.
  *
  * CERTIFIED MODE (Phase 2.10, owner decision 2e, `FastModelOptions.certified`, entry `specializeCount.ts`). The same count model, built through the proof layer, is
- * the model Precise solves on an acyclic part graph: the rows below are unchanged (they are integers and binary64 leaves), and the constructed ones are exactly
- * those of `specializeLP` (recoil caps, MOA rows, objective, gear factor, weight-penalty secant: exact rationals, outward padding, `FastModel.proof`), plus the MOA
- * larger-centre-of-impact terms that make the model state the oracle's rule. It is never single-copy, requires an acyclic template graph, and leaves the text of
+ * the model Precise solves (every supported gun has an acyclic part graph): the rows below are unchanged (they are integers and binary64 leaves), and the constructed ones are exactly
+ * those of the occurrence model `specializeLP` (test-only since decision 2d was amended: tests/physical/occurrence; recoil caps, MOA rows, objective, gear factor, weight-penalty secant: exact rationals, outward padding, `FastModel.proof`), plus the MOA
+ * larger-centre-of-impact terms that make the model state the oracle's rule. It is never single-copy, and it leaves the text of
  * the plain Fast model (this file's default) byte for byte as it was. See `specializeCount.ts` for what makes it exact and what a certificate rests on.
  *
  * Decision columns (all integer, finite):
@@ -24,7 +24,7 @@
  *   e_s_c       copies of template c installed directly in a slot of raw id s, over all copies of the slot's owner (binary when <= 1)
  *   base_b      the accessible base b (binary)
  * Auxiliary columns: z_t presence of a template that can repeat and takes part in a conflict or MOA row (binary, linked to n_t both ways),
- * lot_t_k whole lots bought of a non-dominated legal offer (integer), f_s_c connectivity flow on a cyclic graph (continuous), and the same
+ * lot_t_k whole lots bought of a non-dominated legal offer (integer), and the same
  * statistic, frame, clamp and objective columns as the Precise model (raw_ergo, capped_ergo, rec_mod, rec_axis, price_axis, weight, acc_total,
  * ergo_axis, tch_t, total_obj).
  *
@@ -45,14 +45,13 @@
  * `specializeLP` is substituted into the cover row (`sum size_k lot_k - n_t + sum q_b base_b >= -owned`: lots are nonnegative, so a negative
  * deficit costs nothing, which is what the surrogate's own lower bound said).
  *
- * What is approximate (and why a witness is still never trusted):
- *   1. NO ANCESTOR-REPETITION RULE. Counts cannot say "a template never recurs on one root-to-leaf path". On an acyclic template graph, which is
- *      every one of the 172 pinned guns, a template cannot be its own descendant, so the rule is vacuous there; on a cyclic graph a point can
- *      repeat a template under itself and the decoder cannot place it.
- *   2. CONNECTIVITY ONLY BY FLOW, ONLY WHERE A CYCLE EXISTS. On an acyclic graph every installed copy is rooted by induction on the topological
- *      order (a copy needs a parent copy of a template above it). On a cyclic graph a cycle of parts could hold each other with no rooted
- *      chain, so the templates on or below a cycle carry a single-commodity flow from the receiver (one unit per installed copy); the flow
- *      proves template-level reachability, not path-level legality.
+ * Acyclic part graphs only (owner decision 2d as amended, 2026-10-12). A gun whose part graph reachable from the receiver has a cycle is refused as
+ * unsupported data before any model is built (`partGraphIsAcyclic`); this builder throws `CYCLIC_PART_GRAPH` for one as an internal guard. On an acyclic
+ * graph:
+ *   1. NO ANCESTOR-REPETITION RULE is needed. Counts cannot say "a template never recurs on one root-to-leaf path", but a template cannot be its
+ *      own descendant, so the rule is vacuous.
+ *   2. ROOTEDNESS IS DERIVED. Every installed copy is rooted by induction on the topological order (a copy needs a parent copy of a template
+ *      above it), so no connectivity row is needed (the flow a cyclic graph needed is gone with the cyclic graphs).
  *   3. SLOT CONFLICTS ARE AGGREGATE. The blocked slots are all slots of a raw id across the build; this is exact (the rule is global), not an
  *      approximation, but it is stated per raw id and not per physical slot.
  * The model is a relaxation of the physical problem in placement (every physical build is a model point with the same objective), but nothing
@@ -78,7 +77,7 @@
  * the bound is the bound of the APPROXIMATE model (the rows are plain doubles, no proof frame): it orders and fathoms the search, it never certifies.
  */
 
-import type { PhysicalBlueprint } from './blueprint';
+import { partGraphIsAcyclic, type PhysicalBlueprint } from './blueprint';
 import { computeActiveBounds, type ActiveBounds } from './bounds';
 import type { AccessibleBase, SubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
@@ -213,9 +212,7 @@ export interface FastModelOptions {
    * Build the model through the proof layer, for a certificate (decision 2e, Phase 2.10): every constructed coefficient is built in exact rationals with
    * directed outward rounding (`proof.ts`), the recoil caps, the MOA rows (with the larger-centre-of-impact terms) and the objective are the rows of
    * `specializeLP`, every auxiliary column has a finite enclosed domain, and the model carries its `proof`. Multiple copies of a part are always allowed
-   * (`singleCopy` is ignored, as in the Precise model), and the template graph must be acyclic: a cyclic graph throws (the connectivity flow is a
-   * relaxation whose points need a decoder, which a certificate cannot rest on; the caller keeps the occurrence model there). Default false: the plain
-   * Fast model, whose text this option leaves untouched.
+   * (`singleCopy` is ignored, as in the Precise model). Default false: the plain Fast model, whose text this option leaves untouched.
    */
   certified?: boolean;
   /**
@@ -376,7 +373,6 @@ const edgeName = (rawIdx: number, child: number): string => `e_${rawIdx}_${child
 const baseName = (b: number): string => `base_${b}`;
 const presenceName = (t: number): string => `z_${t}`;
 const lotName = (t: number, k: number): string => `lot_${t}_${k}`;
-const flowName = (rawIdx: number, child: number): string => `f_${rawIdx}_${child}`;
 
 /** Offers that no other offer beats on both lot size and price, ascending by price with strictly increasing size (ties keep the earlier offer). */
 export function nonDominatedLots<T extends { index: number; price: number; lotSize: number }>(offers: readonly T[]): T[] {
@@ -742,32 +738,6 @@ class FastSpecializer {
       }
       this.emit(`catreq_${g}`, terms, '>=', 1, `include group ${g} [${group.join(', ')}] matches no active occurrence`);
     });
-  }
-
-  /** Single-commodity flow from the receiver over the templates on or below a cycle: one unit per installed copy, so no cycle floats free. */
-  private emitConnectivity(): void {
-    const { graph } = this;
-    if (graph.acyclic) return;
-    let capacity = 0;
-    for (let t = 1; t < graph.templateCount; t++) if (graph.region[t]) capacity += this.copies[t];
-    const incoming = new Map<number, [string, number][]>();
-    const outgoing = new Map<number, [string, number][]>();
-    for (const slot of graph.slots) {
-      for (const { child, column } of this.edgeColumns[slot.index]) {
-        if (!graph.region[child]) continue;
-        const flow = flowName(slot.rawIdx, child);
-        this.w.addColumn(flow, 'continuous', 0, capacity);
-        this.emit(`fl_${slot.index}_${child}`, [[flow, 1], [column, -capacity]], '<=', 0, `flow link ${flow}`);
-        (incoming.get(child) ?? incoming.set(child, []).get(child)!).push([flow, 1]);
-        if (graph.region[slot.owner]) (outgoing.get(slot.owner) ?? outgoing.set(slot.owner, []).get(slot.owner)!).push([flow, -1]);
-      }
-    }
-    for (let t = 1; t < graph.templateCount; t++) {
-      if (!graph.region[t]) continue;
-      // inflow - outflow = n_t: every copy absorbs one unit that came from the receiver.
-      this.emit(`fc_${t}`, [...(incoming.get(t) ?? []), ...(outgoing.get(t) ?? []), [countName(t), -1]], '=', 0, `flow conservation of ${this.bp.templateIds[t]}`);
-    }
-    this.notes.push('the template graph has a cycle: the templates on or below it carry a connectivity flow, and a point may still repeat a template under itself (rejected when decoded)');
   }
 
   // --- statistics -----------------------------------------------------------------------------
@@ -1209,7 +1179,6 @@ class FastSpecializer {
     this.emitStructure();
     this.emitConflicts();
     this.emitIncludes();
-    this.emitConnectivity();
     const ranges = this.emitStatistics(priceUpper);
     this.emitCaps();
     this.emitMoa();
@@ -1231,9 +1200,7 @@ function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain, sing
     slotsOf: [],
     slotsHolding: [],
     edgeCount: 0,
-    acyclic: true,
     topological: new Int32Array(0),
-    region: new Uint8Array(blueprint.templateCount),
     maxCopies: new Int32Array(blueprint.templateCount),
   };
   return {
@@ -1310,13 +1277,13 @@ export function specializeFast(
     finite(node.weightMin, 'node.weightMin');
     finite(node.weightMax, 'node.weightMax');
   }
+  if (!partGraphIsAcyclic(blueprint)) {
+    throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The part graph of ${blueprint.weaponId} has a cycle: unsupported data, refused before any model is built`, { weaponId: blueprint.weaponId });
+  }
   if (domain.empty) return emptyModel(blueprint, domain, resolved.singleCopy, resolved.certified);
 
   const structure = structureEntry(blueprint, domain);
   const { bounds } = structure;
-  if (resolved.certified && !structure.graph.acyclic) {
-    throw new PhysicalModelError('DOMAIN_INCONSISTENT', 'The certified count model needs an acyclic active template graph; a cyclic graph keeps the occurrence model', { weaponId: blueprint.weaponId });
-  }
   const graph = resolved.singleCopy ? (structure.single ??= singleCopyGraph(structure.graph)) : structure.graph;
   const specializer = new FastSpecializer(blueprint, domain, graph, resolved, bounds, node);
   const objective = specializer.build();

@@ -1,6 +1,7 @@
 /**
  * The response envelopes of a request that stops BEFORE any model work (ADR 0013 sections 5 and 6, Phase 2.7a): an invalid `owned_items`
- * list, a request that expired in the queue, a request cancelled before dispatch. Nothing is resolved, nothing was searched, so every
+ * list, a request that expired in the queue, a request cancelled before dispatch, a gun whose part graph has a cycle (unsupported data, owner
+ * decision 2d as amended: refused in every operation and mode before any solve). Nothing is resolved, nothing was searched, so every
  * operation has its own null envelope: no build, no certificate, no bound, no node, a search that never started (`limit`), and the factual
  * reason. The shapes follow the transport of `api/client.ts`.
  *
@@ -17,7 +18,7 @@ import { PUBLIC_REASONS } from './physical/reasons';
 const DEFAULT_TOLERANCE = 1e-5;
 
 /** Why a request stopped before any model work. */
-export type PreModelStop = 'invalid_owned_items' | 'queue_timeout' | 'cancelled';
+export type PreModelStop = 'invalid_owned_items' | 'queue_timeout' | 'cancelled' | 'unsupported_part_graph';
 
 /** The public reason of a pre-model stop (the closed set of `physical/reasons.ts`). */
 export const preModelReason = (stop: PreModelStop): string => {
@@ -25,6 +26,7 @@ export const preModelReason = (stop: PreModelStop): string => {
     case 'invalid_owned_items': return PUBLIC_REASONS.invalidOwnedItems;
     case 'queue_timeout': return PUBLIC_REASONS.queueTimeoutBeforeDispatch;
     case 'cancelled': return PUBLIC_REASONS.cancelledByUser;
+    case 'unsupported_part_graph': return PUBLIC_REASONS.unsupportedCyclicPartGraph;
   }
 };
 

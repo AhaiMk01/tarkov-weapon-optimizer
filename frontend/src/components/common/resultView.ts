@@ -135,6 +135,8 @@ export type ReasonKind =
   | 'model_empty'
   /** The request was rejected before any model work. */
   | 'input'
+  /** The weapon's data is outside what the optimizer supports (a part graph with a cycle): nothing was solved, in any mode. */
+  | 'unsupported'
   /** The request's own time ran out while it waited. */
   | 'queue'
   /** A build was withheld because the independent validator rejected it. */
@@ -151,6 +153,7 @@ const REASON_KIND: Record<ReasonName, ReasonKind> = {
   fastProvisionalMoaModelInfeasible: 'model_empty',
   invalidOwnedItems: 'input',
   invalidExploreSchedule: 'input',
+  unsupportedCyclicPartGraph: 'unsupported',
   queueTimeoutBeforeDispatch: 'queue',
   independentBuildValidationFailed: 'validation',
   requiredProofPrerequisiteUnavailable: 'prerequisite',
@@ -256,12 +259,14 @@ export type NoticeId =
   | 'infeasible'
   | 'cancelled_build' | 'cancelled_none'
   | 'invalid_owned' | 'invalid_schedule'
+  /** The weapon's data is not supported (its part graph has a cycle): nothing can be built for it. */
+  | 'unsupported_data'
   | 'queue_timeout'
   | 'error';
 
 export const NOTICE_IDS: readonly NoticeId[] = [
   'feasible_time', 'feasible_limit', 'feasible_other', 'none_time', 'none_limit', 'none_other', 'fast_empty', 'moa_empty', 'infeasible',
-  'cancelled_build', 'cancelled_none', 'invalid_owned', 'invalid_schedule', 'queue_timeout', 'error',
+  'cancelled_build', 'cancelled_none', 'invalid_owned', 'invalid_schedule', 'unsupported_data', 'queue_timeout', 'error',
 ];
 
 /** i18n key of a plain sentence, `notice.<id>`. */
@@ -313,6 +318,7 @@ export function noticeOf(authority: Pick<Authority, 'level' | 'hasBuild'>, reaso
         case 'limit': return notice(reason.name === 'timeLimitReached' ? 'none_time' : 'none_limit', 'warning', true);
         case 'model_empty': return notice(reason.name === 'provisionalMoaModelInfeasible' ? 'moa_empty' : 'fast_empty', 'warning');
         case 'input': return notice(reason.name === 'invalidExploreSchedule' ? 'invalid_schedule' : 'invalid_owned', 'warning');
+        case 'unsupported': return notice('unsupported_data', 'warning');
         case 'queue': return notice('queue_timeout', 'warning', true);
         default: return notice('none_other', 'warning');
       }

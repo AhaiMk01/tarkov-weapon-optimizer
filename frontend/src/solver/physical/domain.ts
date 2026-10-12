@@ -22,7 +22,7 @@
  *    parent is never removed for being undecided, and a template reached through several parents keeps every
  *    alternative path.
  *
- * Request-dependent numerics (caps, objective, equipment) are not here: they belong to `specializeLP`.
+ * Request-dependent numerics (caps, objective, equipment) are not here: they belong to the model builder (`specializeCount` / `specializeFast`).
  */
 
 import type { GunLookupEntry, ItemLookup, ModLookupEntry } from '../types';

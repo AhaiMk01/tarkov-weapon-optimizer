@@ -174,6 +174,7 @@
     "cancelled_none": "취소됨.",
     "invalid_owned": "보관함 목록이 올바르지 않습니다 — 수정한 뒤 다시 시도해 주세요.",
     "invalid_schedule": "탐색 설정이 올바르지 않습니다 — 설정을 바꾼 뒤 다시 시도해 주세요.",
+    "unsupported_data": "이 무기의 부품 데이터는 지원되지 않아 빌드를 만들 수 없습니다.",
     "queue_timeout": "요청이 너무 오래 대기해 취소되었습니다 — 다시 시도해 주세요.",
     "error": "문제가 발생했습니다 — 다시 시도해 주세요."
   },
@@ -416,6 +417,7 @@
     "fastProvisionalMoaModelInfeasible": "근사(빠른) 모델은 MOA 한도에서 빌드를 찾지 못했습니다. 존재하지 않는다는 증명은 아니므로 정밀 모드를 시도하거나 MOA 한도를 완화해 보세요.",
     "invalidOwnedItems": "보관함 목록이 올바르지 않아 계산하지 않았습니다.",
     "invalidExploreSchedule": "탐색 계획이 비어 있거나 올바르지 않아 계산하지 않았습니다.",
+    "unsupportedCyclicPartGraph": "이 무기의 데이터에는 서로를 순환해서 장착할 수 있는 부품이 있으며, 최적화기는 이런 데이터를 지원하지 않아 계산하지 않았습니다.",
     "queueTimeoutBeforeDispatch": "요청이 대기열에서 시간 초과되어 계산하지 않았습니다. 다시 시도해 주세요.",
     "independentBuildValidationFailed": "솔버가 만든 빌드가 독립 검증을 통과하지 못해 표시하지 않았습니다.",
     "requiredProofPrerequisiteUnavailable": "증명에 필요한 전제 조건을 사용할 수 없어 증명했다고 주장하지 않습니다.",

@@ -3,7 +3,7 @@
  * ADR 0013 section 4C, Phases 2.4b-3b and 2.5).
  *
  * TrueErgo and Prevent Overswing subtract the weight penalty q(W) = max(0, 100 - 300 / W), which is zero up to 3 kg and concave above it.
- * `specializeLP` models q on a weight node by a verified lower envelope (exact up to 3 kg or at a single weight, a secant otherwise), so a
+ * The count model (`specializeCount`, `specializeFast`) models q on a weight node by a verified lower envelope (exact up to 3 kg or at a single weight, a secant otherwise), so a
  * node's optimum is an UPPER bound of the best exactly-scored build of that node, and a decoded build re-scored exactly is an incumbent. This
  * module is the search over nodes, pure: it knows nothing about HiGHS, LP text or builds. A caller supplies `evaluate(node)`.
  *

@@ -7,10 +7,10 @@
 // the text, on solve (no dropped coefficient, no infinite bound, no tokenizer surprise).
 import assert from 'node:assert/strict';
 import {
-  decodeSolution, preparePhysicalWeapon, prepareSubproblemDomain, specializeLP,
-  type DecodedBuild, type PhysicalBlueprint, type SpatialNode, type SpecializedModel, type SpecializeRequest, type SubproblemDomain,
-  type SubproblemRequest,
+  preparePhysicalWeapon, prepareSubproblemDomain, type PhysicalBlueprint, type SpatialNode, type SpecializeRequest, type SubproblemDomain, type SubproblemRequest,
 } from '../../src/solver/physical';
+import { specializeLP, type SpecializedModel } from './occurrence/specializeOccurrence';
+import { decodeSolution, type DecodedBuild } from './occurrence/decodeOccurrence';
 import {
   compareReadback, getNativeHighs, MODEL_STATUS_TEXT, parseLpText, readbackModel, type HighsOptions, type ModelStatusName,
 } from '../../src/solver/native';

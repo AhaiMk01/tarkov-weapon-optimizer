@@ -1,11 +1,11 @@
-// Shared by the count-versus-occurrence gate (countVsOccurrence.test.ts) and the long campaigns run from scratch scripts: the occurrence model (solvePrecise) and the
-// certifiable count model (the milestone-1 driver, countHarness.ts) on one seeded world, compared on kind, certificate, optimum, bounds and validity. It asserts, so a
-// campaign catches the failing seed.
+// Shared by the count-versus-occurrence gate (countVsOccurrence.test.ts) and the long campaigns run from scratch scripts: the test-only occurrence model
+// (occurrence/solveOccurrence.ts, the independent cross-check) and production Precise (solvePrecise: the certified count model with its second opinion) on one
+// seeded world, compared on kind, certificate, optimum, bounds and validity. It asserts, so a campaign catches the failing seed.
 import assert from 'node:assert/strict';
-import { computeActiveBounds, countModelEligibility, preparePhysicalWeapon, prepareSubproblemDomain, validatePhysicalBuild } from '../../src/solver/physical';
+import { assertCountModelApplies, computeActiveBounds, preparePhysicalWeapon, prepareSubproblemDomain, validatePhysicalBuild } from '../../src/solver/physical';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { GunLookupEntry, ModLookupEntry, SolveParams } from '../../src/solver/types';
-import { solveCount } from './countHarness';
+import { solveOccurrence } from './occurrence/solveOccurrence';
 import { WEAPON } from './lpFixtures';
 import { randomWorld, rng, type World } from './randomWorlds';
 
@@ -13,11 +13,11 @@ export const near = (a: number, b: number, tolerance: number): boolean => Math.a
 
 /**
  * The objective tolerance of the gates. 1e-9 sits AT the native noise: HiGHS may end a solve on a point that uses its 1e-9 primal tolerance in a clamp row
- * (`capped_ergo = raw_ergo + 5e-10`, worth 1e-9 of objective at an ergonomics weight of 2), which lifts the native dual bound, and so the proved gap, to 1.0e-9 and
- * keeps a certificate at tolerance 1e-9 from being issued. It happens to both models (1 of 127 nonempty plain worlds each, measured), so it is the solver and not the
- * model; a tolerance a decade above it tests the models.
+ * (`capped_ergo = raw_ergo + 5e-10`, worth 1e-9 of objective at an ergonomics weight of 2), which lifts the native dual bound, and so the proved gap, to 1.0e-9.
+ * And production Precise solves with an integrality tolerance of 1e-7 (owner decision 5b), which lifts a dual bound by up to about 1e-7 on about 1% of solves
+ * (seed 8 of the plain worlds: a gap of 1.0e-7), so a request below that tolerance can stay uncertified. A tolerance a decade above both tests the models.
  */
-export const NOISE_SAFE_TOLERANCE = 1e-8;
+export const NOISE_SAFE_TOLERANCE = 1e-6;
 
 /** A world with the MOA family: large accuracy modifiers, barrels of distinct centres of impact, a negative cap. */
 export function moaWorld(seed: number): World {
@@ -46,8 +46,8 @@ export async function compareModels(label: string, world: World, tolerance: numb
   const params: SolveParams = { ...world.params, objectiveTolerance: tolerance };
   const blueprint = preparePhysicalWeapon(params.itemLookup, WEAPON);
   const domain = prepareSubproblemDomain(blueprint, params.itemLookup, params);
-  const precise = await solvePrecise({ params, deadline: performance.now() + 120_000 });
-  const count = await solveCount(params);
+  const precise = await solveOccurrence({ params, deadline: performance.now() + 120_000 });
+  const count = await solvePrecise({ params, deadline: performance.now() + 120_000 });
   let moaFamily = false;
   if (!domain.empty && params.maxMOA != null && params.maxMOA < 0) {
     const barrelCois = new Set<number>();
@@ -61,11 +61,12 @@ export async function compareModels(label: string, world: World, tolerance: numb
     bump('empty domain');
     return { moaFamily };
   }
-  assert.ok(countModelEligibility(blueprint, domain).eligible, `${label}: an acyclic world is eligible`);
-  if (count.kind === 'ineligible') assert.fail(`${label}: ${count.reason}`);
+  assert.ok(assertCountModelApplies(blueprint, domain).slotsChecked >= 0, `${label}: an acyclic world passes the count-model assertion`);
   assert.notEqual(precise.kind, 'incomplete', `${label}: the occurrence model finishes`);
   assert.notEqual(count.kind, 'incomplete', `${label}: the count model finishes${count.kind === 'incomplete' ? ` (${count.reason})` : ''}`);
-  assert.equal(count.telemetry.unqualifiedSolves, 0, `${label}: every count solve is qualified (${count.telemetry.unqualifiedReasons.join(' | ')})`);
+  assert.equal(count.summary.telemetry.unqualifiedSolves, 0, `${label}: every count solve is qualified (${count.summary.telemetry.unqualifiedReasons.join(' | ')})`);
+  assert.equal(count.summary.telemetry.unsettledDisagreements, 0, `${label}: every second opinion settled`);
+  tally.disagreements = (tally.disagreements ?? 0) + count.summary.telemetry.disagreements;
   assert.equal(precise.summary.telemetry.unqualifiedSolves, 0, `${label}: every occurrence solve is qualified`);
   if (precise.kind === 'empty') {
     assert.equal(count.kind, 'empty', `${label}: the occurrence model proves the request empty`);
@@ -81,7 +82,7 @@ export async function compareModels(label: string, world: World, tolerance: numb
   const verdict = validatePhysicalBuild(params.itemLookup, params, count.best.build, { requirePathInstanceIds: true });
   assert.equal(verdict.ok, true, `${label}: ${JSON.stringify(verdict.violations)}`);
   // each model's proved upper bound covers the other's verified score
-  assert.ok(count.bounds.upper !== null && count.bounds.upper >= precise.best.score - 3 * tolerance * Math.max(1, Math.abs(precise.best.score)), `${label}: count bound ${count.bounds.upper} vs occurrence score ${precise.best.score}`);
+  assert.ok(count.summary.bounds.upper !== null && count.summary.bounds.upper >= precise.best.score - 3 * tolerance * Math.max(1, Math.abs(precise.best.score)), `${label}: count bound ${count.summary.bounds.upper} vs occurrence score ${precise.best.score}`);
   assert.ok(precise.summary.bounds.upper !== null && precise.summary.bounds.upper >= count.best.score - 3 * tolerance * Math.max(1, Math.abs(count.best.score)), `${label}: occurrence bound vs count score`);
   bump(moaFamily ? 'equal (MOA family)' : 'equal');
   return { moaFamily };

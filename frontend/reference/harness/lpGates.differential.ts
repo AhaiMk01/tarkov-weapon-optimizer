@@ -22,10 +22,9 @@ import {
   toNumber, validateReference,
   type BaseChoice, type ReferenceBuild, type ReferenceFixture, type ReferenceRequest,
 } from '../oracle/index';
-import {
-  decodeSolution, preparePhysicalWeapon, prepareSubproblemDomain, specializeLP,
-  type DecodedBuild, type SpatialNode, type SpecializedModel, type SpecializeRequest,
-} from '../../src/solver/physical';
+import { preparePhysicalWeapon, prepareSubproblemDomain, type SpatialNode, type SpecializeRequest } from '../../src/solver/physical';
+import { specializeLP, type SpecializedModel } from '../../tests/physical/occurrence/specializeOccurrence';
+import { decodeSolution, type DecodedBuild } from '../../tests/physical/occurrence/decodeOccurrence';
 import type { LedgerCase } from '../ledger/index';
 import { detectUnsupported } from './toProduction.differential';
 import { productionLookup, subproblemRequestOf, type ProductionPhysical } from './blueprint.differential';

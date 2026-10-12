@@ -4,7 +4,7 @@
  * `validatePhysicalBuild(lookup, request, build)` judges one physical build, the way the independent reference validator does, and
  * reproduces its every accept and reject: a base choice plus placements `(parentInstanceId, slotId, childInstanceId, itemId)` over the
  * production `ItemLookup`. Every build the solver publishes must pass it. It reads the lookup and the request only; it shares nothing with
- * the LP, the blueprint's index arrays, the domain masks, `specializeLP` or `decodeSolution`, so it checks what they produced instead of
+ * the LP, the blueprint's index arrays, the domain masks, the model builders or the decoders, so it checks what they produced instead of
  * repeating it. The small helpers it does reuse are pure data rules the ADRs fix once: offer legality (`acquisition.ts`), preset supply
  * (`presetSupply.ts`), `owned_items` validation (`ownedItems.ts`) and the receiver instance id (`blueprint.ts`).
  *
@@ -44,7 +44,6 @@ import { presetSupply } from '../presetSupply';
 import type { GunLookupEntry, ItemLookup, ItemLookupEntry, ModLookupEntry, PresetInfo } from '../types';
 import { legalOffers, resolveMarket, type MarketInput, type MarketSettings } from './acquisition';
 import { ROOT_INSTANCE_ID } from './blueprint';
-import type { DecodedBuild } from './decode';
 import { PhysicalModelError } from './errors';
 import {
   RAT_ONE, RAT_ZERO, rat, ratAdd, ratDiv, ratFromDouble, ratGe, ratGt, ratLe, ratLt, ratMax, ratMin, ratMul, ratString, ratSub, ratSum,
@@ -115,7 +114,7 @@ export interface PhysicalPlacement {
 
 export type PhysicalBuildBase = { kind: 'naked' } | { kind: 'preset'; presetId: string };
 
-/** A claimed per-occurrence provenance; structurally the `OccurrenceProvenance` of `decodeSolution`. */
+/** A claimed per-occurrence provenance (a decoder may claim one; the count-model decoder claims none and the validator recomputes it). */
 export interface ClaimedAcquisition {
   instanceId: string;
   itemId: string;
@@ -268,15 +267,6 @@ export interface PhysicalValidator {
 
 /** Absolute RUB tolerance when a claimed spend is compared with the exact one (prices are whole roubles, so a real discrepancy is at least 1). */
 export const CLAIM_TOLERANCE = 1e-6;
-
-/** The build a `DecodedBuild` describes, claims included: the claims make the validator cross-check the decoder's spend and provenance. */
-export function physicalBuildFromDecoded(decoded: DecodedBuild): PhysicalBuild {
-  return {
-    base: decoded.base.kind === 'naked' ? { kind: 'naked' } : { kind: 'preset', presetId: decoded.base.presetId },
-    placements: decoded.placements,
-    claimed: { spend: decoded.spend, basePrice: decoded.basePrice, modSpend: decoded.modSpend, acquisition: decoded.acquisition },
-  };
-}
 
 // ---------------------------------------------------------------------------------------------
 // Constants of the model (ADR 0006, ADR 0007)

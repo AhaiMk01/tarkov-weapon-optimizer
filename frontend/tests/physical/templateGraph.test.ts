@@ -1,8 +1,8 @@
 // The template-level view of a prepared domain (src/solver/physical/templateGraph.ts): owners, candidate edges over ACTIVE occurrences, the
-// topological order, the copy bounds and the cyclic region, on hand-built lookups.
+// topological order and the copy bounds, on hand-built lookups; a cyclic graph is refused (owner decision 2d as amended).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTemplateGraph, preparePhysicalWeapon, prepareSubproblemDomain, type TemplateGraph } from '../../src/solver/physical';
+import { buildTemplateGraph, PhysicalModelError, preparePhysicalWeapon, prepareSubproblemDomain, type TemplateGraph } from '../../src/solver/physical';
 import type { ItemLookup } from '../../src/solver/types';
 import { gun, lookupOf, mod, slot, WEAPON } from './lpFixtures';
 
@@ -25,12 +25,10 @@ test('owners, required flags and candidate edges come from the active occurrence
   const { graph, ids } = graphOf(lookup);
   assert.deepEqual(edgesOf(graph, ids), ['gun.mount>host', 'gun.stock>butt', 'gun.stock>host', 'host.rail>sight']);
   assert.deepEqual(graph.slots.filter(s => s.required).map(s => s.slotId), ['stock']);
-  assert.equal(graph.acyclic, true);
   assert.equal(graph.edgeCount, 4);
   assert.equal(ids[graph.topological[0]], WEAPON, 'the receiver starts the order');
   const position = new Map([...graph.topological].map((t, i) => [ids[t], i]));
   assert.ok((position.get('host') as number) < (position.get('sight') as number), 'parents before children');
-  assert.deepEqual([...graph.region], new Array(graph.templateCount).fill(0));
 });
 
 test('the filters of the request remove templates and their edges: an excluded template, and a child whose only host is excluded', () => {
@@ -69,7 +67,7 @@ test('copy bounds: the exact maximum over trees on an acyclic graph, far below t
   assert.equal(graph.maxCopies[0], 1);
 });
 
-test('a cycle among the templates is detected, nothing is ordered, and the region is the cycle plus everything below it', () => {
+test('a cycle among the templates is not ordered: it throws CYCLIC_PART_GRAPH (a gun with a cycle is refused before any model is built)', () => {
   // A and B can each host the other (reachable from different root slots, so neither occurrence has the other as an ancestor everywhere).
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
@@ -80,14 +78,8 @@ test('a cycle among the templates is detected, nothing is ordered, and the regio
     ['E', mod('E')],
   );
   lookup[WEAPON].slots.push({ id: 's2', name: 's2', nameId: 's2', required: false, allowedItems: ['E'] });
-  const { graph, ids } = graphOf(lookup);
-  assert.equal(graph.acyclic, false);
-  assert.equal(graph.topological.length, 0);
-  const inRegion = (id: string): number => graph.region[ids.indexOf(id)];
-  assert.deepEqual(['A', 'B', 'C', 'D'].map(inRegion), [1, 1, 1, 1], 'the cycle and the parts below it');
-  assert.equal(inRegion('E'), 0, 'a part outside the cycle is rooted by the DAG argument');
-  assert.equal(inRegion(WEAPON), 0);
-  assert.ok(graph.maxCopies[ids.indexOf('A')] >= 1, 'the bound on a cyclic graph is the occurrence count');
+  assert.throws(() => graphOf(lookup), (e: unknown) => e instanceof PhysicalModelError && e.code === 'CYCLIC_PART_GRAPH');
+  assert.equal(preparePhysicalWeapon(lookup, WEAPON).stats.prunedAncestorEdges > 0, true, 'the blueprint detects it: the ancestor rule cut an edge');
 });
 
 test('an empty domain has no template graph', () => {

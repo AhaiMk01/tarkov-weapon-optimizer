@@ -6,7 +6,7 @@
  * reference oracle everywhere it was tried.
  *
  * Which setting the search runs with is ONE named constant per model family (`PRECISE_PRESOLVE`, `FAST_PRESOLVE`), so Stage 4 can benchmark it.
- * The physical (Precise) models run with presolve OFF. Orchestrator measurement, 2026-10-04, pinned snapshot, `specializeLP` with weights
+ * The physical (Precise) models run with presolve OFF. Orchestrator measurement, 2026-10-04, pinned snapshot, the occurrence model `specializeLP` (now test-only) with weights
  * e 0.4, r 0.4, p 0.2, pinned native build, 60 s limit, mip_rel_gap = mip_abs_gap = 1e-6 (presolve ON vs OFF):
  *   TRG M10 0.4 s vs 0.1 s; MPX 9.2 s vs 5.8 s; VSS 1.7 s vs 0.4 s; NL545 DI 27.8 s vs 8.9 s (presolve alone took 12.9 of 28.6 s);
  *   AK-105 time limit at gap 47% vs optimal in 30.0 s; AK-74N gap 61% vs 54%; M4A1 no incumbent vs an incumbent at gap 83%.
@@ -55,8 +55,25 @@ const LIMIT_STATUSES: ReadonlySet<string> = new Set<ModelStatusName>([
 export const isInfeasibleStatus = (name: string): boolean => INFEASIBLE_STATUSES.has(name);
 export const isLimitStatus = (name: string): boolean => LIMIT_STATUSES.has(name);
 
-/** Native feasibility tolerance of every solve: the model text carries exact coefficients, so the solver is held to them. */
+/** Native primal and dual feasibility tolerance of every solve: the model text carries exact coefficients, so the solver is held to them. */
 export const NATIVE_FEASIBILITY_TOLERANCE = 1e-9;
+
+/**
+ * Native integrality tolerance of every solve (`mip_feasibility_tolerance`), ALWAYS 1e-7, whatever the request tolerance (owner decision 5b,
+ * 2026-10-06). At 1e-9 HiGHS 1.15.1 with presolve off returned a wrong Optimal with a wrong dual bound on the count model
+ * (tests/physical/solverDefects/count_presolve_off_wrong_optimal.lp: likely a derived integer bound such as 1.9999999982 rounded down, which cuts
+ * off the optimum); at 1e-7 it does not, and the Phase 2.10 campaigns (19,000 worlds, both models) saw no wrong-optimum disagreement at all.
+ * The owner's rationale: a looser integrality tolerance only enlarges the set HiGHS searches (a point within 1e-7 of integral counts as integral),
+ * and every candidate is validated exactly and cut out when it fails. The cost, accepted by the owner: some solves report a bound about 1e-7 high,
+ * so a request at a tolerance below that can lose its certificate (status feasible; 7 of the ledger's 1e-9 cases, reference/harness/README.md).
+ * CAUTION (Phase 2.10 measurement): the shift is not one-sided. An integer column may sit up to 1e-7 off its integer, and HiGHS may close the search
+ * on such a point with a dual bound BELOW the exact optimum by up to (the column's objective sensitivity) x 1e-7: ledger case
+ * F04-near-cap-min-ergonomics-gap-2e-20 returned a dual bound 1.1e-5 below the exact score of its own decoded build (n = 1 + 4.4e-8 read as 1).
+ * The bound-shortfall guard of `solvePrecise` withheld it; `NATIVE_FRAME.assumptions` states the residual assumption, which the owner accepted
+ * (2026-10-12, decision 5b correction in docs/stage2-plan.md) without an extra guard. The primal and dual
+ * feasibility tolerances a bound depends on stay at 1e-9.
+ */
+export const NATIVE_INTEGRALITY_TOLERANCE = 1e-7;
 
 /** The largest native MIP gap ever used: the pre-cutover value, so a loose request tolerance never loosens the native search. */
 const MAX_NATIVE_ABS_GAP = 1e-9;
@@ -64,14 +81,15 @@ const MAX_NATIVE_ABS_GAP = 1e-9;
 /**
  * Native options derived from the request's absolute objective tolerance `tau`. The native MIP gap is at most `tau / 4` (and at most 1e-9):
  * the final certificate adds the spatial fathoming tolerance and numeric noise on top of the native gap, so the native search has to be
- * finer than the claim it supports. The relative gap is 0, feasibility tolerances are the strict ones the model text was written for.
+ * finer than the claim it supports. The relative gap is 0, the primal and dual feasibility tolerances are the strict ones the model text was
+ * written for, and the integrality tolerance is `NATIVE_INTEGRALITY_TOLERANCE` for every request (decision 5b).
  */
 export function nativeSolveOptions(tau: number): HighsOptions {
   const gap = Math.min(MAX_NATIVE_ABS_GAP, Math.max(0, tau) / 4);
   return {
     mip_rel_gap: 0,
     mip_abs_gap: gap,
-    mip_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE,
+    mip_feasibility_tolerance: NATIVE_INTEGRALITY_TOLERANCE,
     primal_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE,
     dual_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE,
   };

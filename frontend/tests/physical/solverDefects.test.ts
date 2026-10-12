@@ -21,6 +21,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { getNativeHighs, type HighsOptions } from '../../src/solver/native';
+import { nativeSolveOptions } from '../../src/solver/physical/nativeSolve';
+import { PRECISE_RANDOM_SEEDS } from '../../src/solver/physical/solvePrecise';
 
 interface Solved { status: string; objective: number | null; values: Record<string, number> }
 
@@ -122,23 +124,33 @@ test('the Fast template model of random world 123 (fast_presolve_wrong_optimal.l
   t.diagnostic(`presolve on: ${on.modelStatus.name} ${on.objectiveValue}, dual bound ${on.mipDualBound}${wrong ? ' (wrong: the maximum is 335.35)' : ''}`);
 });
 
-test('the COUNT model node [1.5, 3] of TED world 2105 (count_presolve_off_wrong_optimal.lp): presolve OFF, default seed, HiGHS 1.15.1 may report Optimal 93.6 with a dual bound of 93.6 although a build scoring 100 is a feasible point', async t => {
+test('the COUNT model node [1.5, 3] of TED world 2105 (count_presolve_off_wrong_optimal.lp): at the production integrality tolerance of 1e-7 (owner decision 5b) presolve off with the default seed returns the true optimum 100 with a dual bound of at least 100; at 1e-9 HiGHS 1.15.1 may report Optimal 93.6 with a dual bound of 93.6', async t => {
   // Seeded world `randomTedWorld(2105, false)`, weight node [1.5, 3], request weights 1 / 0 / 0, TrueErgo, equipment modifier +0.2. Three templates (t1: 22 ergonomics and two
   // slots, t3: 9, t2: 5). The physical build {t1, t1, t3, t3} (2.75 kg, raw ergonomics 87, x 1.2 = 104.4, clamped 100, no weight penalty below 3 kg) scores 100, and the
   // occurrence model of the same request returns it (tests/physical/countVsOccurrence.test.ts). The truth below does not depend on the defect: the model pinned to that
-  // build is FEASIBLE and its objective is 100, so the maximum is at least 100. The root LP of the unpinned model is mis-solved with the default random seed:
-  // an Optimal verdict AND a dual bound, which is the number a certificate would be built on. A second seed (or presolve on) returns 100.
+  // build is FEASIBLE and its objective is 100, so the maximum is at least 100. With an integrality tolerance of 1e-9 the root LP of the unpinned model is mis-solved with
+  // the default random seed: an Optimal verdict AND a dual bound below 100, which is the number a certificate would be built on (likely a derived integer bound such as
+  // 1.9999999982 rounded down). At 1e-7, the tolerance production always uses, the same solve is right; the second opinion (decision 5a) is the other safeguard.
   const lp = model('count_presolve_off_wrong_optimal.lp');
   const at = lp.indexOf('\nBounds\n');
   const pinned = `${lp.slice(0, at)}\n  pin_t1: n_1 = 2\n  pin_t3: n_2 = 2\n  pin_t2: n_3 = 0\n  pin_base: base_0 = 1${lp.slice(at)}`;
   const truth = await native(pinned, { presolve: 'off' });
   assert.equal(truth.status, 'Optimal');
   assert.ok(Math.abs((truth.objective as number) - 100) < 1e-6, `the pinned build scores ${truth.objective}`);
-  const second = await native(lp, { presolve: 'off', random_seed: 11 });
-  assert.equal(second.status, 'Optimal');
-  assert.ok(Math.abs((second.objective as number) - 100) < 1e-6, `a second seed finds ${second.objective}`);
+  // The FIXED behavior: the production options (integrality 1e-7, primal and dual feasibility 1e-9), presolve off, every seed production uses.
+  const production = nativeSolveOptions(1e-9);
+  assert.equal(production.mip_feasibility_tolerance, 1e-7);
+  assert.equal(production.primal_feasibility_tolerance, 1e-9);
+  assert.equal(production.dual_feasibility_tolerance, 1e-9);
+  for (const seed of PRECISE_RANDOM_SEEDS) {
+    const fixed = await getNativeHighs().solveStructured(lp, { ...production, presolve: 'off', random_seed: seed });
+    assert.equal(fixed.modelStatus.name, 'Optimal', `seed ${seed}`);
+    assert.ok(Math.abs((fixed.objectiveValue as number) - 100) < 1e-6, `seed ${seed}: the optimum is found (${fixed.objectiveValue})`);
+    assert.ok(fixed.mipDualBound !== null && fixed.mipDualBound >= 100 - 1e-6, `seed ${seed}: the dual bound ${fixed.mipDualBound} is an upper bound of the maximum`);
+  }
+  // The defect at the old integrality tolerance, reported only (it depends on the default seed of this build).
   const first = await getNativeHighs().solveStructured(lp, { ...BASE, presolve: 'off' });
   const wrong = first.modelStatus.name === 'Optimal' && (first.objectiveValue as number) < 100 - 1e-6;
-  t.diagnostic(`presolve off, default seed: ${first.modelStatus.name} ${first.objectiveValue}, dual bound ${first.mipDualBound}${wrong ? ' (WRONG: the maximum is at least 100, so this dual bound is not an upper bound)' : ''}`);
+  t.diagnostic(`integrality 1e-9, presolve off, default seed: ${first.modelStatus.name} ${first.objectiveValue}, dual bound ${first.mipDualBound}${wrong ? ' (WRONG: the maximum is at least 100, so this dual bound is not an upper bound)' : ''}`);
   if (wrong) assert.ok(first.mipDualBound !== null && first.mipDualBound < 100, 'the wrong verdict carries a wrong bound, not only a wrong point');
 });

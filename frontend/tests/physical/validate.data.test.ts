@@ -13,9 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
 import type { ItemLookup } from '../../src/solver/types';
 import {
-  decodeSolution, physicalBuildFromDecoded, preparePhysicalWeapon, prepareSubproblemDomain, preparePhysicalValidator, specializeLP,
-  type DecodedBuild, type PhysicalBuild, type PhysicalValidation, type PhysicalValidationRequest, type SpecializeRequest, type SubproblemRequest,
+  preparePhysicalWeapon, prepareSubproblemDomain, preparePhysicalValidator, type PhysicalBuild, type PhysicalValidation, type PhysicalValidationRequest, type SpecializeRequest, type SubproblemRequest,
 } from '../../src/solver/physical';
+import { specializeLP } from './occurrence/specializeOccurrence';
+import { decodeSolution, physicalBuildFromDecoded, type DecodedBuild } from './occurrence/decodeOccurrence';
 import { barter, gun, lookupOf, mod, slot, trader } from './fixtures';
 import { solveLp } from './lpHarness';
 

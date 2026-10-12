@@ -28,21 +28,24 @@
 import { compareReadback, LpParseError, parseLpText } from '../native';
 import type { NativeResult } from '../native';
 import { ratCmp, ratFromDouble } from './exact';
-import { NATIVE_FEASIBILITY_TOLERANCE } from './nativeSolve';
+import { NATIVE_FEASIBILITY_TOLERANCE, NATIVE_INTEGRALITY_TOLERANCE } from './nativeSolve';
 import { HIGHS_LARGE_MATRIX_VALUE, HIGHS_SMALL_MATRIX_VALUE, type BoundEvidence, type ModelProof } from './proof';
 
 /** The native tolerance frame the proofs are stated in: what `nativeSolveOptions` sets and `DEFAULT_HIGHS_OPTIONS` pins. */
 export const NATIVE_FRAME = {
   primalFeasibilityTolerance: NATIVE_FEASIBILITY_TOLERANCE,
   dualFeasibilityTolerance: NATIVE_FEASIBILITY_TOLERANCE,
-  mipFeasibilityTolerance: NATIVE_FEASIBILITY_TOLERANCE,
+  /** The integrality tolerance (`mip_feasibility_tolerance`), 1e-7 on every solve (owner decision 5b). */
+  mipFeasibilityTolerance: NATIVE_INTEGRALITY_TOLERANCE,
   smallMatrixValue: HIGHS_SMALL_MATRIX_VALUE,
   largeMatrixValue: HIGHS_LARGE_MATRIX_VALUE,
   /** Accepted, not proved. A qualified bound is only as sound as these. */
   assumptions: [
     'HiGHS reports a MIP dual bound that is an upper bound of the maximum of the parsed model. The floating-point error of the node LP solves (observed on the ledger: a dual bound 5e-12 below an exact optimum of 2500, about 2e-15 relative) and the dual-feasibility slack (at most the dual feasibility tolerance times the column ranges) are NOT added: neither can be bounded without node duals, which the pinned build does not export. The largest shortfall seen is reported as `boundShortfall`, and a shortfall beyond `BOUND_SANITY_RELATIVE` withholds the bound.',
     'The parsed model equals the model that was solved: the readback is taken from the same handle, after the read and before the run.',
-    'Row feasibility tolerances do not enter an upper bound: a bound is a dual quantity, and a primal point that uses the tolerance is re-validated exactly and cut out when it fails (nogood.ts).',
+    'Row feasibility tolerances do not enter an upper bound: a bound is a dual quantity, and a primal point that uses the tolerance is re-validated exactly and cut out when it fails (fastCut.ts).',
+    'The integrality tolerance (1e-7, owner decision 5b) moves a dual bound by at most about (the objective sensitivity of an integer column) x 1e-7, in EITHER direction: a point within it of integral is accepted as integral. Raised bounds only cost certificates; a lowered one (observed once, ledger case F04-near-cap-min-ergonomics-gap-2e-20: 1.1e-5 below the exact optimum) is caught only when a verified build of the same node beats it by more than `BOUND_SANITY_RELATIVE` (the bound is then withheld). A lowered bound that no verified build exposes is not detected. Every accepted point is re-validated exactly.',
+    'One solve of HiGHS 1.15.1 is not trusted alone with a certificate: every certificate-bearing verdict is confirmed by a second solve with another random seed and a third on a disagreement (owner decision 5a, solvePrecise.ts). The certificate assumes that two agreeing solves are not wrong the same way.',
   ],
 } as const;
 
@@ -129,9 +132,11 @@ export function assessNativeResult(input: AssessInput, result: NativeResult): Na
     }
   }
 
-  const tolerancesInForce = (['primal_feasibility_tolerance', 'dual_feasibility_tolerance', 'mip_feasibility_tolerance'] as const).every(name => {
+  // Each tolerance at most its declared value: primal and dual feasibility 1e-9, integrality 1e-7 (owner decision 5b; a stricter one is fine).
+  const declared = { primal_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE, dual_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE, mip_feasibility_tolerance: NATIVE_INTEGRALITY_TOLERANCE } as const;
+  const tolerancesInForce = (Object.keys(declared) as (keyof typeof declared)[]).every(name => {
     const value = NUMERIC_OPTION(result, name);
-    return value !== null && value <= NATIVE_FEASIBILITY_TOLERANCE;
+    return value !== null && value <= declared[name];
   });
   if (!tolerancesInForce) reasons.push('the native feasibility tolerances in force are not the declared ones');
   const thresholdsInForce = NUMERIC_OPTION(result, 'small_matrix_value') === HIGHS_SMALL_MATRIX_VALUE

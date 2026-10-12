@@ -83,8 +83,8 @@ test('all 172 pinned guns: closure acyclic (D1), active graph acyclic (D2), cand
       if (domain.empty) continue; // no accessible base or an unfillable root slot: no graph, nothing cyclic, and the empty answer is exact
       nonempty.set(profile.name, (nonempty.get(profile.name) ?? 0) + 1);
       everNonempty.add(gun.id);
+      // D2: the active template graph is acyclic (buildTemplateGraph throws CYCLIC_PART_GRAPH otherwise).
       const graph = buildTemplateGraph(bp, domain);
-      assert.equal(graph.acyclic, true, `${gun.shortName}/${profile.name}: D2 (the active template graph has a cycle)`);
       const { checked, disagreement } = candidateSetsAgree(bp, domain);
       assert.equal(disagreement, null, `${gun.shortName}/${profile.name}: L ${disagreement}`);
       pairs += checked;

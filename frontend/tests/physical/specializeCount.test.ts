@@ -1,18 +1,19 @@
 // The certifiable count model (src/solver/physical/specializeCount.ts, the certified mode of specializeFast.ts; Phase 2.10, decision 2e): strict text that HiGHS
 // reads back as written, the proof record every constructed row carries, the row families, the numerics shared with the occurrence model, the MOA rows that state
-// the oracle's rule (the largest centre of impact binds), eligibility checked on the data, and the refusals. The plain Fast model must stay what it was.
+// the oracle's rule (the largest centre of impact binds), the preconditions asserted on the data (acyclic part graph, Lemma 1), and the refusals. The plain Fast model must stay what it was.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLpText } from '../../src/solver/native';
 import {
-  countModelEligibility, familyOfRow, integerNoGood, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, specializeFast, specializeLP,
-  type CountModel, type SpatialNode, type SpecializeRequest, type SubproblemDomain, type SubproblemRequest,
+  assertCountModelApplies, familyOfRow, PhysicalModelError, integerNoGood, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, specializeFast, type CountModel, type SpatialNode, type SpecializeRequest, type SubproblemDomain, type SubproblemRequest,
 } from '../../src/solver/physical';
+import { specializeLP } from './occurrence/specializeOccurrence';
 import { ratCmp, ratFromDouble } from '../../src/solver/physical/exact';
 import type { ItemLookup } from '../../src/solver/types';
 import { barter, flea, gun, gunWith, lookupOf, mod, modWith, slot, trader, WEAPON } from './lpFixtures';
 import { assertReadbackMatches, assertTextIsStrict } from './lpHarness';
-import { solveCount } from './countHarness';
+import { solvePrecise } from '../../src/solver/physical/solvePrecise';
+import { solveOccurrence } from './occurrence/solveOccurrence';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 
 type Request = SpecializeRequest & SubproblemRequest;
@@ -191,24 +192,24 @@ test('the build the plain Fast rows lose is found: {b1, b2} meets a cap of -5 at
     ['b2', modWith('b2', { coi: 0.5, accuracy: 0, ergo: 10, offers: [trader('prapor', 1, 100)] })],
   );
   const params = { weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup), ergoWeight: 1, recoilWeight: 0, priceWeight: 0, maxMOA: -5, objectiveTolerance: 1e-9 };
-  const run = await solveCount(params);
+  const run = await solvePrecise({ params, deadline: performance.now() + 60_000 });
   assert.equal(run.kind, 'build');
   assert.equal(run.kind === 'build' && run.certified, true);
   assert.deepEqual(run.kind === 'build' ? run.best.build.placements.map(p => p.itemId).sort() : [], ['b1', 'b2']);
-  const { solvePrecise } = await import('../../src/solver/physical/solvePrecise');
-  const precise = await solvePrecise({ params, deadline: performance.now() + 60_000 });
-  assert.equal(precise.kind, 'build');
-  assert.deepEqual(precise.kind === 'build' ? precise.best.build.placements.map(p => p.itemId).sort() : [], ['b1', 'b2'], 'the occurrence model states the same rule');
+  const occurrence = await solveOccurrence({ params, deadline: performance.now() + 60_000 });
+  assert.equal(occurrence.kind, 'build');
+  assert.deepEqual(occurrence.kind === 'build' ? occurrence.best.build.placements.map(p => p.itemId).sort() : [], ['b1', 'b2'], 'the occurrence model states the same rule');
 });
 
-test('eligibility is checked on the data: an acyclic graph with path-independent candidates is eligible; a cyclic graph, an empty domain and a tampered domain are not', () => {
+const isCode = (code: string) => (e: unknown): boolean => e instanceof PhysicalModelError && e.code === code;
+
+test('the preconditions are asserted on the data: an acyclic part graph with path-independent candidates passes; a cyclic graph, an empty domain and a foreign domain throw', () => {
   const acyclic = lookupOf(gun(WEAPON, { slots: [slot('s0', ['A'])] }), ['A', mod('A', { slots: [slot('s1', ['B'])] })], ['B', mod('B')]);
   const bp = preparePhysicalWeapon(acyclic, WEAPON);
   const domain = prepareSubproblemDomain(bp, acyclic, {});
-  const ok = countModelEligibility(bp, domain);
-  assert.deepEqual([ok.eligible, ok.acyclic, ok.closureAcyclic, ok.reason], [true, true, true, null]);
+  const ok = assertCountModelApplies(bp, domain);
   assert.ok(ok.slotsChecked >= 2);
-  assert.equal(countModelEligibility(bp, domain), ok, 'memoized per domain');
+  assert.equal(assertCountModelApplies(bp, domain), ok, 'memoized per domain');
 
   const cyclic = lookupOf(
     gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
@@ -217,29 +218,26 @@ test('eligibility is checked on the data: an acyclic graph with path-independent
   );
   const cbp = preparePhysicalWeapon(cyclic, WEAPON);
   const cdomain = prepareSubproblemDomain(cbp, cyclic, {});
-  const bad = countModelEligibility(cbp, cdomain);
-  assert.equal(bad.eligible, false);
-  assert.equal(bad.acyclic, false);
-  assert.match(bad.reason ?? '', /cycle/);
-  assert.throws(() => specializeCount(cbp, cdomain, {}), /does not apply/);
-  assert.throws(() => specializeFast(cbp, cdomain, {}, undefined, { certified: true }), /needs an acyclic/);
-  // the plain Fast model still builds there (with its connectivity flow), unchanged
-  assert.equal(specializeFast(cbp, cdomain, {}).certified, false);
+  // a gun whose part graph has a cycle is unsupported data (owner decision 2d as amended): no count model, certified or plain
+  assert.throws(() => assertCountModelApplies(cbp, cdomain), isCode('CYCLIC_PART_GRAPH'));
+  assert.throws(() => specializeCount(cbp, cdomain, {}), isCode('CYCLIC_PART_GRAPH'));
+  assert.throws(() => specializeFast(cbp, cdomain, {}, undefined, { certified: true }), isCode('CYCLIC_PART_GRAPH'));
+  assert.throws(() => specializeFast(cbp, cdomain, {}), isCode('CYCLIC_PART_GRAPH'));
 
   const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
   const ebp = preparePhysicalWeapon(noBase, WEAPON);
   const edomain = prepareSubproblemDomain(ebp, noBase, {});
-  assert.equal(countModelEligibility(ebp, edomain).eligible, false);
+  assert.throws(() => assertCountModelApplies(ebp, edomain), isCode('DOMAIN_INCONSISTENT'), 'an empty domain has no count model to check');
   const empty = specializeCount(ebp, edomain, {});
   assert.equal(empty.provedEmpty?.source, 'domain');
   assert.equal(empty.certified, true);
   assert.equal(empty.proof.withheld, null);
 
   const other = preparePhysicalWeapon(acyclic, WEAPON);
-  assert.throws(() => countModelEligibility(other, domain), /was not prepared from the blueprint/);
+  assert.throws(() => assertCountModelApplies(other, domain), /was not prepared from the blueprint/);
 });
 
-test('Lemma 1 is verified, not trusted: masking one candidate occurrence under one of two copies of a template makes the domain ineligible', () => {
+test('Lemma 1 is verified, not trusted: masking one candidate occurrence under one of two copies of a template fails the assertion (a fault, never a fallback)', () => {
   // T hangs under two hosts (P1 in g0, P2 in g1) and owns the slot `ts` for X: two occurrences of T, each with an X candidate.
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('g0', ['P1']), slot('g1', ['P2'])] }),
@@ -250,16 +248,14 @@ test('Lemma 1 is verified, not trusted: masking one candidate occurrence under o
   );
   const bp = preparePhysicalWeapon(lookup, WEAPON);
   const domain = prepareSubproblemDomain(bp, lookup, {});
-  assert.equal(countModelEligibility(bp, domain).eligible, true);
+  assert.ok(assertCountModelApplies(bp, domain).slotsChecked > 0);
   const occurrencesOfX = bp.instancesOf(bp.templateIndexOf('X')).filter(o => domain.occActive[o] === 1);
   assert.equal(occurrencesOfX.length, 2);
   const mask = Uint8Array.from(domain.occActive);
   mask[occurrencesOfX[0]] = 0;
   const tampered: SubproblemDomain = { ...domain, occActive: mask };
-  const verdict = countModelEligibility(bp, tampered);
-  assert.equal(verdict.eligible, false);
-  assert.equal(verdict.acyclic, true);
-  assert.match(verdict.reason ?? '', /depend on the path/);
+  assert.throws(() => assertCountModelApplies(bp, tampered), (e: unknown) => isCode('DOMAIN_INCONSISTENT')(e) && /depend on the path/.test((e as Error).message));
+  assert.throws(() => specializeCount(bp, tampered, {}), isCode('DOMAIN_INCONSISTENT'), 'no certified model is built on it');
 });
 
 test('a certified model allows every repeat: the singleCopy restriction of Fast is not read; the plain Fast model is unchanged by the option existing', () => {

@@ -2,6 +2,10 @@
  * Resolves Fast vs Precise LP mode. Auto runs the exact (Precise) model when its occurrence universe is small enough to solve to a proof
  * within the default request deadline, and the Fast model otherwise.
  *
+ * PENDING (owner decision 2d as amended, Phase 2.10): Precise now solves the certified count model, whose size is the template count, not the
+ * occurrence count, so the rule below no longer measures Precise's cost. It is kept unchanged until the owner re-decides it from the Phase 2.10
+ * measurement; the measurement that justified it (below) was taken on the occurrence model.
+ *
  * The size that decides solve time is the number of ITEM OCCURRENCES of the exact model (one per template per physical slot it can
  * occupy, `PhysicalBlueprintStats.itemOccurrences`), not the number of distinct reachable mods: the exact model has a binary column per
  * occurrence, and the unreduced model is slow past a certain size (reductions are Stage 4). Measured on the pinned capture with the default

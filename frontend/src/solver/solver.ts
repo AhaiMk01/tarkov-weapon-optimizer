@@ -4,10 +4,11 @@
  * Two models, one acceptance rule. Nothing is published that the independent physical validator (`physical/validate.ts`) did not accept,
  * and every published statistic is the validator's exact recomputation.
  *
- *  - Precise (`preciseMode: true`): the exact occurrence-level model of `physical/` (`solvePrecise`). Multiple copies, physical slots, the exact
- *    wallet, preset/owned supply. TrueErgo and Prevent Overswing run its spatial search over total weight, certified.
+ *  - Precise (`preciseMode: true`): the certified count model of `physical/` (`solvePrecise`, owner decisions 2d and 2e), built through the
+ *    proof layer, with a second opinion on every certificate (decision 5a). Multiple copies, physical slots, the exact wallet, preset/owned
+ *    supply. TrueErgo and Prevent Overswing run its spatial search over total weight, certified.
  *  - Fast (`preciseMode` false or absent): the template-count model of `physical/specializeFast.ts` on the same physical domain, acquisition and
- *    request as Precise (only placement is approximated: counts per template and per slot edge, no ancestor-repetition rule), solved on the same
+ *    request as Precise (the same count model as plain doubles, at most one copy per part unless repeats are allowed), solved on the same
  *    pinned native build. Its counts are decoded into a rooted occurrence tree and judged by the same exact validator; a rejected point is cut out
  *    and the model re-solved, and a result that is not a valid physical build is `incomplete`, never published (`physical/solveFast.ts`).
  *    TrueErgo and Prevent Overswing run the same spatial search over total weight on the count model (owner decision 2b, Phase 2.6b): an
@@ -17,6 +18,9 @@
  * (`physical/outcome.ts`, ADR 0013 section 6), fed by the facts `solvePrecise` and `solveFast` report; the optimization metadata is the search's
  * own bounds (an unknown bound is `null`, never 0). The response is the section 5 transport of `api/client.ts`.
  * A native failure is a typed error (`SolverError`), never a fabricated result.
+ *
+ * A gun whose part graph reachable from the receiver has a cycle is unsupported data (owner decision 2d as amended): `solve` refuses it before any
+ * solve with `Unsupported data: cyclic part graph` and the pre-model envelope, whatever the mode.
  *
  * Precision. `precision_request` echoes what the caller asked (`SolveParams.precisionRequest`, else derived from `preciseMode`);
  * `precision_resolved` is the model that actually ran, which is `preciseMode` and nothing else: a TrueErgo or Prevent Overswing request is NOT
@@ -41,7 +45,7 @@ import type { OptimizeOutcome, StopObservations } from './physical/outcome';
 import { PUBLIC_REASONS } from './physical/reasons';
 import { solveFast } from './physical/solveFast';
 import type { FastSummary } from './physical/solveFast';
-import { resolveTolerance, solvePrecise } from './physical/solvePrecise';
+import { partGraphRefusal, resolveTolerance, solvePrecise } from './physical/solvePrecise';
 import type { PreciseSummary } from './physical/solvePrecise';
 import type { PhysicalBuild, PhysicalBuildStats } from './physical/validate';
 
@@ -386,6 +390,10 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   // Stage guard: nothing runs for a request that was cancelled or ran out of time before its first stage.
   const entryStop = guardStop(guard);
   if (entryStop !== null) return unstarted(guardObservation(entryStop));
+  // A gun whose part graph has a cycle is unsupported data (owner decision 2d as amended): refused in every mode before any solve, payoff included.
+  if (partGraphRefusal(params) !== null) {
+    return { response: optimizeEnvelope('unsupported_part_graph', { precisionRequest, moaDependent, tolerance, elapsedMs: now() - start }) };
+  }
   let payoff: PayoffReport | undefined;
   if (params.useTchebycheff && !params.idealPoint) {
     try {

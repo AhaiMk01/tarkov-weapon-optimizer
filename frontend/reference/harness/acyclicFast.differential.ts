@@ -101,7 +101,7 @@ const fail = (detail: string): Verdict => ({ status: 'fail', detail });
 const na = (detail: string): Verdict => ({ status: 'n/a', detail });
 
 /** Why a case is not gated. */
-export type SkipKind = 'unsupported' | 'ted' | 'oracle_incomplete' | 'cyclic_active_graph' | 'solver_failure';
+export type SkipKind = 'unsupported' | 'ted' | 'oracle_incomplete' | 'cyclic_part_graph' | 'solver_failure';
 
 /**
  * The production Fast pipeline (`solveFast`: model, native solve, decode, exact validation, cut loop), loaded at run time through a non-literal specifier
@@ -111,7 +111,8 @@ interface FastRun {
   kind: 'empty' | 'build' | 'incomplete';
   best?: { score: number; build: { base: { kind: 'naked' } | { kind: 'preset'; presetId: string }; placements: readonly { parentInstanceId: string; slotId: string; childInstanceId: string; itemId: string }[] } };
   optimal?: boolean;
-  summary: { rejectedPoints: number; nativeSolves: number; acyclic: boolean };
+  reason?: string;
+  summary: { rejectedPoints: number; nativeSolves: number };
 }
 const FAST_MODULE = '../../src/solver/physical/solveFast.ts';
 let solveFastFn: ((context: { params: SolveParams; deadline: number; presolve?: 'off' | 'choose' }) => Promise<FastRun>) | undefined;
@@ -141,8 +142,6 @@ export interface FastExactnessOptions {
   randomDirections?: number;
   /** Oracle enumeration caps. */
   oracle?: EnumerateOptions;
-  /** Run the gates on a case whose active graph is cyclic (the result is informational, never an exactness claim). */
-  includeCyclic?: boolean;
   /** Relative tolerance of the pointwise objective comparison. */
   tolerance?: number;
 }
@@ -151,9 +150,12 @@ export interface FastExactness {
   id: string;
   skipped: SkipKind | null;
   skipDetail: string;
-  /** The ACTIVE template graph is acyclic (`buildTemplateGraph`, after the domain masks). */
+  /**
+   * The part graph is acyclic (request independent: no ancestor edge was ever pruned), so the ACTIVE graph is too. Owner decision 2d as amended (2026-10-12):
+   * a case whose part graph has a cycle is unsupported data; no model is built for it (`cyclic_part_graph`), and with `productionPath` the production
+   * pipeline is checked to refuse it.
+   */
   acyclic: boolean;
-  /** Request-independent: the whole closure is acyclic (no ancestor edge was ever pruned). */
   closureAcyclic: boolean;
   oracleProjections: number;
   oracleEmpty: boolean;
@@ -424,9 +426,14 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
 
   const { blueprint, domain } = prepareFor(fixture, request);
   out.closureAcyclic = blueprint.stats.prunedAncestorEdges === 0;
-  if (!domain.empty) out.acyclic = buildTemplateGraph(blueprint, domain).acyclic;
-  else out.acyclic = true; // an empty domain has no graph: nothing to be cyclic
-  if (!out.acyclic && options.includeCyclic !== true) return skip('cyclic_active_graph', 'the active template graph has a cycle');
+  out.acyclic = out.closureAcyclic;
+  if (!out.closureAcyclic) {
+    // Unsupported data (owner decision 2d as amended): no count model exists for it; the production pipeline must refuse it before any solve.
+    const refused = skip('cyclic_part_graph', 'the part graph has a cycle: unsupported data, refused before any model is built');
+    if (options.productionPath === true) await productionRefusalGate(fixture, request, refused);
+    return refused;
+  }
+  if (!domain.empty) buildTemplateGraph(blueprint, domain); // throws CYCLIC_PART_GRAPH on a cyclic active graph, which the check above rules out
 
   const tolerance = options.tolerance ?? 1e-7;
   const requestFast = specializeRequestOf(request);
@@ -622,6 +629,17 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
   }
   if (options.productionPath === true && options.certified !== true) await productionPathGate(fixture, request, oracle, out, tolerance);
   return out;
+}
+
+/** A case whose part graph has a cycle: production `solveFast` refuses it with the unsupported-data reason and solves nothing. */
+async function productionRefusalGate(fixture: ReferenceFixture, request: ReferenceRequest, out: FastExactness): Promise<void> {
+  const lookup = productionLookup(fixture);
+  const params: SolveParams = { ...mapRequest(request), weaponId: request.weapon_id, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(request.weapon_id, lookup), allowRepeatedParts: true };
+  const run = await (await loadSolveFast())({ params, deadline: performance.now() + 120_000, presolve: 'off' });
+  out.productionPath = run.kind === 'incomplete' && run.reason === 'Unsupported data: cyclic part graph' && run.summary.nativeSolves === 0
+    ? pass('refused as unsupported data, nothing solved')
+    : fail(`solveFast returned ${run.kind} (${run.reason ?? 'no reason'}) for a cyclic part graph`);
+  if (out.productionPath.status === 'fail') out.mismatches.push(`production path: ${out.productionPath.detail}`);
 }
 
 async function productionPathGate(fixture: ReferenceFixture, request: ReferenceRequest, oracle: OracleResult, out: FastExactness, tolerance: number): Promise<void> {

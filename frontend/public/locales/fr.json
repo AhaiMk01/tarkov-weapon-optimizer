@@ -174,6 +174,7 @@
     "cancelled_none": "Annulé.",
     "invalid_owned": "Votre liste de stash n’est pas valide — corrigez-la et réessayez.",
     "invalid_schedule": "Les réglages d’exploration ne sont pas valides — modifiez-les et réessayez.",
+    "unsupported_data": "Les données de pièces de cette arme ne sont pas prises en charge : aucune configuration ne peut être créée pour elle.",
     "queue_timeout": "La requête a attendu trop longtemps et a été abandonnée — réessayez.",
     "error": "Une erreur s’est produite — réessayez."
   },
@@ -416,6 +417,7 @@
     "fastProvisionalMoaModelInfeasible": "Le modèle approximatif (rapide) n’a trouvé aucun build sous la limite de MOA. Cela ne prouve pas qu’il n’en existe pas ; essayez Précis ou assouplissez la limite de MOA.",
     "invalidOwnedItems": "La liste du stash n’est pas valide, rien n’a donc été résolu.",
     "invalidExploreSchedule": "Le plan d’exploration est vide ou invalide, rien n’a donc été résolu.",
+    "unsupportedCyclicPartGraph": "Les données de cette arme contiennent des pièces qui peuvent se monter les unes sur les autres en boucle ; l'optimiseur ne prend pas en charge ces données, donc rien n'a été calculé.",
     "queueTimeoutBeforeDispatch": "Le délai de la requête a expiré dans la file d’attente, rien n’a donc été résolu. Réessayez.",
     "independentBuildValidationFailed": "Un build produit par le solveur a échoué à la validation indépendante ; il a donc été écarté.",
     "requiredProofPrerequisiteUnavailable": "Une condition nécessaire à une preuve était indisponible ; aucune preuve n’est donc revendiquée.",
