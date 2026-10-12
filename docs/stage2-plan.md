@@ -33,7 +33,7 @@ suite, harness ratchet) and committed by the orchestrator.
 | 2.5 Numerics | §4C: K = 100/2.9089, no Big-M literal, no `toFixed(6)`, signed accuracy, zero-intrinsic and constant MOA rows, outward secants, recoil caps with nonpositive denominators, finite auxiliary ranges, global UB including tolerance-fathomed bounds | 2.4, 2.3 |
 | 2.6 Solve and status | §5/§6 transport shapes, statuses, certificates, reasons and precedence; decoder; production validator matching every reference accept/reject; payoff-table reporting | 2.3–2.5 |
 | 2.6b Fast TED | Owner decision 2b: TrueErgo/Prevent Overswing on the Fast count model (weight search over its exact aggregate weight), approximate qualification, no silent Precise upgrade | 2.6 |
-| 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, acyclicity guard with occurrence-model fallback, infeasibility second opinion; occurrence model kept as a test cross-check | 2.6b, before 2.9 |
+| 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, second opinion (5a), integrality tolerance (5b); decision 2d as amended: acyclicity checked per gun, cyclic guns refused as unsupported data, occurrence model and cycle code out of production (kept as a test cross-check); Auto rule revisited from the measurement | 2.6b, before 2.9 |
 | 2.7 Operations | §4D deadlines and macrotask yields, out-of-band cancel, `owned_items` validation and forwarding, floor discovery then bisection, Explore classification, metadata ops, cache invalidation, `preparePhysicalWeapon` / `prepareSubproblemDomain` / `specializeLP` | 2.6 |
 | 2.8 Consumers | §4E client, App and UI components, locales, EFTForge v1 export (supported-only), MethodologyModal | 2.6–2.7 |
 | 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere | all |
@@ -82,11 +82,34 @@ is approximate. Decisions:
    cycle handling stays as is for now (Precise's ancestor rule keeps the occurrence tree finite; Fast adds its connectivity flow
    only on a cyclic graph; cyclic test worlds stay). In Stage 4, when certified Fast lands, acyclicity becomes a checked
    precondition: a cyclic gun is refused as unsupported data with a clear error, and the cycle code is removed with it.
+   **Amended (owner, 2026-10-12): acyclicity is a checked precondition now, not in Stage 4** ("we will not have cyclic guns").
+   - The check is a property of the gun's data: the part graph reachable from the receiver has no cycle (the blueprint's
+     ancestor rule cut no edge, `prunedAncestorEdges === 0`), cached per gun. The ancestor rule stays only as this detector.
+   - A cyclic gun is refused in every mode (Fast, Precise, Auto, Explore, floors) with a new public reason for unsupported
+     data and one plain sentence; nothing is solved and no build is shown.
+   - Precise runs only on the count model. The occurrence model leaves production and stays in the tests as the
+     independent cross-check. The per-domain Lemma 1 check (candidate sets agree) becomes an internal assertion: a
+     failure is a solver error, never a silent fallback.
+   - Removed with it: Fast's connectivity flow and cyclic decode search (`placeBySearch`), the occurrence fallback, the
+     cyclic branches of eligibility and telemetry (`acyclic` flags become invariants).
+   - Ledger: the Stage 1 oracle is unchanged and still solves the 5 cyclic cases (F03-self-loop,
+     F03-ancestor-loop-with-sibling-repetition, F03-memoization-context-ancestor, F03-memoization-context-required-slot,
+     F10-cycle-behind-deactivated-owner). The harness expects production to refuse them as unsupported data; the baseline
+     records this as owner-approved scope, never by editing a ledger expectation. F10-no-disconnected-assembly (loops not
+     reachable from the receiver) keeps its optimum.
+   - The seeded cyclic test worlds become refusal tests; the cyclic gates in `docs/research/acyclic-fast-exactness.md`
+     section 8 stay as history.
+   - ADR 0003 (rootedness on cyclic graphs) and ADR 0013 section 3 items 3 and 10 need an amendment note; the text is
+     drafted in the repo, and posting it to #40 needs the owner's approval.
+   - Consequences to settle after Phase 2.10's measurement: Auto's size rule counts occurrences
+     (`AUTO_PRECISE_MAX_OCCURRENCES`), which no longer measures Precise's cost; and Stage 4 candidate 2a (certified Fast)
+     shrinks to what Fast still lacks: the proof layer, the second opinion and the MOA rows.
 2e. **Precise is rebuilt on the count model now, before 2.9 (owner, 2026-10-06; amends ADR 0013's order, Phase 2.10).**
    On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
    activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4
    and 5), and every row goes through the proof layer, so Precise keeps its certificates. Adds the MOA larger-COI rows,
-   an acyclicity guard (a cyclic gun keeps the occurrence model) and a second opinion before any certified infeasibility.
+   an acyclicity guard and a second opinion before any certified infeasibility. (Amended 2d: a cyclic gun is refused,
+   not sent to the occurrence model.)
    The occurrence model stays in the tests as an independent cross-check. Stage 3 proves the rebuilt Precise.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
