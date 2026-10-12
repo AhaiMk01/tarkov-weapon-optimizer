@@ -69,7 +69,7 @@ test('item 6, per-tolerance qualification on the certified count model: each nat
   const cases: [string, HighsOptions, boolean][] = [
     ['production frame', {}, true],
     ['integrality at its declared 1e-7', { mip_feasibility_tolerance: 1e-7 }, true],
-    ['integrality stricter, 1e-8', { mip_feasibility_tolerance: 1e-8 }, true],
+    ['integrality stricter, 1e-8 (exactly 1e-7 is required)', { mip_feasibility_tolerance: 1e-8 }, false],
     ['integrality looser, 2e-7', { mip_feasibility_tolerance: 2e-7 }, false],
     ['integrality 1e-6', { mip_feasibility_tolerance: 1e-6 }, false],
     ['primal stricter, 1e-10', { primal_feasibility_tolerance: 1e-10 }, true],
@@ -174,7 +174,7 @@ test('item 6, the matrix thresholds production declares are the ones HiGHS holds
   assert.equal(result.effectiveOptions.large_matrix_value, HIGHS_LARGE_MATRIX_VALUE);
 });
 
-test('item 6, defence in depth (REPORTED, not fixed: production code is out of scope for this workstream): the gate accepts any integrality tolerance at or below 1e-7, so a solve at the defect-prone 1e-9 is called qualified', { todo: 'decision 5b says integrality is always 1e-7; assessNativeResult accepts a stricter value ("a stricter one is fine"), which is exactly the setting under which count_presolve_off_wrong_optimal.lp returns a wrong Optimal with a wrong bound. Production never solves at 1e-9 (nativeSolveOptions pins 1e-7 and nativeStop admits only mip_max_improving_sols), so this is not a live defect; owner to decide whether the gate should require exactly 1e-7' }, async () => {
+test('item 6, defence in depth: the gate requires integrality exactly 1e-7, so a solve at the defect-prone 1e-9 is not qualified (owner, 2026-10-12)', async () => {
   const lp = readFileSync(fileURLToPath(new URL('./solverDefects/count_presolve_off_wrong_optimal.lp', import.meta.url)), 'utf8');
   const old = await getNativeHighs().solveStructured(lp, { ...nativeSolveOptions(1e-9), mip_feasibility_tolerance: 1e-9, presolve: 'off' }, { includeReadback: true });
   const assessment = assessNativeResult({ lpText: lp, proof: EMPTY_MODEL_PROOF }, old);

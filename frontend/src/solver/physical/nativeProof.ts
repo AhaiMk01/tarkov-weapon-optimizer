@@ -132,9 +132,11 @@ export function assessNativeResult(input: AssessInput, result: NativeResult): Na
     }
   }
 
-  // Each tolerance at most its declared value: primal and dual feasibility 1e-9, integrality 1e-7 (owner decision 5b; a stricter one is fine).
-  const declared = { primal_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE, dual_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE, mip_feasibility_tolerance: NATIVE_INTEGRALITY_TOLERANCE } as const;
-  const tolerancesInForce = (Object.keys(declared) as (keyof typeof declared)[]).every(name => {
+  // Primal and dual feasibility at most 1e-9; integrality EXACTLY 1e-7 (owner decision 5b, and the Stage 3 follow-up of 2026-10-12): a stricter
+  // integrality tolerance is not safer here, it is the setting under which count_presolve_off_wrong_optimal.lp returns a wrong Optimal.
+  const declared = { primal_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE, dual_feasibility_tolerance: NATIVE_FEASIBILITY_TOLERANCE } as const;
+  const integrality = NUMERIC_OPTION(result, 'mip_feasibility_tolerance');
+  const tolerancesInForce = integrality === NATIVE_INTEGRALITY_TOLERANCE && (Object.keys(declared) as (keyof typeof declared)[]).every(name => {
     const value = NUMERIC_OPTION(result, name);
     return value !== null && value <= declared[name];
   });

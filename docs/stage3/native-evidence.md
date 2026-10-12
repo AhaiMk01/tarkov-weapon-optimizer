@@ -23,7 +23,7 @@ and the shared loader `tests/native/evidence/pinned.ts`. Everything else cited e
 | 3 | Small coefficients and very wide price normalization: filtering detected or proof withheld, never silently wrong | PASS (one observation, O1) |
 | 4 | Finite auxiliary domains in the count model | PASS |
 | 5 | Completed vs limit-stopped native runs | PASS |
-| 6 | Bound-error statement (`NATIVE_FRAME.assumptions`, `boundShortfall`, `BOUND_SANITY_RELATIVE`, per-tolerance qualification, defect fixture) | PASS (one observation, O2, recorded as a `todo` test) |
+| 6 | Bound-error statement (`NATIVE_FRAME.assumptions`, `boundShortfall`, `BOUND_SANITY_RELATIVE`, per-tolerance qualification, defect fixture) | PASS (observation O2 fixed 2026-10-12: the gate requires integrality exactly 1e-7) |
 | 7 | Second-opinion paths | PASS (existing tests) |
 | 8 | Pinned loader only, no stock HiGHS | PASS (existing tests) |
 
@@ -130,16 +130,16 @@ assumed is stated; the noise is measured and an implausible shortfall withholds 
 | same file, "item 6, per-tolerance qualification on the certified count model: …" (new) | Each tolerance against its own declared value on a count model with constructed rows: production frame, integrality 1e-7 and 1e-8, primal 1e-10 qualify; integrality 2e-7 and 1e-6, primal 1e-8 (the integrality value is not a feasibility allowance), dual 1e-8 and 1e-7, a changed `small_matrix_value` or `large_matrix_value` do not, each with the tolerance/threshold reason, while the readback itself stays equal. |
 | same file, "item 6, the shortfall guard at its limit …" (new) | Production Precise with every dual bound lowered by 0.8 and 1.5 times `max(tolerance, 1e-9 x max(1, |bound|))`, in three regimes (bound 25 at tolerance 1e-9: absolute floor 2.5e-8; bound 2,500: relative 2.5e-6; tolerance 1e-5 dominating). Inside: the shortfall is measured in `boundShortfall`, the bound is kept, no solve is unqualified, and the request certifies, which is the accepted residual assumption made concrete; the transported upper bound still never shows below the witness. Outside: the verified witness is kept, the bound is withheld (null), not certified, the reason is reported and the shortfall equals the injected one. |
 | same file, "item 6, two-sided integrality shift, upward side: …" (new) | A bound raised by 1e-7 costs the certificate at tolerance 1e-9 (status `feasible`, gap between 1e-9 and 2e-7, bound at least the witness) and keeps it at 1e-5. |
-| same file, "item 6, the defect fixture count_presolve_off_wrong_optimal.lp under the production frame: …" (new) | On `tests/physical/solverDefects/count_presolve_off_wrong_optimal.lp`, every production seed (0, 11, 29) at the production options returns the true optimum 100 with a dual bound at least 100; the solve is qualified and its bound evidence encloses the truth. Diagnostic: at integrality 1e-9 the default seed still returns the wrong `Optimal` 93.6 with dual bound 93.6, and the gate calls that solve qualified (O2). A spy on `solvePrecise` at tolerances 1e-9, 1e-5 and 1e-2 (TrueErgo) shows every native solve ran at integrality exactly 1e-7. |
+| same file, "item 6, the defect fixture count_presolve_off_wrong_optimal.lp under the production frame: …" (new) | On `tests/physical/solverDefects/count_presolve_off_wrong_optimal.lp`, every production seed (0, 11, 29) at the production options returns the true optimum 100 with a dual bound at least 100; the solve is qualified and its bound evidence encloses the truth. Diagnostic: at integrality 1e-9 the default seed still returns the wrong `Optimal` 93.6 with dual bound 93.6, and the gate now refuses to qualify that solve (O2, fixed). A spy on `solvePrecise` at tolerances 1e-9, 1e-5 and 1e-2 (TrueErgo) shows every native solve ran at integrality exactly 1e-7. |
 | same file, "item 6, the matrix thresholds production declares are the ones HiGHS holds on every solve" (new) | `effectiveOptions` of a production solve carry `small_matrix_value` 1e-9 and `large_matrix_value` 1e15. |
-| same file, "item 6, defence in depth …" (new, `todo`) | Records O2 as an expected-to-fail test: a solve at integrality 1e-9 is currently qualified. |
+| same file, "item 6, defence in depth …" (new) | O2 fixed (owner, 2026-10-12): a solve at integrality 1e-9 is not qualified; the gate requires exactly 1e-7. |
 | `tests/physical/countModel.proof.test.ts` and `tests/physical/solvePrecise.proof.test.ts` "a bound that falls far below a build verified in its own node is withheld as a wrong bound; a few ulps of solver noise only count in boundShortfall" | The guard end to end (1e-13 kept, 1 withheld). |
 | `tests/physical/solvePrecise.proof.test.ts` "the reported bounds enclose the exact optimum: lower is a downward enclosure of the verified score, upper at least it, and the gap is the exact gap" | LB/UB enclosure (4C). |
 | `tests/physical/proof.rows.test.ts` "a node bound is the qualified native bound plus the frame error, exactly: unqualified, missing or non-finite evidence is unknown, never a finite guess" | UB = qualified native bound + proved frame error, exact. |
 | `tests/physical/nativeProof.test.ts` "a solve without a readback, with a read warning, with loosened native tolerances or with a withheld model proof is unqualified, each for its own reason", "a solve with presolve ON is a witness at most …" | Decision 5 and the tolerance check (primal). |
 | `tests/physical/solverDefects.test.ts` "the COUNT model node [1.5, 3] of TED world 2105 (count_presolve_off_wrong_optimal.lp): …" | The defect fixture: pinned to the true build it scores 100; at 1e-7 every production seed is right. |
 
-Verdict: **PASS** for the obligation as decided by the owner. O2 is a defence-in-depth gap, not a live defect.
+Verdict: **PASS** for the obligation as decided by the owner. O2 (a defence-in-depth gap, never a live defect) is fixed.
 
 ## 7. Second-opinion paths
 
@@ -176,6 +176,7 @@ Verdict: **PASS**.
   no real price comes close (the largest price in the capture is 21,693,600, about 2.2e7, and the largest coefficient of the 153 default certified models is 844,077). Reproduction:
   `evidence.filtering.test.ts` "item 3, at large_matrix_value …" (a part priced 1e15). Not fixed (out of scope); decide
   whether a flagged model should withhold up front.
+- **Resolved (owner, 2026-10-12):** `assessNativeResult` now requires integrality exactly 1e-7.
 - **O2, the integrality gate accepts a stricter value.** `assessNativeResult` qualifies any `mip_feasibility_tolerance` at
   or below 1e-7. At 1e-9 the defect fixture returns the wrong `Optimal` 93.6 with dual bound 93.6, and the gate calls that
   solve qualified. Production is not exposed: `nativeSolveOptions` pins 1e-7 for every request, `nativeStop` admits only
