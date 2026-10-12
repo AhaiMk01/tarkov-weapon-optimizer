@@ -112,7 +112,8 @@ is approximate. Decisions:
    153 + 19 in 1,050 s (max 49 s); before, the occurrence model left 17 plain and 43 TrueErgo guns uncertified (1,608 s and
    3,453 s). Same optimum on every gun certified by both. The second opinion costs about half the solve time; one
    disagreement in 883 second solves (AK-104 TrueErgo), settled by the third seed. Data and scripts:
-   `frontend/benchmarks/phase210m2/`. Auto's new rule: performance policy item 1 (owner, 2026-10-12).
+   `frontend/benchmarks/phase210m2/` (scripts and summaries; raw results on the evidence disk as
+   `phase210m2-results-20261012-c73b9e32c6fc.tar.gz`). Auto's new rule: performance policy item 1 (owner, 2026-10-12).
 2e. **Precise is rebuilt on the count model now, before 2.9 (owner, 2026-10-06; amends ADR 0013's order, Phase 2.10).**
    On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
    activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4
