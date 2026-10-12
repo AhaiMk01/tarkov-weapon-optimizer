@@ -113,7 +113,7 @@ interface Sample {
 
 const VIOLATING: Sample[] = [
   { name: 'static import escaping reference/', file: at('oracle/s.ts'), source: `import { solve } from '../../src/solver/solver';`, rules: ['outside-reference'] },
-  { name: 'multi-line named import', file: at('oracle/s.ts'), source: lines('import {', '  a,', '  b,', `} from '../../src/solver/lpBuilder';`), rules: ['outside-reference'] },
+  { name: 'multi-line named import', file: at('oracle/s.ts'), source: lines('import {', '  a,', '  b,', `} from '../../src/solver/solver';`), rules: ['outside-reference'] },
   { name: 'side-effect import', file: at('oracle/s.ts'), source: `import '../../src/solver/solver';`, rules: ['outside-reference'] },
   { name: 'type-only import', file: at('oracle/s.ts'), source: `import type { X } from '../../src/types';`, rules: ['outside-reference'] },
   { name: 're-export with a name list', file: at('oracle/s.ts'), source: `export { a } from '../../src/solver/a';`, rules: ['outside-reference'] },
@@ -193,7 +193,7 @@ const ALLOWED: Sample[] = [
   {
     name: 'bare package names (production code is not published as a package)',
     file: at('oracle/s.ts'),
-    source: lines(`import ts from 'typescript';`, `import { Highs } from 'highs';`, `import x from '@scope/pkg/sub';`, `import fsx from 'fs';`, `import y from '${packageName}-utils';`),
+    source: lines(`import ts from 'typescript';`, `import lz from 'lz-string';`, `import x from '@scope/pkg/sub';`, `import fsx from 'fs';`, `import y from '${packageName}-utils';`),
     rules: [],
   },
   {

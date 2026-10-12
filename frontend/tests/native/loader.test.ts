@@ -101,16 +101,12 @@ test('wrong artifact hashes are refused before the glue runs: the committed SHA-
 });
 
 test('a stock or foreign build cannot pass: a different wasm with a consistent manifest still fails the export/version checks', async () => {
-  // Hash-consistent but wrong build: pretend the committed identity describes the stock highs-js wasm. Its exports are not ours.
-  let stock: Uint8Array;
-  try {
-    stock = new Uint8Array(readFileSync(fileURLToPath(new URL('../../node_modules/highs/build/highs.wasm', import.meta.url))));
-  } catch {
-    return; // the stock package is gone (Phase 2.6): nothing to impersonate
-  }
-  const digest = createHash('sha256').update(stock).digest('hex');
+  // Hash-consistent but wrong build: pretend the committed identity describes a foreign wasm (an empty, valid module). Its exports are not ours.
+  // (The stock npm `highs` package is no longer installed, Phase 2.9; any foreign module stands in for it.)
+  const foreign = new Uint8Array([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]);
+  const digest = createHash('sha256').update(foreign).digest('hex');
   await assert.rejects(
-    loadHighs({ wasmBytes: stock, expected: identity(c => { c.artifacts['highs.wasm'].sha256 = digest; }) }),
+    loadHighs({ wasmBytes: foreign, expected: identity(c => { c.artifacts['highs.wasm'].sha256 = digest; }) }),
     (e: unknown) => e instanceof HighsAbiError || e instanceof HighsLoadError,
     'the pinned glue cannot instantiate a foreign wasm; there is no fallback',
   );

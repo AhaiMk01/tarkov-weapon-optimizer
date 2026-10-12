@@ -5,9 +5,8 @@
  */
 
 import type {
-  ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetComponent, PresetInfo, TraderLevels,
+  ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetComponent, PresetInfo,
 } from './types.ts';
-import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
 import { barterIngredientCount, barterLotSize, presetComponentCount, SourceDataError } from './sourceErrors.ts';
 import { barterLotPrice } from './physical/barterPrice.ts';
@@ -565,8 +564,8 @@ function extractGunStats(gun: RawItem): GunStats {
   const props = gun.properties ?? {};
   const buyFor = gun.buyFor ?? [];
 
-  // Every offer is kept, with its trader level, so the naked base can go
-  // through getAvailablePrice() like mods and presets do. Collapsing to a
+  // Every offer is kept, with its trader level, so the naked base is gated by
+  // the physical domain (physical/acquisition.ts) like mods and presets. Collapsing to a
   // single cheapest price here is what let the bare receiver bypass trader
   // loyalty levels and TRADER_DISABLED entirely.
   //
@@ -592,10 +591,10 @@ function extractGunStats(gun: RawItem): GunStats {
   offers.sort((a, b) => a.price - b.price);
 
   // Cheapest offer ignoring availability settings — display fallback only.
-  // Callers that must respect trader levels use getAvailablePrice(stats).
+  // Callers that must respect trader levels read the offers (physical/acquisition.ts).
   // No offers means no purchase path: price 0 + 'not_available', the same
   // convention extractAllPresets uses. (This used to be a 999999999 sentinel,
-  // which getAvailablePrice's no-offers fallback read as a real price and
+  // which the pre-cutover pricing's no-offers fallback read as a real price and
   // reported as *available* — every caller then needed a magic ceiling to
   // undo it.)
   let lowestPrice = 0;
@@ -859,78 +858,6 @@ export function buildItemLookup(guns: RawItem[], mods: RawItem[]): ItemLookup {
     };
   }
   return lookup;
-}
-
-// --- Price Availability ---
-
-export function getAvailablePrice(
-  stats: {
-    purchasable?: boolean;
-    offers?: OfferInfo[];
-    price?: number;
-    price_source?: string;
-    min_level_flea?: number;
-  },
-  traderLevels: TraderLevels = DEFAULT_TRADER_LEVELS,
-  fleaAvailable = true,
-  playerLevel: number | null = null,
-  barterAvailable = false,
-  barterExcludeDogtags = false,
-): [number, string | null, boolean, string | null] {
-  if (stats.purchasable === false) {
-    return [0, 'not_purchasable', false, null];
-  }
-
-  const minLevelFlea = stats.min_level_flea ?? 0;
-  const offers = stats.offers;
-
-  if (!offers || !offers.length) {
-    const defaultPrice = stats.price ?? 0;
-    if (defaultPrice > 0 && fleaAvailable) {
-      if (playerLevel !== null && minLevelFlea > playerLevel) {
-        return [0, null, false, null];
-      }
-      return [defaultPrice, stats.price_source ?? 'market', true, null];
-    }
-    return [0, null, false, null];
-  }
-
-  let bestPrice: number | null = null;
-  let bestSource: string | null = null;
-  let bestLabel: string | null = null;
-
-  for (const offer of offers) {
-    const price = offer.price;
-    const source = offer.source;
-    // Skip barter offers when barter toggle is off
-    if (!barterAvailable && source.startsWith('barter:')) continue;
-    if (barterExcludeDogtags && offer.requires_dogtag) continue;
-    const requiredLevel = offer.trader_level;
-    const vendor = (offer.vendor_normalized ?? '').toLowerCase();
-
-    if (source === 'fleaMarket') {
-      if (!fleaAvailable) continue;
-      if (playerLevel !== null && minLevelFlea > playerLevel) continue;
-    } else {
-      // Fast O(1) lookup on normalized map; zero allocations in hot pricing loop
-      const traderLevel = traderLevels[vendor] ?? 4;
-      if (requiredLevel !== null && requiredLevel > traderLevel) continue;
-    }
-
-    if (bestPrice === null || price < bestPrice) {
-      bestPrice = price;
-      bestSource = source;
-      bestLabel =
-        source === 'fleaMarket'
-          ? 'Flea Market'
-          : (offer.vendor_name || offer.vendor_normalized || source);
-    }
-  }
-
-  if (bestPrice !== null) {
-    return [bestPrice, bestSource, true, bestLabel];
-  }
-  return [0, null, false, null];
 }
 
 // --- State Cache ---

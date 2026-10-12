@@ -9,8 +9,6 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
-import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
-import { computeStructuralBounds } from '../../src/solver/structuralBounds';
 import type { ItemLookup } from '../../src/solver/types';
 import {
   InactiveReason, preparePhysicalWeapon, prepareSubproblemDomain, type PhysicalBlueprint,
@@ -124,23 +122,6 @@ test('camora ammunition slots are removed, not emptied: 5 guns, 28 slot records,
   assert.deepEqual(gunsWithAmmo.sort(), ['CR 200DS', 'CR 50DS', 'MSGL', 'MTs-255-12', 'RSh-12']);
   assert.equal(slotRecords.size, 28);
   assert.equal(ammoIds.size, 39);
-});
-
-test('direct raw bounds equal the legacy weight bounds and ergonomics minimum, and are never looser at the ergonomics maximum', { skip }, () => {
-  // The legacy DP caps a required slot's best candidate at zero (it adds only a positive child), so its ergonomics maximum can
-  // only be looser than the exact bound, never tighter. Weight and the ergonomics minimum agree on every gun.
-  let tighterErgoMax = 0;
-  for (const gun of guns) {
-    const bp = prepare(gun.id);
-    const legacy = computeStructuralBounds(gun.id, lookup, buildCompatibilityMap(gun.id, lookup));
-    const raw = bp.rawBounds!;
-    assert.ok(Math.abs(raw.weight.min - legacy.physicalWeightBounds[0]) < 1e-9, `${gun.shortName} weight min`);
-    assert.ok(Math.abs(raw.weight.max - legacy.physicalWeightBounds[1]) < 1e-9, `${gun.shortName} weight max`);
-    assert.ok(Math.abs(raw.ergonomics.min - legacy.ergoBounds[0]) < 1e-9, `${gun.shortName} ergonomics min`);
-    assert.ok(raw.ergonomics.max <= legacy.ergoBounds[1] + 1e-9, `${gun.shortName} ergonomics max is looser than the legacy bound`);
-    if (raw.ergonomics.max < legacy.ergoBounds[1] - 1e-9) tighterErgoMax++;
-  }
-  assert.equal(tighterErgoMax, 90);
 });
 
 test('M4A1 domain: masks cover every occurrence, the blueprint is untouched, reasons add up', { skip }, t => {

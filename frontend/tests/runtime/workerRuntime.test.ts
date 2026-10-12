@@ -342,7 +342,7 @@ test('the full acquisition and feasibility domain reaches every operation base, 
     max_price: 123456, min_ergonomics: 30, max_recoil_v: 70, max_recoil_sum: -0.1, min_mag_capacity: 20, min_sighting_range: 100, max_weight: 4.5,
     include_items: ['a'], exclude_items: ['b'], include_categories: [['c1']], exclude_categories: ['c2'], prevent_overswing: true, use_true_ergo: true,
     equip_ergo_modifier: -0.1, trader_levels: { Prapor: 2, skier: 3 } as unknown as OptimizeRequest['trader_levels'], flea_available: false, barter_available: true,
-    barter_exclude_dogtags: true, player_level: 22, bounds_mode: 'naive',
+    barter_exclude_dogtags: true, player_level: 22,
   };
   const h = harness();
   h.receive(optimizeMsg(1, { ...domain, precise_mode: 'auto' }));
@@ -352,7 +352,7 @@ test('the full acquisition and feasibility domain reaches every operation base, 
   const expected = {
     maxPrice: 123456, minErgonomics: 30, maxRecoilV: 70, maxRecoilSum: -0.1, minMagCapacity: 20, minSightingRange: 100, maxWeight: 4.5,
     includeItems: ['a'], excludeItems: ['b'], includeCategories: [['c1']], excludeCategories: ['c2'], preventOverswing: true, useTrueErgo: true,
-    equipErgoModifier: -0.1, fleaAvailable: false, barterAvailable: true, barterExcludeDogtags: true, playerLevel: 22, boundsMode: 'naive',
+    equipErgoModifier: -0.1, fleaAvailable: false, barterAvailable: true, barterExcludeDogtags: true, playerLevel: 22,
   };
   for (const params of [h.calls.solve[0], h.calls.explore[0].baseParams, h.calls.floor[0].baseParams]) {
     assert.deepEqual(Object.fromEntries(Object.keys(expected).map(k => [k, (params as unknown as Record<string, unknown>)[k]])), expected);

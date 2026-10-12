@@ -57,7 +57,7 @@ export interface UnsupportedFeature {
   detail: string;
 }
 
-/** The base marker production's LP uses for the naked receiver (lpBuilder baseIds, solver base decoding). */
+/** The marker the pre-cutover LP used for the naked receiver, and the physical base kind's name: a preset with this id stays ambiguous. */
 const NAKED_BASE_MARKER = 'naked';
 
 const positive = (offer: ReferenceOffer): boolean => offer.kind === 'barter' || offer.price > 0;

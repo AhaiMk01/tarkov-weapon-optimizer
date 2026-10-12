@@ -171,9 +171,10 @@ test('the knapsack and precision fixtures round-trip', async () => {
   }
 });
 
-const AK74_LP_PATH = fileURLToPath(new URL('../../test_AK-74.lp', import.meta.url));
+// The text the retired pre-cutover LP writer emitted for the AK-74 (formerly frontend/test_AK-74.lp), kept as a parser regression fixture.
+const AK74_LP_PATH = fileURLToPath(new URL('./lp/legacy_AK-74.lp', import.meta.url));
 test('the committed legacy AK-74 model (about 3300 rows, 395 kB): the readback check catches `x_-1`, and the repaired text reads back identically',
-  { skip: existsSync(AK74_LP_PATH) ? false : 'test_AK-74.lp is not present' }, async () => {
+  { skip: existsSync(AK74_LP_PATH) ? false : 'lp/legacy_AK-74.lp is not present' }, async () => {
     const lp = readFileSync(AK74_LP_PATH, 'utf8');
     // The legacy writer emits `x_-1` for index -1. HiGHS reads that as the column `x_` and the number -1: a different model.
     assert.ok(lp.includes('x_-1'));

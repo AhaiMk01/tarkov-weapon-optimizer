@@ -36,7 +36,7 @@ suite, harness ratchet) and committed by the orchestrator.
 | 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, second opinion (5a), integrality tolerance (5b); decision 2d as amended: acyclicity checked per gun, cyclic guns refused as unsupported data, occurrence model and cycle code out of production (kept as a test cross-check); Auto rule revisited from the measurement | 2.6b, before 2.9 |
 | 2.7 Operations | §4D deadlines and macrotask yields, out-of-band cancel, `owned_items` validation and forwarding, floor discovery then bisection, Explore classification, metadata ops, cache invalidation, `preparePhysicalWeapon` / `prepareSubproblemDomain` / `specializeLP` | 2.6 |
 | 2.8 Consumers | §4E client, App and UI components, locales, EFTForge v1 export (supported-only), MethodologyModal | 2.6–2.7 |
-| 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere | all |
+| 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere. **Done (2026-10-12):** the 25 root `test_*.ts` scripts, `bench_*.ts`, `proto_tchebycheff.ts` and the pre-cutover benchmark suite are gone; what the new pipeline still needs moved to `tests/` (Gunsmith on the pinned capture, TED display, request keys and trader canonicalization, preset quantities, translations). `lpBuilder.ts`, `validateBuild.ts`, `structuralBounds.ts` (with `bounds_mode`), `getAvailablePrice`, the `legacySolve` shim and the npm `highs` and `puppeteer-core` packages are retired; `tsconfig.benchmarks.json` checks `benchmarks/phase210m2/`; lint is clean | all |
 
 ## Owner decisions carried into Stage 2
 
@@ -157,7 +157,11 @@ is approximate. Decisions:
 6. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
    the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
 
-## Known baseline failures (before Stage 2)
+## Known baseline failures (before Stage 2): resolved in Phase 2.9
 
-`test_gunsmith_all` (PKP preset purchase), `test_spatial_candidates` (TypeError), `test_worker_deadline`
-(missing benchmark manifest). Phase 2.9 resolves or retires them.
+- `test_gunsmith_all`: replaced by `tests/solver/gunsmith.pinned.test.ts`. On the pinned capture 27 of 29 tasks are certified optima; Part 22
+  (M4A1) is certified infeasible without barters (its required REAP-IR is barter-only) and certified optimal with them; Part 25 (PKP) is
+  certified infeasible because no offer, barter or preset makes the PKP accessible (none of its three presets has an offer).
+- `test_spatial_candidates`: retired with the experiments it exercised (adaptive envelope, node-option tuning on the pre-cutover LP).
+- `test_worker_deadline`: retired with the benchmark manifest; deadlines are covered by `tests/runtime/workerRuntime.test.ts` and
+  `tests/runtime/workerChannel.test.ts`.

@@ -19,7 +19,7 @@ interface Line {
   bounds?: { lower: number | null; upper: number | null; gap: number | null };
   nodes?: number;
   telemetry?: Record<string, number>;
-  size: { occurrences: number; autoEstimate: number; templates: number; emptyDomain: boolean; countColumns: number | null; countRows: number | null; countEdges: number | null; countIntegers: number | null };
+  size: { occurrences: number; autoEstimate?: number; candidateEdges?: number; templates: number; emptyDomain: boolean; countColumns: number | null; countRows: number | null; countEdges: number | null; countIntegers: number | null };
 }
 
 const dir = process.argv[2];

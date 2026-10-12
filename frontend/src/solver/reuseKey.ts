@@ -48,8 +48,7 @@ export function canonicalizeOwnedItems(items?: readonly string[] | null): string
  *
  * This normalized map MUST be used consistently across:
  * - Cache key generation (computeIdealPointCacheKey)
- * - Solver pricing (dataService.ts:getAvailablePrice)
- * - Independent build validation (validateBuild.ts)
+ * - The physical acquisition domain (physical/acquisition.ts) and the solver entry (solver.ts)
  */
 export function canonicalizeTraderLevels(levels?: TraderLevels | null): Record<string, number> | undefined {
   if (!levels) return undefined;
@@ -69,24 +68,6 @@ export function canonicalizeTraderLevels(levels?: TraderLevels | null): Record<s
     out[k] = merged.get(k)!;
   }
   return out;
-}
-
-/**
- * Computes canonical key for Tier 1 Structural Bounds reuse.
- * Invariant to all preferences, prices, and constraints except weaponId and data snapshot.
- */
-export function computeStructuralBoundsCacheKey(
-  lang: string,
-  gameMode: string,
-  weaponId: string,
-  maxWeight?: number | null,
-): string {
-  return JSON.stringify({
-    lang,
-    gameMode,
-    weapon_id: weaponId,
-    max_weight: maxWeight != null ? Number(maxWeight) : undefined,
-  });
 }
 
 /**
@@ -122,7 +103,6 @@ export function computeIdealPointCacheKey(
     equip_ergo_modifier: req.equip_ergo_modifier != null ? Number(req.equip_ergo_modifier) : undefined,
     use_true_ergo: Boolean(req.use_true_ergo),
     precise_mode: req.precise_mode ?? undefined,
-    bounds_mode: req.bounds_mode ?? 'structural',
     // Market domain (strictly canonicalized)
     trader_levels: canonicalizeTraderLevels(req.trader_levels),
     flea_available: req.flea_available ?? true,

@@ -141,7 +141,7 @@ function sources(dir: string): string[] {
   return found;
 }
 
-test('production src/ never imports node built-ins statically in the native surface, and never loads another HiGHS', () => {
+test('production src/ never imports node built-ins statically in the native surface, and nothing (src, tests, benchmarks) loads another HiGHS', () => {
   const nodeBuiltin = /^\s*(?:import|export)\b[^'"]*\bfrom\s+['"](?:node:[^'"]+|fs|path|url|module|crypto|os|child_process)['"]/m;
   for (const file of sources(at('src/solver/native'))) {
     assert.ok(!nodeBuiltin.test(readFileSync(file, 'utf8')), `${relative(frontend, file)} imports a node built-in statically`);
@@ -149,22 +149,30 @@ test('production src/ never imports node built-ins statically in the native surf
   const anotherHighs = /(?:from\s+['"]highs['"]|import\(\s*['"]highs['"]\s*\)|require\(\s*['"]highs['"]\s*\)|node_modules\/highs)/;
   for (const file of sources(at('src'))) {
     const text = readFileSync(file, 'utf8');
-    assert.ok(!anotherHighs.test(text), `${relative(frontend, file)} references the stock highs package`);
     assert.ok(!/stock npm package|Fallback to stock/i.test(text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '')), `${relative(frontend, file)} contains a stock fallback`);
   }
   assert.ok(existsSync(at('src/solver/native/loadHighs.ts')));
+  // Phase 2.9: every test and benchmark goes through the pinned loader as well, and the npm package is not a dependency.
+  for (const file of [...sources(at('src')), ...sources(at('tests')), ...sources(at('benchmarks'))]) {
+    if (file === fileURLToPath(import.meta.url)) continue; // this file names the package as history (superseded hashes) and in the pattern
+    assert.ok(!anotherHighs.test(readFileSync(file, 'utf8')), `${relative(frontend, file)} references the stock highs package`);
+  }
+  const pkg = JSON.parse(readFileSync(at('package.json'), 'utf8')) as Record<string, Record<string, string> | undefined>;
+  for (const field of ['dependencies', 'devDependencies', 'optionalDependencies']) {
+    assert.ok(!(pkg[field] !== undefined && 'highs' in pkg[field]), `package.json ${field} still lists the stock highs package`);
+  }
 });
 
 test('solver.ts reaches HiGHS only through the native surface (no direct highs.solve, no silent catch around loading, no legacy shim)', () => {
+  assert.ok(!existsSync(at('src/solver/native/legacy.ts')), 'the legacySolve shim was deleted in Phase 2.9');
   const solver = readFileSync(at('src/solver/solver.ts'), 'utf8');
   assert.ok(!/highs\.solve\(/.test(solver));
   assert.ok(!/loadHiGHS|HighsInstance|highsCorrupted/.test(solver));
   assert.ok(/from '\.\/native'/.test(solver));
-  // Phase 2.4b-3b: the structured solve is the only way in; the deprecated legacy shim has no caller left in src/.
+  // Phase 2.4b-3b: the structured solve is the only way in; the deprecated legacy shim is gone (Phase 2.9) and nothing names it.
   const policy = readFileSync(at('src/solver/physical/nativeSolve.ts'), 'utf8');
   assert.ok(/solveStructured\(/.test(policy) && /from '\.\.\/native'/.test(policy));
   for (const file of sources(at('src'))) {
-    if (relative(frontend, file).replace(/\\/g, '/').startsWith('src/solver/native/')) continue;
     assert.ok(!/legacySolve/.test(readFileSync(file, 'utf8')), `${relative(frontend, file)} still uses the deprecated legacySolve shim`);
   }
 });

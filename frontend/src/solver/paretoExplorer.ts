@@ -1,4 +1,3 @@
-import { computeStructuralBounds } from './structuralBounds.ts';
 /**
  * Pareto frontier exploration: the sweep-target generation (Phase 2.7b, ADR 0013 section 6).
  * Ported from optimizer.py:explore_pareto(); the target generation is the pre-cutover one, now exposed as a recorded schedule.
@@ -55,8 +54,6 @@ export interface ParetoParams {
   allowRepeatedParts?: boolean;
   /** What the caller asked for, echoed on every point's `precision_request`. */
   precisionRequest?: PrecisionRequest;
-  boundsMode?: 'structural' | 'naive';
-  structuralBounds?: import('./structuralBounds.ts').StructuralBounds;
 }
 
 function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight'> {
@@ -88,8 +85,6 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     preciseMode: p.preciseMode,
     ...(p.allowRepeatedParts === undefined ? {} : { allowRepeatedParts: p.allowRepeatedParts }),
     precisionRequest: p.precisionRequest,
-    boundsMode: p.boundsMode,
-    structuralBounds: p.structuralBounds,
   };
 }
 
@@ -101,21 +96,17 @@ const gunOf = (params: ParetoParams) => {
 /** The request of a sweep, as `runExplore` reads it: the shared Optimize request, the axis, the precision flags and the weapon's naked recoil. */
 export function exploreRunRequest(params: ParetoParams): ExploreRunRequest {
   const weapon = gunOf(params);
-  const base = buildBaseParams(params);
-  if (weapon !== null && !base.structuralBounds && base.boundsMode !== 'naive') {
-    base.structuralBounds = computeStructuralBounds(params.weaponId, params.itemLookup, params.compatibilityMap, { maxWeight: params.maxWeight });
-  }
   return {
     ignore: params.ignore,
-    base,
+    base: buildBaseParams(params),
     precisionRequest: params.precisionRequest ?? (params.preciseMode ? 'precise' : 'fast'),
     ...(params.preciseMode === undefined ? {} : { preciseMode: params.preciseMode }),
     nakedRecoilV: weapon === null ? 0 : weapon.stats.naked_recoil_v,
   };
 }
 
-// Tiny tiebreaker on secondary weights prevents multi-slot over-constraint from blocking items (see lpBuilder.ts slot mutex). Must be small
-// enough not to collapse the Pareto frontier.
+// Tiny tiebreaker on the secondary weights: the pre-cutover sweep weights, kept so the generated targets are unchanged. Must be small enough not
+// to collapse the Pareto frontier.
 const TB = 0.0001;
 type Weights = SweepTarget['weights'];
 const RECOIL_WEIGHTS: Weights = { ergoWeight: TB, recoilWeight: 1, priceWeight: TB };

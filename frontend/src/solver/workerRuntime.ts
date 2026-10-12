@@ -15,7 +15,7 @@
  *    Optimize (and the Gunsmith optimize call, which is the same message), every Explore step and every floor trial;
  *  - metadata operations (`loadData`, `getInfo`, `getWeaponMods`, `getGunsmithTasks`, `getStatus`, `clearCache`) take no stash and no deadline.
  *
- * Caches. The loaded data of a language and game mode carries its compatibility maps, structural bounds and endpoint (payoff table) cache; all
+ * Caches. The loaded data of a language and game mode carries its compatibility maps and endpoint (payoff table) cache; all
  * of it is tied to the IDENTITY of the loaded state, so a reload, a replacement or a cache clear discards it even when the names match. The
  * endpoint cache admits only qualified Precise MOA-independent certified tables (`endpointCache.ts`).
  *
@@ -46,14 +46,12 @@ import { MOA_K } from './physical/specialize.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { epochNow } from './requestGuard.ts';
-import { canonicalizeTraderLevels, computeIdealPointCacheKey, computeStructuralBoundsCacheKey } from './reuseKey.ts';
+import { canonicalizeTraderLevels, computeIdealPointCacheKey } from './reuseKey.ts';
 import { serializeWorkerError } from './runtimeErrors.ts';
 import { guardStop, yieldMacrotask as realYieldMacrotask } from './runtimeGuard.ts';
 import type { RuntimeGuard } from './runtimeGuard.ts';
 import { SOLVER_CAPABILITIES, solveRequest } from './solver.ts';
 import type { SolveReport } from './solver.ts';
-import { computeStructuralBounds } from './structuralBounds.ts';
-import type { StructuralBounds } from './structuralBounds.ts';
 import type { CompatibilityMap, ItemLookup, ModStats, PrecisionRequest, SolveParams, TraderLevels } from './types.ts';
 import {
   DEFAULT_EXPLORE_TIME_LIMIT_MS, DEFAULT_FLOOR_TIME_LIMIT_MS, DEFAULT_OPTIMIZE_TIME_LIMIT_MS, resolveTimeLimit,
@@ -71,7 +69,6 @@ interface LoadedData {
   mods: RawItem[];
   itemLookup: ItemLookup;
   compatMaps: Record<string, CompatibilityMap>;
-  structuralBoundsCache: Map<string, StructuralBounds>;
   endpoints: EndpointCache;
 }
 
@@ -89,7 +86,7 @@ export interface ExploreRunInput {
   /** The resolved model of the sweep: Precise (true) or Fast (false). */
   usePrecise: boolean;
   /**
-   * The common domain of every step: lookup, compatibility map, structural bounds, acquisition, the stash, the hard constraints and the resolved
+   * The common domain of every step: lookup, compatibility map, acquisition, the stash, the hard constraints and the resolved
    * model. No weights and no objective-specific fields; a step adds its own.
    */
   baseParams: SolveParams;
@@ -178,7 +175,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       mods: state.mods,
       itemLookup: state.itemLookup,
       compatMaps: {},
-      structuralBoundsCache: new Map(),
       endpoints: new EndpointCache(),
     };
     dataCache.set(key, loaded);
@@ -190,16 +186,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     return data.compatMaps[weaponId];
   }
 
-  function getStructuralBounds(data: LoadedData, lang: string, gameMode: string, weaponId: string): StructuralBounds {
-    // Cache key is weapon-invariant: caches unclipped physical bounds in the data session
-    const key = computeStructuralBoundsCacheKey(lang, gameMode, weaponId, null);
-    let cached = data.structuralBoundsCache.get(key);
-    if (!cached) {
-      cached = computeStructuralBounds(weaponId, data.itemLookup, getCompatMap(data, weaponId), { maxWeight: null });
-      data.structuralBoundsCache.set(key, cached);
-    }
-    return cached;
-  }
 
   /** The guard of one request: the client-stamped epoch deadline (or one derived from the arrival time), this request cancel flag, this clock. */
   function guardOf(message: WorkerRequestMessage, entry: Entry, defaultLimitMs: number, requestedLimit: unknown): RuntimeGuard {
@@ -220,7 +206,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
 
   /** The common domain of a request, without weights or objective. The stash is the validated snapshot. */
   function domainParams(
-    req: OptimizeRequest | MOAFloorRequest, data: LoadedData, lang: string, gameMode: string, owned: readonly string[], guard: RuntimeGuard,
+    req: OptimizeRequest | MOAFloorRequest, data: LoadedData, owned: readonly string[], guard: RuntimeGuard,
     precisionRequest: PrecisionRequest, usePrecise: boolean,
   ): SolveParams {
     const compatMap = getCompatMap(data, req.weapon_id);
@@ -228,7 +214,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       weaponId: req.weapon_id,
       itemLookup: data.itemLookup,
       compatibilityMap: compatMap,
-      structuralBounds: req.bounds_mode !== 'naive' ? getStructuralBounds(data, lang, gameMode, req.weapon_id) : undefined,
       maxPrice: req.max_price,
       minErgonomics: req.min_ergonomics,
       maxRecoilV: req.max_recoil_v,
@@ -249,7 +234,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
       playerLevel: req.player_level,
       ownedItems: owned,
-      boundsMode: req.bounds_mode,
       precisionRequest,
       preciseMode: usePrecise,
       guard,
@@ -286,7 +270,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     const compatMap = getCompatMap(data, req.weapon_id);
     const usePrecise = resolvePreciseFlag(precisionRequest, compatMap, req.use_true_ergo === true || req.prevent_overswing === true);
     const params: SolveParams = {
-      ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise),
+      ...domainParams(req, data, owned.items, guard, precisionRequest, usePrecise),
       maxMOA: req.max_moa,
       allowRepeatedParts: req.allow_repeated_parts === true,
       ergoWeight: req.ergo_weight ?? 1,
@@ -347,7 +331,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       guard,
       precisionRequest,
       usePrecise,
-      baseParams: { ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise), maxMOA: req.max_moa, allowRepeatedParts: req.allow_repeated_parts === true },
+      baseParams: { ...domainParams(req, data, owned.items, guard, precisionRequest, usePrecise), maxMOA: req.max_moa, allowRepeatedParts: req.allow_repeated_parts === true },
       optimize: stepOptimizer(owned.items),
       publishSnapshot: snapshot => post('snapshot', id, snapshot),
     });
@@ -373,7 +357,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       request: { ...req, owned_items: [...owned.items] },
       ownedItems: owned.items,
       guard,
-      baseParams: domainParams(req, data, lang, gameMode, owned.items, guard, 'precise', true),
+      baseParams: domainParams(req, data, owned.items, guard, 'precise', true),
       publishSnapshot: snapshot => post('snapshot', id, snapshot),
     });
     post('result', id, result);
@@ -389,7 +373,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
         // memoized on the old lookup object are unreachable too).
         for (const data of dataCache.values()) {
           data.endpoints.clear();
-          data.structuralBoundsCache.clear();
         }
         dataCache.clear();
         clearLoadedData();
@@ -613,8 +596,6 @@ function paretoParamsOf(input: ExploreRunInput): ParetoParams {
     preciseMode: input.usePrecise,
     allowRepeatedParts: p.allowRepeatedParts === true,
     precisionRequest: input.precisionRequest,
-    boundsMode: p.boundsMode,
-    structuralBounds: p.structuralBounds,
   };
 }
 

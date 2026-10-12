@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
-import { estimateOccurrences } from '../../src/solver/precisionMode';
+import { countCandidateEdges } from '../../src/solver/precisionMode';
 import { preparePhysicalWeapon, prepareSubproblemDomain, specializeFast } from '../../src/solver/physical';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { ItemLookup, SolveParams } from '../../src/solver/types';
@@ -59,13 +59,14 @@ const wanted = only === '' ? null : new Set(only.split(','));
 const guns = snapshot.guns.filter((g, i) => (wanted === null ? i % shards === shard : wanted.has(g.shortName) && i % shards === shard));
 
 for (const gun of guns) {
-  // size of the gun: the occurrences Auto counts today and the count model's dimensions on the default domain
+  // size of the gun: the candidate slot edges Auto counts today (the recorded runs predate it and carry `autoEstimate`, the occurrence estimate
+  // Auto used then) and the count model's dimensions on the default domain
   const blueprint = preparePhysicalWeapon(lookup, gun.id, { isAmmo });
   const domain = prepareSubproblemDomain(blueprint, lookup, {});
   const compat = buildCompatibilityMap(gun.id, lookup);
   const size: Record<string, number | boolean | null> = {
     occurrences: blueprint.stats.itemOccurrences,
-    autoEstimate: estimateOccurrences(compat, 1_000_000),
+    candidateEdges: countCandidateEdges(compat),
     templates: blueprint.stats.templates,
     prunedAncestorEdges: blueprint.stats.prunedAncestorEdges,
     emptyDomain: domain.empty,

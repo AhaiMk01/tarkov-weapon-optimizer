@@ -20,6 +20,4 @@ export type {
   ReadbackDifference,
 } from './readback';
 export { discardNativeHighs, getNativeHighs, readbackModel, solveStructured } from './instance';
-export { legacySolve } from './legacy';
-export type { LegacyColumn, LegacyHighsOptions, LegacyRow, LegacySolveResult } from './legacy';
 export { sha256Hex, sha256HexSync } from './sha256';

@@ -15,7 +15,7 @@
 //
 // npm highs misbehaved in the presolve rules FreeColSubstitution, DoubletonEquation and Aggregator (`presolve_rule_off` bits 8, 9, 12) and
 // aborted with presolve off, so no setting of it was safe. The hard assertions here are on the pinned native build: every model has its truth with
-// default presolve and with presolve off. The npm package, while it is still installed, is run only to REPORT whether it still misbehaves.
+// default presolve and with presolve off. (The npm package itself was uninstalled in Phase 2.9; its reported answers above are history.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -37,52 +37,30 @@ async function native(lp: string, extra: HighsOptions): Promise<Solved> {
   return { status: r.modelStatus.name, objective: r.objectiveValue, values };
 }
 
-/** The retired npm package, only to report; a message when it is no longer installed or aborts. */
-async function legacy(lp: string, extra: Record<string, unknown>): Promise<string> {
-  try {
-    const loader = (await import('highs')).default as unknown as () => Promise<{
-      solve(p: string, o?: Record<string, unknown>): { Status: string; ObjectiveValue: number; Columns: Record<string, { Primal?: number }> };
-    }>;
-    const r = (await loader()).solve(lp, { ...BASE, ...extra });
-    return `${r.Status} ${r.ObjectiveValue}`;
-  } catch (e) {
-    return `unavailable (${String(e).slice(0, 60)})`;
-  }
-}
-
 const model = (name: string): string => readFileSync(fileURLToPath(new URL(`./solverDefects/${name}`, import.meta.url)), 'utf8');
 
 const VARIANTS: Record<string, HighsOptions> = { 'default presolve': {}, 'presolve off': { presolve: 'off' } };
-const LEGACY_VARIANTS: Record<string, Record<string, unknown>> = {
-  default: {},
-  'presolve off': { presolve: 'off' },
-  'culprit rules off': { presolve_rule_off: 2 ** 8 + 2 ** 9 + 2 ** 12 },
-};
-
 const BOUND_DEFECT = [
   'Maximize', '  obj: total', 'Subject To', '  o: total - 0.1 raw = 0', '  raw_def: raw - 10 x = 50', '  w_def: w - x = 4',
   '  c1_hi: raw - 201 h >= -101', 'Bounds', '  0 <= total <= 100', '  50 <= raw <= 60', '  w = 4.5', 'Binary', '  x h', 'End',
 ].join('\n');
 
-test('wrong optimal: the true maximum 340.5 is found, with and without presolve', async t => {
+test('wrong optimal: the true maximum 340.5 is found, with and without presolve', async () => {
   const lp = model('presolve_wrong_optimal.lp');
   for (const [name, options] of Object.entries(VARIANTS)) {
     const r = await native(lp, options);
     assert.equal(r.status, 'Optimal', name);
     assert.ok(Math.abs((r.objective as number) - 340.5) < 1e-6, `${name}: ${r.objective}`);
   }
-  for (const [name, options] of Object.entries(LEGACY_VARIANTS)) t.diagnostic(`npm highs, ${name}: ${await legacy(lp, options)}`);
 });
 
-test('false infeasibility: the feasible model is feasible, with and without presolve', async t => {
+test('false infeasibility: the feasible model is feasible, with and without presolve', async () => {
   const lp = model('presolve_false_infeasible.lp');
   for (const [name, options] of Object.entries(VARIANTS)) assert.equal((await native(lp, options)).status, 'Optimal', name);
-  for (const [name, options] of Object.entries(LEGACY_VARIANTS)) t.diagnostic(`npm highs, ${name}: ${await legacy(lp, options)}`);
 });
 
-test('a tightened bound on a continuous column tied to a binary: infeasible, with and without presolve', async t => {
+test('a tightened bound on a continuous column tied to a binary: infeasible, with and without presolve', async () => {
   for (const [name, options] of Object.entries(VARIANTS)) assert.equal((await native(BOUND_DEFECT, options)).status, 'Infeasible', name);
-  for (const [name, options] of Object.entries(LEGACY_VARIANTS)) t.diagnostic(`npm highs, ${name}: ${await legacy(BOUND_DEFECT, options)}`);
 });
 
 test('the same restriction written as a row is infeasible too (why a weight node is a row, whatever the solver)', async () => {
@@ -90,14 +68,13 @@ test('the same restriction written as a row is infeasible too (why a weight node
   for (const options of Object.values(VARIANTS)) assert.equal((await native(asRows, options)).status, 'Infeasible');
 });
 
-test('the model npm highs aborted on: the pinned build solves it to -6659.939357 with and without presolve', async t => {
+test('the model npm highs aborted on: the pinned build solves it to -6659.939357 with and without presolve', async () => {
   const lp = model('presolve_off_crash.lp');
   for (const [name, options] of Object.entries(VARIANTS)) {
     const r = await native(lp, options);
     assert.equal(r.status, 'Optimal', name);
     assert.ok(Math.abs((r.objective as number) - -6659.939357142857) < 1e-5, `${name}: ${r.objective}`);
   }
-  for (const [name, options] of Object.entries(LEGACY_VARIANTS)) t.diagnostic(`npm highs, ${name}: ${await legacy(lp, options)}`);
 });
 
 test('the PINNED build (HiGHS 1.15.1) still reports a feasible 6-row model Infeasible with presolve on; presolve off solves it', async t => {

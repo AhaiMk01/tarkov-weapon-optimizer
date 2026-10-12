@@ -277,7 +277,8 @@ export async function loadHighs(config: LoadHighsConfig = {}): Promise<HighsRunt
     const instantiationFailed = new Promise<never>((_, reject) => { failInstantiation = reject; });
     const ready = factory({
       instantiateWasm: (imports, receiveInstance) => {
-        WebAssembly.instantiate(compiled, imports).then((instance) => receiveInstance(instance, compiled), failInstantiation);
+        // A foreign module can instantiate and still break the glue inside receiveInstance (no memory export): that is a failure too.
+        WebAssembly.instantiate(compiled, imports).then((instance) => receiveInstance(instance, compiled)).catch(failInstantiation);
         return {};
       },
       locateFile: (file) => file,

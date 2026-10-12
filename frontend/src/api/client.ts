@@ -86,8 +86,6 @@ export interface OptimizeRequest {
    * the Tchebycheff payoff endpoints, every Explore step and the Gunsmith call. The MOA floor (always Precise) does not carry it.
    */
   allow_repeated_parts?: boolean;
-  /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
-  bounds_mode?: 'structural' | 'naive';
   /**
    * Request budget in milliseconds. ONE epoch deadline is stamped when the call enters, so time spent queued counts. Omitted means the
    * default of the operation: 60 s for Optimize and Explore, 30 s for a MOA floor.

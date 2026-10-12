@@ -1,4 +1,3 @@
-import type { StructuralBounds } from './structuralBounds.ts';
 import type { RuntimeGuard } from './runtimeGuard.ts';
 /**
  * Core types for the weapon optimizer solver.
@@ -189,7 +188,7 @@ export interface CompatibilityMap {
  * Unlocked loyalty level per trader, keyed by `normalizedName`.
  * `TRADER_DISABLED` (0) means "do not buy from this trader at all" — every
  * trader offer requires at least LL1, so a 0 here excludes all of them via the
- * existing level check in `getAvailablePrice`.
+ * level check of the physical acquisition domain (`physical/acquisition.ts`).
  */
 export interface TraderLevels {
   prapor: number;
@@ -335,8 +334,4 @@ export interface SolveParams {
    * Overswing request is not upgraded to Precise: Fast runs the weight search on its own count model), and `precision_resolved` says what ran.
    */
   precisionRequest?: PrecisionRequest;
-  /** Strategy for weight and ergonomics bounds: 'structural' (default) or 'naive' (sum of all mods). */
-  boundsMode?: 'structural' | 'naive';
-  /** Precomputed structural bounds on weight and ergonomics. */
-  structuralBounds?: StructuralBounds;
 }
