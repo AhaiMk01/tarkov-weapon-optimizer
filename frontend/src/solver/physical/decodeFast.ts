@@ -10,11 +10,11 @@
  * child instance and queues it. Children of a slot are therefore spread one per copy of the owner, the first copies in creation order taking them
  * when fewer children than copies exist, and a required slot has exactly as many children as copies, so every copy takes one.
  *
- * The part graph is acyclic (owner decision 2d as amended, 2026-10-12: a gun with a cycle is refused before any model is built), so the
+ * The part graph is acyclic (owner decision 2026-10-12; the blueprint builder throws on a cycle), so the
  * construction consumes every edge count, whatever the choice among candidates, because the instances of a template are created from its incoming
  * edges and each takes at most one child per slot (the model's slot rows state exactly that). The result is then a tree the model describes in full
  * (research report section 5.1). A count point the construction cannot consume (which the slot rows rule out for an integer point) is REJECTED
- * (`ok: false`): the caller treats it like a validator rejection and cuts the point out. The backtracking search a cyclic graph needed is gone.
+ * (`ok: false`): the caller treats it like a validator rejection and cuts the point out.
  *
  * A column that is missing or not an integer within the reading tolerance is a solver fault, not a rejectable point: it throws
  * `PhysicalModelError('DECODE_FAILED')`, the same as the Precise decoder.

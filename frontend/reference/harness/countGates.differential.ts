@@ -68,8 +68,7 @@
 // occurrence gates); a delta above it but within `PRECISION_RELATIVE` x max(1, |value|) is NOT passed silently: the cell gets the status `precision`
 // with its delta, and the test compares the set of such cells with an explicit list. Anything larger fails.
 //
-// Cyclic part graphs (decision 2d as amended): such a case is not gated; it is checked as REFUSED: `partGraphIsAcyclic` is false, `specializeCount` throws
-// CYCLIC_PART_GRAPH, `partGraphRefusal` returns the public reason and `solvePrecise` returns `incomplete` with that reason without a native solve.
+// Cyclic part data is out of scope (owner decision 2026-10-12): production's blueprint throws an internal error on it, and such a case is skipped.
 //
 // Differential helper: may import production code (reference/independenceScan.ts); no non-differential file may import this one.
 
@@ -80,13 +79,13 @@ import {
   type EnumerateOptions, type OracleResult, type ReferenceBuild, type ReferenceFixture, type ReferenceRequest,
 } from '../oracle/index';
 import {
-  appendCuts, columnValuesFromStructured, decodeFast, integerNoGood, partGraphIsAcyclic, PhysicalModelError, preparePhysicalValidator, prepareSubproblemDomain,
+  appendCuts, columnValuesFromStructured, decodeFast, integerNoGood, PhysicalModelError, preparePhysicalValidator, prepareSubproblemDomain,
   specializeCount,
-  type CountModel, type IntegerNoGood, type PhysicalBlueprint, type PhysicalBuild, type PhysicalValidator, type SpatialNode, type SubproblemDomain,
+  type CountModel, type IntegerNoGood, type PhysicalBlueprint, type PhysicalBuild, type PhysicalValidator, type SpatialNode,
 } from '../../src/solver/physical';
 import type { ItemLookup, PhysicalClassifiers, SolveParams } from '../../src/solver/types';
 import type { RuntimeTolerance } from '../ledger/types';
-import { detectUnsupported, toProduction } from './toProduction.differential';
+import { CYCLIC_OUT_OF_SCOPE, detectUnsupported, isCyclicPartGraphError, toProduction } from './toProduction.differential';
 import { fastPinRows, isToleranceBoundary, projectionEncoding, readPoint, withRows } from './acyclicFast.differential';
 import { objectiveDirections, parseProjectionKey, seedOf, structuralWeights, type Weights } from './lpGates.differential';
 
@@ -122,7 +121,6 @@ interface PreciseRunLike {
 }
 interface SolvePreciseModule {
   getPhysicalBlueprint(lookup: ItemLookup, weaponId: string, classifiers?: PhysicalClassifiers): PhysicalBlueprint;
-  partGraphRefusal(params: Pick<SolveParams, 'itemLookup' | 'weaponId' | 'physicalOptions'>): string | null;
   resolveTolerance(requested: number | undefined): number;
   solvePrecise(context: { params: SolveParams; deadline: number }): Promise<PreciseRunLike>;
   PRECISE_RANDOM_SEEDS: readonly number[];
@@ -149,9 +147,6 @@ async function load(): Promise<Production> {
   return production;
 }
 
-/** The public reason production refuses a cyclic part graph with (`PUBLIC_REASONS.unsupportedCyclicPartGraph`). */
-export const CYCLIC_REFUSAL = 'Unsupported data: cyclic part graph';
-
 /** A solver objective off the exact value by more than the case tolerance but within this (relative to max(1, |value|)) is a `precision` cell (decision 5b). */
 export const PRECISION_RELATIVE = 1e-6;
 
@@ -177,16 +172,14 @@ export const COUNT_GATES = [
 ] as const;
 export type CountGateName = (typeof COUNT_GATES)[number];
 
-export type Scope = 'gated' | 'refused' | 'skipped';
+export type Scope = 'gated' | 'skipped';
 
 export interface CountCaseGates extends Record<CountGateName, Verdict> {
   id: string;
   family: number;
   scope: Scope;
-  /** Why the case is not gated (skipped), or the refusal check's verdict (refused). */
+  /** Why the case is not gated (skipped). */
   scopeDetail: string;
-  /** The refusal check of a cyclic case: pass when every production entry point refuses it as unsupported data. */
-  refusal: Verdict;
   oracleProjections: number;
   oracleEmpty: boolean;
   /** Singleton weight nodes of a TED case (0 otherwise). */
@@ -219,7 +212,7 @@ export interface CountCaseGates extends Record<CountGateName, Verdict> {
 }
 
 const blank = (id: string, family: number): CountCaseGates => ({
-  id, family, scope: 'gated', scopeDetail: '', refusal: na('acyclic'), oracleProjections: 0, oracleEmpty: false, nodes: 0, solves: 0, seedOverrides: 0, inconclusive: 0, relaxationCaught: 0, relaxationVetoed: 0,
+  id, family, scope: 'gated', scopeDetail: '', oracleProjections: 0, oracleEmpty: false, nodes: 0, solves: 0, seedOverrides: 0, inconclusive: 0, relaxationCaught: 0, relaxationVetoed: 0,
   boundaryCuts: 0, relaxedFractional: 0, relaxedSolves: 0, boundDisagreements: 0, maxObjectiveDelta: 0, maxDualGap: 0, validated: 0, pinned: 0,
   gateC: na('not run'), gateBObjective: na('not run'), gateBBuild: na('not run'), gateBPinned: na('not run'), gateBExclusion: na('not run'),
   gateAComplete: na('not run'), gateASound: na('not run'), relaxedFirst: na('not run'), validators: na('not run'), native: na('not run'),
@@ -492,27 +485,6 @@ async function solveInteger(ctx: Context, world: CaseWorld, model: CountModel, e
 
 const isTed = (request: ReferenceRequest): boolean => request.use_true_ergo === true || request.prevent_overswing === true;
 
-/** The refusal check of a cyclic part graph: every production entry point refuses it as unsupported data, nothing is solved. */
-async function refusalCheck(prod: Production, blueprint: PhysicalBlueprint, params: SolveParams, domain: SubproblemDomain): Promise<Verdict> {
-  const problems: string[] = [];
-  if (partGraphIsAcyclic(blueprint)) problems.push('partGraphIsAcyclic is true');
-  if (!domain.empty) {
-    try {
-      specializeCount(blueprint, domain, params);
-      problems.push('specializeCount built a model');
-    } catch (e) {
-      if (!(e instanceof PhysicalModelError) || e.code !== 'CYCLIC_PART_GRAPH') problems.push(`specializeCount threw ${e instanceof PhysicalModelError ? e.code : String(e)}`);
-    }
-  }
-  const refusal = prod.precise.partGraphRefusal(params);
-  if (refusal !== CYCLIC_REFUSAL) problems.push(`partGraphRefusal returned ${JSON.stringify(refusal)}`);
-  const run = await prod.precise.solvePrecise({ params, deadline: performance.now() + 60_000 });
-  if (run.kind !== 'incomplete' || run.reason !== CYCLIC_REFUSAL || run.summary.telemetry.nativeSolves !== 0) {
-    problems.push(`solvePrecise returned ${run.kind} (${run.reason ?? 'no reason'}) after ${run.summary.telemetry.nativeSolves} native solve(s)`);
-  }
-  return problems.length === 0 ? pass(`refused (${domain.empty ? 'empty domain; ' : 'CYCLIC_PART_GRAPH from specializeCount; '}partGraphRefusal and solvePrecise give "${CYCLIC_REFUSAL}", 0 solves)`) : fail(problems.join('; '));
-}
-
 function compareObjective(value: number, expected: number, caseSlack: number): { status: GateStatus; delta: number } {
   const delta = Math.abs(value - expected);
   if (delta <= caseSlack) return { status: 'pass', delta };
@@ -566,13 +538,14 @@ export async function runCountGates(input: CaseInput, options: CountGateOptions 
   const inputs = toProduction(fixture, request, { preciseMode: true, objectiveTolerance: input.tolerance.absolute });
   const params = inputs.params;
   const lookup = params.itemLookup;
-  const blueprint = prod.precise.getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
-  const domain = prepareSubproblemDomain(blueprint, lookup, params);
-
-  if (!partGraphIsAcyclic(blueprint)) {
-    const refusal = await refusalCheck(prod, blueprint, params, domain);
-    return { ...out, scope: 'refused', scopeDetail: refusal.detail, refusal };
+  let blueprint: PhysicalBlueprint;
+  try {
+    blueprint = prod.precise.getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
+  } catch (error) {
+    if (isCyclicPartGraphError(error)) return skip(CYCLIC_OUT_OF_SCOPE);
+    throw error;
   }
+  const domain = prepareSubproblemDomain(blueprint, lookup, params);
 
   const oracle = runOracle(fixture, request, options.oracle ?? { maxBuilds: 60_000 });
   if (!oracle.complete) return skip('the oracle enumeration is incomplete');
@@ -907,8 +880,6 @@ export async function runCountGates(input: CaseInput, options: CountGateOptions 
 export interface CountTally {
   cases: number;
   gated: number;
-  refused: number;
-  refusalFailures: string[];
   skipped: Record<string, number>;
   empty: number;
   nonEmpty: number;
@@ -934,7 +905,7 @@ export interface CountTally {
 export function newCountTally(): CountTally {
   const gate = Object.fromEntries(COUNT_GATES.map(g => [g, { pass: 0, fail: 0, na: 0, precision: 0 }])) as CountTally['gate'];
   return {
-    cases: 0, gated: 0, refused: 0, refusalFailures: [], skipped: {}, empty: 0, nonEmpty: 0, ted: 0, solves: 0, validated: 0, pinned: 0, boundaryCuts: 0,
+    cases: 0, gated: 0, skipped: {}, empty: 0, nonEmpty: 0, ted: 0, solves: 0, validated: 0, pinned: 0, boundaryCuts: 0,
     seedOverrides: 0, inconclusive: 0, relaxationCaught: 0, relaxationVetoed: 0, relaxedSolves: 0, relaxedFractional: 0, boundDisagreements: 0, maxObjectiveDelta: 0, maxDualGap: 0,
     gate, failures: [], precision: [],
   };
@@ -943,11 +914,6 @@ export function newCountTally(): CountTally {
 export function addCount(t: CountTally, r: CountCaseGates): void {
   t.cases++;
   t.solves += r.solves;
-  if (r.scope === 'refused') {
-    t.refused++;
-    if (r.refusal.status !== 'pass') t.refusalFailures.push(`${r.id}: ${r.refusal.detail}`);
-    return;
-  }
   if (r.scope === 'skipped') {
     const key = r.scopeDetail.replace(/\(.*$/, '').trim();
     t.skipped[key] = (t.skipped[key] ?? 0) + 1;
@@ -985,7 +951,7 @@ export function addCount(t: CountTally, r: CountCaseGates): void {
 export function formatCountTally(label: string, t: CountTally): string {
   const gates = COUNT_GATES.map(g => `${g} ${t.gate[g].pass}/${t.gate[g].pass + t.gate[g].fail + t.gate[g].precision}${t.gate[g].precision > 0 ? ` (+${t.gate[g].precision} precision)` : ''}`).join(', ');
   const skipped = Object.entries(t.skipped).map(([k, n]) => `${k} x${n}`).join(', ') || 'none';
-  return `${label}: ${t.cases} case(s), ${t.gated} gated (${t.nonEmpty} nonempty, ${t.empty} empty, ${t.ted} TED), ${t.refused} refused (cyclic, ${t.refused - t.refusalFailures.length} refused correctly), skipped: ${skipped}; `
+  return `${label}: ${t.cases} case(s), ${t.gated} gated (${t.nonEmpty} nonempty, ${t.empty} empty, ${t.ted} TED), skipped: ${skipped}; `
     + `pinned ${t.pinned}, validated ${t.validated}, boundary cuts ${t.boundaryCuts}, seed overrides ${t.seedOverrides}, inconclusive solves ${t.inconclusive}, integer false Infeasible caught by the relaxation ${t.relaxationCaught}, certificates withheld by the relaxation rule ${t.relaxationVetoed}, relaxed solves ${t.relaxedSolves} (${t.relaxedFractional} fractional), unsettled bound disagreements ${t.boundDisagreements}, `
     + `max objective delta ${t.maxObjectiveDelta.toExponential(2)}, max dual gap ${t.maxDualGap.toExponential(2)}; native solves ${t.solves}; passing gates: ${gates}`;
 }

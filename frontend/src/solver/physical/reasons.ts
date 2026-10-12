@@ -7,10 +7,6 @@
  * prerequisites and the interrupts). It is an ADR gap closed here by the owner's decision (Phase 2.7 integration) rather than by an alias of an
  * existing string; the locale layer maps it with the others (Phase 2.8). The only reason text outside this set is the diagnostic message of an
  * Explore `E` step row (`exploreSweep.ts`).
- *
- * A second entry is not in the ADR either: `unsupportedCyclicPartGraph` (owner decision 2d as amended, 2026-10-12, Phase 2.10). A gun whose part
- * graph reachable from the receiver has a cycle is refused as unsupported data in every operation and mode before any solve: no build, no proof,
- * never an infeasibility. Like an invalid stock list it is an input refusal, so it carries the pre-model envelope of each operation.
  */
 export const PUBLIC_REASONS = {
   approximateModelInfeasible: 'Approximate model infeasible',
@@ -18,7 +14,6 @@ export const PUBLIC_REASONS = {
   fastProvisionalMoaModelInfeasible: 'Fast provisional MOA model infeasible',
   invalidOwnedItems: 'Invalid owned_items format',
   invalidExploreSchedule: 'Invalid Explore schedule',
-  unsupportedCyclicPartGraph: 'Unsupported data: cyclic part graph',
   queueTimeoutBeforeDispatch: 'Queue timeout before dispatch',
   independentBuildValidationFailed: 'Independent build validation failed',
   requiredProofPrerequisiteUnavailable: 'Required proof prerequisite unavailable',

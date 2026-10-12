@@ -1,11 +1,11 @@
-// The Stage 3 operations transition matrix (workstream 3.5; ADR 0013 sections 4D, 5 and 6; owner decision 2d as amended). Every operation runs
+// The Stage 3 operations transition matrix (workstream 3.5; ADR 0013 sections 4D, 5 and 6). Every operation runs
 // through the REAL worker runtime with the real solve, the real Explore and MOA floor drivers and the pinned native build (operationsMatrix.harness.ts):
 //
 //   operations  Optimize Fast, Optimize Precise, Optimize Auto, Gunsmith optimize (the same `optimize` message with the App's Gunsmith request), Explore,
 //               MOA floor, and the metadata operations (loadData, getInfo, getWeaponMods, getGunsmithTasks, getStatus, clearCache);
 //   causes      normal completion, queue expiry, cancel while queued, cancel while running (out of band, delivered as a task), invalid owned_items, the
 //               deadline before the model, during the solve (before and after a verified witness) and during the second opinion, a withheld bound,
-//               an independent validation failure, the cyclic-part-graph refusal, and (Explore) an invalid schedule;
+//               an independent validation failure, and (Explore) an invalid schedule;
 //   precedence  every pair of those causes that can co-occur (ADR 0013 section 6).
 //
 // Each cell asserts the public envelope: status, certificate, reason, termination, and the points / witness. Cells already proved elsewhere are listed
@@ -19,7 +19,7 @@ import type { SerializedWorkerError } from '../../src/solver/runtimeErrors';
 import { yieldMacrotask } from '../../src/solver/runtimeGuard';
 import type { WorkerDeps } from '../../src/solver/workerRuntime';
 import {
-  asTimeLimit, assertPreModelEnvelope, cancelOf, cyclicLookup, EXPLORE, FLOOR, GUNSMITH, messageOf, metadataMessage, METADATA_OPERATIONS, OPTIMIZE_AUTO,
+  asTimeLimit, assertPreModelEnvelope, cancelOf, EXPLORE, FLOOR, GUNSMITH, messageOf, metadataMessage, METADATA_OPERATIONS, OPTIMIZE_AUTO,
   OPTIMIZE_FAST, OPTIMIZE_OPERATIONS, OPTIMIZE_PRECISE, overfilled, rig, SEARCH_OPERATIONS, sweepLookup, T0, tedLookup, withheld, withNative,
 } from './operationsMatrix.harness';
 import type { AnyResponse, NativeHook, Operation, Rig } from './operationsMatrix.harness';
@@ -398,12 +398,6 @@ for (const op of SEARCH_OPERATIONS) {
       assert.equal(r.witness, undefined);
     }
   });
-
-  test(`${op.name}: cyclic part graph — refused with the pre-model envelope before any solve`, async () => {
-    const { response, calls } = await run(op, { lookup: cyclicLookup() });
-    assert.equal(calls, 0);
-    assertPreModelEnvelope(op, response, R.unsupportedCyclicPartGraph);
-  });
 }
 
 // =====================================================================================================================================
@@ -551,50 +545,7 @@ test('precedence — a typed native failure is never rewritten as an interrupt: 
   }
 });
 
-test('precedence at entry — invalid owned_items outranks the cyclic refusal; queue expiry and a queued cancel outrank it too (nothing is loaded)', async () => {
-  for (const op of SEARCH_OPERATIONS) {
-    const invalid = rig(cyclicLookup());
-    invalid.send(messageOf(op, 1, { owned_items: [''] }));
-    await invalid.runtime.idle();
-    assertPreModelEnvelope(op, invalid.result<AnyResponse>(1), R.invalidOwnedItems);
-
-    const expired = rig(cyclicLookup());
-    expired.send(messageOf(op, 1, {}, T0 - 1));
-    await expired.runtime.idle();
-    assertPreModelEnvelope(op, expired.result<AnyResponse>(1), R.queueTimeoutBeforeDispatch);
-    assert.equal(expired.loads(), 0);
-
-    const cancelled = rig(cyclicLookup());
-    cancelled.send(messageOf(OPTIMIZE_FAST, 99, {}, T0 - 1)); // a blocker that expires at once, so request 1 is queued when its cancel arrives
-    cancelled.send(messageOf(op, 1));
-    cancelled.send(cancelOf(1));
-    await cancelled.runtime.idle();
-    assertPreModelEnvelope(op, cancelled.result<AnyResponse>(1), R.cancelledByUser);
-    assert.equal(cancelled.loads(), 0);
-  }
-});
-
-test('precedence after dispatch — the cyclic refusal versus an interrupt observed before the solve: pinned per operation (ADR 0013 is silent, see the evidence doc)', async () => {
-  // Optimize-family: solve() reads its entry guard before the part-graph check, so the interrupt is reported (with the resolved model).
-  // Explore and the floor check the part graph before their first guard, so the refusal is reported. Both are pre-model stops with no build, no proof
-  // and no native call; only the reason and the resolved-model fields differ. Recorded as an owner question, not a defect.
-  for (const op of SEARCH_OPERATIONS) {
-    for (const interrupt of ['deadline', 'cancel'] as const) {
-      const { response, calls } = await run(op, {
-        lookup: cyclicLookup(),
-        setup: r => { r.duringLoad(() => { if (interrupt === 'deadline') r.clock.t = LATE; else r.send(cancelOf(1)); }); },
-      });
-      assert.equal(calls, 0, `${op.name} + ${interrupt}`);
-      if (op.kind === 'optimize') {
-        assertOptimizeStop(op, response, { status: 'incomplete', reason: interrupt === 'deadline' ? R.timeLimitReached : R.cancelledByUser, termination: 'limit', build: false });
-      } else {
-        assertPreModelEnvelope(op, response, R.unsupportedCyclicPartGraph);
-      }
-    }
-  }
-});
-
-test('Explore precedence at entry — invalid stash before an invalid schedule; queue expiry before it; the schedule check before the cyclic refusal and before a passed deadline', async () => {
+test('Explore precedence at entry — invalid stash before an invalid schedule; queue expiry before it; the schedule check before a passed deadline', async () => {
   const bad = { steps: Number.NaN };
   const stash = rig(sweepLookup());
   stash.send(messageOf(EXPLORE, 1, { ...bad, owned_items: [''] }));
@@ -606,12 +557,9 @@ test('Explore precedence at entry — invalid stash before an invalid schedule; 
   await expired.runtime.idle();
   assertPreModelEnvelope(EXPLORE, expired.result<AnyResponse>(1), R.queueTimeoutBeforeDispatch);
 
-  const cyclic = await run(EXPLORE, { extra: bad, lookup: cyclicLookup() });
-  assertPreModelEnvelope(EXPLORE, cyclic.response, R.invalidExploreSchedule);
-
   const late = await run(EXPLORE, { extra: bad, setup: r => { r.duringLoad(() => { r.clock.t = LATE; }); } });
   assertPreModelEnvelope(EXPLORE, late.response, R.invalidExploreSchedule);
-  assert.equal(late.calls + cyclic.calls, 0);
+  assert.equal(late.calls, 0);
 });
 
 // -------------------------------------------------------------------------------------------------------------------------------------
@@ -654,7 +602,7 @@ test('D1 (fixed), second case: a relaxed-edge solve stopped at its native time l
     r.clock.t = LATE;
     return asTimeLimit(result);
   };
-  for (const op of [OPTIMIZE_PRECISE, OPTIMIZE_AUTO, GUNSMITH]) {
+  for (const op of [OPTIMIZE_FAST, OPTIMIZE_PRECISE, OPTIMIZE_AUTO, GUNSMITH]) {
     const res = asOptimize((await run(op, { setup: late })).response);
     if (res.status !== 'feasible' || res.reason !== R.timeLimitReached || res.selected_items.length === 0) {
       failures.push(`${op.name}: ${res.status} / ${res.physical_certificate} / ${res.reason} / ${res.selected_items.length} items`);
@@ -726,19 +674,6 @@ test('metadata operations complete normally and ignore a stash, a stamped deadli
       assert.ok(payload === null || !('reason' in payload), `${type}: no operation reason`);
     }
   }
-});
-
-test('metadata operations on a gun with a cyclic part graph: the refusal belongs to the search operations, the mod list and its compatibility graph still load', async () => {
-  const r = rig(cyclicLookup());
-  r.send(metadataMessage('getWeaponMods', 1, { withCompat: true }));
-  r.send(metadataMessage('getGunsmithTasks', 2));
-  r.send(metadataMessage('getStatus', 3));
-  await r.runtime.idle();
-  const mods = r.result<{ mods: { id: string }[]; slots_by_item: Record<string, string[]> }>(1);
-  assert.deepEqual(mods.mods.map(m => m.id).sort(), ['A', 'B']);
-  assert.ok(mods.slots_by_item.A.length > 0 && mods.slots_by_item.B.length > 0);
-  r.result(2);
-  r.result(3);
 });
 
 test('the matrix covers every search operation and every metadata operation of the protocol', () => {

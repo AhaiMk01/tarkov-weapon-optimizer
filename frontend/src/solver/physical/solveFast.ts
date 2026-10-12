@@ -17,7 +17,7 @@
  *   - the bound of a node is the native dual bound of the APPROXIMATE model (plain double rows, no proof frame): it orders and fathoms the search and
  *     decides when to split, it never becomes a physical upper bound. It is also only used when the solve ran with presolve off, the one setting whose
  *     dual bound HiGHS 1.15.1 can be trusted for (`nativeSolve.ts`);
- *   - the count model carries total weight exactly (weight = receiver + sum of n_t x weight_t) and, on the acyclic part graph of every supported gun, decodes every point
+ *   - the count model carries total weight exactly (weight = receiver + sum of n_t x weight_t) and, on the acyclic part graph every gun has, decodes every point
  *     to a physical build of the same installed multiset, so the weight of the decoded build is the weight of the model point and a node's rows state
  *     what the node means (docs/research/acyclic-fast-exactness.md section 9).
  *
@@ -46,7 +46,6 @@ import { guardStop } from '../runtimeGuard';
 import type { RuntimeGuard } from '../runtimeGuard';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { SolveParams } from '../types';
-import { partGraphIsAcyclic } from './blueprint';
 import { computeActiveBounds } from './bounds';
 import { columnValuesFromStructured } from './decode';
 import type { ColumnValues } from './decode';
@@ -58,7 +57,7 @@ import type { IntegerNoGood } from './fastCut';
 import { FAST_PRESOLVE, isLimitStatus, NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
 import type { PolicyOutcome, PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
-import { classifyOptimize, isMoaDependent, observationsOfReason, unsupportedPartGraphOutcome } from './outcome';
+import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
 import type { OptimizeOutcome } from './outcome';
 import { exactAxes, exactObjectiveScore, scoreEnclosure } from './proof';
 import type { BoundEvidence } from './proof';
@@ -198,11 +197,6 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   }
 
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
-  // Owner decision 2d as amended: a gun whose part graph has a cycle is refused as unsupported data, nothing solved.
-  if (!partGraphIsAcyclic(blueprint)) {
-    const outcome = unsupportedPartGraphOutcome(moaDependent);
-    return { kind: 'incomplete', reason: outcome.reason as string, outcome, summary };
-  }
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
   if (domain.empty) {
     const detail = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`)).join('; ');
@@ -309,9 +303,11 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   /**
    * First try of a node with continuous slot-edge counts (`FastModel.lpRelaxedEdges`), a relaxation of the node's model. When its optimum has every
    * edge integral, that point is feasible for the integer model and therefore optimal for it (the relaxation's optimum is at least the integer
-   * optimum), so the answer is judged exactly as an integer answer; its dual bound is still a valid bound of the node. Anything else (a fractional
-   * edge, a non-optimal stop) returns `null` and the caller solves the integer model as before; a point that must be cut returns `rejected` (the
-   * caller solves the integer model too, but the observed rejection outranks a coincident interrupt, ADR 0013 section 6). Only the deadline is final.
+   * optimum), so the answer is judged exactly as an integer answer; its dual bound is still a valid bound of the node. A native limit stop whose primal
+   * has every edge integral and validates is a verified build of the node: it is returned as the node's witness with the stop's reason, as the integer
+   * model's own limit stop would be (ADR 0013 section 6; the Fast side of defect D1). Anything else (a fractional edge, a limit stop with no primal or
+   * no verified build) returns `null` and the caller solves the integer model as before; a point that must be cut returns `rejected` (the caller
+   * solves the integer model too, but the observed rejection outranks a coincident interrupt, ADR 0013 section 6). Only the deadline is final.
    */
   type RelaxedTry = NodeEvaluation<FastVerifiedBuild> | { rejected: BoundEvidence } | null;
   const tryRelaxedEdges = async (model: FastModel): Promise<RelaxedTry> => {
@@ -326,7 +322,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     // The relaxation has no point, so the integer model has none either.
     if (outcome.kind === 'infeasible') return { verdict: 'infeasible', evidence: null, candidate: null, exact: model.exact };
     const result = outcome.result;
-    const fractional = result.modelStatus.name !== 'Optimal' || result.colValues === null || result.colNames === null
+    const fractional = result.colValues === null || result.colNames === null
       || model.edges.some(edge => {
         const j = result.colIndexByName.get(edge.column);
         const v = j === undefined ? Number.NaN : (result.colValues as Float64Array)[j];
@@ -337,7 +333,12 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
       return null;
     }
     const judged = judge(model, result);
-    if ('evaluation' in judged) return judged.evaluation;
+    if ('evaluation' in judged) {
+      // A limit stop counts only with a verified build (a witness); without one it proves nothing about the integer model, which is solved next.
+      if (result.modelStatus.name === 'Optimal' || judged.evaluation.candidate !== null) return judged.evaluation;
+      summary.relaxedEdgeFallbacks++;
+      return null;
+    }
     summary.relaxedEdgeFallbacks++;
     return { rejected: judged.reject.evidence };
   };

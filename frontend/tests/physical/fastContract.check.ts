@@ -18,7 +18,7 @@ import { PUBLIC_REASONS, PUBLIC_REASON_SET } from '../../src/solver/physical/rea
 import type { SolveParams } from '../../src/solver/types';
 
 /** The envelopes production returns before any model work: nothing is resolved, there is no build. */
-const PRE_MODEL_REASONS: ReadonlySet<string> = new Set([PUBLIC_REASONS.invalidOwnedItems, PUBLIC_REASONS.unsupportedCyclicPartGraph]);
+const PRE_MODEL_REASONS: ReadonlySet<string> = new Set([PUBLIC_REASONS.invalidOwnedItems]);
 
 export const returnsBuild = (r: Pick<OptimizeResponse, 'status'>): boolean => r.status === 'optimal' || r.status === 'feasible';
 

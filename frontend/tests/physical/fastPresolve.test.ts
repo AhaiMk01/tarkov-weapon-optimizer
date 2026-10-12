@@ -28,7 +28,7 @@ test('the fixture model has the exact maximum 335.35 with presolve off, and the 
 });
 
 test('the Fast pipeline with presolve off returns the Precise optimum of that world', async () => {
-  const { params } = randomWorld(123, false);
+  const { params } = randomWorld(123);
   const exact = await solvePrecise({ params, deadline: performance.now() + 60_000 });
   assert.equal(exact.kind, 'build');
   const fast = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline: performance.now() + 60_000, presolve: 'off' });

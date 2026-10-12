@@ -27,9 +27,9 @@
  *             reachable by a verified witness. A point that fails the decode or the exact validator (a tolerance boundary) is cut out and the node re-solved,
  *             and a witness is published only after the independent validator accepted it, so a projection failure can lose a witness, never fake a certificate.
  *
- * Preconditions (owner decision 2d as amended, 2026-10-12). Acyclicity is a checked property of the gun's data: the part graph reachable from the receiver has no
- * cycle (`partGraphIsAcyclic`), and a gun that fails it is refused as unsupported data before any model is built, so the active graph of every domain is acyclic
- * too. Lemma 1 then holds by theorem; its conclusion is still verified on every domain (`assertCountModelApplies`: the candidate templates of every active
+ * Preconditions (owner decision 2026-10-12). Part graphs are acyclic (no gun has a cyclic one): the blueprint builder throws an internal `CYCLIC_PART_GRAPH`
+ * error on a cycle reachable from the receiver, so the active graph of every domain is acyclic too. Lemma 1 then holds by theorem; its conclusion is still
+ * verified on every domain (`assertCountModelApplies`: the candidate templates of every active
  * occurrence's slot equal the graph's union set) as an internal assertion, and a failure is a solver error, never a fallback to another model.
  *
  * TrueErgo and Prevent Overswing: the weight is an aggregate the count model carries exactly (`weight = receiver + sum n_t x weight_t`), a weight node is rows on
@@ -37,7 +37,7 @@
  * lies in the node, with the same objective function of the projection as the occurrence model, so the spatial search over weight transfers unchanged.
  */
 
-import { partGraphIsAcyclic, type PhysicalBlueprint } from './blueprint';
+import type { PhysicalBlueprint } from './blueprint';
 import type { SubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
 import type { ModelProof } from './proof';
@@ -59,8 +59,7 @@ export interface CountModelCheck {
 const checkMemo = new WeakMap<SubproblemDomain, CountModelCheck>();
 
 /**
- * Assert that the count model is exact for a prepared, nonempty domain (see the module comment): the part graph reachable from the receiver is acyclic
- * (`partGraphIsAcyclic`, a precondition every operation checks first, so a failure here throws `CYCLIC_PART_GRAPH`) and the conclusion of Lemma 1 holds on
+ * Assert that the count model is exact for a prepared, nonempty domain (see the module comment): the conclusion of Lemma 1 holds on
  * this very domain (a failure throws `DOMAIN_INCONSISTENT`: it would contradict the theorem, so it is a fault, and the caller reports it as a solver error,
  * never by falling back to another model). Memoized per (immutable) domain.
  */
@@ -70,9 +69,6 @@ export function assertCountModelApplies(blueprint: PhysicalBlueprint, domain: Su
   }
   const cached = checkMemo.get(domain);
   if (cached !== undefined) return cached;
-  if (!partGraphIsAcyclic(blueprint)) {
-    throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The part graph of ${blueprint.weaponId} has a cycle: unsupported data`, { weaponId: blueprint.weaponId });
-  }
   if (domain.empty) throw new PhysicalModelError('DOMAIN_INCONSISTENT', 'An empty domain has no count model to check: its emptiness is decided by the domain', { weaponId: blueprint.weaponId });
   const { graph } = templateStructureOf(blueprint, domain);
   const check = candidateSetsAgree(blueprint, domain, graph.slots);

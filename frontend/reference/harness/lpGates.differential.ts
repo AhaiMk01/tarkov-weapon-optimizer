@@ -3,9 +3,10 @@
 //
 // Production Precise no longer solves this model: since Phase 2.10 (owner decisions 2d as amended and 2e) it solves the certified COUNT model
 // (`src/solver/physical/specializeCount.ts` through `solvePrecise.ts`), and the formal gates on THAT model are countGates.differential.ts. The
-// occurrence model (`tests/physical/occurrence/specializeOccurrence.ts`, path-qualified occurrence variables, no acyclicity precondition) stays here as
+// occurrence model (`tests/physical/occurrence/specializeOccurrence.ts`, path-qualified occurrence variables) stays here as
 // an independent second formulation: the same gates on a different model, so a defect shared by the count model and its gates would have to be
-// shared by this one too. It also still gates the 5 cyclic ledger cases production refuses (the occurrence model handles cycles).
+// shared by this one too. Cyclic part data is out of scope (owner decision 2026-10-12: the blueprint both models start from throws an internal
+// error on it), so the 5 cyclic ledger cases and the cyclic fuzz worlds are skipped.
 //
 // For one ledger case this builds blueprint -> domain -> `specializeLP` (the occurrence model), solves the emitted text on the PINNED native HiGHS
 // build (`src/solver/native`, HiGHS 1.15.1; the npm `highs` package these gates were first written against was retired in Phase 2.3) with the gate
@@ -34,7 +35,7 @@ import { preparePhysicalWeapon, prepareSubproblemDomain, type SpatialNode, type 
 import { specializeLP, type SpecializedModel } from '../../tests/physical/occurrence/specializeOccurrence';
 import { decodeSolution, type DecodedBuild } from '../../tests/physical/occurrence/decodeOccurrence';
 import type { LedgerCase } from '../ledger/index';
-import { detectUnsupported } from './toProduction.differential';
+import { CYCLIC_OUT_OF_SCOPE, detectUnsupported, isCyclicPartGraphError } from './toProduction.differential';
 import { productionLookup, subproblemRequestOf, type ProductionPhysical } from './blueprint.differential';
 
 // ---------------------------------------------------------------------------------------------
@@ -462,7 +463,13 @@ export async function runGates(c: LedgerCase, options: GateOptions = {}): Promis
 
   const oracle = runOracle(c.fixture, c.request);
   if (!oracle.complete) return skip('the oracle enumeration is incomplete');
-  const physical = preparePhysical(c);
+  let physical: ProductionPhysical;
+  try {
+    physical = preparePhysical(c);
+  } catch (error) {
+    if (isCyclicPartGraphError(error)) return skip(CYCLIC_OUT_OF_SCOPE);
+    throw error;
+  }
   const ted = isTedRequest(c.request);
   const tolerance = c.runtimeTolerance;
   const nearCap = tolerance.kind === 'near_cap' && !tolerance.resolvableAtTolerance;

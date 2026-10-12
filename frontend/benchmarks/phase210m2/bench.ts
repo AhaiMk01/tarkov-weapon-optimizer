@@ -68,7 +68,6 @@ for (const gun of guns) {
     occurrences: blueprint.stats.itemOccurrences,
     candidateEdges: countCandidateEdges(compat),
     templates: blueprint.stats.templates,
-    prunedAncestorEdges: blueprint.stats.prunedAncestorEdges,
     emptyDomain: domain.empty,
     countColumns: null, countRows: null, countEdges: null, countIntegers: null,
   };

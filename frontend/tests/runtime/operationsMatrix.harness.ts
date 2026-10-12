@@ -51,13 +51,6 @@ export const tedLookup = (): ItemLookup => lookupOf(
   ['a', mod('a', { weight: 1, ergo: 20 })], ['b', mod('b', { weight: 2, ergo: 30 })], ['c', mod('c', { weight: 3, ergo: 41 })],
 );
 
-/** A and B can host each other below the receiver: a cycle reachable from the receiver (owner decision 2d as amended: unsupported data). */
-export const cyclicLookup = (): ItemLookup => lookupOf(
-  gunWith(WEAPON, { coi: 0.0625, slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
-  ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
-  ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
-);
-
 // ---------------------------------------------------------------------------------------------------------------------------
 // The operations
 // ---------------------------------------------------------------------------------------------------------------------------

@@ -15,28 +15,28 @@ export type Dimension = (typeof DIMENSIONS)[number];
  */
 export const FAST_DIMENSIONS: readonly Dimension[] = ['buildValid', 'emptiness', 'outcomeContract'];
 
-/**
- * `refused`: production refused the case as unsupported data, exactly as an owner decision requires (`OWNER_APPROVED_REFUSALS`), on a dimension that would
- * otherwise be graded. It is neither a pass nor a failure: the ledger expectation is unchanged (the oracle still solves the case), the scope is the owner's.
- */
-export type Verdict = 'pass' | 'fail' | 'n/a' | 'refused';
-export const VERDICTS: readonly Verdict[] = ['pass', 'fail', 'n/a', 'refused'];
+export type Verdict = 'pass' | 'fail' | 'n/a';
+export const VERDICTS: readonly Verdict[] = ['pass', 'fail', 'n/a'];
 
 // ---------------------------------------------------------------------------------------------
 // Owner-approved scope (README.md, "Owner-approved scope")
 // ---------------------------------------------------------------------------------------------
 
+/** The `unsupported` feature id an out-of-scope case is recorded with (baseline.json), and why. */
+export const CYCLIC_PART_GRAPH_FEATURE = 'cyclic_part_graph';
+export const CYCLIC_OUT_OF_SCOPE_REASON = 'cyclic part data is not supported; production throws an internal error';
+
 /**
- * Ledger cases production refuses, by owner decision, as unsupported data: the part graph reachable from the receiver has a cycle (owner decision 2d as
- * amended, 2026-10-12; docs/stage2-plan.md). The oracle still solves them and their ledger expectations are not edited; the harness grades them as
- * `refused` only when production returns exactly the refusal (`Unsupported data: cyclic part graph`, no build, nothing resolved) in both modes.
+ * Ledger cases outside production's scope (owner decision 2026-10-12: no gun has a cyclic part graph, so cyclic data is not supported). The oracle still
+ * solves them and their ledger expectations are not edited; the harness does not run production on them: every dimension is `n/a` and the case lists
+ * `CYCLIC_PART_GRAPH_FEATURE` as its unsupported feature.
  */
-export const OWNER_APPROVED_REFUSALS: Readonly<Record<string, string>> = {
-  'F03-self-loop': 'decision 2d as amended: cyclic part graph',
-  'F03-ancestor-loop-with-sibling-repetition': 'decision 2d as amended: cyclic part graph',
-  'F03-memoization-context-ancestor': 'decision 2d as amended: cyclic part graph',
-  'F03-memoization-context-required-slot': 'decision 2d as amended: cyclic part graph',
-  'F10-cycle-behind-deactivated-owner': 'decision 2d as amended: cyclic part graph',
+export const OUT_OF_SCOPE_CASES: Readonly<Record<string, string>> = {
+  'F03-self-loop': CYCLIC_OUT_OF_SCOPE_REASON,
+  'F03-ancestor-loop-with-sibling-repetition': CYCLIC_OUT_OF_SCOPE_REASON,
+  'F03-memoization-context-ancestor': CYCLIC_OUT_OF_SCOPE_REASON,
+  'F03-memoization-context-required-slot': CYCLIC_OUT_OF_SCOPE_REASON,
+  'F10-cycle-behind-deactivated-owner': CYCLIC_OUT_OF_SCOPE_REASON,
 };
 
 /**
@@ -129,7 +129,7 @@ export function parseBaseline(text: string): Baseline {
   for (const [id, entry] of Object.entries(raw.cases as Record<string, unknown>)) {
     const e = entry as { unsupported?: unknown; precise?: unknown; fast?: unknown };
     if (!Array.isArray(e.unsupported) || !e.unsupported.every(f => typeof f === 'string')) throw new Error(`baseline case ${id}: unsupported must be a string list`);
-    if (!isVerdictRow(e.precise) || !isVerdictRow(e.fast)) throw new Error(`baseline case ${id}: every dimension needs a pass, fail, n/a or refused verdict`);
+    if (!isVerdictRow(e.precise) || !isVerdictRow(e.fast)) throw new Error(`baseline case ${id}: every dimension needs a pass, fail or n/a verdict`);
     cases[id] = { unsupported: e.unsupported as string[], precise: e.precise, fast: e.fast };
   }
   return { schemaVersion: 1, cases };
@@ -199,8 +199,6 @@ export interface FamilySummary {
 
 export interface Summary {
   total: number;
-  /** Cases graded `refused` (owner-approved unsupported data): outside every pass/applicable count. */
-  refused: number;
   families: FamilySummary[];
   totals: { precise: Record<Dimension, PassCount>; fast: Record<Dimension, PassCount> };
   topReasons: Record<ModeName, { key: string; count: number }[]>;
@@ -216,7 +214,7 @@ const emptyCounts = (): Record<Dimension, PassCount> => ({
 
 function tally(into: Record<Dimension, PassCount>, results: DimensionResults): void {
   for (const d of DIMENSIONS) {
-    if (results[d].verdict === 'n/a' || results[d].verdict === 'refused') continue;
+    if (results[d].verdict === 'n/a') continue;
     into[d].applicable++;
     if (results[d].verdict === 'pass') into[d].pass++;
   }
@@ -227,9 +225,7 @@ export function summarize(board: Scoreboard, topN = 8): Summary {
   const totals = { precise: emptyCounts(), fast: emptyCounts() };
   const reasons: Record<ModeName, Map<string, number>> = { precise: new Map(), fast: new Map() };
   const unsupported = new Map<string, number>();
-  let refused = 0;
   for (const c of board) {
-    if (MODES.some(mode => DIMENSIONS.some(d => c[mode][d].verdict === 'refused'))) refused++;
     let family = byFamily.get(c.family);
     if (!family) {
       family = { family: c.family, cases: 0, precise: emptyCounts(), fast: emptyCounts() };
@@ -251,7 +247,6 @@ export function summarize(board: Scoreboard, topN = 8): Summary {
   const top = (m: Map<string, number>) => [...m.entries()].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, topN).map(([key, count]) => ({ key, count }));
   return {
     total: board.length,
-    refused,
     families: [...byFamily.values()].sort((a, b) => a.family - b.family),
     totals,
     topReasons: { precise: top(reasons.precise), fast: top(reasons.fast) },
@@ -275,6 +270,5 @@ export function formatSummary(summary: Summary): string {
     for (const r of summary.topReasons[mode]) out.push(`  ${String(r.count).padStart(4)}  ${r.key}`);
   }
   out.push(`unsupported features (cases): ${summary.unsupported.map(u => `${u.feature} (${u.cases})`).join(', ') || 'none'}`);
-  out.push(`refused as owner-approved unsupported data (cases, outside the counts above): ${summary.refused}`);
   return out.join('\n');
 }

@@ -19,7 +19,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LEDGER } from '../ledger/index';
 import { gradeCase, probeNativeLoader, type GradedCase } from './compare.differential';
-import { compareToBaseline, formatSummary, OWNER_APPROVED_CERTIFICATE_LOSSES, OWNER_APPROVED_REFUSALS, parseBaseline, serializeBaseline, summarize, toBaseline } from './scoreboard';
+import { compareToBaseline, formatSummary, OUT_OF_SCOPE_CASES, OWNER_APPROVED_CERTIFICATE_LOSSES, parseBaseline, serializeBaseline, summarize, toBaseline } from './scoreboard';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const baselinePath = join(here, 'baseline.json');
@@ -82,9 +82,9 @@ test('ratchet: every newly passing dimension is recorded in baseline.json', () =
 });
 
 test('every ledger case the oracle has an optimum for is certified `optimal` on Precise at its case tolerance, except the owner-approved scope', () => {
-  // Owner-approved scope (README.md): the cases refused as unsupported data (decision 2d as amended) and the certificates lost to the 1e-7 integrality
-  // tolerance at the 1e-9 case tolerance (decision 5b), which still return the validated optimum as `feasible`.
-  const withOptimum = board.filter(g => g.precise.scoreOptimal.verdict !== 'n/a' && g.precise.scoreOptimal.verdict !== 'refused');
+  // Owner-approved scope (README.md): the cases out of scope (cyclic part data, not run, every dimension n/a) and the certificates lost to the 1e-7
+  // integrality tolerance at the 1e-9 case tolerance (decision 5b), which still return the validated optimum as `feasible`.
+  const withOptimum = board.filter(g => g.precise.scoreOptimal.verdict !== 'n/a');
   assert.ok(withOptimum.length >= 125, `${withOptimum.length} cases have an oracle optimum`);
   assert.deepEqual(
     withOptimum.filter(g => g.observed.precise !== 'optimal' && !Object.hasOwn(OWNER_APPROVED_CERTIFICATE_LOSSES, g.id)).map(g => `${g.id}: ${g.observed.precise}`),
@@ -99,11 +99,10 @@ test('every ledger case the oracle has an optimum for is certified `optimal` on 
   }
 });
 
-test('the cases refused as unsupported data are exactly the owner-approved cyclic cases, refused in both modes; no other case is refused', () => {
-  const refused = board.filter(g => [g.precise, g.fast].some(r => Object.values(r).some(d => d.verdict === 'refused'))).map(g => g.id);
-  assert.deepEqual(refused, Object.keys(OWNER_APPROVED_REFUSALS));
-  for (const id of refused) {
-    const graded = board.find(g => g.id === id) as GradedCase;
-    assert.deepEqual([graded.observed.precise, graded.observed.fast], ['incomplete', 'incomplete'], id);
-  }
+test('exactly the out-of-scope cases (cyclic part data) are not run; a loop the receiver cannot reach is in scope and keeps its certified optimum', () => {
+  const outOfScope = board.filter(g => g.observed.precise === 'out_of_scope' || g.observed.fast === 'out_of_scope').map(g => g.id);
+  assert.deepEqual(outOfScope, Object.keys(OUT_OF_SCOPE_CASES));
+  const unreachableLoop = board.find(g => g.id === 'F10-no-disconnected-assembly') as GradedCase;
+  assert.equal(unreachableLoop.observed.precise, 'optimal');
+  assert.equal(unreachableLoop.precise.scoreOptimal.verdict, 'pass');
 });

@@ -2,15 +2,15 @@
 // PROJECTIONS. It is the harness of the Fast exactness research (acyclicFast.differential.ts) pointed at the model built through the proof layer, so the same
 // gates, the same enumeration and pinning, and the same populations judge it:
 //
-//   - the ledger (every non-todo case whose active graph is acyclic),
+//   - the ledger (every non-todo case in scope: the cyclic ones are out of scope),
 //   - seeded random acyclic worlds (the lpFuzz generator),
-//   - the adversarial generator of the research (seven profiles), now WITHOUT the exception the plain Fast model needed: the MOA family (several barrels, accuracy
+//   - the adversarial generator of the research (four profiles; the back-edge ones left with cyclic part data), now WITHOUT the exception the plain Fast model needed: the MOA family (several barrels, accuracy
 //     sum above 100 percent points, cap below zero) must equal the oracle, because the certified rows state "the largest centre of impact binds",
 //   - the minimal MOA counterexample, in both regimes of the dominance terms,
 //   - real-gun slices of the pinned raw documents.
 //
 // Eligibility is part of the run: `specializeCount` verifies Lemma 1 on the data (the candidate templates of every active occurrence's slot equal the graph's union
-// set), so a case whose graph passes the acyclicity gate but breaks the lemma throws and fails here.
+// set), so a case that breaks the lemma throws and fails here.
 //
 // Sizes: the defaults finish in a few minutes. COUNT_MODEL_LONG=1 runs the long campaign (about an hour); COUNT_MODEL_SEED shifts the seeds. Run alone:
 // cd frontend && npx tsx --test reference/harness/countModel.differential.test.ts
@@ -57,30 +57,28 @@ test('random acyclic worlds (lpFuzz): projections, objective and emptiness equal
   }
   summary(t, `lpFuzz (${cases} seeds from ${20261004 + SEED})`, tally);
   assert.deepEqual(failures, [], `${failures.length} random case(s) differ`);
-  // lpFuzz often draws a part graph with a cycle (a back edge), which is now refused as unsupported data (decision 2d as amended) and skipped here.
+  // lpFuzz often draws a part graph with a cycle (a back edge): out of scope (cyclic part data, production throws an internal error), skipped here.
   assert.ok(tally.gated >= cases / 3, `${tally.gated} of ${cases} cases were gated`);
 });
 
-const PROFILES: { name: string; options: AdversarialOptions; cases: [number, number] }[] = [
-  { name: 'baseline', options: {}, cases: [14, 600] },
-  { name: 'dense multi-copy', options: { dense: true }, cases: [14, 600] },
-  { name: 'back edges (any)', options: { backEdges: 'any' }, cases: [14, 600] },
-  { name: 'back edges (dominated: closure cyclic, active graph acyclic)', options: { backEdges: 'dominated' }, cases: [14, 600] },
-  { name: 'back edges (required slots)', options: { backEdges: 'required' }, cases: [14, 600] },
-  { name: 'MOA, several barrels', options: { moa: true }, cases: [14, 600] },
+/** `seedIndex` fixes each profile's seed range; indices 2 to 4 were the back-edge (cyclic closure) profiles, out of scope since 2026-10-12. */
+const PROFILES: { name: string; options: AdversarialOptions; cases: [number, number]; seedIndex: number }[] = [
+  { name: 'baseline', options: {}, cases: [14, 600], seedIndex: 0 },
+  { name: 'dense multi-copy', options: { dense: true }, cases: [14, 600], seedIndex: 1 },
+  { name: 'MOA, several barrels', options: { moa: true }, cases: [14, 600], seedIndex: 5 },
   // The family the plain Fast rows get wrong: 65 of 600 cases in the research run. More cases by default, so the family is hit.
-  { name: 'MOA, accuracy sum above 100', options: { moa: true, bigAccuracy: true }, cases: [90, 600] },
+  { name: 'MOA, accuracy sum above 100', options: { moa: true, bigAccuracy: true }, cases: [90, 600], seedIndex: 6 },
 ];
 
 test('adversarial worlds: EVERY case equals the oracle on the certified count model, the MOA family included', { timeout: 240 * 60_000 }, async t => {
   const failures: string[] = [];
   const all = newTally();
   let moaDominance = 0;
-  for (const [p, profile] of PROFILES.entries()) {
+  for (const profile of PROFILES) {
     const tally = newTally();
     const cases = size(...profile.cases);
     for (let k = 0; k < cases; k++) {
-      const seed = 100_000 * (p + 1) + SEED + k;
+      const seed = 100_000 * (profile.seedIndex + 1) + SEED + k;
       const world = adversarialCase(seed, profile.options);
       const r: FastExactness = await runFastExactness(`adv-${seed}`, world.fixture, world.request, { certified: true });
       addToTally(tally, r);

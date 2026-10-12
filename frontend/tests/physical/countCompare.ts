@@ -21,7 +21,7 @@ export const NOISE_SAFE_TOLERANCE = 1e-6;
 
 /** A world with the MOA family: large accuracy modifiers, barrels of distinct centres of impact, a negative cap. */
 export function moaWorld(seed: number): World {
-  const world = randomWorld(seed, false);
+  const world = randomWorld(seed);
   const rand = rng(Math.imul(seed, 2654435761) + 977);
   const pick = <T,>(items: readonly T[]): T => items[Math.floor(rand() * items.length)];
   const chance = (p: number): boolean => rand() < p;

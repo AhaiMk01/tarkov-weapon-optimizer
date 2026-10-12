@@ -102,7 +102,7 @@ test('the Fast template model of random world 123 (fast_presolve_wrong_optimal.l
 });
 
 test('the COUNT model node [1.5, 3] of TED world 2105 (count_presolve_off_wrong_optimal.lp): at the production integrality tolerance of 1e-7 (owner decision 5b) presolve off with the default seed returns the true optimum 100 with a dual bound of at least 100; at 1e-9 HiGHS 1.15.1 may report Optimal 93.6 with a dual bound of 93.6', async t => {
-  // Seeded world `randomTedWorld(2105, false)`, weight node [1.5, 3], request weights 1 / 0 / 0, TrueErgo, equipment modifier +0.2. Three templates (t1: 22 ergonomics and two
+  // Seeded world `randomTedWorld(2105)`, weight node [1.5, 3], request weights 1 / 0 / 0, TrueErgo, equipment modifier +0.2. Three templates (t1: 22 ergonomics and two
   // slots, t3: 9, t2: 5). The physical build {t1, t1, t3, t3} (2.75 kg, raw ergonomics 87, x 1.2 = 104.4, clamped 100, no weight penalty below 3 kg) scores 100, and the
   // occurrence model of the same request returns it (tests/physical/countVsOccurrence.test.ts). The truth below does not depend on the defect: the model pinned to that
   // build is FEASIBLE and its objective is 100, so the maximum is at least 100. With an integrality tolerance of 1e-9 the root LP of the unpinned model is mis-solved with

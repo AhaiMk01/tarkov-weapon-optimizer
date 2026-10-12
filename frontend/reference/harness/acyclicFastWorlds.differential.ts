@@ -1,6 +1,6 @@
 // Adversarial worlds for the Fast exactness gates (research task: docs/research/acyclic-fast-exactness.md).
 //
-// `lpFuzz.differential.ts` draws small mostly-acyclic weapons; this generator is aimed at the families where a per-template COUNT model could differ
+// `lpFuzz.differential.ts` draws small weapons; this generator is aimed at the families where a per-template COUNT model could differ
 // from the per-occurrence physical domain. Every world is a ReferenceFixture plus request, so the oracle enumerates it exhaustively.
 //
 //   multi-slot owner   an owner with two or three slots whose allowlists overlap (one item allowed in several slots of one owner);
@@ -11,9 +11,10 @@
 //                      lots, dominated offers, several offers of one item;
 //   MOA                several barrel templates (centre of impact above zero) in different slots at once, with the accuracy sum able to pass 100 percent
 //                      points when `bigAccuracy` is on, and caps on both sides of zero;
-//   tight caps         caps equal to the statistic of some enumerated build, or one grid step away;
-//   cyclic closure     back references that the ancestor rule prunes (the active graph usually stays acyclic when every occurrence of the host sits
-//                      under the target), which exercises the "active graph, not the closure" definition.
+//   tight caps         caps equal to the statistic of some enumerated build, or one grid step away.
+//
+// Every world has an acyclic part graph (children always have a higher index). The back-edge modes that drew cyclic closures were removed with
+// cyclic part data (owner decision 2026-10-12: out of scope); they drew only after every other slot draw, so every remaining seed draws the same world.
 //
 // Every number sits on a binary-exact grid so a cap that equals a build statistic is exactly representable. The structural features of the final
 // world are measured from the world itself (`featuresOf`), never taken from what the generator intended.
@@ -64,16 +65,6 @@ const TRADERS = ['prapor', 'skier', 'mechanic'];
 export interface AdversarialOptions {
   /** Accuracy modifiers large enough for the accuracy sum to pass 100 percent points (the MOA row's monotonicity assumption). */
   bigAccuracy?: boolean;
-  /**
-   * Back references added to the closure (cycles the ancestor rule prunes):
-   *   'any'        an item allowed in the slot of a higher-index item; the active graph is cyclic unless every occurrence of the host sits under the target;
-   *   'dominated'  only a target that lies on EVERY root path of the host (so the ancestor rule prunes the edge at every occurrence: the closure
-   *                has a cycle, the active graph never does);
-   *   'required'   the back edge goes into a REQUIRED slot, so the host is viable under some ancestor sets and not under others (viability is
-   *                path-dependent in the blueprint even though the active graph can stay acyclic).
-   * `true` means 'any'.
-   */
-  backEdges?: boolean | 'any' | 'dominated' | 'required';
   /** Few templates, many slots with overlapping allowlists, and larger preset counts: deep multi-copy structure. */
   dense?: boolean;
   /** Force several barrel templates and a MOA cap. */
@@ -126,7 +117,7 @@ export function adversarialCase(seed: number, options: AdversarialOptions = {}):
   const hubIndex = d.chance(0.85) && n >= 4 ? d.int(1, n - 2) : -1;
   const hub = hubIndex >= 0 ? ids[hubIndex] : null;
 
-  // --- slots: owners are the weapon (-1) and the items; children always have a higher index (acyclic) unless a back edge is added below ---
+  // --- slots: owners are the weapon (-1) and the items; children always have a higher index (acyclic) ---
   const slotsByOwner = new Map<string, ReferenceSlot[]>();
   const ownerIndexOf = (owner: string): number => (owner === 'gun' ? -1 : ids.indexOf(owner));
   for (const owner of ['gun', ...ids]) {
@@ -149,40 +140,6 @@ export function adversarialCase(seed: number, options: AdversarialOptions = {}):
       if (below.length > 0) slots.push({ id: `${owner}_s0`, required: true, allowedItemIds: d.some(below, Math.min(2, below.length)) });
     }
     slotsByOwner.set(owner, slots);
-  }
-  // Back references (cycles of the closure).
-  const mode = options.backEdges === true ? 'any' : options.backEdges === false || options.backEdges === undefined ? null : options.backEdges;
-  if (mode !== null) {
-    // the items on every root path of an item (its dominators), by enumerating the paths of the acyclic part
-    const children = (owner: string): string[] => [...new Set((slotsByOwner.get(owner) ?? []).flatMap(sl => sl.allowedItemIds))].filter(c => ownerIndexOf(c) > ownerIndexOf(owner));
-    const dominators = new Map<string, Set<string> | null>();
-    const walk = (owner: string, path: string[]): void => {
-      for (const c of children(owner)) {
-        const here = new Set(path);
-        const known = dominators.get(c);
-        if (known === undefined || known === null) dominators.set(c, here);
-        else for (const x of [...known]) if (!here.has(x)) known.delete(x);
-        walk(c, [...path, c]);
-      }
-    };
-    walk('gun', []);
-    for (let k = 0; k < d.int(1, 2); k++) {
-      const hostIndex = d.int(1, n - 1);
-      const host = ids[hostIndex];
-      let target: string | undefined;
-      if (mode === 'dominated') {
-        const doms = [...(dominators.get(host) ?? [])];
-        target = doms.length > 0 ? d.pick(doms) : undefined;
-      } else target = ids[d.int(0, hostIndex - 1)];
-      if (target === undefined) continue;
-      const slots = slotsByOwner.get(host) ?? [];
-      if (mode === 'required') {
-        const other = ids.filter((_, j) => j > hostIndex);
-        slots.push({ id: `${host}_b${k}`, required: true, allowedItemIds: d.chance(0.5) || other.length === 0 ? [target] : [target, d.pick(other)] });
-      } else if (slots.length === 0) slots.push({ id: `${host}_s0`, required: false, allowedItemIds: [target] });
-      else if (!slots[0].allowedItemIds.includes(target)) slots[0].allowedItemIds.push(target);
-      slotsByOwner.set(host, slots);
-    }
   }
   // Barrels: several templates with a positive centre of impact, each allowed in its own slot so they can be installed together.
   const barrelIds = options.moa === true || d.chance(0.35) ? d.some(ids, d.int(2, Math.min(3, n))) : [];

@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import {
-  assertCountModelApplies, computeActiveBounds, partGraphIsAcyclic, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, validatePhysicalBuild,
+  assertCountModelApplies, computeActiveBounds, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, validatePhysicalBuild,
   type SpatialNode, type SpecializeRequest, type SubproblemRequest,
 } from '../../src/solver/physical';
 import { assessNativeResult } from '../../src/solver/physical/nativeProof';
@@ -50,7 +50,7 @@ const VARIANTS: Record<string, { request: Request; node?: SpatialNode }> = {
   overswing: { request: { preventOverswing: true, maxWeight: 9 }, node: { weightMin: 4, weightMax: 5 } },
 };
 
-test('all 172 guns: every part graph is acyclic, every nonempty default domain passes the count-model assertion, and its certified model carries a proof with nothing withheld and no filtered coefficient', { skip, timeout: 900_000 }, t => {
+test('all 172 guns: every blueprint prepares (no cyclic part graph), every nonempty default domain passes the count-model assertion, and its certified model carries a proof with nothing withheld and no filtered coefficient', { skip, timeout: 900_000 }, t => {
   assert.equal(guns.length, 172);
   let eligible = 0, empty = 0, columns = 0, rows = 0, widest = 0, narrowest = Infinity;
   const started = performance.now();
@@ -58,7 +58,6 @@ test('all 172 guns: every part graph is acyclic, every nonempty default domain p
     const blueprint = preparePhysicalWeapon(lookup, gun.id, { isAmmo });
     const domain = prepareSubproblemDomain(blueprint, lookup, {});
     if (domain.empty) { empty++; continue; }
-    assert.equal(partGraphIsAcyclic(blueprint), true, `${gun.shortName}: the part graph of every pinned gun is acyclic`);
     assertCountModelApplies(blueprint, domain); // throws on a failure of Lemma 1
     eligible++;
     const model = specializeCount(blueprint, domain, { ergoWeight: 1, recoilWeight: 1, priceWeight: 0.5 });

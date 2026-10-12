@@ -7,7 +7,7 @@
 //     a different seed decides first and confirms second; status, certificate and the certified score must not move (a tie may pick another of the
 //     maximizers; then the score is the same and the build is reported, and a ledger case with a single maximizer must give the same build).
 //
-// On every Stage 1 ledger case (Precise and Fast) and on pinned real guns (MP5, SR-25 and M4A1 plain; MP5 TrueErgo; MP5 Sweet Spot for the endpoint cache).
+// On every Stage 1 ledger case in scope (Precise and Fast; the cyclic ones are out of scope) and on pinned real guns (MP5, SR-25 and M4A1 plain; MP5 TrueErgo; MP5 Sweet Spot for the endpoint cache).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -23,7 +23,7 @@ import { createWorkerRuntime } from '../../src/solver/workerRuntime';
 import type { WorkerOutMessage } from '../../src/solver/workerProtocol';
 import { LEDGER } from '../../reference/ledger/index';
 import type { LedgerCase } from '../../reference/ledger/index';
-import { OWNER_APPROVED_REFUSALS } from '../../reference/harness/scoreboard';
+import { OUT_OF_SCOPE_CASES } from '../../reference/harness/scoreboard';
 import { toProduction } from '../../reference/harness/toProduction.differential';
 import { withNative } from '../runtime/operationsMatrix.harness';
 import type { NativeHook } from '../runtime/operationsMatrix.harness';
@@ -71,6 +71,9 @@ const honest: NativeHook = async (_call, real) => real();
 // The ledger
 // ---------------------------------------------------------------------------------------------------------------------------
 
+/** The ledger cases production supports: the cyclic ones are out of scope (owner decision 2026-10-12; production throws an internal error on them). */
+const IN_SCOPE = LEDGER.filter(c => !Object.hasOwn(OUT_OF_SCOPE_CASES, c.id));
+
 const inputsOf = (c: LedgerCase, precise: boolean) =>
   toProduction(c.fixture, c.request, { preciseMode: precise, timeLimitMs: 20_000, objectiveTolerance: c.runtimeTolerance.absolute });
 
@@ -79,7 +82,7 @@ const ledgerRows: LedgerRow[] = [];
 
 test('ledger: every case gives the same response on a fresh state, on warm caches and on a second fresh state, in both modes', { timeout: 900_000 }, async () => {
   const problems: string[] = [];
-  for (const c of LEDGER) {
+  for (const c of IN_SCOPE) {
     for (const precise of [true, false]) {
       const first = inputsOf(c, precise);
       if (first.unsupported.length > 0) { problems.push(`${c.id}: unsupported ${first.unsupported.map(u => u.feature).join(',')}`); continue; }
@@ -96,7 +99,7 @@ test('ledger: every case gives the same response on a fresh state, on warm cache
     }
   }
   assert.deepEqual(problems, [], `${problems.length} problem(s)`);
-  assert.equal(ledgerRows.length, LEDGER.length * 2);
+  assert.equal(ledgerRows.length, IN_SCOPE.length * 2);
 });
 
 test('ledger: across the second-opinion seed permutations a certified Precise answer keeps its status, certificate and score (decision 5b losses listed); a unique maximizer keeps its projection', { timeout: 900_000 }, async t => {
@@ -105,7 +108,7 @@ test('ledger: across the second-opinion seed permutations a certified Precise an
   let certified = 0;
   let tieBuildsMoved = 0;
   let treesMoved = 0;
-  for (const c of LEDGER) {
+  for (const c of IN_SCOPE) {
     const base = await withNative(honest, () => solve(inputsOf(c, true).params));
     if (base.physical_certificate !== 'certified_optimal' && base.physical_certificate !== 'certified_infeasible') continue;
     certified++;
@@ -141,16 +144,6 @@ test('ledger: across the second-opinion seed permutations a certified Precise an
   assert.ok(certified >= 100, `only ${certified} certified answers`);
   // Pinned so a change shows: exactly these two cases, both at the 1e-9 runtime tolerance, under both permutations that put seed 29 among the deciding solves.
   assert.deepEqual([...new Set(lost.map(l => l.split(' ')[0]))].sort(), ['F01-legal-alternative-placement', 'F13-reduction-counterexample-multi-copy-capacity']);
-});
-
-test('ledger: the owner-approved cyclic cases are refused identically on every run', () => {
-  for (const id of Object.keys(OWNER_APPROVED_REFUSALS)) {
-    for (const mode of ['precise', 'fast'] as const) {
-      const row = ledgerRows.find(r => r.id === id && r.mode === mode);
-      assert.ok(row, `${id} ${mode} ran`);
-      assert.equal(row.status, 'incomplete', `${id} ${mode}`);
-    }
-  }
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------

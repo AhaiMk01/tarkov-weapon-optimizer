@@ -19,9 +19,6 @@
  * own bounds (an unknown bound is `null`, never 0). The response is the section 5 transport of `api/client.ts`.
  * A native failure is a typed error (`SolverError`), never a fabricated result.
  *
- * A gun whose part graph reachable from the receiver has a cycle is unsupported data (owner decision 2d as amended): `solve` refuses it before any
- * solve with `Unsupported data: cyclic part graph` and the pre-model envelope, whatever the mode.
- *
  * Precision. `precision_request` echoes what the caller asked (`SolveParams.precisionRequest`, else derived from `preciseMode`);
  * `precision_resolved` is the model that actually ran, which is `preciseMode` and nothing else: a TrueErgo or Prevent Overswing request is NOT
  * upgraded to Precise (the caller resolves Auto by size, `precisionMode.ts`).
@@ -45,7 +42,7 @@ import type { OptimizeOutcome, StopObservations } from './physical/outcome';
 import { PUBLIC_REASONS } from './physical/reasons';
 import { solveFast } from './physical/solveFast';
 import type { FastSummary } from './physical/solveFast';
-import { partGraphRefusal, resolveTolerance, solvePrecise } from './physical/solvePrecise';
+import { resolveTolerance, solvePrecise } from './physical/solvePrecise';
 import type { PreciseSummary } from './physical/solvePrecise';
 import type { PhysicalBuild, PhysicalBuildStats } from './physical/validate';
 
@@ -390,10 +387,6 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   // Stage guard: nothing runs for a request that was cancelled or ran out of time before its first stage.
   const entryStop = guardStop(guard);
   if (entryStop !== null) return unstarted(guardObservation(entryStop));
-  // A gun whose part graph has a cycle is unsupported data (owner decision 2d as amended): refused in every mode before any solve, payoff included.
-  if (partGraphRefusal(params) !== null) {
-    return { response: optimizeEnvelope('unsupported_part_graph', { precisionRequest, moaDependent, tolerance, elapsedMs: now() - start }) };
-  }
   let payoff: PayoffReport | undefined;
   if (params.useTchebycheff && !params.idealPoint) {
     try {

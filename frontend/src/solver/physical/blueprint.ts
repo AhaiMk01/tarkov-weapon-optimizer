@@ -11,8 +11,10 @@
  *  - A *physical slot* s = (owner occurrence u, template slot id) holds at most one of its candidate occurrences.
  *    Every candidate occurrence has exactly one parent slot. The same template under two parents, or in two slots of
  *    one parent, is two distinct occurrences.
- *  - No ancestor-template repetition: a template never recurs on one root-to-leaf path (the receiver counts as an
- *    ancestor of everything). This is an explicit finite-domain restriction, not a claim about the game.
+ *  - Acyclic part graph: a template never recurs on one root-to-leaf path (the receiver counts as an ancestor of
+ *    everything). No gun has a cyclic part graph (owner decision 2026-10-12), so a recurrence is bad data and the
+ *    unrolling throws `CYCLIC_PART_GRAPH` (an internal error) instead of expanding it. A loop among parts the receiver
+ *    cannot reach is never expanded and is not an error.
  *  - Required slots with no candidate are KEPT (candidateCount 0): the owner of an empty required slot can never be
  *    built; for the receiver that makes the whole domain empty. The domain preparation propagates it.
  *  - Camora / ammunition-only slots are removed from the domain, not emptied (INTERPRETATIONS.md choice 15). The
@@ -114,11 +116,6 @@ export interface PhysicalBlueprintStats {
   itemOccurrences: number;
   slots: number;
   templates: number;
-  /**
-   * Allowlist entries skipped because the template was an ancestor (no-ancestor-repetition rule). Nonzero exactly when the part graph reachable from
-   * the receiver has a cycle: the rule is kept only as that detector (`partGraphIsAcyclic`), since a gun with a cycle is refused as unsupported data.
-   */
-  prunedAncestorEdges: number;
   /** Item occurrences that can never be built, whatever the request: a receiver-banned template, or an empty required slot below. */
   structurallyImpossibleOccurrences: number;
 }
@@ -359,7 +356,7 @@ export function preparePhysicalWeapon(
         if (seenAllowed.has(allowedId)) continue;
         seenAllowed.add(allowedId);
         if (allowedId === weaponId) {
-          parts.push(allowedId); // the receiver template: always an ancestor, pruned at expansion
+          parts.push(allowedId); // the receiver template: always an ancestor, so the expansion throws on it
         } else if (hasEntry(lookup, allowedId)) {
           if (lookup[allowedId].type === 'mod') parts.push(allowedId);
           else droppedAllowedItems.push({ ownerTemplateId: ownerId, slotId: slotInfo.id, itemId: allowedId, reason: 'not_a_mod' });
@@ -418,7 +415,6 @@ export function preparePhysicalWeapon(
 
   occTemplateBuf.push(0);
   occParentSlotBuf.push(-1);
-  let prunedAncestorEdges = 0;
   const ancestors: number[] = [];
 
   for (let v = 0; v < occTemplateBuf.length; v++) {
@@ -440,9 +436,9 @@ export function preparePhysicalWeapon(
       slotCandStartBuf.push(first);
       for (let k = 0; k < def.candidates.length; k++) {
         const c = def.candidates[k];
+        // Part graphs are acyclic (owner decision 2026-10-12): a template on its own root path is bad data, and unrolling it would never end.
         if (ancestors.includes(c)) {
-          prunedAncestorEdges++;
-          continue;
+          throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The part graph of ${weaponId} has a cycle through ${templateIds[c]}`, { weaponId, templateId: templateIds[c] });
         }
         occTemplateBuf.push(c);
         occParentSlotBuf.push(s);
@@ -676,7 +672,6 @@ export function preparePhysicalWeapon(
       itemOccurrences: N - 1,
       slots: S,
       templates: T,
-      prunedAncestorEdges,
       structurallyImpossibleOccurrences: impossible,
     },
     templateCount: T,
@@ -734,15 +729,4 @@ export function preparePhysicalWeapon(
   };
   preparedFrom.set(blueprint, lookup);
   return Object.freeze(blueprint);
-}
-
-/**
- * The per-gun data check of owner decision 2d as amended (2026-10-12): the part graph reachable from the receiver has no cycle. The unrolling above
- * never repeats a template on one root path; it cuts an allowlist entry exactly when the entry names a template already on the path, which on the
- * reachable graph happens iff that graph has a cycle (a self-listing part included). A part graph that has a loop only among parts the receiver cannot
- * reach is acyclic here. Request independent, so it is decided once per prepared blueprint. Every operation refuses a gun that fails it as unsupported
- * data before any solve (`Unsupported data: cyclic part graph`): the count model and its decoder are exact only on an acyclic graph.
- */
-export function partGraphIsAcyclic(blueprint: PhysicalBlueprint): boolean {
-  return blueprint.stats.prunedAncestorEdges === 0;
 }

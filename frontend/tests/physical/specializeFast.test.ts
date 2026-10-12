@@ -1,5 +1,5 @@
 // The Fast model text and metadata (src/solver/physical/specializeFast.ts): strict LP text that HiGHS reads back as written, template-sized columns,
-// the per-template acquisition modes and the exact reductions behind them, presence columns, the refusal of a cyclic part graph, the conflict
+// the per-template acquisition modes and the exact reductions behind them, presence columns, no connectivity row, the conflict
 // clique cover, and the refusals.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +8,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { buildItemLookup } from '../../src/solver/dataService';
 import {
-  cliqueCover, integerNoGood, nonDominatedLots, PhysicalModelError, preparePhysicalWeapon, prepareSubproblemDomain, specializeFast,
+  cliqueCover, integerNoGood, nonDominatedLots, preparePhysicalWeapon, prepareSubproblemDomain, specializeFast,
   type FastModel, type SpecializeRequest, type SubproblemRequest,
 } from '../../src/solver/physical';
 import type { ItemLookup } from '../../src/solver/types';
@@ -118,13 +118,7 @@ test('presence: a template that can repeat and takes part in a conflict or MOA r
   assert.ok(!/ z_\d+/.test(fast(lookupOf(gun(WEAPON, { slots: [slot('s', ['a', 'a'])] }), ['a', mod('a')])).lpBase));
 });
 
-test('a gun whose part graph has a cycle builds no model (unsupported data, owner decision 2d as amended); an acyclic one carries no connectivity row', () => {
-  const cyclic = lookupOf(
-    gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['A', mod('A', { slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { slots: [slot('toA', ['A'])] })],
-  );
-  assert.throws(() => fast(cyclic), (e: unknown) => e instanceof PhysicalModelError && e.code === 'CYCLIC_PART_GRAPH');
+test('a model carries no connectivity row (rootedness is derived on the acyclic part graph)', () => {
   const acyclic = fast(lookupOf(gun(WEAPON, { slots: [slot('s0', ['A'])] }), ['A', mod('A')]));
   assert.ok(!/ f_\d+_\d+/.test(acyclic.lpBase) && !hasRow(acyclic, 'fc_1'));
 });

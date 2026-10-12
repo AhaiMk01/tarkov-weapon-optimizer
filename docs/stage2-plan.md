@@ -33,7 +33,7 @@ suite, harness ratchet) and committed by the orchestrator.
 | 2.5 Numerics | §4C: K = 100/2.9089, no Big-M literal, no `toFixed(6)`, signed accuracy, zero-intrinsic and constant MOA rows, outward secants, recoil caps with nonpositive denominators, finite auxiliary ranges, global UB including tolerance-fathomed bounds | 2.4, 2.3 |
 | 2.6 Solve and status | §5/§6 transport shapes, statuses, certificates, reasons and precedence; decoder; production validator matching every reference accept/reject; payoff-table reporting | 2.3–2.5 |
 | 2.6b Fast TED | Owner decision 2b: TrueErgo/Prevent Overswing on the Fast count model (weight search over its exact aggregate weight), approximate qualification, no silent Precise upgrade | 2.6 |
-| 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, second opinion (5a), integrality tolerance (5b); decision 2d as amended: acyclicity checked per gun, cyclic guns refused as unsupported data, occurrence model and cycle code out of production (kept as a test cross-check); Auto rule revisited from the measurement | 2.6b, before 2.9 |
+| 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, second opinion (5a), integrality tolerance (5b); decision 2d as amended: cyclic part data unsupported (an internal blueprint error, no handling code), occurrence model and cycle code out of production (kept as a test cross-check); Auto rule revisited from the measurement | 2.6b, before 2.9 |
 | 2.7 Operations | §4D deadlines and macrotask yields, out-of-band cancel, `owned_items` validation and forwarding, floor discovery then bisection, Explore classification, metadata ops, cache invalidation, `preparePhysicalWeapon` / `prepareSubproblemDomain` / `specializeLP` | 2.6 |
 | 2.8 Consumers | §4E client, App and UI components, locales, EFTForge v1 export (supported-only), MethodologyModal | 2.6–2.7 |
 | 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere. **Done (2026-10-12):** the 25 root `test_*.ts` scripts, `bench_*.ts`, `proto_tchebycheff.ts` and the pre-cutover benchmark suite are gone; what the new pipeline still needs moved to `tests/` (Gunsmith on the pinned capture, TED display, request keys and trader canonicalization, preset quantities, translations). `lpBuilder.ts`, `validateBuild.ts`, `structuralBounds.ts` (with `bounds_mode`), `getAvailablePrice`, the `legacySolve` shim and the npm `highs` and `puppeteer-core` packages are retired; `tsconfig.benchmarks.json` checks `benchmarks/phase210m2/`; lint is clean | all |
@@ -86,25 +86,28 @@ is approximate. Decisions:
    cycle handling stays as is for now (Precise's ancestor rule keeps the occurrence tree finite; Fast adds its connectivity flow
    only on a cyclic graph; cyclic test worlds stay). In Stage 4, when certified Fast lands, acyclicity becomes a checked
    precondition: a cyclic gun is refused as unsupported data with a clear error, and the cycle code is removed with it.
-   **Amended (owner, 2026-10-12): acyclicity is a checked precondition now, not in Stage 4** ("we will not have cyclic guns").
-   - The check is a property of the gun's data: the part graph reachable from the receiver has no cycle (the blueprint's
-     ancestor rule cut no edge, `prunedAncestorEdges === 0`), cached per gun. The ancestor rule stays only as this detector.
-   - A cyclic gun is refused in every mode (Fast, Precise, Auto, Explore, floors) with a new public reason for unsupported
-     data and one plain sentence; nothing is solved and no build is shown.
+   **Amended (owner, 2026-10-12): acyclicity is a precondition now, not in Stage 4** ("we will not have cyclic guns").
+   **Amended again (owner, 2026-10-12): cyclic part data is not supported, and no code handles it** ("I said there is not
+   cyclic gun", "we don't need any code related to cyclic handling").
+   - No refusal, no public reason, no locale text, no per-gun check. The one guard left is internal: the blueprint
+     builder, whose unrolling only terminates because a template never recurs on its own root path, throws
+     `PhysicalModelError('CYCLIC_PART_GRAPH')` the moment it meets a cycle reachable from the receiver, so bad data fails
+     with the generic error instead of hanging the tab. A loop the receiver cannot reach is never expanded.
    - Precise runs only on the count model. The occurrence model leaves production and stays in the tests as the
-     independent cross-check. The per-domain Lemma 1 check (candidate sets agree) becomes an internal assertion: a
+     independent cross-check. The per-domain Lemma 1 check (candidate sets agree) stays an internal assertion: a
      failure is a solver error, never a silent fallback.
-   - Removed with it: Fast's connectivity flow and cyclic decode search (`placeBySearch`), the occurrence fallback, the
-     cyclic branches of eligibility and telemetry (`acyclic` flags become invariants).
+   - Removed: Fast's connectivity flow and cyclic decode search (`placeBySearch`), the occurrence fallback, the cyclic
+     branches of eligibility and telemetry, the `prunedAncestorEdges` statistic, the model builders' cycle checks, the
+     public reason `Unsupported data: cyclic part graph` and its locale keys, and the cyclic test worlds and refusal tests.
    - Ledger: the Stage 1 oracle is unchanged and still solves the 5 cyclic cases (F03-self-loop,
      F03-ancestor-loop-with-sibling-repetition, F03-memoization-context-ancestor, F03-memoization-context-required-slot,
-     F10-cycle-behind-deactivated-owner). The harness expects production to refuse them as unsupported data; the baseline
-     records this as owner-approved scope, never by editing a ledger expectation. F10-no-disconnected-assembly (loops not
-     reachable from the receiver) keeps its optimum.
-   - The seeded cyclic test worlds become refusal tests; the cyclic gates in `docs/research/acyclic-fast-exactness.md`
-     section 8 stay as history.
-   - ADR 0003 (rootedness on cyclic graphs) and ADR 0013 section 3 items 3 and 10 need an amendment note; the text is
-     drafted in the repo, and posting it to #40 needs the owner's approval.
+     F10-cycle-behind-deactivated-owner). The harness lists them as out of scope (`OUT_OF_SCOPE_CASES`, not run, every
+     dimension `n/a`, feature `cyclic_part_graph`), never by editing a ledger expectation. F10-no-disconnected-assembly
+     (loops not reachable from the receiver) keeps its optimum. Seeded harness worlds that draw a cycle are skipped as
+     out of scope.
+   - The cyclic gates in `docs/research/acyclic-fast-exactness.md` section 8 stay as history.
+   - ADR 0003 (rootedness on cyclic graphs) and ADR 0013 section 3 items 3 and 10 need an amendment note
+     (`docs/adr/amendments/2026-10-12-acyclic-precondition.md`); posting it to #40 needs the owner's approval.
    - Consequences: Auto's size rule was re-decided from Phase 2.10's measurement (performance policy item 1); Stage 4
      candidate 2a (certified Fast) shrinks to what Fast still lacks: the proof layer, the second opinion and the MOA rows.
    **Phase 2.10 result (2026-10-12, 172 pinned guns, 60 s):** Precise on the count model (relaxed-first slot edges, second
@@ -118,8 +121,8 @@ is approximate. Decisions:
    On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
    activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4
    and 5), and every row goes through the proof layer, so Precise keeps its certificates. Adds the MOA larger-COI rows,
-   an acyclicity guard and a second opinion before any certified infeasibility. (Amended 2d: a cyclic gun is refused,
-   not sent to the occurrence model.)
+   and a second opinion before any certified infeasibility. (Amended 2d: cyclic part data is not supported; the blueprint
+   throws an internal error on it.)
    The occurrence model stays in the tests as an independent cross-check. Stage 3 proves the rebuilt Precise.
 3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
    (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted

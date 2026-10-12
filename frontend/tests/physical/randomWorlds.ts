@@ -1,5 +1,6 @@
-// Seeded random worlds for the Fast-versus-Precise differential tests: a weapon of up to seven item templates (acyclic or cyclic), with every request
-// feature the Fast rows state drawn at random.
+// Seeded random worlds for the Fast-versus-Precise differential tests: a weapon of up to seven item templates with an acyclic part graph (slots list only
+// later templates), with every request feature the Fast rows state drawn at random. A seed draws the same world it drew before the cyclic mode was
+// removed (owner decision 2026-10-12): the acyclic branch's draws are unchanged.
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import { DEFAULT_TRADER_LEVELS } from '../../src/solver/types';
 import type { GunLookupEntry, ItemLookup, ModLookupEntry, OfferInfo, SolveParams } from '../../src/solver/types';
@@ -22,13 +23,12 @@ export interface World {
   ids: string[];
 }
 
-export function randomWorld(seed: number, cyclic: boolean): World {
+export function randomWorld(seed: number): World {
   const rand = rng(seed);
   const int = (lo: number, hi: number): number => lo + Math.floor(rand() * (hi - lo + 1));
   const pick = <T,>(items: readonly T[]): T => items[int(0, items.length - 1)];
   const chance = (p: number): boolean => rand() < p;
-  // A cyclic graph unrolls into every simple path of the template graph: keep it small (the blueprint has no other limit).
-  const count = cyclic ? int(3, 5) : int(3, 7);
+  const count = int(3, 7);
   const ids = Array.from({ length: count }, (_, i) => `t${i + 1}`);
   const allSlotIds: string[] = [];
 
@@ -36,9 +36,9 @@ export function randomWorld(seed: number, cyclic: boolean): World {
     const out: SlotSpec[] = [];
     const n = int(owner === WEAPON ? 2 : 0, max);
     for (let k = 0; k < n; k++) {
-      const pool = cyclic ? ids.filter(id => id !== owner) : ids.slice(from);
+      const pool = ids.slice(from);
       if (pool.length === 0) break;
-      const allowed = pool.filter(() => chance(cyclic ? 0.35 : 0.5));
+      const allowed = pool.filter(() => chance(0.5));
       if (allowed.length === 0) allowed.push(pick(pool));
       const id = `${owner}_s${k}`;
       allSlotIds.push(id);
@@ -67,7 +67,7 @@ export function randomWorld(seed: number, cyclic: boolean): World {
       capacity: chance(0.15) ? pick([10, 20, 30]) : 0,
       sighting: chance(0.15) ? pick([25, 50, 100]) : 0,
       offers: offersOf(),
-      slots: randomSlots(id, i + 1, cyclic ? 2 : 3),
+      slots: randomSlots(id, i + 1, 3),
       conflictsItems: [],
       conflictsSlots: [],
     })];
@@ -115,11 +115,11 @@ export function randomWorld(seed: number, cyclic: boolean): World {
 
 /**
  * A world that exercises TrueErgo and Prevent Overswing: the seeded world of `randomWorld` with its weights raised to the range where the 3 kg knee
- * matters, an equipment modifier, and at least one of the two TED flags. Drawn from a second generator, so `randomWorld(seed, cyclic)` itself is
+ * matters, an equipment modifier, and at least one of the two TED flags. Drawn from a second generator, so `randomWorld(seed)` itself is
  * unchanged. The weights and ergonomics are small multiples of an eighth, so a build's TED sits near the overswing boundary often.
  */
-export function randomTedWorld(seed: number, cyclic: boolean): World {
-  const world = randomWorld(seed, cyclic);
+export function randomTedWorld(seed: number): World {
+  const world = randomWorld(seed);
   const rand = rng(Math.imul(seed, 7919) + 104_729);
   const pick = <T,>(items: readonly T[]): T => items[Math.floor(rand() * items.length)];
   const chance = (p: number): boolean => rand() < p;

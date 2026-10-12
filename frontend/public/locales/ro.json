@@ -174,7 +174,6 @@
     "cancelled_none": "Cancelled.",
     "invalid_owned": "Your stash list isn't valid — fix it and try again.",
     "invalid_schedule": "The Explore settings aren't valid — change them and try again.",
-    "unsupported_data": "Datele pieselor acestei arme nu sunt acceptate, așa că nu se poate crea o configurație pentru ea.",
     "queue_timeout": "The request waited too long and was dropped — try again.",
     "error": "Something went wrong — try again."
   },
@@ -417,7 +416,6 @@
     "fastProvisionalMoaModelInfeasible": "The approximate (Fast) model found no build under the MOA limit. That does not prove none exists; try Precise or loosen the MOA limit.",
     "invalidOwnedItems": "The stash list is not valid, so nothing was solved.",
     "invalidExploreSchedule": "The Explore schedule is empty or invalid, so nothing was solved.",
-    "unsupportedCyclicPartGraph": "Datele acestei arme conțin piese care se pot monta una în alta în buclă; optimizatorul nu acceptă astfel de date, așa că nu s-a calculat nimic.",
     "queueTimeoutBeforeDispatch": "The request's time ran out while it waited in the queue, so nothing was solved. Try again.",
     "independentBuildValidationFailed": "A build the solver produced failed independent validation, so it was withheld.",
     "requiredProofPrerequisiteUnavailable": "A requirement for a proof was unavailable, so no proof is claimed.",

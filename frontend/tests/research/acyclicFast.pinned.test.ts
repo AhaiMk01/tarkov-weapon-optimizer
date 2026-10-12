@@ -1,7 +1,7 @@
 // Research: is the Fast count/edge model an exact reformulation on acyclic template graphs? (docs/research/acyclic-fast-exactness.md)
 //
 // The pinned snapshot (frontend/benchmarks/snapshot.json, SHA-256 219443b4...) is scanned for the CONDITIONS the proof needs:
-//   D1  the whole closure is acyclic: the blueprint pruned no ancestor edge (`stats.prunedAncestorEdges === 0`); request-independent;
+//   D1  the whole closure is acyclic: the blueprint prepares (it throws CYCLIC_PART_GRAPH on a cycle); request-independent;
 //   D2  the ACTIVE template graph (what `specializeFast` builds, after the domain masks) is acyclic; D1 implies D2 for every request;
 //   L   the lemma behind the count model: every ACTIVE occurrence of one template lists the same active candidate templates in each of its slots
 //       (a count model can only be exact when the physical candidates do not depend on the path);
@@ -77,14 +77,15 @@ test('all 172 pinned guns: closure acyclic (D1), active graph acyclic (D2), cand
   const started = performance.now();
   for (const gun of guns) {
     const bp = preparePhysicalWeapon(lookup, gun.id, { isAmmo: snapshotIsAmmo });
-    assert.equal(bp.stats.prunedAncestorEdges, 0, `${gun.shortName}: D1 (the closure has a cycle: ${bp.stats.prunedAncestorEdges} pruned ancestor edge(s))`);
+    // D1: preparing succeeded, so the closure has no cycle (the blueprint throws CYCLIC_PART_GRAPH on one).
     for (const profile of PROFILES) {
       const domain = prepareSubproblemDomain(bp, lookup, profile.request);
       if (domain.empty) continue; // no accessible base or an unfillable root slot: no graph, nothing cyclic, and the empty answer is exact
       nonempty.set(profile.name, (nonempty.get(profile.name) ?? 0) + 1);
       everNonempty.add(gun.id);
-      // D2: the active template graph is acyclic (buildTemplateGraph throws CYCLIC_PART_GRAPH otherwise).
+      // D2: the active template graph is acyclic: its topological order covers every active template.
       const graph = buildTemplateGraph(bp, domain);
+      assert.equal(graph.topological.length, graph.active.reduce((a, b) => a + b, 0), `${gun.shortName}/${profile.name}: D2`);
       const { checked, disagreement } = candidateSetsAgree(bp, domain);
       assert.equal(disagreement, null, `${gun.shortName}/${profile.name}: L ${disagreement}`);
       pairs += checked;

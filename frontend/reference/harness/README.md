@@ -34,7 +34,8 @@ exact optimality is not required of it (ADR 0013 section 6) and `scoreOptimal` i
 | `outcomeContract` | The response carries the admitted public outcome of ADR 0013 section 6 for the mode: `status`, `physical_certificate`, `model_qualification`, `moa_qualification` (an explicit `null` when MOA-independent, absent is a miss), `precision_resolved` (the requested mode), `reason` and `optimization.termination`. `reason` is a closed set: the admitted reason when one is required, otherwise none at all (so today's `"No valid configuration found"` fails). The failure key lists the fields that are missing and the ones that are wrong. Phase 2.6 made production publish the section 5 transport through the pure classifier `src/solver/physical/outcome.ts`. |
 
 A case with an unsupported feature (below) is a recorded failure on every applicable dimension with the reason
-`unsupported: ...`; it is not run. Nothing is ever passed by loosening a comparison.
+`unsupported: ...`; it is not run. Nothing is ever passed by loosening a comparison. A case outside production's scope (cyclic part data, see
+"Owner-approved scope") is not run either: every dimension is `n/a`.
 
 Stage 2 is complete when every Precise cell passes. The Fast column is the secondary signal. Phase 2.6b closed the one question that stayed open
 after phase 2.6: the 15 Fast `outcomeContract` cells of the TrueErgo and Prevent Overswing cases (F11 6, F12 8, F14 1) failed because `solve`
@@ -141,14 +142,16 @@ githash, glue and wasm SHA-256), and the ledger test prints that identity with t
 Two owner decisions narrow what production must do on a few ledger cases. Neither edits a ledger expectation or the oracle: the oracle still enumerates
 and solves every case, and the harness records the owner's scope next to it, in `scoreboard.ts` (pure data) and `baseline.json`.
 
-* **Cyclic part graphs are refused as unsupported data** (owner decision 2d as amended, 2026-10-12, docs/stage2-plan.md). A gun whose part graph
-  reachable from the receiver has a cycle is refused in every mode before any solve, with `Unsupported data: cyclic part graph`, no build and nothing
-  resolved. Exactly five ledger cases have such a graph, the ones the decision names: `F03-self-loop`, `F03-ancestor-loop-with-sibling-repetition`,
-  `F03-memoization-context-ancestor`, `F03-memoization-context-required-slot` and `F10-cycle-behind-deactivated-owner` (measured: no other case trips
-  the check; `F10-no-disconnected-assembly`, whose loop the receiver cannot reach, keeps its certified optimum). They are listed in
-  `OWNER_APPROVED_REFUSALS`. `gradeOutcome` grades such a case `refused` on every applicable dimension, in both modes, only when production returns
-  exactly that refusal; anything else is graded as usual, so a change of scope shows in the ratchet. `refused` is outside every pass/applicable count of
-  the summary, and the baseline records it as `"refused"` (a fifth verdict, by hand: the update path refuses to write over cells that passed before).
+* **Cyclic part data is out of scope** (owner decision 2026-10-12, docs/stage2-plan.md decision 2d amendment: no gun has a cyclic part graph, so no
+  code handles one). Production's blueprint builder throws an internal `CYCLIC_PART_GRAPH` error on a cycle reachable from the receiver, which a request
+  reports as a generic error. Exactly five ledger cases have such a graph: `F03-self-loop`, `F03-ancestor-loop-with-sibling-repetition`,
+  `F03-memoization-context-ancestor`, `F03-memoization-context-required-slot` and `F10-cycle-behind-deactivated-owner`. They are listed in
+  `OUT_OF_SCOPE_CASES` with the reason "cyclic part data is not supported; production throws an internal error". `gradeCase` does not run production
+  on them: every dimension is `n/a` in both modes and the case records the feature `cyclic_part_graph` in `unsupported`, so `baseline.json` shows why.
+  `F10-no-disconnected-assembly`, whose loop the receiver cannot reach, is in scope and keeps its certified optimum (the blueprint never expands an
+  unreachable loop). The model-level gates (`lpGates`, `countGates`, `acyclicFast`, `countModel`) skip cyclic ledger cases and cyclic seeded worlds
+  (lpFuzz draws a back reference now and then) as out of scope when the blueprint throws (`isCyclicPartGraphError` in `toProduction.differential.ts`),
+  so every seed still draws the world it drew before.
 * **Integrality tolerance 1e-7** (owner decision 5b, 2026-10-06). Precise always solves with a native integrality tolerance of 1e-7 (primal and dual
   feasibility 1e-9). At the ledger's runtime tolerance of 1e-9 seven cases keep their exact, validated optimum but lose the certificate (`feasible`,
   `Required proof prerequisite unavailable`): six with a proved gap of about 1.0e-7 (`F01-self-copy-cap`, `F04-recoil-final-cap-sum`,

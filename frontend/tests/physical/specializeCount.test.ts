@@ -1,6 +1,6 @@
 // The certifiable count model (src/solver/physical/specializeCount.ts, the certified mode of specializeFast.ts; Phase 2.10, decision 2e): strict text that HiGHS
 // reads back as written, the proof record every constructed row carries, the row families, the numerics shared with the occurrence model, the MOA rows that state
-// the oracle's rule (the largest centre of impact binds), the preconditions asserted on the data (acyclic part graph, Lemma 1), and the refusals. The plain Fast model must stay what it was.
+// the oracle's rule (the largest centre of impact binds), the preconditions asserted on the data (Lemma 1), and the refusals. The plain Fast model must stay what it was.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLpText } from '../../src/solver/native';
@@ -203,26 +203,13 @@ test('the build the plain Fast rows lose is found: {b1, b2} meets a cap of -5 at
 
 const isCode = (code: string) => (e: unknown): boolean => e instanceof PhysicalModelError && e.code === code;
 
-test('the preconditions are asserted on the data: an acyclic part graph with path-independent candidates passes; a cyclic graph, an empty domain and a foreign domain throw', () => {
+test('the preconditions are asserted on the data: path-independent candidates pass; an empty domain and a foreign domain throw', () => {
   const acyclic = lookupOf(gun(WEAPON, { slots: [slot('s0', ['A'])] }), ['A', mod('A', { slots: [slot('s1', ['B'])] })], ['B', mod('B')]);
   const bp = preparePhysicalWeapon(acyclic, WEAPON);
   const domain = prepareSubproblemDomain(bp, acyclic, {});
   const ok = assertCountModelApplies(bp, domain);
   assert.ok(ok.slotsChecked >= 2);
   assert.equal(assertCountModelApplies(bp, domain), ok, 'memoized per domain');
-
-  const cyclic = lookupOf(
-    gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['A', mod('A', { slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { slots: [slot('toA', ['A'])] })],
-  );
-  const cbp = preparePhysicalWeapon(cyclic, WEAPON);
-  const cdomain = prepareSubproblemDomain(cbp, cyclic, {});
-  // a gun whose part graph has a cycle is unsupported data (owner decision 2d as amended): no count model, certified or plain
-  assert.throws(() => assertCountModelApplies(cbp, cdomain), isCode('CYCLIC_PART_GRAPH'));
-  assert.throws(() => specializeCount(cbp, cdomain, {}), isCode('CYCLIC_PART_GRAPH'));
-  assert.throws(() => specializeFast(cbp, cdomain, {}, undefined, { certified: true }), isCode('CYCLIC_PART_GRAPH'));
-  assert.throws(() => specializeFast(cbp, cdomain, {}), isCode('CYCLIC_PART_GRAPH'));
 
   const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
   const ebp = preparePhysicalWeapon(noBase, WEAPON);

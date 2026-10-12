@@ -79,8 +79,7 @@ test('an empty domain has nothing to decode', () => {
 });
 
 test('a count point the slot rows forbid is rejected, not repaired: two children in a slot of one copy, and a child whose owner is not installed', () => {
-  // The part graph is acyclic (a gun with a cycle is refused before any model is built, owner decision 2d as amended); such points can still reach the
-  // decoder as a solver fault or a tampered answer, and leave edge counts unplaced.
+  // The part graph is acyclic; such points can still reach the decoder as a solver fault or a tampered answer, and leave edge counts unplaced.
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('s0', ['A', 'B'])] }),
     ['A', mod('A', { slots: [slot('a1', ['C'])] })],

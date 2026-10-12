@@ -207,7 +207,8 @@ text). Not complete: the row-deleted minimal text keeps the false `Infeasible` o
 **Long gates campaign** (`COUNT_GATES_LONG=1`, 2026-10-12, after the fix): ledger 149 cases (144 gated, 5 refused), lpFuzz 2,000 worlds (1,126 gated,
 868 cyclic refused, 6 skipped), adversarial MOA 600 worlds (558 gated, 42 skipped): every gate passes (`native` 139/139, 1,055/1,055 and 546/546), the
 precision cells are the known decision-5b ones (7 ledger, 1 lpFuzz, 1 MOA). 19 inconclusive solves (9 ledger, 6 lpFuzz, 4 MOA), all retried to a
-verdict; 1 false integer-text `Infeasible` neutralized by the relaxation rule; 0 certificates withheld by it.
+verdict; 1 false integer-text `Infeasible` neutralized by the relaxation rule; 0 certificates withheld by it. (Measured before the cyclic handling was removed the same day: the
+"refused" cases and worlds are now out of scope and skipped, with the same gated counts.)
 
 **Measured cost on the 172 pinned guns** (Precise, 60 s, 12 processes; `frontend/benchmarks/phase210m2/results/s3fix-*.jsonl`, compared with the
 Phase 2.10 production run `afterrelaxed-*.jsonl`): plain 153 certified optimal + 19 certified infeasible (unchanged), 109 s total (was 111 s), max 5.7 s;

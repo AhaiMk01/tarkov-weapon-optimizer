@@ -14,8 +14,8 @@
 //           oracle's exact score of it; hence the maximum and the full maximizer set agree (a near-tie below the solver tolerance is reported
 //           as unresolvable, never as a tie).
 //
-// Fast is never given TrueErgo or Prevent Overswing (Precise-only), so those cases are out of scope. A case whose ACTIVE template graph (the graph
-// `specializeFast` builds, after the domain masks) is cyclic is out of scope too: it is reported, and optionally still run for information.
+// Fast is never given TrueErgo or Prevent Overswing (Precise-only), so those cases are out of scope. A case with a cyclic part graph is out of scope
+// too (owner decision 2026-10-12: production's blueprint throws an internal error on it); it is skipped as `cyclic_part_graph`.
 //
 // Differential helper: may import production code (reference/independenceScan.ts); no non-differential file may import this one.
 
@@ -24,13 +24,13 @@ import {
   type BaseChoice, type EnumerateOptions, type OracleResult, type ReferenceBuild, type ReferenceFixture, type ReferenceRequest,
 } from '../oracle/index';
 import {
-  appendCuts, buildTemplateGraph, decodeFast, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, specializeFast,
+  appendCuts, decodeFast, preparePhysicalWeapon, prepareSubproblemDomain, specializeCount, specializeFast,
   type FastModel, type IntegerNoGood, type SpecializeRequest, type SubproblemDomain, type PhysicalBlueprint,
 } from '../../src/solver/physical';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
 import type { SolveParams } from '../../src/solver/types';
 import { productionLookup, subproblemRequestOf } from './blueprint.differential';
-import { detectUnsupported, mapRequest } from './toProduction.differential';
+import { CYCLIC_OUT_OF_SCOPE, detectUnsupported, isCyclicPartGraphError, mapRequest } from './toProduction.differential';
 import { GATE_OPTIONS, objectiveDirections, parseProjectionKey, seedOf, solveText as primarySolve, specializeRequestOf, type Solve } from './lpGates.differential';
 
 // ---------------------------------------------------------------------------------------------
@@ -101,6 +101,7 @@ const fail = (detail: string): Verdict => ({ status: 'fail', detail });
 const na = (detail: string): Verdict => ({ status: 'n/a', detail });
 
 /** Why a case is not gated. */
+/** `cyclic_part_graph`: out of scope (cyclic part data; production's blueprint throws an internal error on it). */
 export type SkipKind = 'unsupported' | 'ted' | 'oracle_incomplete' | 'cyclic_part_graph' | 'solver_failure';
 
 /**
@@ -150,13 +151,6 @@ export interface FastExactness {
   id: string;
   skipped: SkipKind | null;
   skipDetail: string;
-  /**
-   * The part graph is acyclic (request independent: no ancestor edge was ever pruned), so the ACTIVE graph is too. Owner decision 2d as amended (2026-10-12):
-   * a case whose part graph has a cycle is unsupported data; no model is built for it (`cyclic_part_graph`), and with `productionPath` the production
-   * pipeline is checked to refuse it.
-   */
-  acyclic: boolean;
-  closureAcyclic: boolean;
   oracleProjections: number;
   oracleEmpty: boolean;
   fastEmpty: boolean | null;
@@ -190,7 +184,7 @@ export interface FastExactness {
 }
 
 const blankResult = (id: string): FastExactness => ({
-  id, skipped: null, skipDetail: '', acyclic: false, closureAcyclic: false, oracleProjections: 0, oracleEmpty: false, fastEmpty: null,
+  id, skipped: null, skipDetail: '', oracleProjections: 0, oracleEmpty: false, fastEmpty: null,
   fastProjections: 0, enumerationComplete: false, decodedValidated: 0, boundaryPoints: 0, productionPath: na('not run'), productionRejected: 0, pinnedChecked: 0, solves: 0, maxObjectiveDelta: 0,
   gateC: na('not run'), gateAComplete: na('not run'), gateASound: na('not run'), gateASetEquality: na('not run'),
   gateBPointwise: na('not run'), gateBMaximizers: na('not run'), mismatches: [],
@@ -424,16 +418,14 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
   out.oracleProjections = oracle.projections.length;
   out.oracleEmpty = oracle.empty;
 
-  const { blueprint, domain } = prepareFor(fixture, request);
-  out.closureAcyclic = blueprint.stats.prunedAncestorEdges === 0;
-  out.acyclic = out.closureAcyclic;
-  if (!out.closureAcyclic) {
-    // Unsupported data (owner decision 2d as amended): no count model exists for it; the production pipeline must refuse it before any solve.
-    const refused = skip('cyclic_part_graph', 'the part graph has a cycle: unsupported data, refused before any model is built');
-    if (options.productionPath === true) await productionRefusalGate(fixture, request, refused);
-    return refused;
+  let prepared: Prepared;
+  try {
+    prepared = prepareFor(fixture, request);
+  } catch (error) {
+    if (isCyclicPartGraphError(error)) return skip('cyclic_part_graph', CYCLIC_OUT_OF_SCOPE);
+    throw error;
   }
-  if (!domain.empty) buildTemplateGraph(blueprint, domain); // throws CYCLIC_PART_GRAPH on a cyclic active graph, which the check above rules out
+  const { blueprint, domain } = prepared;
 
   const tolerance = options.tolerance ?? 1e-7;
   const requestFast = specializeRequestOf(request);
@@ -631,17 +623,6 @@ export async function runFastExactness(id: string, fixture: ReferenceFixture, re
   return out;
 }
 
-/** A case whose part graph has a cycle: production `solveFast` refuses it with the unsupported-data reason and solves nothing. */
-async function productionRefusalGate(fixture: ReferenceFixture, request: ReferenceRequest, out: FastExactness): Promise<void> {
-  const lookup = productionLookup(fixture);
-  const params: SolveParams = { ...mapRequest(request), weaponId: request.weapon_id, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(request.weapon_id, lookup), allowRepeatedParts: true };
-  const run = await (await loadSolveFast())({ params, deadline: performance.now() + 120_000, presolve: 'off' });
-  out.productionPath = run.kind === 'incomplete' && run.reason === 'Unsupported data: cyclic part graph' && run.summary.nativeSolves === 0
-    ? pass('refused as unsupported data, nothing solved')
-    : fail(`solveFast returned ${run.kind} (${run.reason ?? 'no reason'}) for a cyclic part graph`);
-  if (out.productionPath.status === 'fail') out.mismatches.push(`production path: ${out.productionPath.detail}`);
-}
-
 async function productionPathGate(fixture: ReferenceFixture, request: ReferenceRequest, oracle: OracleResult, out: FastExactness, tolerance: number): Promise<void> {
   const lookup = productionLookup(fixture);
   // The full count model (repeats allowed): production's Fast default is one copy per part (owner decision 2c), which this gate does not describe.
@@ -689,8 +670,6 @@ export interface Tally {
   skipped: Record<string, number>;
   empty: number;
   nonEmpty: number;
-  /** Cases whose closure has a cycle that the masks removed from the active graph. */
-  closureCyclicActiveAcyclic: number;
   oracleProjections: number;
   fastProjections: number;
   decodedValidated: number;
@@ -705,7 +684,7 @@ export interface Tally {
 export function newTally(): Tally {
   const gate = Object.fromEntries(GATE_NAMES.map(g => [g, { pass: 0, fail: 0, na: 0 }])) as Tally['gate'];
   return {
-    cases: 0, gated: 0, skipped: {}, empty: 0, nonEmpty: 0, closureCyclicActiveAcyclic: 0, oracleProjections: 0, fastProjections: 0,
+    cases: 0, gated: 0, skipped: {}, empty: 0, nonEmpty: 0, oracleProjections: 0, fastProjections: 0,
     decodedValidated: 0, boundaryPoints: 0, pinnedChecked: 0, solves: 0, maxObjectiveDelta: 0, gate, failures: [],
   };
 }
@@ -720,7 +699,6 @@ export function addToTally(tally: Tally, r: FastExactness): void {
   tally.gated++;
   if (r.oracleEmpty) tally.empty++;
   else tally.nonEmpty++;
-  if (!r.closureAcyclic && r.acyclic) tally.closureCyclicActiveAcyclic++;
   tally.oracleProjections += r.oracleProjections;
   tally.fastProjections += r.fastProjections;
   tally.decodedValidated += r.decodedValidated;
@@ -740,7 +718,7 @@ export function addToTally(tally: Tally, r: FastExactness): void {
 export function formatTally(label: string, tally: Tally): string {
   const gates = GATE_NAMES.map(g => `${g} ${tally.gate[g].pass}/${tally.gate[g].pass + tally.gate[g].fail}`).join(', ');
   const skipped = Object.entries(tally.skipped).map(([k, n]) => `${k} ${n}`).join(', ') || 'none';
-  return `${label}: ${tally.cases} cases, ${tally.gated} gated (${tally.nonEmpty} nonempty, ${tally.empty} empty; ${tally.closureCyclicActiveAcyclic} with a cyclic closure but acyclic active graph), skipped: ${skipped}; `
+  return `${label}: ${tally.cases} cases, ${tally.gated} gated (${tally.nonEmpty} nonempty, ${tally.empty} empty), skipped: ${skipped}; `
     + `oracle projections ${tally.oracleProjections}, Fast points enumerated ${tally.fastProjections}, decoded and validated ${tally.decodedValidated} (+${tally.boundaryPoints} tolerance-boundary), pinned ${tally.pinnedChecked}; `
     + `max objective delta ${tally.maxObjectiveDelta.toExponential(2)}; HiGHS solves ${tally.solves}; ${gates}`;
 }

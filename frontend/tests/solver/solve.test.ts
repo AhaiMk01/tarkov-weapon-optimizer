@@ -342,41 +342,6 @@ test('Fast installs several copies of one part with the same provenance and spen
   assert.ok(fast.optimization.lower_bound !== null && fast.optimization.lower_bound <= fast.objective_value);
 });
 
-test('a gun whose part graph has a cycle is refused in every mode before any solve (owner decision 2d as amended): unsupported data, the pre-model envelope', async () => {
-  // A and B can host each other: the part graph reachable from the receiver has a cycle.
-  const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('req', ['M'], true), slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['M', mod('M', { conflictsSlots: ['s1'] })],
-    ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
-  );
-  const modes: [string, Partial<SolveParams>][] = [
-    ['precise', { preciseMode: true, precisionRequest: 'precise' }],
-    ['fast', { preciseMode: false, precisionRequest: 'fast' }],
-    ['auto resolved to precise', { preciseMode: true, precisionRequest: 'auto' }],
-    ['precise with TrueErgo and a Tchebycheff payoff table', { preciseMode: true, useTrueErgo: true, useTchebycheff: true }],
-    ['precise with a MOA cap', { preciseMode: true, maxMOA: 3 }],
-  ];
-  for (const [label, extra] of modes) {
-    const response = await solve(paramsOf(lookup, extra));
-    assert.equal(response.status, 'incomplete', label);
-    assert.equal(response.reason, 'Unsupported data: cyclic part graph', label);
-    assert.ok(PUBLIC_REASON_SET.has(response.reason as string), label);
-    assert.equal(response.physical_certificate, 'none', label);
-    assert.equal(response.precision_resolved, null, `${label}: nothing ran`);
-    assert.equal(response.model_qualification, null, label);
-    assert.equal(response.moa_qualification, extra.maxMOA != null ? 'provisional_model' : null, label);
-    assert.deepEqual(response.selected_items, [], label);
-    assert.equal(response.objective_value, null, label);
-    assert.equal(response.optimization.termination, 'limit', label);
-    assert.equal(response.optimization.nodes, 0, label);
-    assert.equal(response.ideal_point, undefined, `${label}: no payoff endpoint was solved`);
-  }
-  // An invalid stash is still reported first: it is checked before any model work, the part graph included.
-  const invalid = await solve(paramsOf(lookup, { ownedItems: [''] }));
-  assert.equal(invalid.reason, 'Invalid owned_items format');
-});
-
 // ---------------------------------------------------------------------------------------------------------------------------
 // The transport (ADR 0013 sections 5 and 6): every response carries the whole contract
 // ---------------------------------------------------------------------------------------------------------------------------

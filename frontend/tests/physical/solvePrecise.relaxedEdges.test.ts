@@ -25,8 +25,8 @@ test('relaxed-first Precise equals integer-only Precise on seeded acyclic worlds
   let relaxedSolves = 0;
   let fallbacks = 0;
   const worlds = [
-    ...Array.from({ length: 60 }, (_, k) => ({ label: `plain ${k + 1}`, world: randomWorld(k + 1, false) })),
-    ...Array.from({ length: 30 }, (_, k) => ({ label: `ted ${k + 1}`, world: randomTedWorld(k + 1, false) })),
+    ...Array.from({ length: 60 }, (_, k) => ({ label: `plain ${k + 1}`, world: randomWorld(k + 1) })),
+    ...Array.from({ length: 30 }, (_, k) => ({ label: `ted ${k + 1}`, world: randomTedWorld(k + 1) })),
   ];
   for (const { label, world } of worlds) {
     const params: SolveParams = { ...world.params, objectiveTolerance: TOLERANCE };

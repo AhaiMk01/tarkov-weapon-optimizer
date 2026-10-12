@@ -25,6 +25,8 @@ import {
   blueprintTrees, domainTrees, independentWalk, maskRelevantUnsupported, oracleSide, prepareProduction, treeKey,
   type OracleSide, type ProductionPhysical, type TreeSet,
 } from './blueprint.differential';
+import { OUT_OF_SCOPE_CASES } from './scoreboard';
+import { CYCLIC_OUT_OF_SCOPE } from './toProduction.differential';
 
 // dataService.ts cannot be statically imported here: tsconfig.reference.json has no DOM lib and dataService references IndexedDB and typed
 // Response APIs (see reference/source/extractors.differential.test.ts). A non-literal specifier keeps tsc from following the import while
@@ -42,6 +44,8 @@ interface CaseRun {
 }
 
 const runs: CaseRun[] = LEDGER.map(c => {
+  // Cyclic part data is out of scope (owner decision 2026-10-12): the blueprint throws an internal error on it.
+  if (Object.hasOwn(OUT_OF_SCOPE_CASES, c.id)) return { id: c.id, skipped: [CYCLIC_OUT_OF_SCOPE] };
   const skipped = maskRelevantUnsupported(c.fixture, c.request);
   if (skipped.length > 0) return { id: c.id, skipped };
   try {

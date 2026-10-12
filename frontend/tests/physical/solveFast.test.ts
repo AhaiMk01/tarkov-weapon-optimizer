@@ -1,5 +1,5 @@
 // The Fast pipeline (src/solver/physical/solveFast.ts: template-count model -> decode -> exact validation -> cuts) on hand-built lookups and the
-// pinned native build. Every published build is judged by the exact validator; on acyclic graphs the model optimum equals the Precise optimum.
+// pinned native build. Every published build is judged by the exact validator; the model optimum equals the Precise optimum (every part graph is acyclic).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
@@ -293,8 +293,7 @@ test('a deadline that has passed is incomplete with the time-limit reason', asyn
 
 /**
  * One slot, two candidates: A (20) and B (10). The tampered solver (`overfillEdges`) answers with both edges at 1, a count point the decoder cannot
- * place (two children in a slot of one copy): it is rejected and cut out, and the next point is the real optimum A. Until Phase 2.10 this path was
- * reached with a cyclic part graph, which is now refused before any solve (owner decision 2d as amended).
+ * place (two children in a slot of one copy): it is rejected and cut out, and the next point is the real optimum A.
  */
 const rejectable = () => lookupOf(
   gun(WEAPON, { slots: [slot('s0', ['A', 'B'])] }),
@@ -323,24 +322,6 @@ test('when every candidate is rejected the request is incomplete, never a guess:
   assert.equal(result.kind === 'incomplete' && result.reason, 'Independent build validation failed');
   assert.equal(result.summary.rejectedPoints, 3);
   assert.ok(MAX_FAST_REJECTIONS >= 16);
-});
-
-test('a gun whose part graph has a cycle is refused before any solve, Fast and Precise alike: unsupported data, no build, no proof', async () => {
-  const cyclic = lookupOf(
-    gun(WEAPON, { slots: [slot('s0', ['A'])] }),
-    ['A', mod('A', { ergo: 20, slots: [slot('toB', ['B'])] })],
-    ['B', mod('B', { ergo: 10, slots: [slot('toA', ['A'])] })],
-  );
-  const params = paramsOf(cyclic);
-  const fast = await solveFast({ params, deadline: FAR() });
-  const precise = await solvePrecise({ params, deadline: FAR() });
-  for (const result of [fast, precise]) {
-    assert.equal(result.kind, 'incomplete');
-    assert.equal(result.outcome.reason, 'Unsupported data: cyclic part graph');
-    assert.equal(result.outcome.physical_certificate, 'none');
-  }
-  assert.equal(fast.summary.nativeSolves, 0);
-  assert.equal(precise.summary.telemetry.nativeSolves, 0);
 });
 
 test('a limit stop with a primal solution that the validator accepts is a build with the stop reason, not an optimum', async () => {

@@ -1,6 +1,5 @@
-// Native solves that lie on purpose, for the rejection paths of the count-model pipelines (Fast and Precise). Until Phase 2.10 these paths were reached
-// with a cyclic part graph, whose count optimum need not be a physical tree; a gun with a cycle is now refused before any solve (owner decision 2d as
-// amended), so the tests reach the same paths with an honest acyclic model and a solver whose answer is tampered with.
+// Native solves that lie on purpose, for the rejection paths of the count-model pipelines (Fast and Precise): the tests reach them with an honest model
+// and a solver whose answer is tampered with.
 import type { NativeResult } from '../../src/solver/native';
 import { nativeSolve } from '../../src/solver/physical/nativeSolve';
 import type { SolveFn } from '../../src/solver/physical/nativeSolve';

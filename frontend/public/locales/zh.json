@@ -174,7 +174,6 @@
     "cancelled_none": "已取消。",
     "invalid_owned": "库存清单无效——请修正后重试。",
     "invalid_schedule": "探索设置无效——请调整后重试。",
-    "unsupported_data": "该武器的配件数据暂不支持，无法为它生成改装。",
     "queue_timeout": "请求等待过久，已被丢弃——请重试。",
     "error": "出了点问题——请重试。"
   },
@@ -417,7 +416,6 @@
     "fastProvisionalMoaModelInfeasible": "在该 MOA 限制下，近似（快速）模型没有找到配装。这并不证明不存在配装，可以尝试精确模式或放宽 MOA 限制。",
     "invalidOwnedItems": "库存清单无效，因此没有进行求解。",
     "invalidExploreSchedule": "探索计划为空或无效，因此没有进行求解。",
-    "unsupportedCyclicPartGraph": "该武器的数据中有可以互相安装成环的配件，优化器不支持这种数据，因此没有进行求解。",
     "queueTimeoutBeforeDispatch": "请求在排队等待时已超时，因此没有进行求解。请重试。",
     "independentBuildValidationFailed": "求解器给出的配装未通过独立验证，因此已被隐藏。",
     "requiredProofPrerequisiteUnavailable": "证明所需的前提条件不可用，因此不声称已证明。",

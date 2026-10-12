@@ -90,17 +90,6 @@ test('an empty root required slot makes the receiver unbuildable: no raw bounds'
   assert.equal(bp.slotCount, 1, 'the empty required slot is still a physical slot');
 });
 
-test('a required slot whose only candidates are ancestors is empty, not a throw', () => {
-  const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('s', ['m1'])] }),
-    ['m1', mod('m1', { slots: [slot('loop', ['m1'], true)] })],
-  );
-  const bp = preparePhysicalWeapon(lookup, WEAPON);
-  const m1 = occurrenceOf(bp, 'weapon_0/s:m1');
-  assert.equal(bp.structurallyViable[m1], 0, 'its required slot has no non-repeating candidate');
-  assert.ok(bp.rawBounds, 'the optional root slot can stay empty');
-});
-
 test('template conflicts are symmetrized pairs, self-conflicts and receiver bans are flags, unknown ids are ignored', () => {
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('s', ['m1', 'm2', 'm3', 'm4', 'm5', 'm6'])], conflictsItems: ['m5'] }),
@@ -223,9 +212,12 @@ test('every instance id resolves back to its occurrence', () => {
 });
 
 test('an exploding universe stops at the safety limit with a typed error, not an infeasibility', () => {
-  // Three slots of three candidates, each candidate with three slots of the same three candidates, and so on, over distinct templates.
+  // Every template has three slots that each allow every later template (an acyclic part graph): 682 item occurrences under the two root slots.
   const ids = ['a', 'b', 'c', 'd', 'e'];
-  const mods = ids.map(id => [id, mod(id, { slots: [slot(`${id}1`, ids), slot(`${id}2`, ids), slot(`${id}3`, ids)] })] as [string, ReturnType<typeof mod>]);
+  const mods = ids.map((id, i) => {
+    const later = ids.slice(i + 1);
+    return [id, mod(id, { slots: [slot(`${id}1`, later), slot(`${id}2`, later), slot(`${id}3`, later)] })] as [string, ReturnType<typeof mod>];
+  });
   const lookup = lookupOf(gun(WEAPON, { slots: [slot('r1', ids), slot('r2', ids)] }), ...mods);
   assert.throws(
     () => preparePhysicalWeapon(lookup, WEAPON, { maxOccurrences: 50 }),

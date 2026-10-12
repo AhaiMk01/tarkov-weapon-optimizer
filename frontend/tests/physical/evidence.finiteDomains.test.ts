@@ -95,7 +95,7 @@ test('item 4, 60 plain and 60 TED seeded worlds: every column of the certified c
   const scan: Scan = { columns: 0, auxiliary: 0, families: new Set() };
   let models = 0;
   for (let seed = 1; seed <= 60; seed++) {
-    for (const world of [randomWorld(seed, false), randomTedWorld(seed, false)]) {
+    for (const world of [randomWorld(seed), randomTedWorld(seed)]) {
       const blueprint = preparePhysicalWeapon(world.lookup, WEAPON);
       const domain = prepareSubproblemDomain(blueprint, world.lookup, world.params);
       if (domain.empty) continue;

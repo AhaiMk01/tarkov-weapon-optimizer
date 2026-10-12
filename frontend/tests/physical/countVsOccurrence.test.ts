@@ -19,14 +19,14 @@ import { randomTedWorld, randomWorld } from './randomWorlds';
 
 test('plain acyclic worlds: the count model certifies the occurrence model optimum, or both are empty (300 seeded worlds)', { timeout: 900_000 }, async t => {
   const tally: Tally = {};
-  for (let seed = 1; seed <= 300; seed++) await compareModels(`seed ${seed}`, randomWorld(seed, false), NOISE_SAFE_TOLERANCE, tally);
+  for (let seed = 1; seed <= 300; seed++) await compareModels(`seed ${seed}`, randomWorld(seed), NOISE_SAFE_TOLERANCE, tally);
   t.diagnostic(JSON.stringify(tally));
   assert.ok((tally.equal ?? 0) >= 100, `most worlds are nonempty: ${JSON.stringify(tally)}`);
 });
 
 test('TrueErgo and Prevent Overswing: the weight search on the count model certifies the occurrence model optimum, or both are empty (150 seeded worlds)', { timeout: 1_800_000 }, async t => {
   const tally: Tally = {};
-  for (let seed = 1; seed <= 150; seed++) await compareModels(`ted seed ${seed}`, randomTedWorld(seed, false), NOISE_SAFE_TOLERANCE, tally);
+  for (let seed = 1; seed <= 150; seed++) await compareModels(`ted seed ${seed}`, randomTedWorld(seed), NOISE_SAFE_TOLERANCE, tally);
   t.diagnostic(JSON.stringify(tally));
   assert.ok((tally.equal ?? 0) >= 50, `many worlds are nonempty: ${JSON.stringify(tally)}`);
 });
@@ -53,7 +53,7 @@ test('the MOA family (several barrels, accuracy above 100 percent points, negati
 });
 
 test('a request the count model proves empty by a constant row reports empty without a native solve', async () => {
-  const world = randomWorld(7, false);
+  const world = randomWorld(7);
   const params: SolveParams = { ...world.params, includeItems: ['not_an_item'], objectiveTolerance: 1e-9, compatibilityMap: buildCompatibilityMap(WEAPON, world.lookup) };
   const count = await solvePrecise({ params, deadline: performance.now() + 60_000 });
   assert.equal(count.kind, 'empty');

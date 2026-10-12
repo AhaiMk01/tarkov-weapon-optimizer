@@ -1,7 +1,7 @@
 /**
  * The Precise solve pipeline over the certified COUNT model (owner decisions 2d as amended and 2e, Phase 2.10; ADR 0013 sections 4A to 4C, 5 and 6).
  *
- *   preparePhysicalWeapon (memoized per lookup object and weapon id) -> acyclic part graph (checked per gun, else refused)
+ *   preparePhysicalWeapon (memoized per lookup object and weapon id; a cyclic part graph is an internal error there)
  *     -> prepareSubproblemDomain -> Lemma 1 on the domain (an internal assertion) -> specializeCount (per spatial node)
  *     -> native solve (presolve off, readback of the parsed model) -> assessNativeResult -> a second opinion on every certificate-bearing verdict
  *     -> decodeFast -> independent validation (`preparePhysicalValidator`) -> exact re-scoring
@@ -11,10 +11,9 @@
  * a certificate (see `specializeCount.ts` for what the certificate rests on). The occurrence-level model this pipeline used to solve left production
  * with owner decision 2d as amended (2026-10-12); it stays in the tests as the independent cross-check (`tests/physical/occurrence/`).
  *
- * Acyclicity is a checked PRECONDITION, not a branch: a gun whose part graph reachable from the receiver has a cycle (the blueprint's ancestor rule
- * cut an edge, `partGraphIsAcyclic`) is refused as unsupported data (`Unsupported data: cyclic part graph`) before anything is solved, in every
- * mode. On an acyclic gun Lemma 1 holds by theorem; it is still verified on every prepared domain (`assertCountModelApplies`), and a failure is a
- * solver error, never a silent fallback to another model.
+ * Acyclic part graphs are assumed (owner decision 2026-10-12: no gun has a cyclic part graph); the blueprint builder throws an internal
+ * `CYCLIC_PART_GRAPH` error on one rather than unrolling it. Lemma 1 then holds by theorem; it is still verified on every prepared domain
+ * (`assertCountModelApplies`), and a failure is a solver error, never a silent fallback to another model.
  *
  * A build is a candidate only after the validator accepts it, so nothing that fails validation is ever published, and the incumbent's
  * statistics and score are the validator's exact recomputation, never the solver's column values. A count point the decoder or the validator
@@ -87,7 +86,7 @@ import { guardStop } from '../runtimeGuard';
 import type { RuntimeGuard } from '../runtimeGuard';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { ItemLookup, PhysicalClassifiers, SolveParams } from '../types';
-import { partGraphIsAcyclic, preparePhysicalWeapon } from './blueprint';
+import { preparePhysicalWeapon } from './blueprint';
 import type { PhysicalBlueprint } from './blueprint';
 import { computeActiveBounds } from './bounds';
 import { columnValuesFromStructured } from './decode';
@@ -106,7 +105,7 @@ import { exactAxes, exactObjectiveScore, scoreEnclosure, upperBoundExact } from 
 import type { BoundEvidence } from './proof';
 import { ratCmp, ratSub, ratToNumber, type Rat } from './exact';
 import { ratAbs, ratRoundUp } from './rational';
-import { classifyOptimize, isMoaDependent, observationsOfReason, unsupportedPartGraphOutcome } from './outcome';
+import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
 import type { OptimizeOutcome } from './outcome';
 import { PUBLIC_REASONS, reasonOfNativeLimit } from './reasons';
 import { candidateExact, runSpatialSearch, transportedBounds } from './search';
@@ -162,25 +161,6 @@ export function getPhysicalBlueprint(lookup: ItemLookup, weaponId: string, class
     presets: weapon?.type === 'gun' ? weapon.all_presets : undefined,
   });
   return blueprint;
-}
-
-/**
- * The per-gun data check of owner decision 2d as amended: the part graph reachable from the receiver has no cycle. A property of the gun's data,
- * read from its memoized blueprint (so it is computed once per gun), independent of the request. Every operation (Optimize in every mode, the
- * payoff endpoints, Explore, the MOA floor) refuses a gun that fails it before any solve, with `Unsupported data: cyclic part graph`.
- */
-export function partGraphSupported(lookup: ItemLookup, weaponId: string, classifiers?: PhysicalClassifiers): boolean {
-  return partGraphIsAcyclic(getPhysicalBlueprint(lookup, weaponId, classifiers));
-}
-
-/**
- * The entry refusal of an operation (Optimize, Explore, the MOA floor): `Unsupported data: cyclic part graph` when the request's gun fails the data
- * check above, otherwise null. A weapon id the lookup does not hold as a gun is not judged here: the operation reports it as it always did.
- */
-export function partGraphRefusal(params: Pick<SolveParams, 'itemLookup' | 'weaponId' | 'physicalOptions'>): string | null {
-  const { itemLookup, weaponId } = params;
-  if (!Object.hasOwn(itemLookup, weaponId) || itemLookup[weaponId].type !== 'gun') return null;
-  return partGraphSupported(itemLookup, weaponId, params.physicalOptions) ? null : PUBLIC_REASONS.unsupportedCyclicPartGraph;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -274,10 +254,7 @@ export type PreciseResult =
   | { kind: 'empty'; source: 'domain' | 'request' | 'native'; detail: string; outcome: OptimizeOutcome; summary: PreciseSummary }
   /** A verified build. `certified`: the search completed with a gap within the tolerance. `reason`: the outcome's, when it is not certified. */
   | { kind: 'build'; best: VerifiedBuild; certified: boolean; reason?: string; outcome: OptimizeOutcome; summary: PreciseSummary }
-  /**
-   * No verified build and no proof of emptiness. `reason` is the outcome's: a stop, a withheld proof, or the refusal of a gun whose part graph has
-   * a cycle (`Unsupported data: cyclic part graph`: nothing prepared beyond the blueprint, nothing solved).
-   */
+  /** No verified build and no proof of emptiness. `reason` is the outcome's: a stop or a withheld proof. */
   | { kind: 'incomplete'; reason: string; outcome: OptimizeOutcome; summary: PreciseSummary };
 
 export interface PreciseContext {
@@ -477,10 +454,6 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   }
 
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
-  if (!partGraphIsAcyclic(blueprint)) {
-    const outcome = unsupportedPartGraphOutcome(moaDependent);
-    return { kind: 'incomplete', reason: outcome.reason as string, outcome, summary: summary({ nodes: 0 }) };
-  }
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
   if (domain.empty) {
     const detail = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`)).join('; ');

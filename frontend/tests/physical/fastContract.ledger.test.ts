@@ -10,7 +10,7 @@
 //   - a published build passes the production validator AND the independent reference validator (`validateReference`, decoded the way the harness
 //     decodes it, with no decoding issue);
 //   - a case the oracle proves empty never gets a build, and its Fast outcome is `incomplete` / `none`, not a certificate;
-//   - the owner-approved cyclic cases are refused as unsupported data in every variant.
+//   - the cyclic cases are out of scope (owner decision 2026-10-12: production throws an internal error on them) and are not run.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { solve } from '../../src/solver/solver';
@@ -21,7 +21,7 @@ import { validateReference } from '../../reference/oracle/index';
 import type { ReferenceRequest } from '../../reference/oracle/index';
 import { decodeBuild } from '../../reference/harness/compare.differential';
 import type { ProductionResponse } from '../../reference/harness/compare.differential';
-import { OWNER_APPROVED_REFUSALS } from '../../reference/harness/scoreboard';
+import { OUT_OF_SCOPE_CASES } from '../../reference/harness/scoreboard';
 import { toProduction } from '../../reference/harness/toProduction.differential';
 import { checkFastContract, returnsBuild } from './fastContract.check';
 
@@ -43,6 +43,7 @@ const quiet = { error: console.error, warn: console.warn, log: console.log };
 console.error = console.warn = console.log = () => {};
 try {
   for (const c of LEDGER) {
+    if (Object.hasOwn(OUT_OF_SCOPE_CASES, c.id)) continue;
     for (const ted of TED_VARIANTS) {
       const request = requestOf(c, ted);
       const inputs = toProduction(c.fixture, request, { preciseMode: false, timeLimitMs: 20_000, objectiveTolerance: c.runtimeTolerance.absolute });
@@ -65,9 +66,6 @@ try {
         if (ted === 'asIs' && c.expected.empty && !(r.status === 'incomplete' && r.physical_certificate === 'none')) {
           failures.push(`empty case reported ${r.status}/${r.physical_certificate}`);
         }
-        if (Object.hasOwn(OWNER_APPROVED_REFUSALS, c.id) && r.reason !== PUBLIC_REASONS.unsupportedCyclicPartGraph) {
-          failures.push(`owner-approved cyclic case not refused: ${r.status} ${r.reason ?? ''}`);
-        }
         rows.push({ id: c.id, ted, repeats, status: r.status, certificate: r.physical_certificate, reason: r.reason ?? null, build: returnsBuild(r), failures });
       }
     }
@@ -82,20 +80,19 @@ const wallMs = performance.now() - started;
 const tally = (key: (r: Row) => string) => [...rows.reduce((m, r) => m.set(key(r), (m.get(key(r)) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]);
 
 test('Fast contract on the ledger (informational tally)', t => {
-  t.diagnostic(`${rows.length} Fast solves over ${LEDGER.length} cases (6 variants each, ${unsupported.length} cases unmappable) in ${(wallMs / 1000).toFixed(1)} s`);
+  t.diagnostic(`${rows.length} Fast solves over ${LEDGER.length} cases (6 variants each, ${unsupported.length} cases unmappable, ${Object.keys(OUT_OF_SCOPE_CASES).length} out of scope) in ${(wallMs / 1000).toFixed(1)} s`);
   t.diagnostic(`outcomes: ${tally(r => `${r.status}/${r.certificate}${r.reason ? ` (${r.reason})` : ''}`).map(([k, n]) => `${k} ${n}`).join('; ')}`);
   t.diagnostic(`unmappable (not run): ${unsupported.join(', ') || 'none'}`);
 });
 
-test('every ledger case runs in all six Fast variants (except unmappable ones), and most publish a build', () => {
+test('every ledger case in scope runs in all six Fast variants (except unmappable ones), and most publish a build', () => {
   assert.ok(LEDGER.length >= 140);
-  assert.equal(rows.length, (LEDGER.length - unsupported.length) * 6, 'TED forcing must not make a mappable case unmappable');
+  assert.equal(rows.length, (LEDGER.length - Object.keys(OUT_OF_SCOPE_CASES).length - unsupported.length) * 6, 'TED forcing must not make a mappable case unmappable');
   assert.ok(rows.filter(r => r.build).length >= rows.length / 2, `${rows.filter(r => r.build).length} builds`);
-  // the suite exercises the qualifications it guards: emptiness, approximate optima, the refusals
+  // the suite exercises the qualifications it guards: emptiness and approximate optima
   assert.ok(rows.some(r => r.status === 'incomplete' && r.reason === PUBLIC_REASONS.approximateModelInfeasible));
   assert.ok(rows.some(r => r.status === 'incomplete' && r.reason === PUBLIC_REASONS.fastProvisionalMoaModelInfeasible));
   assert.ok(rows.some(r => r.status === 'optimal' && r.certificate === 'approximate_optimal'));
-  assert.ok(rows.some(r => r.reason === PUBLIC_REASONS.unsupportedCyclicPartGraph));
 });
 
 test('every published Fast build passes the production and the reference validator; every Fast outcome is truthfully qualified', () => {

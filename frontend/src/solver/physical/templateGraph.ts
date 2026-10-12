@@ -17,10 +17,9 @@
  *    (a longest-choice dynamic program over the template DAG, so far smaller than the occurrence count: a rail segment that fits twelve rails
  *    can have thousands of occurrences and still at most a dozen copies).
  *
- * The graph is ACYCLIC by precondition (owner decision 2d as amended, 2026-10-12): a gun whose part graph reachable from the receiver has a cycle
- * is refused as unsupported data before any model is built (`partGraphIsAcyclic`), and the active graph of a domain is a subgraph of that graph.
- * A cyclic active graph is therefore an internal fault and throws `CYCLIC_PART_GRAPH`; the connectivity flow and the backtracking decoder that
- * a cyclic graph needed are gone with it.
+ * The graph is ACYCLIC (owner decision 2026-10-12: no gun has a cyclic part graph). The blueprint builder throws an internal `CYCLIC_PART_GRAPH`
+ * error on a cycle reachable from the receiver, and every candidate edge here is an edge of that unrolling, so the topological order below
+ * covers every active template.
  */
 
 import type { PhysicalBlueprint } from './blueprint';
@@ -126,11 +125,6 @@ export function buildTemplateGraph(blueprint: PhysicalBlueprint, domain: Subprob
     const t = queue[i];
     order.push(t);
     for (const slot of slotsOf[t]) for (const c of slot.candidates) if (--indegree[c] === 0) queue.push(c);
-  }
-  let activeCount = 0;
-  for (let t = 0; t < T; t++) activeCount += active[t];
-  if (order.length !== activeCount) {
-    throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The active part graph of ${blueprint.weaponId} has a cycle: unsupported data, refused before any model is built`, { weaponId: blueprint.weaponId });
   }
 
   return {

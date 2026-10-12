@@ -14,7 +14,7 @@
  * of the count model (a physical build that repeats a part is not a point of it), so it can lose a build, never invent one. Default off here.
  *
  * CERTIFIED MODE (Phase 2.10, owner decision 2e, `FastModelOptions.certified`, entry `specializeCount.ts`). The same count model, built through the proof layer, is
- * the model Precise solves (every supported gun has an acyclic part graph): the rows below are unchanged (they are integers and binary64 leaves), and the constructed ones are exactly
+ * the model Precise solves (every gun has an acyclic part graph): the rows below are unchanged (they are integers and binary64 leaves), and the constructed ones are exactly
  * those of the occurrence model `specializeLP` (test-only since decision 2d was amended: tests/physical/occurrence; recoil caps, MOA rows, objective, gear factor, weight-penalty secant: exact rationals, outward padding, `FastModel.proof`), plus the MOA
  * larger-centre-of-impact terms that make the model state the oracle's rule. It is never single-copy, and it leaves the text of
  * the plain Fast model (this file's default) byte for byte as it was. See `specializeCount.ts` for what makes it exact and what a certificate rests on.
@@ -45,13 +45,12 @@
  * `specializeLP` is substituted into the cover row (`sum size_k lot_k - n_t + sum q_b base_b >= -owned`: lots are nonnegative, so a negative
  * deficit costs nothing, which is what the surrogate's own lower bound said).
  *
- * Acyclic part graphs only (owner decision 2d as amended, 2026-10-12). A gun whose part graph reachable from the receiver has a cycle is refused as
- * unsupported data before any model is built (`partGraphIsAcyclic`); this builder throws `CYCLIC_PART_GRAPH` for one as an internal guard. On an acyclic
- * graph:
+ * Acyclic part graphs only (owner decision 2026-10-12: no gun has a cyclic one; the blueprint builder throws an internal `CYCLIC_PART_GRAPH` error
+ * on a cycle). On an acyclic graph:
  *   1. NO ANCESTOR-REPETITION RULE is needed. Counts cannot say "a template never recurs on one root-to-leaf path", but a template cannot be its
  *      own descendant, so the rule is vacuous.
  *   2. ROOTEDNESS IS DERIVED. Every installed copy is rooted by induction on the topological order (a copy needs a parent copy of a template
- *      above it), so no connectivity row is needed (the flow a cyclic graph needed is gone with the cyclic graphs).
+ *      above it), so no connectivity row is needed.
  *   3. SLOT CONFLICTS ARE AGGREGATE. The blocked slots are all slots of a raw id across the build; this is exact (the rule is global), not an
  *      approximation, but it is stated per raw id and not per physical slot.
  * The model is a relaxation of the physical problem in placement (every physical build is a model point with the same objective), but nothing
@@ -77,7 +76,7 @@
  * the bound is the bound of the APPROXIMATE model (the rows are plain doubles, no proof frame): it orders and fathoms the search, it never certifies.
  */
 
-import { partGraphIsAcyclic, type PhysicalBlueprint } from './blueprint';
+import type { PhysicalBlueprint } from './blueprint';
 import { computeActiveBounds, type ActiveBounds } from './bounds';
 import type { AccessibleBase, SubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
@@ -1276,9 +1275,6 @@ export function specializeFast(
   if (node) {
     finite(node.weightMin, 'node.weightMin');
     finite(node.weightMax, 'node.weightMax');
-  }
-  if (!partGraphIsAcyclic(blueprint)) {
-    throw new PhysicalModelError('CYCLIC_PART_GRAPH', `The part graph of ${blueprint.weaponId} has a cycle: unsupported data, refused before any model is built`, { weaponId: blueprint.weaponId });
   }
   if (domain.empty) return emptyModel(blueprint, domain, resolved.singleCopy, resolved.certified);
 

@@ -2,7 +2,7 @@
 // every request feature the Fast rows state drawn at random: weights, Tchebycheff, caps, MOA, includes/excludes, stock, presets, barters, conflicts)
 // and TED worlds (`randomTedWorld`: TrueErgo and/or Prevent Overswing near the 3 kg knee, gear modifier), each with one copy per part (the default,
 // decision 2c) and with repeats allowed. Every published build passes the production validator, and every outcome is truthfully qualified
-// (`fastContract.check.ts`). Worlds from the cyclic generator whose part graph has a cycle are refused as unsupported data.
+// (`fastContract.check.ts`).
 //
 // The last test proves the checker itself bites: tampered responses (a certificate, an infeasibility claim, a broken build, a repeated part under
 // single copy, a published upper bound) are each reported.
@@ -40,27 +40,17 @@ const show = (t: Tally) => [...t.outcomes].sort((a, b) => b[1] - a[1]).map(([k, 
 const range = (lo: number, hi: number) => Array.from({ length: hi - lo + 1 }, (_, k) => lo + k);
 
 test('plain seeded worlds: every published Fast build validates and every outcome is approximate (150 seeds x 2 copy modes)', { timeout: 600_000 }, async t => {
-  const tally = await sweep('plain', range(1, 150), seed => randomWorld(seed, false).params);
+  const tally = await sweep('plain', range(1, 150), seed => randomWorld(seed).params);
   t.diagnostic(`${tally.builds} builds; ${show(tally)}`);
   assert.deepEqual(tally.failures, []);
   assert.ok(tally.builds >= 80, `many worlds publish a build: ${tally.builds}`);
 });
 
 test('TED seeded worlds (TrueErgo / Prevent Overswing): every published Fast build validates, never overswings under Prevent Overswing, and is approximate (200 seeds x 2)', { timeout: 600_000 }, async t => {
-  const tally = await sweep('ted', range(1, 200), seed => randomTedWorld(seed, false).params);
+  const tally = await sweep('ted', range(1, 200), seed => randomTedWorld(seed).params);
   t.diagnostic(`${tally.builds} builds; ${show(tally)}`);
   assert.deepEqual(tally.failures, []);
   assert.ok(tally.builds >= 200, `most worlds publish a build: ${tally.builds}`);
-});
-
-test('worlds from the cyclic generator: a cyclic world is refused as unsupported data, the rest honour the contract (40 seeds x 2, plain and TED)', { timeout: 600_000 }, async t => {
-  const plain = await sweep('cyclic plain', range(1001, 1040), seed => randomWorld(seed, true).params);
-  const ted = await sweep('cyclic ted', range(1001, 1040), seed => randomTedWorld(seed, true).params);
-  t.diagnostic(`plain: ${show(plain)}`);
-  t.diagnostic(`ted: ${show(ted)}`);
-  assert.deepEqual([...plain.failures, ...ted.failures], []);
-  const refused = [...plain.outcomes, ...ted.outcomes].filter(([k]) => k.includes(PUBLIC_REASONS.unsupportedCyclicPartGraph)).reduce((s, [, n]) => s + n, 0);
-  assert.ok(refused >= 20, `the generator reaches cyclic part graphs: ${refused}`);
 });
 
 /** A guard whose cancel flag turns on at the `k`-th macrotask yield: interrupts a Fast search at a reproducible point. */
@@ -88,13 +78,13 @@ test('interrupted Fast searches (cancel at the k-th yield, a deadline already pa
   };
   for (let seed = 1; seed <= 40; seed++) {
     for (const repeats of [false, true]) {
-      const base = fastParams(randomTedWorld(seed, false).params, repeats);
+      const base = fastParams(randomTedWorld(seed).params, repeats);
       for (const k of [1, 2, 3, 5, 8]) {
         const params: SolveParams = { ...base, timeLimitMs: undefined, guard: cancelAtYield(k) };
         record(`ted seed ${seed} ${repeats ? 'repeats' : 'single'} cancel@${k}`, params, await solve(params));
       }
     }
-    const late = { ...fastParams(randomWorld(seed, false).params, false), timeLimitMs: undefined, guard: { ...cancelAtYield(1_000_000), deadline: performance.now() - 1 } };
+    const late = { ...fastParams(randomWorld(seed).params, false), timeLimitMs: undefined, guard: { ...cancelAtYield(1_000_000), deadline: performance.now() - 1 } };
     record(`plain seed ${seed} past deadline`, late, await solve(late));
   }
   t.diagnostic([...outcomes].sort((a, b) => b[1] - a[1]).map(([k, n]) => `${k} ${n}`).join('; '));
@@ -108,7 +98,7 @@ test('the checker reports every tampering of a valid Fast response', async () =>
   let params: SolveParams | null = null;
   let r: OptimizeResponse | null = null;
   for (let seed = 1; seed <= 50 && r === null; seed++) {
-    const p = fastParams(randomWorld(seed, false).params, false);
+    const p = fastParams(randomWorld(seed).params, false);
     const out = await solve(p);
     if (out.status === 'optimal' && out.slot_pairs.length >= 1) {
       params = p;

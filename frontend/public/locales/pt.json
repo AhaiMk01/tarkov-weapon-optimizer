@@ -174,7 +174,6 @@
     "cancelled_none": "Cancelado.",
     "invalid_owned": "Sua lista do estoque não é válida — corrija-a e tente novamente.",
     "invalid_schedule": "As configurações de exploração não são válidas — altere-as e tente novamente.",
-    "unsupported_data": "Os dados de peças desta arma não são suportados, por isso não é possível criar uma build para ela.",
     "queue_timeout": "A solicitação esperou demais e foi descartada — tente novamente.",
     "error": "Algo deu errado — tente novamente."
   },
@@ -417,7 +416,6 @@
     "fastProvisionalMoaModelInfeasible": "O modelo aproximado (rápido) não encontrou nenhum build com o limite de MOA. Isso não prova que não exista; tente Preciso ou relaxe o limite de MOA.",
     "invalidOwnedItems": "A lista do estoque não é válida, então nada foi resolvido.",
     "invalidExploreSchedule": "O plano de exploração está vazio ou é inválido, então nada foi resolvido.",
-    "unsupportedCyclicPartGraph": "Os dados desta arma têm peças que podem ser montadas umas nas outras em ciclo; o otimizador não suporta esses dados, por isso nada foi resolvido.",
     "queueTimeoutBeforeDispatch": "O tempo da solicitação esgotou na fila, então nada foi resolvido. Tente novamente.",
     "independentBuildValidationFailed": "Um build produzido pelo solucionador falhou na validação independente, então foi descartado.",
     "requiredProofPrerequisiteUnavailable": "Um requisito para uma prova estava indisponível, então nenhuma prova é afirmada.",

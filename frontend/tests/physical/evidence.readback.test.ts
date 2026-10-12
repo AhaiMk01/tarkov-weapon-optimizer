@@ -125,7 +125,7 @@ test('item 1, real guns: HiGHS parses exactly the emitted certified Precise text
 test('item 1, seeded worlds: the certified text, the relaxed-first text and both Fast texts read back exactly on 40 plain and 40 TED worlds', { timeout: 600_000 }, async t => {
   let checked = 0;
   for (let seed = 1; seed <= 40; seed++) {
-    for (const [kind, world] of [['plain', randomWorld(seed, false)], ['ted', randomTedWorld(seed, false)]] as const) {
+    for (const [kind, world] of [['plain', randomWorld(seed)], ['ted', randomTedWorld(seed)]] as const) {
       const label = `${kind} world ${seed}`;
       const blueprint = preparePhysicalWeapon(world.lookup, WEAPON);
       const domain = prepareSubproblemDomain(blueprint, world.lookup, world.params);
@@ -152,7 +152,7 @@ test('item 1, seeded worlds: the certified text, the relaxed-first text and both
 test('item 1, production path: solvePrecise verifies every native solve it makes against its text (one readback check per solve, none unqualified) on 15 plain and 15 TED seeded worlds', { timeout: 900_000 }, async t => {
   let solves = 0, certified = 0;
   for (let seed = 1; seed <= 15; seed++) {
-    for (const [kind, world] of [['plain', randomWorld(seed, false)], ['ted', randomTedWorld(seed, false)]] as const) {
+    for (const [kind, world] of [['plain', randomWorld(seed)], ['ted', randomTedWorld(seed)]] as const) {
       const result = await solvePrecise({ params: world.params, deadline: performance.now() + 120_000 });
       const telemetry = result.summary.telemetry;
       assert.equal(telemetry.readbackChecks, telemetry.nativeSolves, `${kind} world ${seed}: every native solve was compared with its text`);

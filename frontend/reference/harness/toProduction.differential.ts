@@ -31,6 +31,21 @@ import type {
   ReferenceBarterOffer, ReferenceFixture, ReferenceFleaOffer, ReferenceItem, ReferenceOffer, ReferencePreset, ReferenceRequest,
   ReferenceSlot, ReferenceWeapon,
 } from '../oracle/index';
+import { PhysicalModelError } from '../../src/solver/physical/errors';
+import { CYCLIC_OUT_OF_SCOPE_REASON } from './scoreboard';
+
+// ---------------------------------------------------------------------------------------------
+// Out of scope: cyclic part data
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Cyclic part data is out of scope (owner decision 2026-10-12: no gun has a cyclic part graph). Production's blueprint builder throws the internal
+ * `CYCLIC_PART_GRAPH` error on it, and the gates record such a case (a ledger case or a seeded world) as out of scope instead of grading it.
+ */
+export const CYCLIC_OUT_OF_SCOPE = `out of scope: ${CYCLIC_OUT_OF_SCOPE_REASON}`;
+
+/** True when `error` is production's internal error for cyclic part data. */
+export const isCyclicPartGraphError = (error: unknown): boolean => error instanceof PhysicalModelError && error.code === 'CYCLIC_PART_GRAPH';
 
 // ---------------------------------------------------------------------------------------------
 // Unsupported features

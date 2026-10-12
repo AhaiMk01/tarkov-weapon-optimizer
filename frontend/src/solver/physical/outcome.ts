@@ -15,7 +15,6 @@
  *   unproved   witness  feasible / feasible                                    resolved qualifiers    completion  by precedence
  *   unproved   none     incomplete / none                                      resolved qualifiers    completion  by precedence
  *   (invalid owned_items, before any model work)  incomplete / none, null resolved fields, termination limit, Invalid owned_items format
- *   (a gun with a cyclic part graph, before any solve)  the same envelope, Unsupported data: cyclic part graph (owner decision 2d as amended)
  *
  * `termination` is search completion ONLY: `optimal` when the executed model search finished (the emptiness and optimum rows always, and a
  * finished search whose proof or candidate was then withheld), `limit` when it was unfinished or never started. It carries no authority: the
@@ -165,18 +164,6 @@ export function classifyOptimize(facts: OptimizeFacts): OptimizeOutcome {
  * The MOA qualification stays what the request says (a cap it carries), since the stash check does not run the model either way.
  */
 export function invalidOwnedItemsOutcome(moaDependent: boolean): OptimizeOutcome {
-  return refusedOutcome(moaDependent, PUBLIC_REASONS.invalidOwnedItems);
-}
-
-/**
- * A gun whose part graph reachable from the receiver has a cycle is refused as unsupported data (owner decision 2d as amended), in every mode and
- * before any solve: the same envelope as an invalid stock list (nothing resolved, no certificate, search never started), never an infeasibility.
- */
-export function unsupportedPartGraphOutcome(moaDependent: boolean): OptimizeOutcome {
-  return refusedOutcome(moaDependent, PUBLIC_REASONS.unsupportedCyclicPartGraph);
-}
-
-function refusedOutcome(moaDependent: boolean, reason: string): OptimizeOutcome {
   return {
     status: 'incomplete',
     physical_certificate: 'none',
@@ -184,6 +171,6 @@ function refusedOutcome(moaDependent: boolean, reason: string): OptimizeOutcome 
     model_qualification: null,
     moa_qualification: moaQualificationOf(moaDependent),
     termination: 'limit',
-    reason,
+    reason: PUBLIC_REASONS.invalidOwnedItems,
   };
 }

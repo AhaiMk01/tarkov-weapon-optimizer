@@ -90,7 +90,8 @@ export function generateCase(seed: number): FuzzCase {
   const slotsOf = (ownerId: string, ownerIndex: number, count: number): ReferenceSlot[] => {
     const slots: ReferenceSlot[] = [];
     for (let k = 0; k < count; k++) {
-      // Mostly acyclic (children have a higher index); occasionally a back reference, which the ancestor rule prunes.
+      // Mostly acyclic (children have a higher index); occasionally a back reference, which makes the part graph cyclic: such a world is out of
+      // scope (owner decision 2026-10-12; production throws an internal error) and the gates skip it, so every seed still draws the world it drew before.
       const forward = itemIds.filter((_, j) => j > ownerIndex);
       const pool = d.chance(0.1) ? itemIds : forward.length > 0 ? forward : itemIds;
       const allowed = d.some(pool, d.int(1, Math.min(3, pool.length)));

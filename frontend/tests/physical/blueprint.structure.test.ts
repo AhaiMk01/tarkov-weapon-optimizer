@@ -1,5 +1,5 @@
 // Physical blueprint structure (ADR 0003, ADR 0012 Tier 1, ADR 0013 section 4A): path-qualified occurrences, physical
-// slots, ancestor-template pruning, empty required slots kept, slot-id collision assertion, ammunition slots removed.
+// slots, the cyclic-data guard, empty required slots kept, slot-id collision assertion, ammunition slots removed.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PhysicalModelError, preparePhysicalWeapon, type PhysicalBlueprint } from '../../src/solver/physical';
@@ -46,25 +46,23 @@ test('sibling slots of one parent hold independent copies of the same template',
   assert.notEqual(bp.parentSlot(1), bp.parentSlot(2));
 });
 
-test('no ancestor-template repetition: a template never recurs on one root-to-leaf path, siblings may repeat', () => {
-  // m1 allows itself and m2 below; m2 allows m1 and m3 below. Only the first appearance on a path is kept.
-  const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('s0', ['m1', WEAPON])] }),
-    ['m1', mod('m1', { slots: [slot('s1', ['m1', 'm2'])] })],
-    ['m2', mod('m2', { slots: [slot('s2', ['m1', 'm3', 'm2'])] })],
+test('a cyclic part graph is bad data: the blueprint throws the internal CYCLIC_PART_GRAPH error; a loop the receiver cannot reach is never expanded', () => {
+  // No gun has a cyclic part graph (owner decision 2026-10-12). The unrolling only terminates because a template never recurs on its own root path, so
+  // a recurrence throws instead of hanging: m1 -> m2 -> m1.
+  const cyclic = lookupOf(
+    gun(WEAPON, { slots: [slot('s0', ['m1'])] }),
+    ['m1', mod('m1', { slots: [slot('s1', ['m2'])] })],
+    ['m2', mod('m2', { slots: [slot('s2', ['m1'])] })],
+  );
+  assert.throws(() => preparePhysicalWeapon(cyclic, WEAPON), (e: unknown) => e instanceof PhysicalModelError && e.code === 'CYCLIC_PART_GRAPH');
+  // The same loop behind no slot of the receiver: the gun prepares normally.
+  const unreachable = lookupOf(
+    gun(WEAPON, { slots: [slot('s0', ['m3'])] }),
+    ['m1', mod('m1', { slots: [slot('s1', ['m2'])] })],
+    ['m2', mod('m2', { slots: [slot('s2', ['m1'])] })],
     ['m3', mod('m3')],
   );
-  const bp = preparePhysicalWeapon(lookup, WEAPON);
-  assert.deepEqual(instanceIds(bp), ['weapon_0/s0:m1', 'weapon_0/s0:m1/s1:m2', 'weapon_0/s0:m1/s1:m2/s2:m3']);
-  // The receiver template in an allowlist is an ancestor of everything and is never an occurrence.
-  assert.equal(bp.templateIndexOf(WEAPON), 0);
-  assert.deepEqual(Array.from(bp.instancesOf(0)), []);
-  for (const v of itemOccurrences(bp)) {
-    const chain: string[] = [];
-    for (let u = v; u > 0; u = bp.slotOwner(bp.parentSlot(u))) chain.push(bp.templateId(u));
-    assert.equal(new Set(chain).size, chain.length, `${bp.instanceId(v)} repeats a template on its path`);
-  }
-  assert.equal(bp.stats.prunedAncestorEdges, 4, 'WEAPON in s0, m1 in s1, m1 and m2 in s2');
+  assert.deepEqual(instanceIds(preparePhysicalWeapon(unreachable, WEAPON)), ['weapon_0/s0:m3']);
 });
 
 test('empty required slots are kept: a mod-owned one stays attached to its owner, a root one stays on the receiver', () => {

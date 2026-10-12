@@ -1,7 +1,7 @@
 # Stage 3 operations, validator agreement and determinism evidence (workstreams 3.5 and 3.6)
 
-Refs #40. Normative source: ADR 0013 §4D, §5, §6 and §7; `docs/stage3-plan.md` rows 3.5 and 3.6; owner decision 2d as amended (a gun with a
-cyclic part graph is refused with `Unsupported data: cyclic part graph`) and decision 5b (integrality tolerance 1e-7).
+Refs #40. Normative source: ADR 0013 §4D, §5, §6 and §7; `docs/stage3-plan.md` rows 3.5 and 3.6; owner decision 2d as amended (cyclic part data is
+unsupported: no refusal, the blueprint throws an internal error, so the matrix has no cyclic rows) and decision 5b (integrality tolerance 1e-7).
 
 Branch `impl/stage2-correctness-cutover`. All paths are under `frontend/`.
 
@@ -10,8 +10,8 @@ Branch `impl/stage2-correctness-cutover`. All paths are under `frontend/`.
 | File | What it proves |
 | :--- | :--- |
 | `tests/runtime/operationsMatrix.harness.ts` | The rig: the **real** worker runtime (`createWorkerRuntime`) with the real solve, the real Explore and MOA floor drivers and the pinned native build. The only seams are ones a worker has anyway: the data load, the epoch clock, and the native solve of the shared pinned instance. A test can wrap that solve to report a native time limit, withhold a proof (a read warning), tamper with the primal (a point the validator rejects), throw a typed failure, or deliver a cancel. |
-| `tests/runtime/operationsMatrix.test.ts` | The transition matrix below: 106 tests, all pass (the former `todo` of defect D1 passes since the 2026-10-12 fix). |
-| `tests/solver/relaxedFallback.defect.test.ts` | Minimal reproduction of defect D1 on `solvePrecise`, now its regression test: the control and both D1 cases pass (fixed 2026-10-12). |
+| `tests/runtime/operationsMatrix.test.ts` | The transition matrix below: 98 tests, all pass (the former `todo` of defect D1 passes since the 2026-10-12 fix; the cyclic-refusal tests left with cyclic handling, 2026-10-12). |
+| `tests/solver/relaxedFallback.defect.test.ts` | Minimal reproduction of defect D1 on `solvePrecise`, now its regression test: the control and both D1 cases pass (fixed 2026-10-12); plus the Fast side of the second case on `solveFast` (fixed 2026-10-12). |
 | `reference/harness/validatorLedgerBuilds.differential.test.ts` | 3.6a: the two validators agree on every hand-derived ledger build, every rejection code, the strict production configuration and the production-only codes (6 pass). |
 | `tests/solver/determinism.test.ts` | 3.6b: the same response on repeated runs (fresh state, warm caches, worker runtime) and across permutations of the second-opinion seeds, on the ledger and on pinned guns (5 pass). |
 
@@ -44,7 +44,6 @@ with their bounds. Every reason must be in the closed set.
 | Withheld bound: `M: withheld bound` | N/A⁶ | PASS | PASS | PASS | PASS | PASS | N/A | `solveOutcome.test.ts` "parsed model differs…"; `countModel.proof.test.ts`; `moaFloor.native.test.ts` |
 | Independent validation failure: `M: independent validation failure` | PASS | PASS | PASS | PASS | PASS | PASS | N/A | `solveOutcome.test.ts` (both models); `exploreSweep.test.ts` "a published status without the build is not one"; `moaFloor.test.ts` |
 | Invalid Explore schedule | N/A | N/A | N/A | N/A | PASS | N/A | N/A | `exploreSweep.test.ts` "an empty or invalid schedule…"; `workerOperations.test.ts` "an unsweepable Explore request…"; `exploreSweep.snapshots.test.ts`; M precedence (below) |
-| Cyclic part graph: `M: cyclic part graph` | PASS | PASS | PASS | PASS | PASS | PASS | PASS⁷ | `solve.test.ts` (Optimize, every mode); `tests/solver/cyclicRefusal.test.ts` (Explore, floor drivers); ledger harness, 5 owner-approved refusals |
 | Typed native failure | PASS | PASS | PASS | PASS | PASS (E row) | PASS | N/A | M "precedence — a typed native failure…"; `solveGuard.test.ts`; `workerRuntime.test.ts`; `floorFailure.test.ts`; `workerOperations.test.ts` |
 
 ¹ M "metadata operations complete normally and ignore a stash, a stamped deadline long past, and a cancel (queued or running)". A metadata operation
@@ -58,8 +57,6 @@ does not downgrade the certified optimum (asserted). After a witness, the stop r
 `lo`: `model_witnessed`, `Time limit reached`, `proved_lower_bound: null`.
 ⁶ Fast has no proof to withhold: it never reads a bound back and never carries a physical upper bound. M asserts `approximate_optimal` with
 `upper_bound: null` under the same read warning.
-⁷ M "metadata operations on a gun with a cyclic part graph…": the refusal belongs to the search operations, and `getWeaponMods` (with its
-compatibility graph), `getGunsmithTasks` and `getStatus` still load.
 
 Observed envelopes (all asserted in M):
 
@@ -67,7 +64,7 @@ Observed envelopes (all asserted in M):
   `feasible`/`feasible` with the build and its LB. Termination is `limit` whenever the search is unfinished. A validation failure after a completed
   search is `optimal`. A withheld proof is `feasible` with termination `optimal`, `upper_bound: null` and `absolute_gap: null`. A deadline during the
   second opinion keeps the first opinion's qualified UB. A request that reached the model reports its resolved model; a pre-model stop (stash, queue,
-  cancel while queued, cyclic) reports null resolved fields, nodes 0 and `limit`.
+  cancel while queued) reports null resolved fields, nodes 0 and `limit`.
 - **Explore.**
   - Entry stops are `invalid` with `[]` points, no schedule and no rows.
   - A stop during the sweep leaves unlaunched targets as U with the factual reason. The curve is `partial` with V >= 1 (rules 3 and 6) and `invalid`
@@ -83,10 +80,7 @@ Observed envelopes (all asserted in M):
 | :--- | :--- | :-: | :-: | :-: | :-: | :-: | :-: | :--- |
 | invalid stash + queue expiry + cancel queued | invalid stash | PASS | PASS | PASS | PASS | PASS | PASS | M: invalid owned_items; `workerRuntime.test.ts` |
 | cancel queued + queue expiry | cancel | PASS | PASS | PASS | PASS | PASS | PASS | M: cancel while queued; `workerRuntime.test.ts` |
-| invalid stash + cyclic | invalid stash | PASS | PASS | PASS | PASS | PASS | PASS | M "precedence at entry…" |
-| queue expiry + cyclic; cancel queued + cyclic | queue expiry; cancel (nothing loaded) | PASS | PASS | PASS | PASS | PASS | PASS | M "precedence at entry…" |
-| cyclic + deadline or cancel observed after dispatch, before the solve | Optimize family: the interrupt; Explore and floor: the refusal | PINNED | PINNED | PINNED | PINNED | PINNED | PINNED | M "precedence after dispatch…" (**owner question Q1**) |
-| Explore: invalid stash + invalid schedule; queue expiry + invalid schedule; invalid schedule + cyclic; invalid schedule + passed deadline | stash; queue; schedule; schedule | | | | | PASS | | M "Explore precedence at entry…" |
+| Explore: invalid stash + invalid schedule; queue expiry + invalid schedule; invalid schedule + passed deadline | stash; queue; schedule | | | | | PASS | | M "Explore precedence at entry…" |
 | validation failure + deadline | validation | PASS | PASS | PASS | PASS | PASS⁸ | PASS | M "precedence — an observed validation failure…"; `tests/physical/outcome.test.ts` precedence 2; `solveOutcome.test.ts` (Fast); `moaFloor.test.ts` "a stop reason is reconciled with the guard" |
 | validation failure + cancel | validation | PASS | PASS | PASS | PASS | PASS⁸ | PASS | M (same test); `searchGuard.test.ts` "a pure interrupt reported by a node loses to a coincident cancel, a validation failure does not" |
 | withheld proof + deadline | prerequisite, witness kept | N/A | PASS (D1 fixed) | PASS (D1 fixed) | PASS (D1 fixed) | PASS (D1 fixed) | PASS (D1 fixed) | M "D1 (fixed)…"; `relaxedFallback.defect.test.ts`; the classifier: `outcome.test.ts` precedence 3, `moaFloor.test.ts` reconcile |
@@ -145,25 +139,19 @@ incumbent), and an observed proof-prerequisite failure replaces a coincident int
 without a `todo` mark (OP, OA, GS: `feasible` / `Required proof prerequisite unavailable` with the build; EX: the first target is V and the curve
 partial; FL: `model_witnessed`). The second case keeps its factual `Time limit reached` (the relaxed solve's own native stop) with the build.
 
-### Owner question Q1 (not a defect)
-
-When a gun with a cyclic part graph meets an interrupt observed after dispatch but before any solve (the deadline passes during the data load, or a
-cancel is dispatched then), the operations disagree:
-
-- **Optimize family.** `solve()` reads its entry guard before the part-graph check. It reports the interrupt, with the resolved model.
-- **Explore and the floor.** They check the part graph before their first guard and report the refusal.
-
-Both outcomes are pre-model, with no build, no proof and no native call. ADR 0013 and amendment 2d are silent on the order. M pins today's behaviour
-per operation, so a change shows. Suggested alignment: the refusal first everywhere. It is a deterministic property of the input, so a retry would
-get it anyway, the same reasoning as for an invalid stash.
+**Fast side of the second case (fixed 2026-10-12).** `solveFast.ts` `tryRelaxedEdges` treated every non-`Optimal` relaxed answer as fractional, so a
+relaxed-edge solve that stopped at its native time limit with an integral primal the validator accepts lost that witness (the request was
+`incomplete` / `Time limit reached`). It now judges such a primal exactly as the integer model's own limit stop is judged: a verified build is the node's
+witness with the stop's reason (`feasible` / `feasible` / `Time limit reached`, `approximate`); a limit stop with no primal, a fractional edge or no
+verified build still falls back to the integer model. Tests: M "D1 (fixed), second case" now includes OF; `relaxedFallback.defect.test.ts` "Fast: a
+relaxed-edge solve stopped at a native time limit…" (fails before the fix, passes after).
 
 ### Other observations
 
 - **O1.** In Explore the aggregate reason is the stop cause, while the per-target row keeps the validation reason (footnote 8). This is by design.
 - **O2.** See 3.6b below: at the 1e-9 runtime tolerance, certificate issuance depends on the order of the second-opinion seeds (decision 5b).
-- **O3.** Fast's relaxed-edge try discards any non-`Optimal` relaxed answer without judging it (`solveFast.ts` `tryRelaxedEdges`). No witness is ever
-  verified and then lost, so this is not a contract issue. It is the reason a native time limit in the first Fast solve yields `incomplete` rather
-  than `feasible`.
+- **O3.** (Resolved 2026-10-12.) Fast's relaxed-edge try used to discard any non-`Optimal` relaxed answer without judging it, so a native time limit in
+  the first Fast solve yielded `incomplete` rather than `feasible`; see "Fast side of the second case" above.
 
 ## 3.6a Validator agreement on the ledger
 

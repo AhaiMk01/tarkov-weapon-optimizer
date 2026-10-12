@@ -21,7 +21,7 @@ import {
   scoreBuild, sub, abs, le, eq, toNumber, validateReference,
   type BaseChoice, type Placement, type ReferenceBuild, type ReferenceFixture, type ReferenceRequest, type ReferenceSlot, type Violation,
 } from '../oracle/index';
-import { DIMENSIONS, MODES, OWNER_APPROVED_REFUSALS, type CaseScore, type DimensionResult, type DimensionResults, type ModeName } from './scoreboard';
+import { CYCLIC_PART_GRAPH_FEATURE, DIMENSIONS, MODES, OUT_OF_SCOPE_CASES, type CaseScore, type DimensionResult, type DimensionResults, type ModeName } from './scoreboard';
 import { toProduction, type ProductionInputs, type UnsupportedFeature } from './toProduction.differential';
 
 // ---------------------------------------------------------------------------------------------
@@ -326,29 +326,8 @@ function gradeOutcomeContract(c: LedgerCase, mode: ModeName, response: Productio
   return fail(detail.join('; '), `outcome: ${parts.join('; ')}`);
 }
 
-/** The refusal an owner decision requires for a case (`OWNER_APPROVED_REFUSALS`): the exact reason, no build, nothing resolved, no certificate. */
-export const CYCLIC_REFUSAL_REASON = 'Unsupported data: cyclic part graph';
-
-/**
- * A case in `OWNER_APPROVED_REFUSALS` that production refuses exactly as required: every applicable dimension is `refused`. Anything else (a build, another
- * reason, a resolved mode) is graded as usual, so a change of production's scope shows in the ratchet.
- */
-function gradeRefusal(c: LedgerCase, mode: ModeName, outcome: ProductionOutcome): DimensionResults | null {
-  if (!Object.hasOwn(OWNER_APPROVED_REFUSALS, c.id) || outcome.kind !== 'response') return null;
-  const r = outcome.response;
-  const refused = r.status === 'incomplete' && r.physical_certificate === 'none' && r.reason === CYCLIC_REFUSAL_REASON
-    && r.precision_resolved === null && r.model_qualification === null && (r.selected_items ?? []).length === 0 && !(Array.isArray(r.slot_pairs) && r.slot_pairs.length > 0);
-  if (!refused) return null;
-  const out = {} as DimensionResults;
-  const why = `refused as unsupported data (${OWNER_APPROVED_REFUSALS[c.id]})`;
-  for (const d of DIMENSIONS) out[d] = d === 'scoreOptimal' && scoreOptimalNotApplicable(c, mode) !== null ? notApplicable(scoreOptimalNotApplicable(c, mode) as string) : { verdict: 'refused', reason: why };
-  return out;
-}
-
 /** Grades one production outcome against one ledger case in one mode. Pure. */
 export function gradeOutcome(c: LedgerCase, mode: ModeName, outcome: ProductionOutcome): DimensionResults {
-  const refusal = gradeRefusal(c, mode, outcome);
-  if (refusal !== null) return refusal;
   if (outcome.kind === 'unsupported') {
     const features = outcome.unsupported.map(u => u.feature);
     const details = outcome.unsupported.map(u => u.detail).join('; ');
@@ -425,11 +404,29 @@ async function outcomeFor(c: LedgerCase, mode: ModeName, options: GradeOptions):
   return { outcome: await (options.runner ?? runProduction)(inputs.params), unsupported: [] };
 }
 
-/** Maps, runs (Precise primary, then Fast) and grades one ledger case. A case with an unsupported feature is not run. */
+/** Every dimension `n/a` for a case outside production's scope (`OUT_OF_SCOPE_CASES`): production is not run on it. */
+function outOfScope(reason: string): DimensionResults {
+  const out = {} as DimensionResults;
+  for (const d of DIMENSIONS) out[d] = notApplicable(`out of scope: ${reason}`);
+  return out;
+}
+
+/**
+ * Maps, runs (Precise primary, then Fast) and grades one ledger case. A case with an unsupported feature is not run, and neither is a case outside
+ * production's scope (every dimension `n/a`, recorded with the out-of-scope feature).
+ */
 export async function gradeCase(c: LedgerCase, options: GradeOptions = {}): Promise<GradedCase> {
   const grades = {} as Record<ModeName, DimensionResults>;
   const observed = {} as Record<ModeName, string>;
   const elapsedMs = {} as Record<ModeName, number>;
+  if (Object.hasOwn(OUT_OF_SCOPE_CASES, c.id)) {
+    for (const mode of MODES) {
+      grades[mode] = outOfScope(OUT_OF_SCOPE_CASES[c.id]);
+      observed[mode] = 'out_of_scope';
+      elapsedMs[mode] = 0;
+    }
+    return { id: c.id, family: c.family, unsupported: [CYCLIC_PART_GRAPH_FEATURE], precise: grades.precise, fast: grades.fast, observed, elapsedMs };
+  }
   let unsupported: UnsupportedFeature[] = [];
   for (const mode of MODES) {
     const started = performance.now();

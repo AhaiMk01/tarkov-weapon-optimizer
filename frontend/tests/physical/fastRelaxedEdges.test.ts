@@ -1,6 +1,6 @@
 // Continuous slot-edge counts first, integer fallback (solveFast `edgeIntegrality: 'relaxed-first'`, the default).
 //  - The relaxed text differs from the integer text only in the integrality declarations of the e_ columns.
-//  - Relaxed-first and integer-only return the same answers on seeded random worlds (acyclic, cyclic, TrueErgo / Prevent Overswing).
+//  - Relaxed-first and integer-only return the same answers on seeded random worlds (plain, TrueErgo / Prevent Overswing).
 //  - A fractional edge, or a point that must be cut, falls back to the integer model and still ends in the same valid build.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -44,7 +44,7 @@ test('LpWriter.toStringRelaxing drops only the integrality of the listed columns
 
 test('specializeFast: lpRelaxedEdges relaxes exactly the slot-edge columns (counts, bases and lots stay integer)', () => {
   for (const seed of [3, 11, 29]) {
-    const { params } = randomWorld(seed, false);
+    const { params } = randomWorld(seed);
     const blueprint = getPhysicalBlueprint(params.itemLookup, params.weaponId, params.physicalOptions);
     const domain = prepareSubproblemDomain(blueprint, params.itemLookup, params);
     const model = specializeFast(blueprint, domain, params);
@@ -65,14 +65,13 @@ const sameAnswer = (label: string, a: FastResult, b: FastResult): void => {
   }
 };
 
-test('relaxed-first equals integer-only on seeded worlds (acyclic, cyclic, TED), and its builds are valid', { timeout: 600_000 }, async t => {
+test('relaxed-first equals integer-only on seeded worlds (plain and TED), and its builds are valid', { timeout: 600_000 }, async t => {
   let builds = 0;
   let fallbacks = 0;
   let relaxedSolves = 0;
   const worlds = [
-    ...Array.from({ length: 60 }, (_, k) => ({ label: `acyclic ${k + 1}`, world: randomWorld(k + 1, false) })),
-    ...Array.from({ length: 30 }, (_, k) => ({ label: `cyclic ${k + 1}`, world: randomWorld(k + 1, true) })),
-    ...Array.from({ length: 30 }, (_, k) => ({ label: `ted ${k + 1}`, world: randomTedWorld(k + 1, false) })),
+    ...Array.from({ length: 60 }, (_, k) => ({ label: `plain ${k + 1}`, world: randomWorld(k + 1) })),
+    ...Array.from({ length: 30 }, (_, k) => ({ label: `ted ${k + 1}`, world: randomTedWorld(k + 1) })),
   ];
   for (const { label, world } of worlds) {
     const { params } = world;
@@ -95,7 +94,7 @@ test('relaxed-first equals integer-only on seeded worlds (acyclic, cyclic, TED),
 });
 
 test('a fractional edge falls back to the integer model and ends in the same build', async () => {
-  const { params } = randomWorld(5, false);
+  const { params } = randomWorld(5);
   const deadline = performance.now() + 60_000;
   const reference = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline, edgeIntegrality: 'integer' });
   assert.equal(reference.kind, 'build');
@@ -119,7 +118,7 @@ test('a fractional edge falls back to the integer model and ends in the same bui
 });
 
 test('relaxed-first on a plain request: one relaxed solve, no fallback, the integer model untouched', async () => {
-  const { params } = randomWorld(7, false);
+  const { params } = randomWorld(7);
   const result = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline: performance.now() + 60_000 });
   if (result.kind !== 'build') return;
   assert.equal(result.summary.relaxedEdgeSolves, 1);

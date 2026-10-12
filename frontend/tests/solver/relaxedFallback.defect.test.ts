@@ -8,6 +8,8 @@
 // (an observed prerequisite failure outranks a coincident interrupt). The fix keeps the relaxed opinion when it holds a verified build or a non-interrupt
 // reason, returns it unconfirmed (unfinished) on a guard stop, and merges it into the integer model's evaluation otherwise.
 // The second case: the build of a relaxed solve that stopped at a native time limit with a primal is kept too, with its factual reason.
+// Fast (`solveFast.ts` `tryRelaxedEdges`) had the second case's loss as well: a relaxed-edge limit stop was treated as fractional and dropped even when
+// its primal was integral and validated. It now returns that verified build as the node's witness with the stop's reason (last test).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
@@ -15,6 +17,7 @@ import type { NativeResult } from '../../src/solver/native';
 import { nativeSolve } from '../../src/solver/physical/nativeSolve';
 import type { SolveFn } from '../../src/solver/physical/nativeSolve';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
+import { solveFast } from '../../src/solver/physical/solveFast';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import { fixedGuard } from '../../src/solver/runtimeGuard';
 import { gun, lookupOf, mod, slot, WEAPON } from '../physical/lpFixtures';
@@ -63,4 +66,22 @@ test('D1: a relaxed-edge solve stopped at a native time limit with a verified pr
   assert.equal(result.kind, 'build', `got ${result.kind}: ${result.outcome.status} / ${result.outcome.reason}`);
   assert.equal(result.outcome.status, 'feasible');
   assert.equal(result.outcome.reason, PUBLIC_REASONS.timeLimitReached);
+});
+
+test('Fast: a relaxed-edge solve stopped at a native time limit with an integral, verified primal keeps that build as a witness with Time limit reached', async () => {
+  let t = 0;
+  let calls = 0;
+  const solve: SolveFn = async (lp, options, extras) => {
+    const real = await nativeSolve(lp, options, extras);
+    const index = calls++;
+    if (index === 0) t = 5_000;
+    return timeLimited(real, index);
+  };
+  const result = await solveFast({ params, guard: fixedGuard(1_000, { now: () => t }), solve });
+  assert.equal(calls, 1, 'the integer model was never solved');
+  assert.equal(result.summary.relaxedEdgeSolves, 1);
+  assert.equal(result.kind, 'build', `got ${result.kind}: ${result.outcome.status} / ${result.outcome.reason}`);
+  assert.equal(result.optimal, false);
+  assert.deepEqual([result.outcome.status, result.outcome.physical_certificate, result.outcome.reason, result.outcome.termination], ['feasible', 'feasible', PUBLIC_REASONS.timeLimitReached, 'limit']);
+  assert.equal(result.outcome.model_qualification, 'approximate');
 });

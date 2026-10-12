@@ -1,8 +1,8 @@
 // The template-level view of a prepared domain (src/solver/physical/templateGraph.ts): owners, candidate edges over ACTIVE occurrences, the
-// topological order and the copy bounds, on hand-built lookups; a cyclic graph is refused (owner decision 2d as amended).
+// topological order and the copy bounds, on hand-built lookups.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { buildTemplateGraph, PhysicalModelError, preparePhysicalWeapon, prepareSubproblemDomain, type TemplateGraph } from '../../src/solver/physical';
+import { buildTemplateGraph, preparePhysicalWeapon, prepareSubproblemDomain, type TemplateGraph } from '../../src/solver/physical';
 import type { ItemLookup } from '../../src/solver/types';
 import { gun, lookupOf, mod, slot, WEAPON } from './lpFixtures';
 
@@ -65,21 +65,6 @@ test('copy bounds: the exact maximum over trees on an acyclic graph, far below t
   assert.ok(domain.templateActiveCount[blueprint.templateIndexOf('b')] > copies('b'), 'the occurrence count is a looser bound');
   assert.equal(copies('s'), 1, 'two slots fit it, a self-conflict allows one copy');
   assert.equal(graph.maxCopies[0], 1);
-});
-
-test('a cycle among the templates is not ordered: it throws CYCLIC_PART_GRAPH (a gun with a cycle is refused before any model is built)', () => {
-  // A and B can each host the other (reachable from different root slots, so neither occurrence has the other as an ancestor everywhere).
-  const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('s0', ['A']), slot('s1', ['B'])] }),
-    ['A', mod('A', { slots: [slot('toB', ['B']), slot('leaf', ['C'])] })],
-    ['B', mod('B', { slots: [slot('toA', ['A'])] })],
-    ['C', mod('C', { slots: [slot('deeper', ['D'])] })],
-    ['D', mod('D')],
-    ['E', mod('E')],
-  );
-  lookup[WEAPON].slots.push({ id: 's2', name: 's2', nameId: 's2', required: false, allowedItems: ['E'] });
-  assert.throws(() => graphOf(lookup), (e: unknown) => e instanceof PhysicalModelError && e.code === 'CYCLIC_PART_GRAPH');
-  assert.equal(preparePhysicalWeapon(lookup, WEAPON).stats.prunedAncestorEdges > 0, true, 'the blueprint detects it: the ancestor rule cut an edge');
 });
 
 test('an empty domain has no template graph', () => {
