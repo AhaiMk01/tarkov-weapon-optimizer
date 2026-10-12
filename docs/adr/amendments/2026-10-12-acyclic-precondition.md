@@ -1,6 +1,6 @@
 # Amendment note (DRAFT): acyclic part graphs are a checked precondition
 
-Status: **draft for the owner** (Refs #40). Drafted with Phase 2.10 milestone 2 from owner decision 2d as amended on 2026-10-12
+Status: **draft for the owner; to be posted to #40 with the Stage 3 verdict (owner, 2026-10-12)** (Refs #40). Drafted with Phase 2.10 milestone 2 from owner decision 2d as amended on 2026-10-12
 (`docs/stage2-plan.md`). Not posted anywhere; posting it to #40 needs the owner's approval. It amends ADR 0003 and ADR 0013 section 3,
 items 3 and 10, and leaves every other decision of those ADRs as it is.
 

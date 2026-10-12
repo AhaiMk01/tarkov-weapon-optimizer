@@ -68,7 +68,8 @@ config, unit, reference, build, lint, baseline unchanged unless an owner-approve
 
 ## Open owner questions (not blocking the first wave)
 
-1. The ADR amendment draft (`docs/adr/amendments/2026-10-12-acyclic-precondition.md`): post to #40 now, or with the
-   Stage 3 verdict?
+1. **Decided (owner, 2026-10-12):** the ADR amendment (`docs/adr/amendments/2026-10-12-acyclic-precondition.md`) is
+   posted to #40 together with the Stage 3 verdict and the push of Stages 2 and 3, so every commit it cites resolves.
+   Until then the repo draft is the working authority; 3.2's proof cites it and may amend it.
 2. After an **adopt** verdict: the release shape (a MAJOR version per CLAUDE.md's rule for solver changes, e.g. v3.0.0,
    and whether to open a PR to master) is decided then, not now.
