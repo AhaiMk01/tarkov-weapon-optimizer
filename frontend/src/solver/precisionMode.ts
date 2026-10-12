@@ -1,33 +1,21 @@
 /**
- * Resolves Fast vs Precise LP mode. Auto runs the exact (Precise) model when its occurrence universe is small enough to solve to a proof
- * within the default request deadline, and the Fast model otherwise.
+ * Resolves Fast vs Precise LP mode (owner decision, 2026-10-12, from the Phase 2.10 measurement in benchmarks/phase210m2/).
  *
- * PENDING (owner decision 2d as amended, Phase 2.10): Precise now solves the certified count model, whose size is the template count, not the
- * occurrence count, so the rule below no longer measures Precise's cost. It is kept unchanged until the owner re-decides it from the Phase 2.10
- * measurement; the measurement that justified it (below) was taken on the occurrence model.
+ * Precise solves the certified count model (owner decisions 2d as amended and 2e), whose size is the number of candidate slot edges, not the
+ * occurrence count. Measured on the pinned capture (60 s limit, relaxed-first edges, second opinion): every gun certifies plain in at most 5.7 s,
+ * so Auto resolves a plain request to Precise for every supported gun. A TrueErgo or Prevent Overswing request runs the spatial weight search
+ * (several node solves): every gun up to 2,513 candidate edges certified in at most 26 s, while the guns from 3,476 edges up (AKMS, the AK and
+ * M4/AR-15 families, NL545 DI) took 12 to 53 s, too close to the 60 s default on a slower client. No gun lies between 2,513 and 3,476, so Auto
+ * runs Precise for a TED request up to `AUTO_PRECISE_MAX_TED_EDGES` candidate edges and Fast (approximate, decision 2b) above.
  *
- * The size that decides solve time is the number of ITEM OCCURRENCES of the exact model (one per template per physical slot it can
- * occupy, `PhysicalBlueprintStats.itemOccurrences`), not the number of distinct reachable mods: the exact model has a binary column per
- * occurrence, and the unreduced model is slow past a certain size (reductions are Stage 4). Measured on the pinned capture with the default
- * weights (ergonomics 1, recoil 1, price 0.1) on the pinned native HiGHS build, every gun up to 13,122 occurrences solved to a proof in at most
- * 18 s (pistols, shotguns and bolt guns in well under 2 s; SR-25, Mk 16/17 and NL545 DI, the slowest, in 16 to 18 s), and the next sizes are
- * the AK family at 34,835 to 41,153 occurrences (no proof within 120 s on the AK-74N) and the M4A1 family at 151,479 (no incumbent in 120 s).
- * No gun lies between 13,122 and 34,835, so any threshold in that gap gives the same answer on the pinned data; 15,000 is the conservative edge
- * with a margin of about 3 over the slowest measured proof against the 60 s default deadline.
- *
- * The count is estimated from the compatibility map alone (no lookup is needed, so the caller's signature is unchanged) by the same
- * path-unrolling rule the blueprint uses (a template never repeats an ancestor on one path), bounded by the threshold so a huge weapon costs
- * no more than the threshold to classify. It agrees with the blueprint to within a fifth on the pinned capture (exactly on most guns), which
- * is far inside the width of the gap above.
- *
- * TrueErgo and Prevent Overswing do not enter the resolution (owner decision 2b, Phase 2.6b): the Fast model states the same TED rows on a weight
- * node and runs the same spatial search, so Auto resolves a TED request by size like any other, and a Fast request for one stays Fast (approximate).
+ * The edge count is read from the compatibility map alone (no lookup is needed): for every slot owned by the weapon or a reachable mod, the
+ * number of distinct reachable candidates. It tracks the count model's integer columns closely (within about 10% on the pinned capture).
  */
 
 import type { CompatibilityMap, PrecisionRequest } from './types';
 
-/** Auto mode runs Precise when the exact model has at most this many item occurrences. */
-export const AUTO_PRECISE_MAX_OCCURRENCES = 15_000;
+/** Auto runs Precise for a TrueErgo or Prevent Overswing request when the weapon has at most this many candidate slot edges. */
+export const AUTO_PRECISE_MAX_TED_EDGES = 3_000;
 
 export function normalizePrecisionRequest(raw: boolean | PrecisionRequest | undefined): PrecisionRequest {
   if (raw === true || raw === 'precise') return 'precise';
@@ -36,45 +24,18 @@ export function normalizePrecisionRequest(raw: boolean | PrecisionRequest | unde
   return 'fast';
 }
 
-/**
- * Item occurrences of the weapon's path-unrolled tree, counted up to `limit + 1` (a larger tree returns `limit + 1`). The weapon is the one
- * slot owner that is not a reachable mod.
- */
-export function estimateOccurrences(compatMap: CompatibilityMap, limit: number): number {
+/** Candidate slot edges of the weapon: for every slot owned by the weapon or a reachable mod, its distinct reachable candidates. */
+export function countCandidateEdges(compatMap: CompatibilityMap): number {
   const reachable = compatMap.reachable_items;
-  const rootSlots: string[] = [];
-  let weaponId: string | undefined;
-  for (const [slotId, owner] of Object.entries(compatMap.slot_owner)) {
-    if (!(owner in reachable)) {
-      weaponId ??= owner;
-      if (owner === weaponId) rootSlots.push(slotId);
-    }
+  let edges = 0;
+  for (const slotId of Object.keys(compatMap.slot_owner)) {
+    edges += new Set((compatMap.slot_items[slotId] ?? []).filter(child => child in reachable)).size;
   }
-  if (weaponId === undefined) return 0;
-  const root = weaponId;
-  let count = 0;
-  const onPath = new Set<string>([root]);
-  const visit = (slots: readonly string[]): boolean => {
-    for (const slotId of slots) {
-      const seen = new Set<string>();
-      for (const child of compatMap.slot_items[slotId] ?? []) {
-        if (seen.has(child) || onPath.has(child) || !(child in reachable)) continue;
-        seen.add(child);
-        if (++count > limit) return false;
-        onPath.add(child);
-        const finished = visit(compatMap.item_to_slots[child] ?? []);
-        onPath.delete(child);
-        if (!finished) return false;
-      }
-    }
-    return true;
-  };
-  visit(rootSlots);
-  return Math.min(count, limit + 1);
+  return edges;
 }
 
-export function resolvePreciseFlag(request: PrecisionRequest, compatMap: CompatibilityMap): boolean {
+export function resolvePreciseFlag(request: PrecisionRequest, compatMap: CompatibilityMap, tedRequest: boolean): boolean {
   if (request === 'precise') return true;
   if (request === 'fast') return false;
-  return estimateOccurrences(compatMap, AUTO_PRECISE_MAX_OCCURRENCES) <= AUTO_PRECISE_MAX_OCCURRENCES;
+  return !tedRequest || countCandidateEdges(compatMap) <= AUTO_PRECISE_MAX_TED_EDGES;
 }

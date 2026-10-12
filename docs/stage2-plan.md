@@ -58,7 +58,11 @@ percentile); the AK family and M4A1 do not finish. Fast (template model) solves 
 is approximate. Decisions:
 
 1. **Auto chooses by size.** Precise up to `AUTO_PRECISE_MAX_OCCURRENCES` (15,000), Fast above, clearly
-   qualified as approximate (implemented in 2.4b-3b).
+   qualified as approximate (implemented in 2.4b-3b). **Superseded (owner, 2026-10-12, after Phase 2.10):** Auto runs
+   Precise for every plain request; for a TrueErgo or Prevent Overswing request it runs Precise up to
+   `AUTO_PRECISE_MAX_TED_EDGES` (3,000) candidate slot edges, read from the compatibility map, and Fast above. On the pinned
+   capture no gun lies between 2,513 and 3,476 edges; the guns above (AKMS, the AK and M4/AR-15 families, NL545 DI) took 12
+   to 53 s in Precise with TrueErgo against the 60 s default.
 2. **No progressive "Fast first, then exact" result.** Rejected by the owner: a Precise request returns only its
    own Precise result (optimal, feasible with honest bounds at the deadline, or incomplete). No early Fast witness
    is streamed or shown for it.
@@ -101,16 +105,14 @@ is approximate. Decisions:
      section 8 stay as history.
    - ADR 0003 (rootedness on cyclic graphs) and ADR 0013 section 3 items 3 and 10 need an amendment note; the text is
      drafted in the repo, and posting it to #40 needs the owner's approval.
-   - Consequences to settle after Phase 2.10's measurement: Auto's size rule counts occurrences
-     (`AUTO_PRECISE_MAX_OCCURRENCES`), which no longer measures Precise's cost; and Stage 4 candidate 2a (certified Fast)
-     shrinks to what Fast still lacks: the proof layer, the second opinion and the MOA rows.
+   - Consequences: Auto's size rule was re-decided from Phase 2.10's measurement (performance policy item 1); Stage 4
+     candidate 2a (certified Fast) shrinks to what Fast still lacks: the proof layer, the second opinion and the MOA rows.
    **Phase 2.10 result (2026-10-12, 172 pinned guns, 60 s):** Precise on the count model (relaxed-first slot edges, second
    opinion) certifies every gun in both profiles: plain 153 optimal + 19 infeasible in 111 s total (max 5.7 s), TrueErgo
    153 + 19 in 1,050 s (max 49 s); before, the occurrence model left 17 plain and 43 TrueErgo guns uncertified (1,608 s and
    3,453 s). Same optimum on every gun certified by both. The second opinion costs about half the solve time; one
    disagreement in 883 second solves (AK-104 TrueErgo), settled by the third seed. Data and scripts:
-   `frontend/benchmarks/phase210m2/`. Auto's new rule is pending an owner decision (proposal: Precise for every plain request;
-   for TrueErgo or Prevent Overswing, Precise up to about 3,000 count-model integer columns, Fast above).
+   `frontend/benchmarks/phase210m2/`. Auto's new rule: performance policy item 1 (owner, 2026-10-12).
 2e. **Precise is rebuilt on the count model now, before 2.9 (owner, 2026-10-06; amends ADR 0013's order, Phase 2.10).**
    On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
    activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4

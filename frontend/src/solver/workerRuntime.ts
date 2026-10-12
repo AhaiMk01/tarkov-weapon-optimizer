@@ -284,7 +284,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
 
     const data = await getOrLoadData(lang, gameMode);
     const compatMap = getCompatMap(data, req.weapon_id);
-    const usePrecise = resolvePreciseFlag(precisionRequest, compatMap);
+    const usePrecise = resolvePreciseFlag(precisionRequest, compatMap, req.use_true_ergo === true || req.prevent_overswing === true);
     const params: SolveParams = {
       ...domainParams(req, data, lang, gameMode, owned.items, guard, precisionRequest, usePrecise),
       maxMOA: req.max_moa,
@@ -340,7 +340,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     if (stop !== null) return envelope(stop);
 
     const data = await getOrLoadData(lang, gameMode);
-    const usePrecise = resolvePreciseFlag(precisionRequest, getCompatMap(data, req.weapon_id));
+    const usePrecise = resolvePreciseFlag(precisionRequest, getCompatMap(data, req.weapon_id), req.use_true_ergo === true || req.prevent_overswing === true);
     const result = await runExplore({
       request: { ...req, owned_items: [...owned.items] },
       ownedItems: owned.items,
