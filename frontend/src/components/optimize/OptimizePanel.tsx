@@ -2,8 +2,10 @@ import { WeaponSelector } from '../common/WeaponSelector'
 import { WeightAdjuster } from '../common/WeightAdjuster'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
-import type { Gun, ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
+import { AdvancedOptions } from '../common/AdvancedOptions'
+import type { Gun, ModInfo, ModCompatibility, ModCategoryOption, PrecisionRequest } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
+import type { FloorView } from '../common/floorView'
 
 interface OptimizePanelProps {
   guns: Gun[]
@@ -13,10 +15,15 @@ interface OptimizePanelProps {
   recoilWeight: number
   priceWeight: number
   onWeightChange: (ergo: number, recoil: number, price: number) => void
-  useEvoErgo: boolean
-  onUseEvoErgoChange: (v: boolean) => void
+  useTrueErgo: boolean
+  onUseTrueErgoChange: (v: boolean) => void
+  /** Sweet Spot Mode: shown in the Advanced menu. */
   useTchebycheff: boolean
   onUseTchebycheffChange: (v: boolean) => void
+  solverPrecision: PrecisionRequest
+  onSolverPrecisionChange: (v: PrecisionRequest) => void
+  allowRepeatedParts: boolean
+  onAllowRepeatedPartsChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -40,6 +47,11 @@ interface OptimizePanelProps {
   equipErgoPenalty: number
   onEquipErgoPenaltyChange: (v: number) => void
   computingMOAFloor: boolean
+  moaFloor: FloorView | null
+  moaFloorError: string | null
+  onCancelMOAFloor: () => void
+  cancellingMOAFloor: boolean
+  onRetryMOAFloor: () => void
   availableMods: ModInfo[]
   modCompat?: ModCompatibility
   loadingMods: boolean
@@ -83,10 +95,8 @@ export function OptimizePanel(props: OptimizePanelProps) {
         recoilWeight={props.recoilWeight}
         priceWeight={props.priceWeight}
         onWeightChange={props.onWeightChange}
-        useEvoErgo={props.useEvoErgo}
-        onUseEvoErgoChange={props.onUseEvoErgoChange}
-        useTchebycheff={props.useTchebycheff}
-        onUseTchebycheffChange={props.onUseTchebycheffChange}
+        useTrueErgo={props.useTrueErgo}
+        onUseTrueErgoChange={props.onUseTrueErgoChange}
         useBudget={props.useBudget}
         onUseBudgetChange={props.onUseBudgetChange}
         maxPrice={props.maxPrice}
@@ -110,6 +120,11 @@ export function OptimizePanel(props: OptimizePanelProps) {
         useExactMOAFloor={props.useExactMOAFloor}
         onUseExactMOAFloorChange={props.onUseExactMOAFloorChange}
         computingMOAFloor={props.computingMOAFloor}
+        moaFloor={props.moaFloor}
+        moaFloorError={props.moaFloorError}
+        onCancelMOAFloor={props.onCancelMOAFloor}
+        cancellingMOAFloor={props.cancellingMOAFloor}
+        onRetryMOAFloor={props.onRetryMOAFloor}
       />
       <ModFilter
         availableMods={props.availableMods}
@@ -142,6 +157,14 @@ export function OptimizePanel(props: OptimizePanelProps) {
         onPlayerLevelChange={props.onPlayerLevelChange}
         traderLevels={props.traderLevels}
         onTraderLevelsChange={props.onTraderLevelsChange}
+      />
+      <AdvancedOptions
+        solverPrecision={props.solverPrecision}
+        onSolverPrecisionChange={props.onSolverPrecisionChange}
+        allowRepeatedParts={props.allowRepeatedParts}
+        onAllowRepeatedPartsChange={props.onAllowRepeatedPartsChange}
+        useTchebycheff={props.useTchebycheff}
+        onUseTchebycheffChange={props.onUseTchebycheffChange}
       />
     </div>
   )

@@ -1,0 +1,7 @@
+# The HiGHS WebAssembly artifacts, their manifest and the build inputs are hashed (vendor/highs/highs-build-manifest.json,
+# src/solver/native/manifestData.ts). Never convert their line endings: a Windows checkout with core.autocrlf would
+# otherwise change the SHA-256 of highs.js, of the manifest and of the hashed build scripts.
+public/highs.js -text
+public/highs.wasm -text
+public/highs-build-manifest.json -text
+vendor/highs/** -text

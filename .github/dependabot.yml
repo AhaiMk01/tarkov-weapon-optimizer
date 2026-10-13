@@ -1,0 +1,9 @@
+version: 2
+updates:
+  # The workflow actions drifted three majors behind before a runner
+  # deprecation notice surfaced it. This turns each bump into a small PR, which
+  # deploy.yml's pull-request build then exercises before it merges.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly

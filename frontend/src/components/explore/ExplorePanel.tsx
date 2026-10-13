@@ -3,7 +3,8 @@ import { Card, InputNumber, Select, Segmented, Slider, Tooltip, Typography } fro
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
-import type { Gun, ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
+import { AdvancedOptions } from '../common/AdvancedOptions'
+import type { Gun, ModInfo, ModCompatibility, ModCategoryOption, PrecisionRequest } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
 
 /**
@@ -37,6 +38,10 @@ interface ExplorePanelProps {
   onUseExploreBudgetChange: (v: boolean) => void
   exploreBudgetValue: number
   onExploreBudgetValueChange: (v: number) => void
+  solverPrecision: PrecisionRequest
+  onSolverPrecisionChange: (v: PrecisionRequest) => void
+  allowRepeatedParts: boolean
+  onAllowRepeatedPartsChange: (v: boolean) => void
   availableMods: ModInfo[]
   modCompat?: ModCompatibility
   loadingMods: boolean
@@ -162,6 +167,12 @@ export function ExplorePanel(props: ExplorePanelProps) {
         onPlayerLevelChange={props.onPlayerLevelChange}
         traderLevels={props.traderLevels}
         onTraderLevelsChange={props.onTraderLevelsChange}
+      />
+      <AdvancedOptions
+        solverPrecision={props.solverPrecision}
+        onSolverPrecisionChange={props.onSolverPrecisionChange}
+        allowRepeatedParts={props.allowRepeatedParts}
+        onAllowRepeatedPartsChange={props.onAllowRepeatedPartsChange}
       />
     </div>
   )

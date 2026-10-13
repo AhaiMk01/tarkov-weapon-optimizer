@@ -1,0 +1,199 @@
+# Stage 2 plan: one private correctness cutover
+
+Refs #40. Normative source: ADR 0013 §4–§6 (canonical comment 5982036627), ADR 0010, ADR 0012, and the owner
+decisions in `frontend/reference/INTERPRETATIONS.md`. Branch `impl/stage2-correctness-cutover` (off the Stage 1
+tip). **Private:** nothing merges to master or deploys while any contract is incomplete. Stage 3 proves the
+result; Stage 4 reductions are out of scope here.
+
+## Test seam
+
+The Stage 1 reference is the truth. A differential harness (`frontend/reference/harness/`) maps every ledger
+case into production inputs, runs production end to end and compares it with the oracle:
+
+- the admitted public outcome (status, certificate, qualifications, reason);
+- the returned build, accepted by the reference validator;
+- the objective equal to the exact maximum within the case tolerance, with the projection among the maximizers;
+- or emptiness where the ledger expects it.
+
+A **ratchet** baseline records which cases pass. A case that passes must keep passing, and a newly passing case
+updates the baseline in the same commit. Stage 2 is done when every ledger case passes and nothing in the
+inventory below is left.
+
+## Phases
+
+Each phase is one or more Sonnet subagents with disjoint files, verified (typecheck, single tests, reference
+suite, harness ratchet) and committed by the orchestrator.
+
+| Phase | Scope (ADR 0013) | Depends on |
+| :--- | :--- | :--- |
+| 2.1 Harness | Ledger-to-production differential harness and ratchet baseline | Stage 1 |
+| 2.2 Quantities | §4A count-bearing extraction: `extractAllPresets`, GraphQL `count`, adapter count rule (no `?? 1`), `{itemId,count}` presets through types, LP preset supply, reconstruction, structural weight, manifest and shopping list; flip the two Stage 1 todos | 2.1 |
+| 2.3 Native surface | §4B pinned reproducible HiGHS WASM and glue build (emsdk in WSL), structured full-precision primals, dual bound, gap and nodes extracted before destroy, parser/readback verification, filtering detection, `mip_max_improving_sols`, no stock fallback | toolchain |
+| 2.4 Physical model | §4A occurrence/path identity, template-slot collision assertion, immutable domain masks; emit rules (one accessible base or contradiction, required occupancy, template/self/slot conflicts, supply caps, integer deficit surrogate with decoded d_i); delete FiR, 100M, price stand-ins and buy aliases; chain category matching; camora ammo excluded | 2.2 |
+| 2.5 Numerics | §4C: K = 100/2.9089, no Big-M literal, no `toFixed(6)`, signed accuracy, zero-intrinsic and constant MOA rows, outward secants, recoil caps with nonpositive denominators, finite auxiliary ranges, global UB including tolerance-fathomed bounds | 2.4, 2.3 |
+| 2.6 Solve and status | §5/§6 transport shapes, statuses, certificates, reasons and precedence; decoder; production validator matching every reference accept/reject; payoff-table reporting | 2.3–2.5 |
+| 2.6b Fast TED | Owner decision 2b: TrueErgo/Prevent Overswing on the Fast count model (weight search over its exact aggregate weight), approximate qualification, no silent Precise upgrade | 2.6 |
+| 2.10 Certified count model | Decision 2e: Precise on the count model with the proof layer, MOA larger-COI rows, second opinion (5a), integrality tolerance (5b); decision 2d as amended: cyclic part data unsupported (an internal blueprint error, no handling code), occurrence model and cycle code out of production (kept as a test cross-check); Auto rule revisited from the measurement | 2.6b, before 2.9 |
+| 2.7 Operations | §4D deadlines and macrotask yields, out-of-band cancel, `owned_items` validation and forwarding, floor discovery then bisection, Explore classification, metadata ops, cache invalidation, `preparePhysicalWeapon` / `prepareSubproblemDomain` / `specializeLP` | 2.6 |
+| 2.8 Consumers | §4E client, App and UI components, locales, EFTForge v1 export (supported-only), MethodologyModal | 2.6–2.7 |
+| 2.9 Tests and benchmarks | §4E migrate or delete every legacy test and benchmark reader, type-check them through a checked config, pinned native loader everywhere. **Done (2026-10-12):** the 25 root `test_*.ts` scripts, `bench_*.ts`, `proto_tchebycheff.ts` and the pre-cutover benchmark suite are gone; what the new pipeline still needs moved to `tests/` (Gunsmith on the pinned capture, TED display, request keys and trader canonicalization, preset quantities, translations). `lpBuilder.ts`, `validateBuild.ts`, `structuralBounds.ts` (with `bounds_mode`), `getAvailablePrice`, the `legacySolve` shim and the npm `highs` and `puppeteer-core` packages are retired; `tsconfig.benchmarks.json` checks `benchmarks/phase210m2/`; lint is clean | all |
+
+## Owner decisions carried into Stage 2
+
+- Category filters match the whole category chain (INTERPRETATIONS 5).
+- Loaded (camora) ammunition is outside the physical domain (15).
+- Tchebycheff: the result reports the payoff table it used; comparisons are made under that table (9, 17).
+- Single correctness cutover; floor discovery then bisection; termination means search completion; floor
+  queries use a zero objective with `mip_max_improving_sols=1`; unsupported external export disabled.
+- Native build host: `zpahai@10.147.20.119`, only `~/tarkov-highs-build`, no sudo; never the lab hosts.
+- **Results are plain by default, details on demand (owner, 2026-10-05, Phase 2.8b).** A regular player sees the build and,
+  only when something is off, one plain sentence; "best" only for a proved optimum. Authority wording, model tags,
+  bounds, gap, tolerance, MOA-model caveats and Explore coverage live in a collapsed Details section.
+
+### Performance policy (owner, 2026-10-04)
+
+Measured on the pinned snapshot (60 s limit): the exact model with presolve off proves every gun up to 13,122
+occurrences in at most about 14 s (as fast as the legacy model at the default settings up to about the 90th
+percentile); the AK family and M4A1 do not finish. Fast (template model) solves every gun in about 1 s or less but
+is approximate. Decisions:
+
+1. **Auto chooses by size.** Precise up to `AUTO_PRECISE_MAX_OCCURRENCES` (15,000), Fast above, clearly
+   qualified as approximate (implemented in 2.4b-3b). **Superseded (owner, 2026-10-12, after Phase 2.10):** Auto runs
+   Precise for every plain request; for a TrueErgo or Prevent Overswing request it runs Precise up to
+   `AUTO_PRECISE_MAX_TED_EDGES` (3,000) candidate slot edges, read from the compatibility map, and Fast above. On the pinned
+   capture no gun lies between 2,513 and 3,476 edges; the guns above (AKMS, the AK and M4/AR-15 families, NL545 DI) took 12
+   to 53 s in Precise with TrueErgo against the 60 s default.
+2. **No progressive "Fast first, then exact" result.** Rejected by the owner: a Precise request returns only its
+   own Precise result (optimal, feasible with honest bounds at the deadline, or incomplete). No early Fast witness
+   is streamed or shown for it.
+2a. **Auto stays size-based after the Fast rebuild (owner, 2026-10-05).** Even though the 2.4c Fast model matched
+   the certified exact optimum on all 384 pinned-gun builds (median 30 ms), Fast remains `approximate` without a
+   certificate. **First Stage 4 candidate:** prove that the Fast count/edge model is an exact reformulation on
+   acyclic template graphs (all 172 pinned guns are acyclic) with a lifting/projection proof plus Gates A–C and
+   the comparative gates; ADR 0011's cyclic counterexamples bound its scope. If adopted, acyclic weapons get
+   certified answers at Fast speed. Research complete (2026-10-05, `docs/research/acyclic-fast-exactness.md`):
+   conditionally exact on acyclic active graphs; the adoption steps are listed there.
+2b. **Fast supports TrueErgo and Prevent Overswing (owner, 2026-10-05).** A Fast request (or Auto resolving to Fast)
+   with TED runs the weight search on the Fast count model and returns a Fast, approximate answer; it is never silently
+   upgraded to Precise (Phase 2.6b). Precise keeps its own certified TED search.
+2c. **Fast uses one copy per part by default (owner, 2026-10-05).** A request option `allowRepeatedParts` (default false)
+   lets Fast install several copies of one template; Precise always allows repeats. Measured on the pinned snapshot: no
+   balanced-weight optimum uses a repeated part; 10% of pure-recoil and 5% of pure-ergo optima do. The ledger harness and
+   the research gates run Fast with repeats allowed, so they keep measuring the full count model. The toggle lives in a
+   new power-user ("Advanced") menu that will host such options (owner, 2026-10-05).
+2d. **Part graphs are assumed acyclic (owner, 2026-10-06).** No pinned gun has a cycle (172 of 172: the no-ancestor-repetition
+   rule prunes nothing, `blueprint.stats.prunedAncestorEdges === 0`), and the owner believes the game does not allow one. The
+   cycle handling stays as is for now (Precise's ancestor rule keeps the occurrence tree finite; Fast adds its connectivity flow
+   only on a cyclic graph; cyclic test worlds stay). In Stage 4, when certified Fast lands, acyclicity becomes a checked
+   precondition: a cyclic gun is refused as unsupported data with a clear error, and the cycle code is removed with it.
+   **Amended (owner, 2026-10-12): acyclicity is a precondition now, not in Stage 4** ("we will not have cyclic guns").
+   **Amended again (owner, 2026-10-12): cyclic part data is not supported, and no code handles it** ("I said there is not
+   cyclic gun", "we don't need any code related to cyclic handling").
+   - No refusal, no public reason, no locale text, no per-gun check. The one guard left is internal: the blueprint
+     builder, whose unrolling only terminates because a template never recurs on its own root path, throws
+     `PhysicalModelError('CYCLIC_PART_GRAPH')` the moment it meets a cycle reachable from the receiver, so bad data fails
+     with the generic error instead of hanging the tab. A loop the receiver cannot reach is never expanded.
+   - Precise runs only on the count model. The occurrence model leaves production and stays in the tests as the
+     independent cross-check. The per-domain Lemma 1 check (candidate sets agree) stays an internal assertion: a
+     failure is a solver error, never a silent fallback.
+   - Removed: Fast's connectivity flow and cyclic decode search (`placeBySearch`), the occurrence fallback, the cyclic
+     branches of eligibility and telemetry, the `prunedAncestorEdges` statistic, the model builders' cycle checks, the
+     public reason `Unsupported data: cyclic part graph` and its locale keys, and the cyclic test worlds and refusal tests.
+   - Ledger: the Stage 1 oracle is unchanged and still solves the 5 cyclic cases (F03-self-loop,
+     F03-ancestor-loop-with-sibling-repetition, F03-memoization-context-ancestor, F03-memoization-context-required-slot,
+     F10-cycle-behind-deactivated-owner). The harness lists them as out of scope (`OUT_OF_SCOPE_CASES`, not run, every
+     dimension `n/a`, feature `cyclic_part_graph`), never by editing a ledger expectation. F10-no-disconnected-assembly
+     (loops not reachable from the receiver) keeps its optimum. Seeded harness worlds that draw a cycle are skipped as
+     out of scope.
+   - The cyclic gates in `docs/research/acyclic-fast-exactness.md` section 8 stay as history.
+   - ADR 0003 (rootedness on cyclic graphs) and ADR 0013 section 3 items 3 and 10 need an amendment note
+     (`docs/adr/amendments/2026-10-12-acyclic-precondition.md`); posting it to #40 needs the owner's approval.
+   - Consequences: Auto's size rule was re-decided from Phase 2.10's measurement (performance policy item 1); Stage 4
+     candidate 2a (certified Fast) shrinks to what Fast still lacks: the proof layer, the second opinion and the MOA rows.
+   **Phase 2.10 result (2026-10-12, 172 pinned guns, 60 s):** Precise on the count model (relaxed-first slot edges, second
+   opinion) certifies every gun in both profiles: plain 153 optimal + 19 infeasible in 111 s total (max 5.7 s), TrueErgo
+   153 + 19 in 1,050 s (max 49 s); before, the occurrence model left 17 plain and 43 TrueErgo guns uncertified (1,608 s and
+   3,453 s). Same optimum on every gun certified by both. The second opinion costs about half the solve time; one
+   disagreement in 883 second solves (AK-104 TrueErgo), settled by the third seed. Data and scripts:
+   `frontend/benchmarks/phase210m2/` (scripts and summaries; raw results on the evidence disk as
+   `phase210m2-results-20261012-c73b9e32c6fc.tar.gz`). Auto's new rule: performance policy item 1 (owner, 2026-10-12).
+2e. **Precise is rebuilt on the count model now, before 2.9 (owner, 2026-10-06; amends ADR 0013's order, Phase 2.10).**
+   On an acyclic part graph (decision 2d) Precise drops its path-qualified occurrence variables: slot capacity, parent
+   activation and the domain filters are stated per template exactly as in Fast (exact there: research report, sections 4
+   and 5), and every row goes through the proof layer, so Precise keeps its certificates. Adds the MOA larger-COI rows,
+   and a second opinion before any certified infeasibility. (Amended 2d: cyclic part data is not supported; the blueprint
+   throws an internal error on it.)
+   The occurrence model stays in the tests as an independent cross-check. Stage 3 proves the rebuilt Precise.
+3. **Stage 4 candidate, not now:** use the validated Fast build as an initial solution for the exact MIP
+   (requires exporting `Highs_setSolution` in a pinned rebuild; ADR 0001 lists hot start as deferred). Adopted
+   only through the Stage 4 proof and comparative gates.
+4. **Native arithmetic noise is a stated assumption (owner, 2026-10-05).** The pinned build exports no node
+   duals, so HiGHS's own floating-point error cannot be bounded. Observed: on 7 ledger cases the qualified dual
+   bound sat 1e-15 to 5e-12 below the exact score of a build verified in the same node. Stage 2 records this in
+   `NATIVE_FRAME.assumptions`, measures it in `telemetry.boundShortfall`, and withholds any bound whose shortfall
+   exceeds `max(tolerance, 1e-9·max(1,|bound|))`; no allowance is added, so cases certify at 1e-9. Stage 4
+   revisits a proved allowance with a rebuild that exports the needed duals.
+5. **No optimality or infeasibility claim from a presolved solve, on any model.** HiGHS 1.15.1 presolve produced
+   both a false Infeasible (exact model) and a false Optimal (Fast model); fixtures in
+   `tests/physical/solverDefects/`. Precise and Fast both solve with presolve off.
+5a. **A second opinion on every certificate (owner, 2026-10-06).** HiGHS 1.15.1 with presolve off also returned a wrong
+   Optimal with a wrong dual bound (about 1 in 10,000 solves, both models; fixture
+   `tests/physical/solverDefects/count_presolve_off_wrong_optimal.lp`). Every solve that backs a certificate is repeated with
+   another random seed: the upper bound is the larger of the two qualified bounds, the incumbent the best verified build,
+   an infeasibility needs both verdicts. On a disagreement a third seed breaks the tie (owner): the bound is the largest
+   qualified bound of all solves, a certificate needs two agreeing solves, and a timeout withholds the certificate.
+   **Two follow-up decisions (owner, 2026-10-12, Stage 3 gates findings):**
+   - **SolveError: retry seeds, never throw.** HiGHS 1.15.1 returns `SolveError` under the production options on some small, valid count models
+     for some seeds (F07-stock-empty and F11-active-recoil-axis-weighted under the gates' weights, adversarial worlds 41000215 and 40000206). A
+     `SolveError`, `PresolveError` or `PostsolveError` on a text HiGHS read without error is an inconclusive solve: it is no opinion, the node moves on
+     to the next seed of `PRECISE_RANDOM_SEEDS` (now six: 0, 11, 29, 47, 83, 131; at most three qualified opinions per verdict as above), and Fast
+     retries the same way. A certificate still needs two agreeing qualified verdicts; when the seeds run out the node is unresolved with `Required proof
+     prerequisite unavailable` and the best verified build is kept. A load or model error, an empty model, a status the build does not name and a native
+     call that throws still raise their typed errors.
+   - **Integer Infeasible needs the relaxation to agree.** The integer count text of fuzz world 30001860 (TrueErgo, node [2.5, 2.5] kg) is reported
+     Infeasible under every seed although a validated build exists; its relaxed-edge text finds it. A node is treated as infeasible (pruned by the
+     spatial search, counted in a certified infeasibility, used as a MOA floor infeasibility proof) only when its relaxed-edge text with the same cuts is
+     also settled Infeasible (two agreeing qualified verdicts); an infeasible relaxation implies an infeasible integer model, which is sound. An
+     integral relaxed point that validates is used as the node's build; a fractional or rejected relaxed point, or no settled relaxed verdict, leaves the
+     node unresolved (no certificate, best verified build kept). Production solves relaxed-first, so an integer-text Infeasible that follows a feasible
+     relaxation of the same text is never certified. The guard is sound but not complete: a relaxation that shares the false verdict is not detected.
+   **Three more follow-up decisions (owner, 2026-10-12, Stage 3 proof review and floor measurement):**
+   - **Skip the second solve for splits (F1).** A node verdict that leads ONLY to a split of the weight range (a qualified Optimal of an inexact node
+     with no verified build and a split point, whose bound would not fathom the node) is not confirmed: the node is split (search verdict `split`),
+     its bound is not used, nothing is pruned and nothing is certified from it. Everything that prunes, certifies optimality, certifies infeasibility
+     or contributes a published bound keeps the full rule above. Proof: `docs/proofs/count-model.md` Proposition F1. Effect: the Prevent Overswing floor
+     cases R1/N1 of `docs/stage3/floor-measurement.md` (finding F1) no longer stop after two trials.
+   - **Only checked bounds (G1).** A published upper bound and gap (Optimize, Gunsmith, Explore rows, every status) come only from settled verdicts (two
+     agreeing qualified solves). A node that ends unresolved or failed carries no bound of its own (a limit-stopped first opinion, a timed-out or
+     unqualified second opinion, a disagreement, a relaxed try carried through the fallback, a rejected solve's dual bound, the floor's first-witness
+     short-circuit); it keeps its settled parent's bound, unknown at a root, and an unknown live bound makes the published upper bound and gap `null`.
+     The Details view shows "unknown".
+   - **A found point blocks impossible (G2).** Two Infeasible verdicts never settle a node against a qualified opinion that returned a primal point (an
+     Optimal, or a qualified limit stop with a point) or a verified build, on the integer and the relaxed-edge text alike; the node stays unresolved.
+5b. **Integrality tolerance 1e-7, primal and dual 1e-9 (owner, 2026-10-06).** On that fixture only the integrality
+   tolerance matters (likely: HiGHS rounds a derived integer bound such as 1.9999999982 down under 1e-9 and cuts off the
+   optimum). A looser integrality tolerance can only enlarge a bound and every candidate is validated exactly, so the
+   certificates keep their footing; the dual tolerance that a bound depends on stays 1e-9. Always 1e-7, whatever the request
+   tolerance (owner): it removed every wrong-optimum disagreement in the Phase 2.10 campaigns (19,000 worlds, both models),
+   and a seed-only second opinion missed one case. Cost accepted by the owner: about 1% of solves report a bound up to 1e-7
+   high, so a ledger case at the 1e-9 runtime tolerance can drop from certified to feasible; those cases are recorded in the
+   baseline as owner-approved, never by editing a ledger expectation.
+   **Correction (Phase 2.10 measurement, owner, 2026-10-12): the shift is two-sided.** A point within 1e-7 of integral is
+   accepted as integral, so a dual bound can also land BELOW the exact optimum, by up to the column's objective sensitivity
+   times 1e-7 (observed once: F04-near-cap-min-ergonomics-gap-2e-20, 1.1e-5 low, n = 1 + 4.4e-8 read as 1). The bound
+   shortfall guard (decision 4) withholds such a bound when a verified build of the same node beats it; a lowered bound that no
+   verified build exposes is not detected. The owner accepts this as a stated assumption, like decision 4's arithmetic noise:
+   it is recorded in `NATIVE_FRAME.assumptions`, no extra guard is added, and Stage 4 revisits it together with decision 4.
+   Seven ledger cases drop from certified to feasible at the 1e-9 runtime tolerance (six with a proved gap about 1e-7, plus
+   that one withheld bound); each still returns the exact optimum.
+6. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
+   the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
+
+## Known baseline failures (before Stage 2): resolved in Phase 2.9
+
+- `test_gunsmith_all`: replaced by `tests/solver/gunsmith.pinned.test.ts`. On the pinned capture 27 of 29 tasks are certified optima; Part 22
+  (M4A1) is certified infeasible without barters (its required REAP-IR is barter-only) and certified optimal with them; Part 25 (PKP) is
+  certified infeasible because no offer, barter or preset makes the PKP accessible (none of its three presets has an offer).
+- `test_spatial_candidates`: retired with the experiments it exercised (adaptive envelope, node-option tuning on the pre-cutover LP).
+- `test_worker_deadline`: retired with the benchmark manifest; deadlines are covered by `tests/runtime/workerRuntime.test.ts` and
+  `tests/runtime/workerChannel.test.ts`.

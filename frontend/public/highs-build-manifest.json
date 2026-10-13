@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "inputs": {
+    "emsdk": {
+      "repo": "https://github.com/emscripten-core/emsdk.git",
+      "tag": "6.0.11",
+      "commit": "dd8e25632640cfc1fb570c7fa4cc374e8a5e5a72"
+    },
+    "emscripten": {
+      "version": "6.0.11",
+      "emscriptenReleasesHash": "f6264d4a4dd9ba24a9f0a5702835a44d1463de13"
+    },
+    "highs": {
+      "repo": "https://github.com/ERGO-Code/HiGHS.git",
+      "tag": "v1.15.1",
+      "commit": "04024d701f79feb8e2f18bc3df0dffc04ef05088",
+      "version": "1.15.1",
+      "hConfigGithash": "04024d701f79"
+    },
+    "sourceDateEpoch": 1782974557,
+    "glueSources": {
+      "build.sh": "37860251696e92f6f0da6af73261edee72c5e9e9f7975a6e67f8d72df96ecbbd",
+      "smoke.mjs": "929c97d572156edc250ca9fa6e6fcf139cd1736e3c43ab69a0e251d881203852",
+      "make_manifest.py": "7e98be015f8f22306eaa69fc185264eea3cd667ad8f0f44b4b04008095fc9f28"
+    }
+  },
+  "build": {
+    "cmakeArgs": [
+      "-DCMAKE_BUILD_TYPE=Release",
+      "-DBUILD_SHARED_LIBS=OFF",
+      "-DBUILD_CXX_EXE=OFF",
+      "-DBUILD_TESTING=OFF",
+      "-DBUILD_EXAMPLES=OFF",
+      "-DBUILD_SHARED_EXTRAS_LIB=OFF",
+      "-DFAST_BUILD=ON",
+      "-DZLIB=OFF",
+      "-DHIPO=OFF",
+      "-DHIGHS_NO_DEFAULT_THREADS=ON"
+    ],
+    "compileFlags": [
+      "-O3",
+      "-DNDEBUG",
+      "-fwasm-exceptions"
+    ],
+    "compileCommandSample": "<build-root>/emsdk/upstream/emscripten/em++ -DNDEBUG -I<build-root>/src/HiGHS/extern -I<build-root>/src/HiGHS/highs -I<build-root>/src/HiGHS/highs/interfaces -I<build-root>/src/HiGHS/highs/io -I<build-root>/src/HiGHS/highs/io/filereader -I<build-root>/src/HiGHS/highs/ipm -I<build-root>/src/HiGHS/highs/ipm/ipx -I<build-root>/src/HiGHS/highs/ipm/basiclu -I<build-root>/src/HiGHS/highs/lp_data -I<build-root>/src/HiGHS/highs/mip -I<build-root>/src/HiGHS/highs/model -I<build-root>/src/HiGHS/highs/parallel -I<build-root>/src/HiGHS/highs/pdlp -I<build-root>/src/HiGHS/highs/pdlp/cupdlp -I<build-root>/src/HiGHS/highs/pdlp/hipdlp -I<build-root>/src/HiGHS/highs/presolve -I<build-root>/src/HiGHS/highs/qpsolver -I<build-root>/src/HiGHS/highs/simplex -I<build-root>/src/HiGHS/highs/test_kkt -I<build-root>/src/HiGHS/highs/util -I<build-root>/build/highs -I<build-root>/src/HiGHS/highs/hipo -I<build-root>/src/HiGHS/highs/hipo/auxiliary -I<build-root>/src/HiGHS/highs/hipo/factorhighs -I<build-root>/src/HiGHS/highs/hipo/ipm -I<build-root>/build/highs/extern -O3 -DNDEBUG -fwasm-exceptions -ffile-prefix-map=<build-root>=/tarkov-highs-build -std=c++11 -std=c++11 -fPIC -Wall -Wreturn-type -Wmissing-declarations -Wno-unused-variable -Wno-unused-const-variable -Wno-unused-but-set-variable -Wno-comment -Wno-unused-label -Wno-unused-lambda-capture -Wno-invalid-offsetof -MD -MT highs/CMakeFiles/highs.dir/lp_data/Highs.cpp.o -MF highs/CMakeFiles/highs.dir/lp_data/Highs.cpp.o.d -o highs/CMakeFiles/highs.dir/lp_data/Highs.cpp.o -c <build-root>/src/HiGHS/highs/lp_data/Highs.cpp",
+    "linkFlags": [
+      "-O3",
+      "-fwasm-exceptions",
+      "-sWASM_LEGACY_EXCEPTIONS=1",
+      "--no-entry",
+      "-sMODULARIZE=1",
+      "-sEXPORT_ES6=1",
+      "-sEXPORT_NAME=createHighsModule",
+      "-sENVIRONMENT=web,worker,node",
+      "-sALLOW_MEMORY_GROWTH=1",
+      "-sINITIAL_MEMORY=67108864",
+      "-sMAXIMUM_MEMORY=4294967296",
+      "-sSTACK_SIZE=8388608",
+      "-sFORCE_FILESYSTEM=1",
+      "-sASSERTIONS=0",
+      "-sEXIT_RUNTIME=0"
+    ],
+    "exportedFunctions": [
+      "_malloc",
+      "_free",
+      "_Highs_create",
+      "_Highs_destroy",
+      "_Highs_version",
+      "_Highs_versionMajor",
+      "_Highs_versionMinor",
+      "_Highs_versionPatch",
+      "_Highs_githash",
+      "_Highs_getSizeofHighsInt",
+      "_Highs_getInfinity",
+      "_Highs_readModel",
+      "_Highs_getNumCol",
+      "_Highs_getNumRow",
+      "_Highs_getNumNz",
+      "_Highs_getLp",
+      "_Highs_getColName",
+      "_Highs_getRowName",
+      "_Highs_setBoolOptionValue",
+      "_Highs_setIntOptionValue",
+      "_Highs_setDoubleOptionValue",
+      "_Highs_setStringOptionValue",
+      "_Highs_getOptionType",
+      "_Highs_getBoolOptionValue",
+      "_Highs_getIntOptionValue",
+      "_Highs_getDoubleOptionValue",
+      "_Highs_getStringOptionValue",
+      "_Highs_run",
+      "_Highs_getModelStatus",
+      "_Highs_getObjectiveValue",
+      "_Highs_getSolution",
+      "_Highs_getIntInfoValue",
+      "_Highs_getDoubleInfoValue",
+      "_Highs_getInt64InfoValue",
+      "_Highs_getRunTime"
+    ],
+    "exportedRuntimeMethods": [
+      "FS",
+      "wasmMemory",
+      "UTF8ToString",
+      "stringToUTF8",
+      "lengthBytesUTF8"
+    ],
+    "wasmExportCount": 38
+  },
+  "toolchain": {
+    "emcc": "emcc (Emscripten gcc/clang-like replacement + linker emulating GNU ld) 6.0.11 (a0014542110d6078c3a1a7941fa1ddb3a2281f16)",
+    "clang": "clang version 24.0.0git (https:/github.com/llvm/llvm-project f718ebe873411a562ef6e5c27da36d75b7aaec98)",
+    "emsdkNode": "v24.19.0",
+    "cmake": "cmake version 4.2.3",
+    "ninja": "1.13.2",
+    "python": "Python 3.14.4",
+    "emsdkDownloads": {
+      "f6264d4a4dd9ba24a9f0a5702835a44d1463de13-wasm-binaries.tar.xz": {
+        "sha256": "cab251b54999e8fb4260080f0e719796336570396e118865013a20b8d93dbb83",
+        "bytes": 304047688
+      },
+      "node-v24.19.0-linux-x64.tar.xz": {
+        "sha256": "14b342e71204f811bde6153be8e04b62aef63c236fef92b55f9c83154b409647",
+        "bytes": 31633904
+      }
+    }
+  },
+  "artifacts": {
+    "highs.js": {
+      "sha256": "52e09bb470bd7eb388df891d1910477b32c24ba5820aceb9df5bade5ef7c6a7e",
+      "bytes": 65744
+    },
+    "highs.wasm": {
+      "sha256": "e035d2aa6b6426511c4231604a79fc87bf0eeb1675eddf12580e639daecaa2ed",
+      "bytes": 3595678
+    }
+  },
+  "runtime": {
+    "highsVersion": "1.15.1",
+    "githash": "04024d701f79",
+    "sizeofHighsInt": 4,
+    "smoke": {
+      "readStatus": 0,
+      "runStatus": 0,
+      "modelStatus": 7,
+      "numCol": 2,
+      "objective": 3.561728394506,
+      "cols": [
+        3.123456789012,
+        0.4382716054939999
+      ],
+      "malformedReadStatus": -1
+    }
+  },
+  "host": {
+    "uname": "Linux zpserver-jy 7.0.0-34-generic #34-Ubuntu SMP PREEMPT_DYNAMIC Wed Sep  2 14:29:37 UTC 2026 x86_64",
+    "distro": "Ubuntu 26.04.1 LTS",
+    "cpuCount": 16
+  },
+  "builtAt": "2026-10-05T00:27:42Z"
+}

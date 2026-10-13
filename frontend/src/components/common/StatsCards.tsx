@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Statistic, theme } from 'antd'
+import { Card, Statistic, Tooltip, Typography, theme } from 'antd'
+import { InfoCircleOutlined } from '@ant-design/icons'
 
 const { useToken } = theme
 
@@ -10,11 +11,12 @@ interface StatsCardsProps {
   weight: number
   price: number
   moa?: number
-  evoErgo?: number
-  eed?: number
+  trueErgoDelta?: number
+  /** Aim-in kick strength, 0-100. Shown only while the build overswings. */
+  overswingPct?: number
 }
 
-export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, evoErgo, eed }: StatsCardsProps) {
+export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weight, price, moa, trueErgoDelta, overswingPct }: StatsCardsProps) {
   const { t } = useTranslation()
   const { token } = useToken()
   return (
@@ -22,22 +24,19 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('sidebar.ergonomics')} value={Math.min(100, Math.max(0, ergonomics)).toFixed(1)} />
       </Card>
-      {evoErgo != null && (
-        <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-          <Statistic title={t('ui.evo_ergo_label')} value={evoErgo.toFixed(1)} />
-        </Card>
-      )}
-      {eed != null && (
+      {trueErgoDelta != null && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
           <Statistic
-            // EED = -15 * (weight - threshold), so >= 0 means the build stays
-            // under the overswing threshold. A fixed "(Overswing)" label read as
-            // if every build overswung, including the healthy ones. Threshold
-            // matches the value colour below so the two can never disagree.
-            title={eed >= 0 ? t('ui.eed_label_ok') : t('ui.eed_label_over')}
-            value={eed > 0 ? `+${eed.toFixed(1)}` : eed.toFixed(1)}
-            valueStyle={{ color: eed >= 0 ? token.colorSuccess : token.colorError }}
+            // TED is nonnegative exactly when the model predicts no overswing.
+            title={trueErgoDelta >= 0 ? t('ui.ted_label_ok') : t('ui.ted_label_over')}
+            value={trueErgoDelta > 0 ? `+${trueErgoDelta.toFixed(1)}` : trueErgoDelta.toFixed(1)}
+            styles={{ content: { color: trueErgoDelta >= 0 ? token.colorSuccess : token.colorError } }}
           />
+          {trueErgoDelta < 0 && overswingPct != null && (
+            <Typography.Text type="danger" style={{ fontSize: 12 }}>
+              {t('ui.overswing_severity', { pct: Math.round(overswingPct) })}
+            </Typography.Text>
+          )}
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
@@ -48,14 +47,25 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
       </Card>
       {moa != null && moa > 0 && (
         <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
-          <Statistic title={t('ui.moa_label')} value={moa.toFixed(3)} />
+          {/* The displayed MOA is the provisional model's value (ADR 0006), not a measured in-game figure: the label is plain, the caveat is in the info tooltip. */}
+          <Statistic
+            title={
+              <span>
+                {t('ui.moa_label')}{' '}
+                <Tooltip title={t('ui.moa_provisional_tooltip')}>
+                  <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
+                </Tooltip>
+              </span>
+            }
+            value={moa.toFixed(3)}
+          />
         </Card>
       )}
       <Card size="small" style={{ flex: '1 1 100px', minWidth: 100 }}>
         <Statistic title={t('ui.weight_label')} value={weight.toFixed(2)} suffix={t('ui.weight_unit')} />
       </Card>
       <Card size="small" style={{ flex: '2 1 150px', minWidth: 150 }}>
-        <Statistic title={t('ui.total_cost')} value={price.toLocaleString()} prefix="₽" valueStyle={{ color: token.colorWarning }} />
+        <Statistic title={t('ui.total_cost')} value={price.toLocaleString()} prefix="₽" styles={{ content: { color: token.colorWarning } }} />
       </Card>
     </div>
   )

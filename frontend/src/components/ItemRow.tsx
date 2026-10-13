@@ -3,6 +3,8 @@ import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { ItemDetail } from '../api/client'
 import { priceCell } from './priceCell'
+import { TedTag } from './TedTag'
+import { isShownTedDelta } from '../solver/trueErgo'
 
 const { Text } = Typography
 const { useToken } = theme
@@ -39,7 +41,7 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
   return (
-    <Tooltip overlayStyle={{ maxWidth: 400 }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
+    <Tooltip styles={{ root: { maxWidth: 400 } }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
       {children}
     </Tooltip>
   )
@@ -118,7 +120,7 @@ export function ItemTooltip({ item, children }: { item: ItemDetail; children: Re
       {lines}
     </div>
   )
-  return <Tooltip title={content} overlayStyle={{ maxWidth: 240 }}>{children}</Tooltip>
+  return <Tooltip title={content} styles={{ root: { maxWidth: 240 } }}>{children}</Tooltip>
 }
 
 interface ItemRowProps {
@@ -201,7 +203,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       )}
     </div>
   ) : null
-  const hasTags = item.ergonomics !== 0 || item.recoil_modifier !== 0 || !!item.accuracy_modifier || !!item.sighting_range
+  const hasTags = item.ergonomics !== 0 || item.recoil_modifier !== 0 || !!item.accuracy_modifier || !!item.sighting_range || isShownTedDelta(item.ted_delta)
 
   if (compactMode) {
     if (isMobile) {
@@ -215,6 +217,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
                </ItemTooltip>
                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                  {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+                 <TedTag item={item} style={{ margin: 0, fontSize: 11 }} />
                  {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
                </div>
              </div>
@@ -234,6 +237,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
             <Text strong style={{ fontSize: 12, ...truncateStyle, display: 'inline', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
           </ItemTooltip>
           {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+          <TedTag item={item} style={{ margin: 0, fontSize: 11, flexShrink: 0 }} />
           {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
         </div>
         <div style={{ width: 80, textAlign: 'left', flexShrink: 0 }}>
@@ -270,15 +274,18 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         </div>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-            <Text strong style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
+              <Text strong style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+            </div>
             {!hidePrice && <Tag color="gold" style={{ margin: 0, flexShrink: 0, border: 'none', background: token.colorFillQuaternary, fontWeight: 600 }}>{priceCell(item)}</Tag>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-            {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
-            {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
-            {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
-            {!!item.sighting_range && <Tag color="purple" bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}
+            {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+            <TedTag item={item} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }} />
+            {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
+            {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
+            {!!item.sighting_range && <Tag color="purple" variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 4 }}>
@@ -306,11 +313,14 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         </div>
       </ItemTooltip>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+          <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+        </div>
         {(item.handbook_categories?.[0] || item.category) && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }} title={item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}>{item.handbook_categories?.length ? [...item.handbook_categories].reverse().join(' > ') : item.category}</Text>}
         {hasTags && (
           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, overflow: 'hidden' }}>
             {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
+            <TedTag item={item} style={tagStyle} />
             {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={tagStyle}>{recoilLabel}: {item.recoil_modifier > 0 ? '+' : ''}{(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
             {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} style={tagStyle}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
             {!!item.sighting_range && <Tag color="purple" style={tagStyle}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}

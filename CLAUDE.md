@@ -30,15 +30,14 @@ npm run preview --prefix frontend # Preview production build
 
 ### Verification Tests
 ```bash
-cd frontend && npx tsx test_json_api_adapter.ts             # JSON API shape parity + buildItemLookup + end-to-end solves (en & zh)
-cd frontend && npx tsx test_trader_access.ts                # per-trader loyalty gating + TRADER_DISABLED (0), incl. Ref barters
-cd frontend && npx tsx test_naked_base_availability.ts       # naked receiver honours trader loyalty levels / TRADER_DISABLED
-cd frontend && npx tsx test_multi_weapon_verification.ts   # buildLP + HiGHS on real weapons (writes temporary .lp files)
-cd frontend && npx tsx test_recoil_maximizer.ts             # recoil-weighted solve via same `solve()` path as the app
-cd frontend && npx tsx test_evoergo.ts                      # EvoErgo k-sweep: solveEvoErgo maximizes true EED (quadratic), EE-off maximizes raw ergo
-cd frontend && npx tsx test_tchebycheff.ts                   # Augmented Tchebycheff scalarization: ideal-point, non-convex Pareto builds, budget separation
-cd frontend && npx tsx test_prevent_overswing.ts              # Prevent overswing hard constraint: EED >= 0 cutting planes on heavy/DMR platforms
+cd frontend && npm run test:unit           # tests/**/*.test.ts (node:test): physical model, native build, runtime, UI helpers, pinned-capture tests
+cd frontend && npm run test:reference      # independent reference: exact-rational oracle, ledger, differential harness + ratchet (frontend/reference/README.md)
+cd frontend && for c in app node reference tests benchmarks; do npx tsc --noEmit -p tsconfig.$c.json; done   # root tsconfig.json has files: []
 ```
+
+Pinned-capture tests skip unless `frontend/benchmarks/snapshot.json` (SHA-256 `219443b4...`, ADR 0013 section 1) is restored from its hashed artifact; it is never regenerated. `reference/harness/baseline.json` is a ratchet: a passing case must keep passing. Every test and benchmark solves through the pinned native loader (`src/solver/native/`); the npm `highs` package is not a dependency.
+
+`frontend/reference/` is the independent oracle used to verify the solver (ADR 0010/0013). It must never import production code (enforced by `reference/independence.test.ts`; only `*.differential.test.ts` may, as the system under test). Its pinned raw JSON API documents under `reference/source/raw/` are gitignored; only `raw/manifest.json` is committed.
 
 ### PyInstaller Executable
 ```bash
@@ -64,14 +63,19 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts �
 **Solver Pipeline (`frontend/src/solver/`):**
 1. `dataService.ts` — Fetches guns/mods from tarkov.dev (JSON API via `jsonApiAdapter.ts`, GraphQL as fallback), builds `ItemLookup`, caches in IndexedDB
 2. `compatibilityMap.ts` — BFS traversal from weapon to discover all reachable mods and slot relationships
-3. `lpBuilder.ts` — Builds a **CPLEX LP format** string (`buildLP`): binary-style decisions as a continuous LP with constraints matching the CP-SAT model (scaled ergo/recoil/price coefficients; auxiliary objective variable for long lines HiGHS parses poorly)
-4. `solver.ts` — Loads **HiGHS** (`highs` npm package / WASM), runs `highs.solve(lpString)`, reads column primals for `x_*`, `base_*`, `buy_*`, assembles `OptimizeResponse` and final stats
-5. `solver.worker.ts` — Web Worker wrapper; handles `loadData`, `optimize`, `explore`, `getInfo`, `getWeaponMods`, `getGunsmithTasks`, `getStatus` messages
-6. `paretoExplorer.ts` — Sweeps one objective axis (price / recoil / ergo ignored) to approximate Pareto frontier points; each point is a full `solve()` call
+3. `physical/` — the model (ADR 0013): `preparePhysicalWeapon` builds the per-gun blueprint (templates, slots, occurrences), `prepareSubproblemDomain` applies the request (acquisition, filters, stash) as immutable masks, then one of two count models over candidate slot edges is written as LP text and solved on the pinned build:
+   - **Precise** (`solvePrecise.ts`, `specializeCount.ts`): every row through the proof layer, presolve off, a second solve with another seed before any certificate (a third seed on disagreement); answers are certified (`certified_optimal` / `certified_infeasible`).
+   - **Fast** (`solveFast.ts`, `specializeFast.ts`): the same domain in plain doubles, one copy per part unless `allowRepeatedParts`; always `approximate`.
+   - TrueErgo / Prevent Overswing run a spatial search over total weight (secant bounds of the weight penalty) on whichever model runs; neither upgrades Fast to Precise.
+   - Nothing is published unless the exact validator (`physical/validate.ts`) accepts the build; statuses and reasons come from `physical/outcome.ts`.
+   - Acyclic part graphs are assumed (no gun has a cycle); a cycle reachable from the receiver makes `preparePhysicalWeapon` throw an internal error (`CYCLIC_PART_GRAPH`).
+4. `precisionMode.ts` — Auto: Precise for every plain request; for TrueErgo / Prevent Overswing, Precise up to 3,000 candidate edges (`AUTO_PRECISE_MAX_TED_EDGES`), Fast above.
+5. `solver.ts` — `solve` / `computeIdealPoint`: runs Precise or Fast and assembles the `OptimizeResponse` (instances, placements, provenance, exact stats, the Tchebycheff payoff table). `trueErgo.ts` holds the shared TED formulas.
+6. `solver.worker.ts` → `workerRuntime.ts` — request guards (epoch deadline, out-of-band cancel), stash validation, caches; Explore (`paretoExplorer.ts` schedule + `exploreSweep.ts` classification) and the MOA floor (`moaFloor.ts`)
 
 **API Client (`api/client.ts`):** All `getInfo`, `optimize`, `explore`, etc. communicate via `postMessage` to the Web Worker — not HTTP. Signatures stay stable so UI code does not depend on transport.
 
-**HiGHS WASM assets:** `solver.ts` passes `locateFile` so `*.wasm` loads from the site origin (`/`). For very large LPs, a **custom WASM build** with higher initial memory may be used; see `frontend/vendor/highs/README.md` (upstream highs-js with increased `INITIAL_MEMORY` / stack).
+**HiGHS WASM assets:** a pinned, reproducible HiGHS 1.15.1 build (`frontend/vendor/highs/README.md`); `public/highs.js` and `highs.wasm` are served from the site origin (`setHighsBaseUrl`) and SHA-checked by `src/solver/native/loadHighs.ts` against the committed manifest. There is no stock fallback.
 
 **UI Stack:**
 - React 19 + TypeScript + Vite
@@ -98,11 +102,9 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts �
 
 ### Solver Model (Both Implementations)
 
-**Decision Variables:** Binary selections for items and base/preset (`x[item]`, `base[...]` in the LP; purchase tracking via `buy_*` columns where applicable).
+**Constraints:** Slot capacity, connectivity (child requires a selected parent along the slot graph), conflict exclusion, exactly one accessible naked gun or preset base (never a free receiver), availability (trader levels, flea market, player level, barters), preset and owned supply, and limits on price, ergonomics, vertical recoil, recoil sum, mag capacity, sighting range, weight, MOA.
 
-**Constraints:** Slot capacity, connectivity (child requires a selected parent along the slot graph), conflict exclusion, exactly one naked gun or preset base, availability (trader levels, flea market, player level), and limits on price, ergonomics, vertical recoil, recoil sum, mag capacity, sighting range, weight.
-
-**Objective:** Weighted combination of ergonomics, recoil modifier contribution, and price. Coefficients are **scaled** in `lpBuilder.ts` (`ERGO_SCALE`, `SCALE`) for numeric stability; see comments there for the exact linear form.
+**Objective:** Weighted combination (or augmented Tchebycheff) of ergonomics or TED, recoil modifier contribution, and price. The web model (`frontend/src/solver/physical/`) is the reference; the Python CP-SAT model is not kept in parity.
 
 ## Data Source
 
@@ -137,8 +139,10 @@ the upstream API returns or `queries.py` gets the same treatment.
 
 ## CI/CD
 
-- `.github/workflows/build.yml` — PyInstaller builds (Windows/Linux/macOS) on `v*` tags, creates GitHub Release
-- `.github/workflows/deploy.yml` — GitHub Pages deployment on push to `master` (the `frontend-only-ghpages` branch is abandoned; deploys moved to `master` in 09cdbd9)
+- `.github/workflows/deploy.yml` — GitHub Pages. The `build` job runs on every PR to `master` (the only PR check: `npm ci` + `npm run build`, which includes `tsc`); the `deploy` job runs only on push to `master`, or a manual dispatch on `master`. (The `frontend-only-ghpages` branch is abandoned; deploys moved to `master` in 09cdbd9.)
+- `.github/workflows/docker.yml` — **runs on every `v*` tag push**: builds the multi-arch frontend image and publishes it to `ghcr.io/<owner>/tarkov-optimizer-frontend` (semver + `sha-` tags). So step 8 of the release checklist publishes an image. A manual dispatch from a branch publishes `<branch>` and `sha-` tags only.
+- `.github/workflows/build.yml` — PyInstaller executables + GitHub Release. **Manual dispatch only**: its `v*` tag trigger is commented out while executable builds are paused, and its actions are still on the pre-Node-24 versions.
+- `.github/dependabot.yml` — monthly PRs for GitHub Actions versions.
 
 ## Internationalization
 
@@ -178,15 +182,29 @@ Only include web app (v2.0.0+) history in the changelog. Pre-web-app Python vers
 
 ## Pre-Commit Checklist
 
-- Run `npx tsc --noEmit` (or `npm run build --prefix frontend`) and fix all TypeScript errors before committing.
+- Run `npm run build --prefix frontend` (`tsc -b` over every tsconfig, including tests, reference and benchmarks) and fix all TypeScript errors before committing.
 - Sync i18n: ensure all locale files in `frontend/public/locales/` have the same keys as `zh.json`. Fill missing keys with English fallbacks.
 
 ## Common Pitfalls
 
-- **HiGHS WASM memory / failures**: Large models can exhaust default WASM memory; use the custom build documented under `frontend/vendor/highs/`. On solve exceptions, `solver.ts` sets a **corrupted** flag and re-instantiates HiGHS on the next call.
+- **HiGHS failures**: a native failure is a typed `SolverError`, never a result; `discardNativeHighs()` drops the shared instance so the next call re-instantiates. HiGHS presolve has produced false answers (`tests/physical/solverDefects/`), so physical solves run with presolve off.
 - **Recoil is a modifier, not absolute**: The model optimizes summed **recoil modifiers**; displayed vertical/horizontal recoil are `naked_recoil * (1 + totalRecoilMod)`. Hard caps on final vertical recoil must be converted when building constraints.
-- **Preset handling**: Preset-contained items avoid double-counting purchase price; base cost comes from the selected preset / naked base in the LP.
-- **LP vs CP-SAT parity**: Frontend LP is ported to align with `weapon_optimizer.py`; when changing constraints or objective, update both or re-run `test_multi_weapon_verification.ts` against known weapons.
+- **Preset handling**: Preset counts are explicit (`{itemId, count}`, no default of 1); preset-supplied and owned copies cost nothing extra, and provenance is per occurrence.
+- **Model changes**: run `npm run test:reference`; the differential harness compares production with the independent oracle on every ledger case.
 - **Hardcoded colors**: Use antd theme tokens (`token.colorPrimary`, etc.) for dark/light mode compatibility.
 - **Worker state**: The Web Worker caches data per `lang:gameMode` key — changing language/mode triggers a fresh data load.
 - **`backend/` directory is empty/legacy** — actual backend logic is in root-level Python files, not in `backend/app/`.
+
+## Agent skills
+
+### Issue tracker
+
+GitHub Issues on `AhaiMk01/tarkov-weapon-optimizer`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root. See `docs/agents/domain.md`.

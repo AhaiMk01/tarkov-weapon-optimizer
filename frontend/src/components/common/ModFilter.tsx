@@ -76,7 +76,7 @@ export function ModFilter({
         label: <span style={{ userSelect: 'none' }}>{t('sidebar.include_exclude')}</span>,
         extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([]); onExcludedCategoriesChange([]); onIncludedModIdsChange([]); onExcludedModIdsChange([]); onCategorySearchChange(''); onModSearchChange('') }} /></Tooltip>,
         children: (
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <Text type="secondary" style={hintStyle}>
               {t('sidebar.mod_filter_categories_hint')}
             </Text>

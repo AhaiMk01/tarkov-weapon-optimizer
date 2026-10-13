@@ -1,0 +1,10 @@
+snapshot.json
+# Phase 2.10 raw timings: archived on the evidence disk as phase210m2-results-20261012-c73b9e32c6fc.tar.gz
+# (SHA-256 c73b9e32c6fcbe7de2226ce8d976a267e058c913c910c076921a10a3827f2a8b); summaries are committed.
+phase210m2/results/
+
+# Stage 3 workstream 3.4 raw results (benchmarks/stage3-fast/run.sh); the summary is committed.
+stage3-fast/results/
+
+# Stage 3 workstream 3.7 raw results (benchmarks/stage3-floor/run.sh); cases.json and summary.md are committed.
+stage3-floor/results/

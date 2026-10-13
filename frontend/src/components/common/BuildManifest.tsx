@@ -1,15 +1,15 @@
 import { useTranslation } from 'react-i18next'
-import { Table, Card, Space, Segmented, Button, Typography, Tag } from 'antd'
-import { CopyOutlined, ExportOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
-import { compressToEncodedURIComponent } from 'lz-string'
+import { Table, Card, Space, Segmented, Button, Typography, Tag, theme } from 'antd'
+import { CopyOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
 import { ItemRow, ItemTooltip, TraderIcon } from '../ItemRow'
 import { priceCell } from '../priceCell'
+import { TedTag } from '../TedTag'
+import { EftforgeButton } from './EftforgeButton'
+import { partitionManifest } from './manifest'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 import { useMemo } from 'react'
 
 const { Text } = Typography
-
-const EFTFORGE_URL = 'https://www.eftforge.com'
 
 interface BuildManifestProps {
   result: OptimizeResponse
@@ -29,16 +29,16 @@ const itemGridStyle = (viewMode: 'detailed' | 'compact' | 'table'): React.CSSPro
   gap: 8,
 })
 
+/**
+ * The instance-aware build manifest: one row per installed OCCURRENCE (repeated templates are separate rows, keyed by `instanceId`), split by the
+ * occurrence's own acquisition: the occurrences the base preset supplies are on the preset card, everything else (purchased and owned) is listed
+ * here. The external EFTForge export is a checked projection that is disabled, with its reason, when the build cannot be represented in v1; the
+ * manifest itself is never affected.
+ */
 export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: BuildManifestProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const gridStyle = useMemo(() => itemGridStyle(viewMode), [viewMode])
-
-  const handleOpenInEFTForge = () => {
-    if (!weaponId || !result.slot_pairs?.length) return
-    const payload = { v: 1, g: weaponId, p: result.slot_pairs }
-    const code = compressToEncodedURIComponent(JSON.stringify(payload))
-    window.open(`${EFTFORGE_URL}?build=${code}`, '_blank')
-  }
 
   const columns = useMemo(() => [
     {
@@ -51,7 +51,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
             <Button
               size="small"
               type="text"
-              icon={lockedIds?.includes(record.id) ? <LockOutlined style={{ color: '#1890ff' }} /> : <UnlockOutlined style={{ opacity: 0.3 }} />}
+              icon={lockedIds?.includes(record.id) ? <LockOutlined style={{ color: token.colorPrimary }} /> : <UnlockOutlined style={{ opacity: 0.3 }} />}
               onClick={() => onToggleLock?.(record.id)}
               title={t('ui.lock_tooltip')}
             />
@@ -85,6 +85,13 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
       render: (val: number) => val !== 0 ? <Tag color={val > 0 ? 'blue' : 'red'} style={{ margin: 0 }}>{val > 0 ? '+' : ''}{val}</Tag> : null
     },
     {
+      title: t('ui.ted_part_label'),
+      key: 'ted_delta',
+      width: 100,
+      align: 'right' as const,
+      render: (_: unknown, record: ItemDetail) => <TedTag item={record} style={{ margin: 0 }} />
+    },
+    {
       title: t('ui.vert_recoil'),
       dataIndex: 'recoil_modifier',
       key: 'recoil',
@@ -114,15 +121,13 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
       align: 'right' as const,
       render: (val: number) => val ? <Tag color="cyan" style={{ margin: 0 }}>{val.toFixed(2)}kg</Tag> : null
     }
-  ], [t, lockedIds, excludedIds, onToggleLock, onToggleExclude])
+  ], [t, token, lockedIds, excludedIds, onToggleLock, onToggleExclude])
 
   const titleContent = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
       <span style={{ userSelect: 'none' }}>{t('ui.build_manifest')}</span>
       <Space>
-        {weaponId && result.slot_pairs && result.slot_pairs.length > 0 && (
-          <Button size="small" icon={<ExportOutlined />} onClick={handleOpenInEFTForge}>EFTForge</Button>
-        )}
+        <EftforgeButton weaponId={weaponId} placements={result.slot_pairs} />
         {onCopy && <Button size="small" icon={<CopyOutlined />} onClick={onCopy}>{t('ui.copy_btn')}</Button>}
         <Segmented
           size="small"
@@ -143,7 +148,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
         <Table
           dataSource={items}
           columns={columns}
-          rowKey="id"
+          rowKey="instanceId"
           pagination={false}
           size="small"
           scroll={{ x: 'max-content' }}
@@ -154,7 +159,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
       <div style={gridStyle}>
         {items.map(item => (
           <ItemRow
-            key={item.id}
+            key={item.instanceId}
             item={item}
             compactMode={viewMode === 'compact'}
             lockedIds={lockedIds}
@@ -167,9 +172,8 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
     )
   }
 
-  const itemsToRender = result.selected_preset
-    ? result.selected_items.filter(i => !result.selected_preset!.items.includes(i.id))
-    : result.selected_items
+  // The manifest lists every occurrence the preset does not supply (purchased and owned); the preset's own parts are on its card.
+  const itemsToRender = partitionManifest(result).listed
 
   return (
     <Card title={titleContent} size="small" styles={{ body: { padding: viewMode === 'table' ? 0 : undefined } }}>

@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "workstream": "Stage 3 workstream 3.7 (ADR 0013 section 7, MOA floor measurement)",
+  "postHoc": "DECLARED POST-HOC ADDENDUM: designed after the primary run (cases.json) showed no case spending the deadline; calibrated by production Precise Optimize (results/calibration.json), frozen before this addendum ran; reported separately from the primary denominators.",
+  "frozenAt": "2026-10-13T00:18:53.820Z",
+  "identities": {
+    "snapshot": {
+      "path": "frontend/benchmarks/snapshot.json",
+      "sha256": "219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c"
+    },
+    "highs": {
+      "manifestPath": "frontend/public/highs-build-manifest.json",
+      "manifestSha256": "e9cf34f8f9b64cf3945b79a82374bc5c12ee7d45aa9cef6338fdb41bdc5067c6",
+      "version": "1.15.1",
+      "commit": "04024d701f79feb8e2f18bc3df0dffc04ef05088",
+      "hConfigGithash": "04024d701f79",
+      "artifacts": {
+        "highs.js": {
+          "sha256": "52e09bb470bd7eb388df891d1910477b32c24ba5820aceb9df5bade5ef7c6a7e",
+          "bytes": 65744
+        },
+        "highs.wasm": {
+          "sha256": "e035d2aa6b6426511c4231604a79fc87bf0eeb1675eddf12580e639daecaa2ed",
+          "bytes": 3595678
+        }
+      },
+      "onDisk": {
+        "highs.js": "52e09bb470bd7eb388df891d1910477b32c24ba5820aceb9df5bade5ef7c6a7e",
+        "highs.wasm": "e035d2aa6b6426511c4231604a79fc87bf0eeb1675eddf12580e639daecaa2ed"
+      }
+    },
+    "toolchain": {
+      "node": "v26.7.0",
+      "tsx": "tsx v4.23.15",
+      "platform": "win32-x64"
+    },
+    "source": {
+      "gitTip": "74066da4590d8ccd2f1de1f5aef7a86577fa12b8",
+      "srcTree": "7921d95056ebf262aa5ef4523edcc55470a6e6e9",
+      "srcStatus": "clean"
+    }
+  },
+  "policy": {
+    "note": "Production constants, not chosen here: default budget 30000 ms (DEFAULT_FLOOR_TIME_LIMIT_MS), at most 14 threshold trials (MOA_FLOOR_MAX_TRIALS), bracket tolerance 0.02 MOA, native stop mip_max_improving_sols=1, Precise. bench.ts asserts them at run time.",
+    "timeLimitMs": 30000,
+    "maxTrials": 14,
+    "bracketTolerance": 0.02,
+    "nativeStop": {
+      "mip_max_improving_sols": 1
+    }
+  },
+  "plan": {
+    "repetitions": 3,
+    "cacheStates": [
+      "cold",
+      "warm"
+    ],
+    "cacheStateDefinition": {
+      "cold": "first floor request of a fresh node process: no HiGHS instance, no blueprint memo, no compatibility map (the item lookup is built from the snapshot before the request is sent, as a loaded IndexedDB/JSON data set would be)",
+      "warm": "the identical request sent again to the same worker runtime right after the cold one finished: HiGHS instantiated, blueprint memoized on the same lookup, compatibility map cached; no result cache exists for floors"
+    },
+    "shards": 8,
+    "plannedRequests": 24,
+    "denominatorRule": "every planned request counts in every rate, including errors, crashes and missing results"
+  },
+  "cases": [
+    {
+      "id": "X1-M4A1-EDGE",
+      "group": "addendum_edge",
+      "weapon": "M4A1",
+      "intent": "edge-feasible: budget 100,000 RUB and minimum ergonomics 93 = the certified maximum ergonomics under that budget (only ergonomics-optimal builds are witnesses)",
+      "request": {
+        "weapon_id": "5447a9cd4bdc2dbd208b4567",
+        "max_price": 100000,
+        "min_ergonomics": 93,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "X2-M4A1-ABOVE",
+      "group": "addendum_infeasible",
+      "weapon": "M4A1",
+      "intent": "infeasible: budget 100,000 RUB and minimum ergonomics 93.05, just above the certified maximum 93; the seed must prove emptiness or spend the deadline",
+      "request": {
+        "weapon_id": "5447a9cd4bdc2dbd208b4567",
+        "max_price": 100000,
+        "min_ergonomics": 93.05,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "X3-AK74N-EDGE",
+      "group": "addendum_edge",
+      "weapon": "AK-74N",
+      "intent": "edge-feasible: budget 60,000 RUB and minimum ergonomics 85.6 = the certified maximum ergonomics under that budget",
+      "request": {
+        "weapon_id": "5644bd2b4bdc2d3b4c8b4572",
+        "max_price": 60000,
+        "min_ergonomics": 85.6,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "X4-AK74N-ABOVE",
+      "group": "addendum_infeasible",
+      "weapon": "AK-74N",
+      "intent": "infeasible: budget 60,000 RUB and minimum ergonomics 85.65, just above the certified maximum 85.6",
+      "request": {
+        "weapon_id": "5644bd2b4bdc2d3b4c8b4572",
+        "max_price": 60000,
+        "min_ergonomics": 85.65,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    }
+  ]
+}

@@ -50,7 +50,7 @@ export function GunsmithPanel(props: GunsmithPanelProps) {
       </Card>
       {props.selectedTask && (
         <Card size="small" title={<span style={{ userSelect: 'none' }}>{props.selectedTask.task_name}</span>}>
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             {props.selectedTask.weapon_image && (
               <img src={props.selectedTask.weapon_image} alt="" style={{ width: '100%', maxHeight: 120, objectFit: 'contain' }} />
             )}

@@ -1,44 +1,38 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Alert, Button, Card, Collapse, Drawer, Grid, Space, Table, Tag, Typography, theme } from 'antd'
-import { BarChartOutlined, CheckCircleOutlined, ExclamationCircleOutlined, ExportOutlined, SettingOutlined, StopOutlined } from '@ant-design/icons'
-import { compressToEncodedURIComponent } from 'lz-string'
+import { Button, Card, Collapse, Drawer, Grid, Table, Tag, Typography, theme } from 'antd'
+import { BarChartOutlined, CheckCircleOutlined, SettingOutlined } from '@ant-design/icons'
 import { ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ZAxis } from 'recharts'
 import { EmptyState } from '../common/EmptyState'
 import { BuildManifest } from '../common/BuildManifest'
-import type { ExplorePoint, OptimizeResponse, SolverPrecisionMode } from '../../api/client'
+import { UsingPresetCard } from '../common/UsingPresetCard'
+import { partitionManifest, presetUsage } from '../common/manifest'
+import { EftforgeButton } from '../common/EftforgeButton'
+import { ApproximateTag, AuthorityTag, CancelButton, DetailsPanel, QualifierTags, ReasonText } from '../common/ResultStatus'
+import { qualifiersOf, reasonViewOf } from '../common/resultView'
+import type { ExplorePoint, ExploreResponse, OptimizeResponse } from '../../api/client'
 import { paletteColorAt, seriesPalette } from './palette'
+import { CoverageDetails, ExploreStatusAlert } from './ExploreStatus'
+import { cancelReasonOf, pointsOfRuns, runLineOf, settledResponseOf } from './exploreView'
+import type { ExploreWeaponRun } from './exploreView'
 
 const { Text } = Typography
 const { useToken } = theme
 
-export interface ExploreProgress {
-  current: number
-  total: number
-  name: string
-}
-
 interface ExploreResultProps {
-  exploreResult: ExplorePoint[]
-  solveTime?: number
-  explorePrecision?: { request?: SolverPrecisionMode; resolved?: 'fast' | 'precise' }
+  /** One sweep per requested weapon, in order: the final response, or the live/retained snapshot of a run that is running or did not finish. */
+  runs: ExploreWeaponRun[]
   resultTradeoff: 'price' | 'recoil' | 'ergo'
   exploring: boolean
-  exploreProgress?: ExploreProgress | null
   onExplore: () => void
-  /** Stops an in-flight run; partial results stay on screen. */
+  /** Stops an in-flight run; the points found so far stay on screen. */
   onCancelExplore?: () => void
+  cancellingExplore?: boolean
   disabled: boolean
   weaponId?: string
   /** Weapon ids requested for the current/last Explore run (denominator for n/m status). */
   runWeaponIds?: string[]
 }
-
-function precisionResolvedLabel(t: (k: string, opts?: Record<string, string>) => string, mode: 'fast' | 'precise'): string {
-  return mode === 'precise' ? t('sidebar.precise') : t('sidebar.fast')
-}
-
-const EFTFORGE_URL = 'https://www.eftforge.com'
 
 /**
  * An Explore point already carries the whole build -- BuildManifest only reads
@@ -48,10 +42,19 @@ const EFTFORGE_URL = 'https://www.eftforge.com'
 function pointAsBuild(point: ExplorePoint): OptimizeResponse {
   return {
     status: point.status,
+    precision_request: point.precision_request,
+    precision_resolved: point.precision_resolved,
+    model_qualification: point.model_qualification,
+    moa_qualification: point.moa_qualification,
+    physical_certificate: point.physical_certificate,
     selected_items: point.selected_items,
+    selected_item_ids: point.selected_item_ids,
     selected_preset: point.selected_preset,
     slot_pairs: point.slot_pairs,
-    objective_value: 0,
+    objective_value: point.objective_value,
+    optimization: point.optimization,
+    solve_time_ms: point.solve_time_ms,
+    ...(point.reason === undefined ? {} : { reason: point.reason }),
     // final_stats is deliberately omitted: an ExplorePoint carries no weight or
     // MOA, and filling them with zeros would report every Explore build as 0 kg
     // at 0 MOA the moment BuildManifest starts showing those fields.
@@ -62,15 +65,20 @@ function xKeyOf(tradeoff: 'price' | 'recoil' | 'ergo'): 'ergo' | 'recoil_v' {
   return tradeoff === 'ergo' ? 'recoil_v' : 'ergo'
 }
 
+/**
+ * Two points are the same point when their weapon and plotted coordinates agree. A live sweep republishes every point as a fresh object with each
+ * snapshot, so a pinned point is followed by this identity rather than by object identity.
+ */
+const samePoint = (a: ExplorePoint, b: ExplorePoint): boolean =>
+  a.weapon_id === b.weapon_id && a.ergo === b.ergo && a.recoil_v === b.recoil_v && a.recoil_h === b.recoil_h && a.price === b.price
+
 export function ExploreResult({
-  exploreResult,
-  solveTime,
-  explorePrecision,
+  runs,
   resultTradeoff,
   exploring,
-  exploreProgress,
   onExplore,
   onCancelExplore,
+  cancellingExplore,
   disabled,
   weaponId,
   runWeaponIds,
@@ -81,6 +89,9 @@ export function ExploreResult({
   const yKey = resultTradeoff === 'price' ? 'recoil_v' : 'price'
   const xLabel = resultTradeoff === 'ergo' ? t('ui.chart_recoil_v') : t('ui.chart_ergonomics')
   const yLabel = resultTradeoff === 'price' ? t('ui.chart_recoil_v') : t('ui.chart_price')
+
+  const exploreResult = useMemo(() => pointsOfRuns(runs), [runs])
+  const solveTime = useMemo(() => runs.reduce((sum, r) => sum + (r.response?.total_solve_time_ms ?? 0), 0), [runs])
 
   /** Series count drives the palette. Kept separate from `series` so appending a
    *  weapon's points mid-run does not regenerate every colour: the palette build
@@ -114,14 +125,13 @@ export function ExploreResult({
   }, [exploreResult, weaponId, palette, xKey, runWeaponIds])
 
 
-  const runTotal = Math.max(runWeaponIds?.length ?? 0, series.length)
-  const returned = series.length
+  const runTotal = Math.max(runWeaponIds?.length ?? 0, runs.length)
   const comparing = runTotal > 1
-  const allOptimal = exploreResult.length > 0 && exploreResult.every(p => p.status === 'optimal')
   const [detailPoint, setDetailPoint] = useState<ExplorePoint | null>(null)
   /** Point pinned by clicking it in the plot, with the click position so the
-   *  panel can sit next to it. Coordinates are relative to the plot wrapper. */
-  const [pinned, setPinned] = useState<{ point: ExplorePoint; x: number; y: number } | null>(null)
+   *  panel can sit next to it, and the size of the plot at that moment (so render
+   *  never has to read the DOM). Coordinates are relative to the plot wrapper. */
+  const [pinned, setPinned] = useState<{ point: ExplorePoint; x: number; y: number; w: number; h: number } | null>(null)
   const plotRef = useRef<HTMLDivElement>(null)
   // Collapsed by default: in that state the panel header renders the weapon
   // swatches, which is exactly what the chart legend used to be -- so the
@@ -142,16 +152,14 @@ export function ExploreResult({
   const listRef = useRef<HTMLDivElement>(null)
   const screens = Grid.useBreakpoint()
   const isDesktop = !!screens.lg
-  const [chartHeight, setChartHeight] = useState(400)
-  const [tableScrollY, setTableScrollY] = useState(320)
+  const [measured, setMeasured] = useState({ chart: 400, table: 320 })
+  // Below the desktop breakpoint (or before the panel exists) the plot has its fixed size; the measurement only applies on desktop.
+  const chartHeight = rootEl && isDesktop ? measured.chart : 400
+  const tableScrollY = rootEl && isDesktop ? measured.table : 320
 
   useLayoutEffect(() => {
     const root = rootEl
-    if (!root || !isDesktop) {
-      setChartHeight(400)
-      setTableScrollY(320)
-      return
-    }
+    if (!root || !isDesktop) return
     const GAPS = 32 // two 16px flex gaps
     const CARD_CHROME = 26 // Card body padding around the plot
     const CHART_FLOOR = 220
@@ -160,10 +168,12 @@ export function ExploreResult({
       const budget =
         root.clientHeight - (alertRef.current?.offsetHeight ?? 0) - GAPS - CARD_CHROME
       const available = budget - (listRef.current?.offsetHeight ?? 0)
-      setChartHeight(Math.max(CHART_FLOOR, Math.round(available)))
-      // Derived from the same budget rather than from the list's own height, so
+      // The table height is derived from the same budget rather than from the list's own height, so
       // the two measurements cannot feed each other into a resize loop.
-      setTableScrollY(Math.round(Math.min(320, Math.max(160, budget - CHART_FLOOR - LIST_CHROME))))
+      setMeasured({
+        chart: Math.max(CHART_FLOOR, Math.round(available)),
+        table: Math.round(Math.min(320, Math.max(160, budget - CHART_FLOOR - LIST_CHROME))),
+      })
     }
     measure()
     // Observing the list covers expand/collapse without depending on listOpen.
@@ -173,55 +183,45 @@ export function ExploreResult({
     if (listRef.current) ro.observe(listRef.current)
     return () => ro.disconnect()
   }, [rootEl, isDesktop])
-  // The panel is positioned from the pixel coordinates of the click. Resizing the
-  // plot -- which the collapse toggle does, 525px <-> 220px -- rescales the axes
-  // and moves every dot, so those coordinates no longer point at anything. Drop
-  // the pin rather than leave it hovering over empty space.
-  useEffect(() => {
-    setPinned(null)
-  }, [chartHeight])
-  // Streaming setExploreResult([...allPoints]) keeps the same point objects, so a
-  // pin must survive identity changes of the array. Drop it only when the run is
-  // cleared or the pinned point is no longer in the frontier.
-  useEffect(() => {
-    if (exploreResult.length === 0) {
-      setPinned(null)
-      return
-    }
-    setPinned(prev => {
-      if (!prev) return prev
-      return exploreResult.includes(prev.point) ? prev : null
-    })
-  }, [exploreResult])
+  // The pin panel is positioned from the pixel coordinates of the click. Resizing the plot -- which the
+  // collapse toggle does, 525px <-> 220px -- rescales the axes and moves every dot, so those coordinates no
+  // longer point at anything: a pin recorded at another plot height is not shown. A live sweep republishes
+  // the points as fresh objects with every snapshot, so the pin follows its point by weapon and
+  // coordinates, and is not shown once that point is no longer in the frontier.
+  const activePin = useMemo(() => {
+    if (pinned === null || pinned.h !== chartHeight) return null
+    const match = exploreResult.find(p => samePoint(p, pinned.point))
+    return match === undefined ? null : { ...pinned, point: match }
+  }, [pinned, chartHeight, exploreResult])
   const [manifestView, setManifestView] = useState<'detailed' | 'compact' | 'table'>('detailed')
 
   /** One row per weapon instead of one per frontier point: 16 weapons produced
-   *  120 paginated rows, most of which just restate the chart's axes. */
-  const weaponRows = useMemo(() => series.map(s => ({
-    key: s.id,
-    id: s.id,
-    name: s.name,
-    color: s.color,
-    points: s.data,
-    bestErgo: s.data.length ? Math.max(...s.data.map(p => p.ergo)) : 0,
-    lowestRecoil: s.data.length ? Math.min(...s.data.map(p => p.recoil_v)) : 0,
-    cheapest: s.data.length ? Math.min(...s.data.map(p => p.price)) : 0,
-  })), [series])
-  const actionLabel = exploring && exploreProgress && exploreProgress.total > 1
+   *  120 paginated rows, most of which just restate the chart's axes. A weapon
+   *  whose sweep produced no point still has its row: its coverage status is the
+   *  answer. */
+  const weaponRows = useMemo(() => runs.map((run, index) => {
+    const points = exploreResult.filter(p => p.weapon_id === run.weaponId)
+    const colorIndex = runWeaponIds?.indexOf(run.weaponId) ?? -1
+    return {
+      key: run.weaponId,
+      id: run.weaponId,
+      name: run.weaponName,
+      color: paletteColorAt(palette, colorIndex >= 0 ? colorIndex : index),
+      run,
+      points,
+      bestErgo: points.length ? Math.max(...points.map(p => p.ergo)) : null,
+      lowestRecoil: points.length ? Math.min(...points.map(p => p.recoil_v)) : null,
+      cheapest: points.length ? Math.min(...points.map(p => p.price)) : null,
+    }
+  }), [runs, exploreResult, palette, runWeaponIds])
+  const liveRun = runs.find(r => r.phase === 'running')
+  const actionLabel = exploring && comparing
     ? t('explore.comparing', {
-        name: exploreProgress.name,
-        current: exploreProgress.current,
-        total: exploreProgress.total,
+        name: liveRun?.weaponName ?? runs[runs.length - 1]?.weaponName ?? '',
+        current: runs.length,
+        total: runTotal,
       })
     : t('ui.run_analysis')
-
-  const handleOpenInEFTForge = (point: ExplorePoint) => {
-    const forgeWeaponId = point.weapon_id || weaponId
-    if (!forgeWeaponId || !point.slot_pairs?.length) return
-    const payload = { v: 1, g: forgeWeaponId, p: point.slot_pairs }
-    const code = compressToEncodedURIComponent(JSON.stringify(payload))
-    window.open(`${EFTFORGE_URL}?build=${code}`, '_blank')
-  }
 
   /** Shared by the per-weapon expansion and the single-weapon table. The old
    *  "N attachments" count column is now the View build action -- the build was
@@ -248,6 +248,12 @@ export function ExploreResult({
       render: (v: number) => <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text>,
     },
     {
+      // Quiet by default: a small "Approximate" tag only for a build that is not a proved optimum; the full wording is in the build's own Details.
+      title: '',
+      dataIndex: 'physical_certificate',
+      render: (_: unknown, record: ExplorePoint) => <ApproximateTag result={record} />,
+    },
+    {
       title: '',
       dataIndex: 'selected_items',
       render: (_: unknown, record: ExplorePoint) => (
@@ -259,18 +265,13 @@ export function ExploreResult({
     {
       title: '',
       dataIndex: 'slot_pairs',
-      render: (_: unknown, record: ExplorePoint) =>
-        (record.weapon_id || weaponId) && record.slot_pairs?.length ? (
-          <Button size="small" icon={<ExportOutlined />} onClick={() => handleOpenInEFTForge(record)}>
-            EFTForge
-          </Button>
-        ) : null,
+      render: (_: unknown, record: ExplorePoint) => (
+        <EftforgeButton weaponId={record.weapon_id || weaponId} placements={record.slot_pairs} />
+      ),
     },
-  // handleOpenInEFTForge is stable for a given weaponId; it only reads props
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [t, token, weaponId])
 
-  if (exploreResult.length === 0) {
+  if (runs.length === 0 || runs.every(r => r.response === null && r.error === undefined)) {
     return (
       <EmptyState
         icon={<BarChartOutlined />}
@@ -280,19 +281,12 @@ export function ExploreResult({
         loading={exploring}
         disabled={disabled}
         onAction={onExplore}
-        extra={exploring && onCancelExplore ? (
-          <Button danger size="large" icon={<StopOutlined />} onClick={onCancelExplore}>
-            {t('explore.cancel_run')}
-          </Button>
-        ) : undefined}
+        extra={exploring && onCancelExplore ? <CancelButton size="large" onCancel={onCancelExplore} cancelling={cancellingExplore} /> : undefined}
       />
     )
   }
 
-  const statusComplete = returned === runTotal && allOptimal
-  const statusText = comparing
-    ? `${t('explore.compare_status', { returned, total: runTotal })} · ${allOptimal ? t('results.status_optimal') : t('results.status_feasible')}`
-    : `${t('results.optimization_status')}: ${allOptimal ? t('results.status_optimal') : t('results.status_feasible')}`
+  const detailBuild = detailPoint ? pointAsBuild(detailPoint) : null
 
   return (
     // Fills the right panel exactly: the alert and the list keep their natural
@@ -307,40 +301,19 @@ export function ExploreResult({
         minHeight: 0,
       }}
     >
-      <div ref={alertRef} style={{ flex: '0 0 auto' }}>
-      <Alert
-        type={statusComplete ? 'success' : 'warning'}
-        message={
-          <>
-            <Text>{statusText}</Text>
-            {solveTime != null && <Tag color="blue" style={{ marginLeft: 8 }}>{solveTime.toFixed(0)} ms</Tag>}
-            {!comparing && explorePrecision?.request === 'auto' && explorePrecision.resolved && (
-              <Tag color="processing" style={{ marginLeft: 8 }} title={t('sidebar.solver_precision_tooltip')}>
-                {t('results.precision_auto_ran', {
-                  mode: precisionResolvedLabel(t, explorePrecision.resolved),
-                })}
-              </Tag>
-            )}
-          </>
-        }
-        icon={statusComplete ? <CheckCircleOutlined /> : <ExclamationCircleOutlined />}
-        showIcon
-        action={
-          <Space>
-            <Button type="primary" icon={<BarChartOutlined />} loading={exploring} onClick={onExplore}>
-              {actionLabel}
-            </Button>
-            {exploring && onCancelExplore && (
-              // The primary button is loading-locked while a run is in flight, so
-              // without this there is no way to stop a long multi-weapon sweep.
-              <Button danger icon={<StopOutlined />} onClick={onCancelExplore}>
-                {t('explore.cancel_run')}
-              </Button>
-            )}
-          </Space>
-        }
-      />
+      <div ref={alertRef} style={{ flex: '0 0 auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <ExploreStatusAlert
+          runs={runs}
+          runTotal={runTotal}
+          solveTimeMs={solveTime > 0 ? solveTime : undefined}
+          exploring={exploring}
+          onExplore={onExplore}
+          onCancel={onCancelExplore}
+          cancelling={cancellingExplore}
+          actionLabel={actionLabel}
+        />
       </div>
+      {exploreResult.length > 0 && (
       <Card size="small" style={{ flex: '0 0 auto' }}>
         <div
           ref={plotRef}
@@ -361,7 +334,7 @@ export function ExploreResult({
               <YAxis type="number" dataKey={yKey} name={yLabel} domain={['auto', 'auto']} label={{ value: yLabel, angle: -90, position: 'insideLeft', offset: -20 }} />
               {!comparing && <ZAxis type="number" dataKey="recoil_pct" />}
               <Tooltip content={({ active, payload }) => {
-                if (pinned) return null
+                if (activePin) return null
                 if (active && payload && payload.length) {
                   const data = payload[0].payload as ExplorePoint
                   return (
@@ -371,6 +344,7 @@ export function ExploreResult({
                         <Text>{t('ui.chart_ergonomics')}: <Text strong style={{ color: token.colorPrimary }}>{data.ergo.toFixed(1)}</Text></Text>
                         <Text>{t('ui.chart_recoil_v')}: <Text strong style={{ color: token.colorSuccess }}>{data.recoil_v.toFixed(1)}</Text></Text>
                         <Text>{t('ui.chart_price')}: <Text strong style={{ color: token.colorWarning }}>₽{data.price.toLocaleString()}</Text></Text>
+                        <ApproximateTag result={data} />
                       </div>
                     </Card>
                   )
@@ -384,29 +358,29 @@ export function ExploreResult({
                   data={s.data}
                   fill={s.color}
                   line
+                  isAnimationActive={!exploring}
                   style={{ cursor: 'pointer' }}
                   onClick={(_data: unknown, _index: number, event: React.MouseEvent) => {
                     const box = plotRef.current?.getBoundingClientRect()
                     const point = (_data as { payload?: ExplorePoint })?.payload
                     if (!box || !point) return
                     event.stopPropagation()
-                    setPinned({ point, x: event.clientX - box.left, y: event.clientY - box.top })
+                    setPinned({ point, x: event.clientX - box.left, y: event.clientY - box.top, w: box.width, h: box.height })
                   }}
                 />
               ))}
             </ScatterChart>
           </ResponsiveContainer>
 
-          {pinned && (() => {
+          {activePin && (() => {
             const W = 300
-            const box = plotRef.current?.getBoundingClientRect()
-            const maxH = Math.min(280, Math.max(150, (box?.height ?? chartHeight) - 24))
+            const maxH = Math.min(280, Math.max(150, activePin.h - 24))
             // Flip to the other side of the cursor near an edge so the panel is
             // never clipped by the plot bounds.
-            const flipX = box ? pinned.x + W + 20 > box.width : false
-            const left = flipX ? Math.max(8, pinned.x - W - 12) : pinned.x + 12
-            const top = Math.min(Math.max(8, pinned.y - 12), Math.max(8, (box?.height ?? chartHeight) - maxH - 8))
-            const p = pinned.point
+            const flipX = activePin.x + W + 20 > activePin.w
+            const left = flipX ? Math.max(8, activePin.x - W - 12) : activePin.x + 12
+            const top = Math.min(Math.max(8, activePin.y - 12), Math.max(8, activePin.h - maxH - 8))
+            const p = activePin.point
             return (
               <div
                 onClick={e => e.stopPropagation()}
@@ -437,6 +411,9 @@ export function ExploreResult({
                       {' / '}
                       <Text style={{ color: token.colorWarning }}>₽{p.price.toLocaleString()}</Text>
                     </div>
+                    <div style={{ marginTop: 4, display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                      <ApproximateTag result={p} style={{ fontSize: 11 }} />
+                    </div>
                   </div>
                   <Button size="small" type="text" onClick={() => setPinned(null)}>
                     ✕
@@ -449,7 +426,7 @@ export function ExploreResult({
                   ) : (
                     p.selected_items.map(item => (
                       <div
-                        key={item.id}
+                        key={item.instanceId}
                         style={{
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -507,7 +484,9 @@ export function ExploreResult({
           })()}
         </div>
       </Card>
+      )}
       {(() => {
+        type WeaponRow = (typeof weaponRows)[number]
         const table = comparing ? (
           <Table
             size="small"
@@ -516,25 +495,42 @@ export function ExploreResult({
             scroll={weaponRows.length > 8 ? { y: tableScrollY } : undefined}
             expandable={{
               expandedRowRender: row => (
-                <Table
-                  size="small"
-                  dataSource={row.points.map((pt, i) => ({ ...pt, key: `${row.id}-${i}` }))}
-                  pagination={false}
-                  columns={pointColumns}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {settledResponseOf(row.run) !== null && <CoverageDetails response={settledResponseOf(row.run) as ExploreResponse} fallbackReason={cancelReasonOf(row.run)} />}
+                  {row.run.error !== undefined && <Text type="secondary">{row.run.error}</Text>}
+                  {row.points.length > 0 && (
+                    <Table
+                      size="small"
+                      dataSource={row.points.map((pt, i) => ({ ...pt, key: `${row.id}-${i}` }))}
+                      pagination={false}
+                      columns={pointColumns}
+                    />
+                  )}
+                </div>
               ),
-              rowExpandable: row => row.points.length > 0,
+              rowExpandable: row => row.run.response !== null || row.run.error !== undefined,
             }}
             columns={[
               {
                 title: t('explore.weapon'),
                 dataIndex: 'name',
-                render: (name: string, row: (typeof weaponRows)[number]) => (
+                render: (name: string, row: WeaponRow) => (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ width: 8, height: 8, borderRadius: 8, background: row.color, flexShrink: 0 }} />
                     {name}
                   </span>
                 ),
+              },
+              {
+                // The plain status of the weapon's sweep: a check when it is complete, else the same one-line message the banner uses.
+                title: t('explore.status'),
+                dataIndex: 'run',
+                render: (run: ExploreWeaponRun) => {
+                  const line = runLineOf(run)
+                  if (line === null) return <CheckCircleOutlined style={{ color: token.colorSuccess }} />
+                  if (run.phase === 'running') return <Tag color="processing" style={{ margin: 0 }}>{t(line.key, line.params)}</Tag>
+                  return <Text type="secondary">{t(line.key, line.params)}</Text>
+                },
               },
               {
                 title: t('explore.frontier_points'),
@@ -544,20 +540,20 @@ export function ExploreResult({
               {
                 title: t('explore.best_ergo'),
                 dataIndex: 'bestErgo',
-                sorter: (a: (typeof weaponRows)[number], b: (typeof weaponRows)[number]) => a.bestErgo - b.bestErgo,
-                render: (v: number) => <Text style={{ color: token.colorPrimary }}>{v.toFixed(1)}</Text>,
+                sorter: (a: WeaponRow, b: WeaponRow) => (a.bestErgo ?? -Infinity) - (b.bestErgo ?? -Infinity),
+                render: (v: number | null) => (v === null ? <Text type="secondary">—</Text> : <Text style={{ color: token.colorPrimary }}>{v.toFixed(1)}</Text>),
               },
               {
                 title: t('explore.lowest_recoil'),
                 dataIndex: 'lowestRecoil',
-                sorter: (a: (typeof weaponRows)[number], b: (typeof weaponRows)[number]) => a.lowestRecoil - b.lowestRecoil,
-                render: (v: number) => <Text style={{ color: token.colorSuccess }}>{v.toFixed(1)}</Text>,
+                sorter: (a: WeaponRow, b: WeaponRow) => (a.lowestRecoil ?? Infinity) - (b.lowestRecoil ?? Infinity),
+                render: (v: number | null) => (v === null ? <Text type="secondary">—</Text> : <Text style={{ color: token.colorSuccess }}>{v.toFixed(1)}</Text>),
               },
               {
                 title: t('explore.cheapest'),
                 dataIndex: 'cheapest',
-                sorter: (a: (typeof weaponRows)[number], b: (typeof weaponRows)[number]) => a.cheapest - b.cheapest,
-                render: (v: number) => <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text>,
+                sorter: (a: WeaponRow, b: WeaponRow) => (a.cheapest ?? Infinity) - (b.cheapest ?? Infinity),
+                render: (v: number | null) => (v === null ? <Text type="secondary">—</Text> : <Text style={{ color: token.colorWarning }}>₽{v.toLocaleString()}</Text>),
               },
             ]}
           />
@@ -609,16 +605,37 @@ export function ExploreResult({
       <Drawer
         open={detailPoint != null}
         onClose={() => setDetailPoint(null)}
-        width="min(760px, 96vw)"
+        size="min(760px, 96vw)"
         title={detailPoint ? (detailPoint.weapon_name ?? t('explore.build_detail')) : ''}
       >
-        {detailPoint && (
-          <BuildManifest
-            result={pointAsBuild(detailPoint)}
-            viewMode={manifestView}
-            onViewModeChange={setManifestView}
-            weaponId={detailPoint.weapon_id || weaponId}
-          />
+        {detailPoint && detailBuild && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <ApproximateTag result={detailPoint} />
+              <DetailsPanel>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <AuthorityTag result={detailPoint} />
+                  <QualifierTags qualifiers={qualifiersOf(detailPoint)} />
+                  <ReasonText reason={reasonViewOf(detailPoint.reason)} />
+                </div>
+              </DetailsPanel>
+            </div>
+            {detailPoint.selected_preset && (
+              <UsingPresetCard
+                preset={detailPoint.selected_preset}
+                retainedItems={partitionManifest(detailBuild).preset}
+                usage={presetUsage(detailBuild)}
+                compactMode={manifestView === 'compact' || manifestView === 'table'}
+                viewMode={manifestView}
+              />
+            )}
+            <BuildManifest
+              result={detailBuild}
+              viewMode={manifestView}
+              onViewModeChange={setManifestView}
+              weaponId={detailPoint.weapon_id || weaponId}
+            />
+          </div>
         )}
       </Drawer>
     </div>

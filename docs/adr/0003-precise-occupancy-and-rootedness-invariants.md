@@ -1,11 +1,11 @@
 # ADR 0003: Precise Occupancy and Rootedness Invariants
 
 ## Status
-Accepted (Refs #32). Closed 2026-10-02.
+Accepted planning decision (Refs #32). Reconciled 2026-10-04; implementation and proof gates remain outstanding.
 
 ## Context
 Following the authoritative physical and acquisition domain contract settled in ADR 0002 (#31), unrolling physical slots into an instance tree introduces key formulation requirements:
-1. **Cycle Hazards & Finite Bounding**: While template-level cycles are absent in EFT game data, recursive item definitions (e.g. risers on risers or synthetic cycle tests) could cause tree unrolling to expand infinitely.
+1. **Cycle Hazards & Finite Bounding**: Recursive template definitions or synthetic cycles can make unrestricted occurrence expansion infinite. The adopted no-ancestor-template-repeat rule is an explicit finite software-domain restriction, not a proved claim about all EFT game data.
 2. **Template Conflicts with Multi-Copy Parts**: A naive copy-sum constraint $\sum_{u \in A} x_u + \sum_{v \in B} x_v \le 1$ incorrectly penalizes legitimate duplicate copies of $A$ when $B$ is absent (e.g. $A+A$ is rejected).
 3. **Occurrence-Specific Identity & Slot Conflicts**: Variables must be occurrence-specific $v = (i, s)$ to prevent satisfying multiple required slots with a single variable. Furthermore, slot conflicts (`conflicting_slot_ids`) must constrain target slot occupancy rather than creating false global item bans.
 4. **Instance-Bound Result Contract**: Client response shapes carry `selected_items: ItemDetail[]`, requiring unique `instanceId` keys on each detail record to establish a 1-to-1 bijection with manifest `childInstanceId`s.
@@ -29,7 +29,7 @@ We establish the canonical precise placement, occupancy, conflict, and manifest 
    - *Root Required Slot*: $\sum_{v \in \text{Allowed}(s)} x_v = 1$ (mandatory; empty set emits $0 = 1 \implies \text{proved infeasible}$).
    - *Mod-Owned Required Slot*: $\sum_{v \in \text{Allowed}(s)} x_v = x_u \quad \forall s = (u, \text{slot})$. If $\text{Allowed}(s) = \emptyset$, simplifies to $0 = x_u$, forcing $x_u = 0$ via impossible-owner deactivation without declaring false global infeasibility.
 4. **Template Conflicts, Slot Conflicts, and User Locks**:
-   - *Template Mutual Exclusion*: For conflicting template pairs $(A, B)$ ($A \ne B$, symmetrized), mutual exclusion is enforced via presence indicators:
+   - *Template Mutual Exclusion*: For conflicting template pairs $(A, B)$ ($A \ne B$, symmetrized), enforce exact presence exclusion. Presence indicators $y_A,y_B \in [0,1]$ have both directions of occurrence linking:
      $$y_A + y_B \le 1$$
      $$x_u \le y_A \quad \forall u \in \text{Instances}(A), \quad x_v \le y_B \quad \forall v \in \text{Instances}(B)$$
      $$y_A \le \sum_{u \in \text{Instances}(A)} x_u, \quad y_B \le \sum_{v \in \text{Instances}(B)} x_v$$
@@ -37,6 +37,7 @@ We establish the canonical precise placement, occupancy, conflict, and manifest 
    - *Self-Conflicts*: If $A \in \text{conflicts}(A)$, $\sum_{u \in \text{Instances}(A)} x_u \le 1$.
    - *Slot Conflicts*: When instance $u$ is installed, for each raw slot template ID $t \in \text{conflicting\_slot\_ids}(u)$, it blocks every physical occurrence of that slot on the weapon:
      $$x_u + \text{occupancy}(s_{\text{target}}) \le 1 \quad \forall s_{\text{target}} \in \text{PhysicalSlots}(t)$$
+     Here `occupancy(s)` sums occurrence variables in that specific physical slot. Raw slot template IDs select all matching physical occurrences; they are not themselves occurrence identity and must not globally ban an item that can use an unblocked alternative slot.
    - *Include/Exclude*: Exclude fixes $x_u = 0$; include enforces $\sum_{u \in \text{Instances}(inc)} x_u \ge 1$.
 5. **Statistics, Accounting & Instance-Bound Result Contracts**:
    - Reconstructed statistics (ergo, recoil, weight, accuracy) sum over installed occurrences ($x_v = 1$) exactly once.
@@ -51,3 +52,10 @@ We establish the canonical precise placement, occupancy, conflict, and manifest 
 - **Issue #33 (Purchase & Reductions)**: Formulate integer $\text{buy}_i$ variables and exact deficits against total installed instances $\sum_{s} p_{i,s}$.
 - **Issue #36 (Oracles & Validation)**: Update `validateBuild` and test oracles to verify instance-level slot uniqueness, 1-to-1 instanceId bijection, and occurrence-aware item details.
 - **Issue #38 (Prepared Boundaries)**: Prepared compatibility trees use instance-qualified slots with branch acyclicity caching.
+
+## Canonical Boundaries
+
+- [Canonical #32](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/32#issuecomment-5955673941) and [canonical #31](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/31#issuecomment-5945998692) govern. The checked cross-template raw-slot collision requirement does not merge separate parent-instance slots.
+- Empty required slots remain represented: root `0 = 1`; mod-owned `0 = x_u`. Propagate proved impossible owners to a fixed point while preserving alternative paths. An optional undecided parent is not an orphan.
+- Physical infeasibility certification requires the exact-domain and native/numerical gates; Fast/provisional model infeasibility does not qualify. Every accepted build needs an independently validated rooted witness.
+- The complete correctness cutover migrates instance-aware consumers together. EFTForge exports are supported-only: clearly disable unrepresentable or ambiguous multi-instance/multi-copy exports rather than inventing an external format.

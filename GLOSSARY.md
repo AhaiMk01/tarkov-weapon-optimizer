@@ -21,33 +21,63 @@ A physical interference constraint (`conflicting_slot_ids`) where installing an 
 A build export and validation structure (`slot_pairs`) where each connection explicitly identifies `{ parentInstanceId, slotId, childInstanceId, itemId }`. Maintains a strict 1-to-1 bijection where each selected `ItemDetail` record carries a unique `instanceId` referenced exactly once as a manifest `childInstanceId`.
 
 ### Physical Certificate
-The explicit level of authoritative proof provided by a solve response:
-- `certified_optimal`: Solved on the precise placement model with certified optimality (gap $\le$ tolerance), clean physical validation, and conditional on the domain/objective equivalence gates established in Issue #36. Strictly fenced from claiming certification on requests whose feasibility depends on unverified MOA constraints.
-- `approximate_optimal`: Optimal under relaxed binary model assumptions, or optimal on the precise placement model under unverified provisional physics (such as requests with active `max_moa` constraints). A merely feasible incumbent is never promoted to this status.
-- `feasible`: A verified physical build exists, but optimality is unproven in either model (e.g. time/node limit reached with an incumbent).
-- `certified_infeasible`: Mathematically or physically impossible within the domain, certified strictly on the precise model and conditional on Issue #36 domain equivalence.
-- `none`: No verified physical build exists.
+The public proof label on a solve response. A deadline, a native `Optimal` status, or the presence of a MOA constraint does not assign it by itself. Provisional MOA results describe the adopted software model, not attested game-engine truth.
+- `certified_optimal`: Precise, MOA-independent, qualified optimum, clean validation, justified global gap within tolerance, and the Issue #36 domain gates. Requires the native trusted-bound surface. Fast and MOA-dependent requests never receive it.
+- `approximate_optimal`: A qualified model optimum only: a Fast optimum, or a precise optimum on a MOA-dependent request. A feasible incumbent is never promoted to this status.
+- `feasible`: A verified incumbent without a completed qualified proof, including a limit or a withheld prerequisite. The witness and justified bounds are retained.
+- `certified_infeasible`: Precise, MOA-independent, proved empty feasible set under Issue #36. Fast infeasibility and provisional-MOA infeasibility do not receive it.
+- `none`: No verified build is published. A rejected later candidate does not erase an earlier witness or completed proof. Provisional-MOA infeasibility retains only its internal model proof.
+
+A completed qualified optimum or infeasibility is not downgraded by a later deadline or cancellation. Hard client termination and native runtime failure use their operation error and snapshot contracts, not a forced `feasible` response. MOA-floor and Explore use their own outcome enums. Fast and MOA-dependent requests keep both qualifiers.
+
+### Search Completion
+Whether execution finished the model search, independently of whether its result is trusted or physically authoritative. A completed Fast-model empty result is completed search, not a physical infeasibility certificate. Validation/proof withholding does not turn completed execution into a timeout; unfinished spatial work is not completed merely because one native sub-solve finished.
+
+### Binary Placement Invariant
+The definitive architectural invariant establishing that physical placement variables $p_{i,s}$ in the repaired precise model are formulated strictly as binary decision variables ($p_{i,s} \in \{0, 1\}$). Continuous placement relaxations ($p_{i,s} \in [0, 1]$) with post-solve matching reconstruction are not admitted due to lifting failures on declared-domain physical conflict graphs (where fractional solutions have zero integer witnesses, violating Gate A).
+
+### Three-Tier Model Preparation
+The architectural partitioning of solver model preparation into three ownership and lifetime scopes; it does not promise a fixed heap bound or immediate garbage collection:
+- **Tier 1 (Session-Scoped `PhysicalWeaponBlueprint`)**: Immutable physical weapon blueprint and standalone structural bounds $[W_{\text{phys\_min}}, W_{\text{phys\_max}}]$ and raw $[E_{\text{raw\_min}}, E_{\text{raw\_max}}]$ evaluated directly without LP serialization, cached per worker session pinned to `dataGenerationId`.
+- **Tier 2 (Subproblem-Scoped `PreparedSubproblemDomain`)**: Pre-compiled constraint body and acquisition state (market access, stash stock, inclusions/exclusions, hard caps, two-stage ergo clamping), scoped per distinct subproblem domain and reused in-memory across internal solves with identical constraints (including 3 payoff solves and spatial B&B nodes), with zero new cache tiers.
+- **Tier 3 (Ephemeral `SpecializedLP`)**: Per-node specialization of the existing endpoint weights `[100, 0, 0]`, `[0, 100, 0]`, and `[0, 0, 100]`, which produce $10 \cdot fE$, $-100 \cdot fR$, and $-0.1 \cdot fP$. Unit-axis objectives are not substituted. Spatial weight bounds and outward secant rows are included. Assembly under $0.5\text{ ms}$, and direct bounds under $1\text{ ms}$, are engineering targets, not acceptance evidence.
+
+### Invalidation Ledger
+The normative domain-identity ledger from the accepted preparation contract. It is not a fixed count of parameters. It includes loaded generation and lookup identity, snapshot, weapon, preparation, formulation, normalization, and model-authority versions, canonical trader levels, flea, barter, dogtag exclusion, player level, legal offers, the full owned multiset, item and category filters with group structure, budget and physical caps, equipment modifier, axis meaning, bounds mode, requested and resolved precision, stable occurrence and edge masks, and every other input preparation consumes. Time limit, node limit, and certificate tolerance are request and proof controls, not domain identity. A hash alone does not authorize reuse.
+
+### Endpoint Domain Projection Key
+A versioned projection of the normalized request permitting only authorized preference changes, with the complete acquisition, feasibility, model and numerical identity retained. Distinct from full telemetry identity and from the request-independent physical-bounds identity. Only a qualified precise, MOA-independent `certified_optimal` endpoint proof can be reused, and only when its retained evidence satisfies the current frame and tolerance. Fast, limit and provisional-MOA results do not enter this cache.
 
 ### Independent Physical Oracle
-A brute-force combinatorial tree enumerator evaluating exact physical non-linear equations directly on unpruned raw `ItemLookup` data, completely decoupled from `buildLP`, `compatibilityMap`, or continuous relaxations, establishing ground-truth physical feasibility, optimal scores, and proved infeasibility for benchmark/oracle suites.
+A decoupled brute-force combinatorial tree enumerator evaluating physical non-linear equations in exact rational arithmetic ($\mathbb{Q}$) with direct IEEE binary64 input decoding within the versioned adopted software domain. Its own test-side reader consumes pinned unpruned source JSON, not production `ItemLookup`, compatibility/pruning extraction, scoring or the production validator; an independently constructed reference lookup is permitted. A normalized snapshot alone does not establish raw upstream provenance. Evaluates normative weighted scoring ($(e/10)fE - r \cdot fR - (p/1000)fP$) and un-clamped augmented Tchebycheff ($0.01(c_e fE - c_r fR - c_p fP) - \max(d_a)$), establishing complete feasibility, exact optimal scores and infeasibility for each enumerated finite fixture under the accepted provisional-MOA authority fence. Domain-wide equivalence needs its separate proof.
 
 ### Behavioral Regression Matrix
-The canonical 14-scenario physical edge-case suite (covering empty required routes, disconnected cycles, one item / two required slots, inaccessible base fallback, zero price weight phantom spend, MOA boundaries, etc.) required to accept any solver modification.
+The canonical 14-family case ledger, including its required subcases, not 14 files or a source-count assertion. Each case records prerequisites, source or request, feasible-set or score expectation, and qualified outcome. Deliberately invalid fixtures must be rejected. Zero validation errors applies to builds claimed valid, not to those negative fixtures. Numerical, TED, and MOA boundary families belong to the correctness-cutover proof; they are not deferred until after that cutover is adopted.
 
 ### Model Reduction Equivalence Gates
-The 4-gate verification requirement for mathematical formulation reductions: Gate A (Bijective Feasibility), Gate B (Optimum & Ties Invariance), Gate C (Infeasibility Equivalence), and Gate D (Statistical Comparative Benchmarks).
+Gates A, B, and C compare an exact reduction with an already oracle-correct baseline. Gate A equates selected-build projections, Gate B preserves the exact optimum and every maximizing projection and tie, and Gate C preserves infeasibility. The comparative decision is the full Issue #37 contract, not a fourth abbreviated mathematics gate. A BCa lower bound greater than 1 is Gate 2 `FAIL` even when rate and tail do not regress. An upper bound of exactly 0.95 is not Gate 3 `PASS`. A degenerate or zero-variance interval is `INCONCLUSIVE`. A rejected or inconclusive reduction leaves the correct baseline in place and does not restore the legacy model.
 
 ### Three-Tier Verification Hierarchy
-The explicit authority ordering: Tier 1 (Brute-Force Physical Oracle & Independent `validateBuild`), Tier 2 (Frontend JS / HiGHS Implementation), Tier 3 (Differential Python / CP-SAT cross-checks on reconciled sub-problems).
+The authority ordering: an independent raw-source reader, exhaustive finite-fixture oracle and separate reference validator; the frontend implementation and upgraded production validator checked against those references; and differential Python/CP-SAT evidence on reconciled subproblems. Production transformations are not their own independent oracle.
+
+### Correctness-First Adoption Sequence
+The executable Issue #40 sequence. Private commits may be incomplete. No intermediate public contract is adopted, and parent acceptance of the plan is not implementation proof.
+1. Independent oracle, source fixtures, and validator expectations, including required rejection of invalid fixtures. The legacy solver is not required to pass the ledger first.
+2. One private correctness cutover: model, native trusted bounds, deadline and cancellation, response metadata, decoder, worker, client, UI, benchmarks, and the minimal preparation seam.
+3. Proof of that whole cutover, including numerical, TED, and MOA families and browser smoke, before any public adoption.
+4. Freeze the proved unreduced model, then optionally evaluate equivalent reductions under Gates A–C and the full comparative contract. Non-adoption keeps that baseline.
+
+### Zero-Shim Migration Policy
+Every consumer of a changed public contract migrates in the selected single correctness cutover; incomplete private development is not public adoption. No shim, obsolete alias or unqualified fallback survives. Preset supply preserves source `containsItems[].count`, not merely repeated entries or template presence. Parent-instance coupling, quantity-sensitive readers and independent source checks remain part of the contract.
 
 ### Model-Relative MOA Floor
-MOA-floor search outcomes evaluated strictly within the provisional software model (`model_proved`, `model_witnessed`, `unresolved`, `model_infeasible`). Inherits full ADR 0004 safeguards: requires a verified instance witness, a finite mathematically justified lower bound $\text{lo}$, non-null bisection gate, and $\text{hi} - \text{lo} \le 0.02\text{ MOA}$ for `model_proved`. Model infeasibility must never advance an authoritative physical lower bound.
+The provisional software-model minimum MOA for the complete request domain, not an attested game-physical minimum. `model_proved` carries a verified achievable upper bound and a qualified lower bound within the declared bracket tolerance. `model_witnessed` carries only the best verified achievable upper bound so far and must not be labeled a proved minimum; `unresolved` has no witness; `model_infeasible` is qualified Precise seed-model emptiness. A lower bracket can be discovered by infeasible threshold queries without an analytic formula. Missing an initial lower bound is not a reason to skip the search.
 
 ### Model Qualification
-The explicit classification of solver baseline: `exact` (solved on the exact placement model with physical instance variables) versus `approximate` (solved on the relaxed binary fast model). Fast mode reports `optimal` or `feasible` with `model_qualification: 'approximate'`, while mathematical optimality certification requires `exact` and `precision_resolved: 'precise'`.
+`exact` means the precise placement model. `approximate` means the relaxed Fast model. A Fast qualified optimum is `optimal` with `physical_certificate: 'approximate_optimal'`. A precise MOA-dependent qualified optimum keeps `model_qualification: 'exact'` and `moa_qualification: 'provisional_model'`, and its public certificate is `approximate_optimal`, not `certified_optimal`. Fast and MOA-dependent requests preserve both qualifiers.
 
 ### Strict Infeasibility Gating
-The search invariant requiring that an infeasible bound (e.g. lower bound `lo` in MOA-floor binary search) advances if and only if a sub-solve returns certified `status: 'infeasible'` on the precise model under Issue #36 domain equivalence. Unresolved outcomes (timeouts, limits, errors, or Fast-model infeasibility) must never advance an infeasible bound.
+An authoritative physical lower bound advances only from a precise infeasibility proof that meets the Issue #36 domain gates. A MOA-floor search may advance its model-relative `proved_lower_bound` from provisional-model infeasibility, and that value must not be published as a physical floor. Unresolved outcomes, including timeouts, cancellation, runtime errors, and Fast-model infeasibility, do not advance either bound. A completed proof is retained if the deadline arrives later.
 
 ### Single Request Deadline Clock
 A unified request-level deadline clock normalized across browser contexts using global monotonic epoch milliseconds ($\text{epoch} = \text{performance.timeOrigin} + \text{performance.now}()$, defaulting to 60,000 ms if omitted). Enforces strict $\text{remaining\_ms} \le 0$ guards before every stage and after cancellation yields, propagates remaining time to sub-operations, bypasses the dispatch chain for out-of-band cancellation, and yields to the event loop between sub-solves.
@@ -61,7 +91,7 @@ The linear objective coordinate system defined in `lpBuilder.ts` and `trueErgo.t
 All objective values, bounds, and tolerances are expressed strictly in these shared units.
 
 ### Global Spatial Upper Bound
-The objective upper bound across the entire spatial branch-and-bound search tree, aggregated as $\max(\text{incumbent.objective}, \max_{k \in \text{OpenNodes}} \text{node}_k.\text{upper\_bound})$, yielding $+\infty$ if any open region is unbounded. Never replaced by the bound of a single closed node.
+The request-wide objective upper bound is the maximum of the verified incumbent and all live or tolerance-fathomed node bounds in the same objective frame. A bound may be qualified native or proved analytic. An unknown retained/frontier bound stays unknown (`null` in transport); a finite sibling or primal value does not hide it. Rejected later decoding preserves prior verified witnesses and completed proofs.
 
 ### Witness Build
 A complete physical weapon build record backing an achieved MOA value (`hi`), carrying an instance-qualified attachment manifest, occurrence-aware `ItemDetail[]`, and configuration scope for independent verification. Bisection requires a finite, mathematically justified lower bound $\text{lo}$ before proceeding.
@@ -82,7 +112,7 @@ The dynamic specialization of raw ergonomics clamping based on unclipped structu
 - $rawLo < 0 \land rawHi > 1000$: Full 3-regime piecewise clamp with $M = \max(|rawLo|, |rawHi|, 1000) + 1000$ (3 binary vars, 8 Big-M rows).
 
 ### Second-Clamp Elimination
-The mathematical reduction establishing that when equipment ergonomics modifiers are non-positive ($factor = \max(0, 1 + \text{equipErgoModifier}) \le 1.0$), the product $factor \cdot \text{capped\_ergo}$ is strictly bounded in $[0, 1000]$. The second clamp is 100% mathematically redundant and replaced by a direct linear equality (`effective_ergo - gear_ergo = 0`), eliminating 3 binary variables and 8 Big-M rows.
+An optional proved Stage 4 reduction, not part of the unreduced correctness baseline. When equipment factor $\max(0, 1 + \text{equipErgoModifier}) \le 1$ and the first capped ergonomics value is proved in $[0,1000]$ scaled units, its product remains in that interval. The second clamp can then be replaced by direct equality (`effective_ergo - gear_ergo = 0`) under the numerical and exact-invariance gates. Preserve both clamp semantics in the baseline and whenever the elimination's prerequisites fail.
 
 ### 3 kg Root Split Invariant
 The search tree invariant requiring any initial weight interval spanning $W = 3\text{ kg}$ to be split at the root node into $[W_{\min}, 3]$ (where weight penalty $q(W) \equiv 0$) and $[3, W_{\max}]$ (where $q(W)$ is strictly concave), with node weight intervals $[W_1, W_2]$ enforced as hard LP bounds on `total_weight`. Guarantees that interval secants are valid under-estimators of $q(W)$ and valid upper bounds on TED.
@@ -94,7 +124,7 @@ An algorithmic row construction error bound $\delta_{\text{computed}}(k)$ derive
 The normative non-negative integer quantity equality $d_i = \max(0, \text{installed}_i - \text{owned}_i - \text{selectedPresetSupply}_i)$ governing out-of-pocket wallet expenditure, objective price axes ($fP$), price reconstruction, shopping list generation, and independent build validation across all objective weightings. Enforced via an unperturbed epigraph-projection and minimal-surrogate lifting contract ($u_i \ge d_i, u_i \ge 0$) preserving budget monotonicity ($\text{spend}^* \le \text{spend}^{\text{LP}}$), objective score non-decrease ($\text{score}^* \ge \text{score}^{\text{LP}}$), and unperturbed native dual bounds without artificial penalties.
 
 ### Purchase Variable Reduction
-The exact substitution of $buy_i \equiv x_i$ into budget and objective rows for single-slot, unowned, non-preset mods ($q_{b,i} == 0 \land N_{\text{owned}}(i) == 0 \land \text{max\_installed}_i == 1$), and the complete presolve elimination of $buy_i$ for fully-owned ($N_{\text{owned}} \ge \text{max\_installed}$) items. Standalone-inaccessible items retain hard inventory caps regardless of stored price. Reductions are validated under formal equivalence proof gates (Issue #36).
+An optional exact elimination or substitution of purchase bookkeeping. The presence substitution requires proved total physical capacity at most one, no preset or owned offset and an exact presence/occurrence linking invariant. Fully-owned elimination requires stock dominating proved capacity. Both require equivalence and comparative adoption gates; neither removes unavailable-item supply caps or belongs implicitly in the unreduced correctness baseline.
 
 ### Recoil Cap Collapse
 The analytical reduction where simultaneous hard vertical and sum recoil caps collapse into a single stricter linear bound $\text{mod} \le \min(\frac{Cap_V}{naked_V} - 1, \frac{Cap_{\text{Sum}}}{naked_V + naked_H} - 1)$ with positive denominator validation, omitting the looser redundant bound. If `recoil_def` is removed, the multi-copy recoil expression is directly inlined into all surviving constraints.
@@ -104,41 +134,49 @@ The explicit tracking of bound derivation sources: distinguishing tight physical
 
 ### Curve Status
 The classification of a Pareto frontier sweep response (`ExploreResponse`):
-- `complete`: All $N$ requested points terminated with certified outcomes (all verified builds, or a proved mix of verified builds and proved-infeasible points).
-- `partial`: Usable sweep where at least one point yielded a verified build, but others timed out, errored, or were cancelled.
-- `infeasible`: Entire requested range is proved infeasible (all $N$ points proved infeasible on the precise model under Issue #36 equivalence).
-- `invalid`: Zero verified builds produced due to timeout, error, or early cancellation.
+- `complete`: Every requested target in a nonempty schedule has a verified build or qualified physical infeasibility proof, with at least one verified build.
+- `partial`: An unfinished schedule with at least one verified build and an unresolved, errored or unlaunched target.
+- `infeasible`: Every requested target has precise, MOA-independent `certified_infeasible` proof under the declared-domain gates.
+- `invalid`: No verified build with unresolved/error targets, or rejected input/schedule. Fast and provisional-model infeasibility are unresolved coverage, not physical infeasibility.
+
+A late cancellation does not downgrade a finished schedule. Unlaunched targets count as unresolved; cancellation rows apply only when work was stopped. Discrete completion is not a continuous Pareto proof.
 
 ### Weapon MOA Semantics
-The in-game accuracy formula under `moa_contract_scope: 'calibrated_consumer_baseline'`:
-$$\text{MOA} = \text{effectiveCOI} \times \left(1 - \frac{\sum_{i} \text{accuracy\_modifier}_i}{100}\right) \times \frac{100}{2.9089}$$
-evaluated at 100% full weapon and barrel durability.
+The pinned provisional software-model convention, not an attested in-game accuracy law:
+$$\text{MOA} = \text{effectiveCOI} \times \left(1 - \frac{\sum_i \text{accuracyModifier}_i}{100}\right) \times \frac{100}{2.9089}.$$
+Modifiers are additive per installed occurrence. Full weapon/barrel condition is a provisional convention; model uncertainty is distinct from numerical representation error.
 
 ### Barrel Replacement COI
-The physical accuracy rule where an installed barrel mod's `center_of_impact` replaces the receiver's intrinsic COI, rather than adding to it. Supported on baseline by the M4A1 14.5" barrel discriminator ($0.053 \times 34.377 = 1.82\text{ MOA}$ matching in-game inspection and Official Wiki, vs additive $2.17\text{ MOA}$).
+The adopted provisional rule that a positive installed barrel COI replaces intrinsic receiver COI; absent, missing or nonpositive replacement values use the intrinsic fallback. Calibration examples are consistency evidence, not game-engine attestation.
 
 ### Display-Bin Mapping Rule
-The empirical observation principle where a test case discriminates between formula families if and only if their prediction intervals map to disjoint rounding bins. Half-up rounding $[x - 0.005, x + 0.005)$ is an unverified provisional display convention pending client attestation. On standard 2-decimal displays, Linear ($0.866$) and Multiplicative Compound ($0.875$) both map to the $0.87$ bin; matching a display bin constitutes consistency evidence, while universal physical certification requires first-party client decompilation.
+A comparison of prediction intervals with an explicit provisional display convention. Disjoint display bins can discriminate candidate formulas; overlapping bins or a matching display value do not prove one family correct. Client rounding remains unattested unless supported by authoritative evidence.
 
 ### Four-Quadrant MOA Calibration Gate
 The empirical evidence protocol across candidate formula families (Linear Subtractive, Divisor, Multiplicative Compound). Recognizes display rounding limits and requires client decompilation or high-divergence measurements exceeding display rounding intervals.
 
 ### Radian-to-MOA Conversion Factor
-The normative decimal model convention $\text{MOA\_K} = \frac{100}{2.9089} \approx 34.377256007\dots$, representing the arc in centimeters of 1 Minute of Angle at 100 meters, with $[34.3, 34.3775]$ designated an arbitrary software comparison envelope.
+The declared rational software-model constant $K=100/2.9089=1000000/29089$. The historical interval $[34.3,34.3775]$ is an arbitrary software comparison envelope, not a physical uncertainty bound.
 
 ### Statistical Acceptance Protocol
-A strictly ordered, exhaustive 4-gate decision protocol evaluating paired execution arms:
-- **Gate 1 (Hard Fail)**: Any physical validation failure (`validateBuild` errors > 0) or Issue #36 oracle/domain violation $\implies$ `FAIL`.
-- **Gate 2 (Hard Fail)**: Any primary on-time success rate drop (physical optimum, proved infeasibility, or sweep completion), tail regression (candidate P95 $> 1.05 \times$ baseline P95), or 95% bootstrap CI lower bound $> 1.0 \implies$ `FAIL`.
-- **Gate 3 (Pass)**: Zero correctness failures, rate and tail non-regression hold, both-success pairs count $N_{\text{both}} \ge 5$, and 95% bootstrap CI is non-degenerate with upper bound strictly $< 0.95$ ($\delta = 0.05$ practical speedup) $\implies$ `PASS`.
-- **Gate 4 (Inconclusive)**: All other outcomes (speedup unproven, zero variance, or CI spans across 1.0) $\implies$ `INCONCLUSIVE`.
-Cross-case adoption requires Gate 1 and Gate 2 to pass across all cases, and Gate 3 on every declared primary case.
+The ordered comparative decision from the full Issue #37 contract, including planned denominators, independent workers, versioned request identity, artifact digests, paired blocks, and degeneracy handling. This entry does not replace that contract.
+- **Gate 1 (Hard Fail)**: Any physical validation failure on a build claimed valid, or an Issue #36 oracle or domain violation, is `FAIL` before speed is considered. A required negative-fixture rejection is not a failure.
+- **Gate 2 (Hard Fail)**: Any primary on-time success-rate drop, tail regression (candidate P95 $> 1.05 \times$ baseline P95), or valid 95% BCa lower bound $> 1$. A CI of $[1.01, 1.03]$ is `FAIL` even when rate and tail do not regress.
+- **Gate 3 (Pass)**: Gate 1 and Gate 2 hold, $N_{\text{both}} \ge 5$, and the 95% BCa interval is non-degenerate with upper bound strictly $< 0.95$. An upper bound of exactly $0.95$ is not `PASS`.
+- **Gate 4 (Inconclusive)**: Every other outcome, including a CI that spans 1, too few both-success pairs, and a zero-variance or undefined-acceleration interval. A constant apparent speedup is not reported as a point interval.
+Cross-case adoption requires nonempty candidate-relevant physically certified precise primary cases and all applicable correctness/non-regression gates. Qualified secondary cases protect Fast, provisional-MOA and MOA-floor workflows without becoming primary speedup proof. Inconclusive or failed optional work keeps the validated baseline.
 
 ### Case-Specific Success Rates
 The primary rate metric evaluated over all planned attempts $N_{\text{planned}}$:
 - Feasible optimization cases: `physical_optimum_rate` (on-time `certified_optimal`).
 - Infeasible cases: `proved_infeasible_rate` (on-time `certified_infeasible` under #36 equivalence).
-- Explore sweep cases: `completed_sweep_rate` (on-time `curve_status === 'complete'`). Typed as `null` with reason for non-Explore cases.
+- Explore sweep cases: on-time `curve_status === 'complete'`, or `infeasible` for a declared all-infeasible sweep, with full schedule coverage. Typed as `null` with reason for non-Explore cases. Rates use all planned attempts as the denominator.
+
+### Qualified Secondary Benchmark Goal
+A predeclared model-relative success goal for Fast, provisional-MOA or MOA-floor cases. Qualified model optima require a valid witness and applicable proof. Minimum-quality floor goals require a proved model bracket; separate interruption/availability goals protect retained witnesses without claiming a minimum or comparing arbitrary cheapest-build ties. Secondary checks cannot establish primary physical speedup. A witnessed-only result never counts as model proof, and missing evaluable evidence is not a non-regression pass.
+
+### Supported External Build Export
+A faithful projection of the instance tree into a verified external format. An ambiguous or unrepresentable instance/multi-copy build remains available in the in-app manifest but has external export clearly disabled; no occurrence is silently dropped and no external format version is invented.
 
 ### Disjoint Timing Trace Invariant
 The accounting invariant partitioning total caller wall-clock time into non-overlapping spans with a signed discrepancy:
@@ -160,19 +198,19 @@ A comparative benchmarking protocol where paired arms alternate execution sequen
 Direct measurement of model dimensions (`matrix_rows`, `matrix_cols`, `model_total_variables`, `matrix_nonzeros`, `discrete_variables`) incremented at statement emission time within `lpBuilder.ts` (excluding bounds and objective rows), eliminating reparsing overhead on the solve path.
 
 ### Emitted vs. Native Metric Provenance
-The explicit distinction between dimensions directly countable from the emitted CPLEX model (`provenance: 'emitted_lp'`) and native solver internals (`presolved_rows`, `native_mip_nodes`, `native_dual_bound`, `presolved_integer_variables`, `native_relative_gap`) which are labeled `UNAVAILABLE` (`null`, `reason: 'unsupported_by_shipped_wasm'`) in the shipped WASM wrapper.
+The distinction between emission-derived model quantities and actual native solver fields. The existing pretty-output wrapper and rounded logs do not provide trusted full-precision primals or dual proof. A pinned native/glue build, structured extraction before handle destruction and verified parsed-model representation are prerequisites; planned integration is not measured evidence.
 
 ### Time-to-Trusted-Certificate
 The total elapsed wall-clock latency from public request creation until an independent physical build check validates with zero errors (`validateBuild` errors = 0) and physical optimality is certified (`physical_certificate === 'certified_optimal'`). Distinct from raw solver exit time; evaluates to `null` if uncertified.
 
 ### Containing Preset
-A pre-assembled weapon configuration sold by traders that includes a receiver and pre-attached components with integer counts $q_{b,i} \in \mathbb{Z}_{\ge 0}$. When selected as the base, included components are acquired at zero marginal cost. A containing preset provides free components but never forces a preset purchase when a component can be legally supplied via standalone purchase or owned stash inventory.
+A pre-assembled receiver and component supply whose integer quantities are preserved from source counts. The chosen base is paid once, supplied components have zero marginal purchase cost, and unused quantities can be stripped without resale credit. Availability of a containing preset never forces its purchase when a component has another legal source.
 
 ### Preset Stripping
 The removal of unused pre-installed components from a purchased preset base at zero liquidation value (₽0 spend, ₽0 resale credit) without penalty.
 
 ### Owned Item (Stash Inventory)
-A component already in the player's personal inventory (`owned_items?: string[]`), represented as element multiplicity in a multiset array ($N_{\text{owned}}(i)$). Validated at worker entry (array of non-empty strings, length $\le 10{,}000$). The full validated multiset array is preserved in the canonical request telemetry hash. Reachable mods define an internal weapon-scoped acquisition projection. Free copies offset required quantities under normative deficit equality: $buy_i = \max(0, \text{installed}_i - N_{\text{owned}}(i) - \sum_b q_{b,i} base_b)$ with exact MIP formulation delegated to Issue #33. Supplied at zero out-of-pocket cash expenditure (`buy_i = 0`), consuming ₽0 of `max_price` budget and adding ₽0 to the price objective. In the output build manifest, instances are deterministically assigned by code-unit order of `instanceId` (preset first, owned second, purchased remainder). For items that cannot be acquired standalone under active market settings, stash quantity strictly caps the maximum number of copies that can be installed on the weapon: $\sum_s p_{i,s} \le \sum_b q_{b,i} base_b + N_{\text{owned}}(i)$.
+A component already in the player's personal inventory (`owned_items?: string[]`), represented as element multiplicity in a multiset array ($N_{\text{owned}}(i)$). Validated before canonical hashing, cache lookup, or model generation, including direct solver entry. Omitted and empty both mean zero stock; otherwise the value is an array of at most 10,000 nonempty strings. Invalid input does not run a solve or invent infeasibility. The full validated multiset array is preserved in the canonical request telemetry hash. Reachable mods define an internal weapon-scoped acquisition projection. The authoritative decoded deficit is $d_i = \max(0, \text{installed}_i - N_{\text{owned}}(i) - \sum_b q_{b,i} base_b)$. The LP emits that quantity as an integer epigraph with linear lower inequalities and nonnegativity. It does not emit a nonlinear max row, and surplus surrogate value is not a purchase. The current `buy_i = x_i` alias is not revived. Issue #33 states when a proved single-capacity substitution is legal. Owned-supplied copies consume ₽0 of `max_price` and add ₽0 to the price objective. The decoded deficit for those copies is zero; that is not the obsolete `buy_i = x_i` row. In the output build manifest, instances are deterministically assigned by code-unit order of `instanceId` (preset first, owned second, purchased remainder). For items that cannot be acquired standalone under active market settings, stash quantity strictly caps the maximum number of copies that can be installed on the weapon: $\sum_s p_{i,s} \le \sum_b q_{b,i} base_b + N_{\text{owned}}(i)$.
 
 ### Standalone Market Accessibility
 Whether an item can be acquired standalone under the request's specific market configuration (`flea_available`, `barter_available`, `player_level`, `trader_levels`). An enabled barter at an accessible trader level constitutes an accessible standalone acquisition path.
@@ -186,4 +224,4 @@ A slot marked as mandatory (`required: true`).
 - **Mod-Owned Required Slot**: Mandatory **conditional on its parent instance being selected** (occupancy = $x_{\text{owner\_instance}}$). If empty, that parent instance is forced off ($x_{\text{owner\_instance}} = 0$); alternative parent/attachment paths remain valid.
 
 ### Proved Infeasibility
-A certified determination by the solver that no mathematically or physically feasible build exists within the specified domain. Distinct from malformed input errors, unproved source data, or incomplete runs halted by time/node limits.
+A precise, MOA-independent determination that the physical feasible set is empty, under the Issue #36 domain gates. Fast-model infeasibility and provisional-MOA infeasibility do not receive `certified_infeasible`. Distinct from malformed input, unproved source data, and incomplete runs halted by time or node limits.

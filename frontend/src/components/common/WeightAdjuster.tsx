@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin } from 'antd'
-import { UndoOutlined, QuestionCircleOutlined } from '@ant-design/icons'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin, theme } from 'antd'
+import { UndoOutlined, QuestionCircleOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
+import { CancelButton } from './ResultStatus'
+import { floorLineOf } from './floorView'
+import type { FloorView } from './floorView'
 
 const { Text } = Typography
 
@@ -14,10 +17,8 @@ interface WeightAdjusterProps {
   recoilWeight: number
   priceWeight: number
   onWeightChange: (ergo: number, recoil: number, price: number) => void
-  useEvoErgo: boolean
-  onUseEvoErgoChange: (v: boolean) => void
-  useTchebycheff: boolean
-  onUseTchebycheffChange: (v: boolean) => void
+  useTrueErgo: boolean
+  onUseTrueErgoChange: (v: boolean) => void
   useBudget: boolean
   onUseBudgetChange: (v: boolean) => void
   maxPrice: number
@@ -37,10 +38,70 @@ interface WeightAdjusterProps {
   useExactMOAFloor: boolean
   onUseExactMOAFloorChange: (v: boolean) => void
   computingMOAFloor: boolean
+  /** The last floor answer (provisional MOA model), or `null` before one. */
+  moaFloor: FloorView | null
+  /** The message of a failed floor request. */
+  moaFloorError: string | null
+  onCancelMOAFloor: () => void
+  cancellingMOAFloor: boolean
+  onRetryMOAFloor: () => void
   preventOverswing: boolean
   onPreventOverswingChange: (v: boolean) => void
   equipErgoPenalty: number
   onEquipErgoPenaltyChange: (v: number) => void
+}
+
+/**
+ * The status of the MOA floor request under the slider, plain by default: one short line ("Lowest MOA: 1.73", "Lowest MOA found: 1.80 (may go
+ * lower)", "Couldn't find the lowest MOA - using an estimate", "No build meets your other constraints") and an info icon. The icon's tooltip holds
+ * the rest: the floor is a result of the PROVISIONAL MOA model, not a game-physical minimum; the proved lower end; the reason; the error of a
+ * failed request. The slider falls back to its estimate whenever the line says so. A running request keeps its Cancel button, a cut-short one Retry.
+ */
+function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry }: {
+  computing: boolean
+  view: FloorView | null
+  error: string | null
+  onCancel: () => void
+  cancelling: boolean
+  onRetry: () => void
+}) {
+  const { t } = useTranslation()
+  const { token } = theme.useToken()
+  if (computing) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <Spin size="small" />
+        <Text type="secondary" style={labelStyle}>{t('moa_floor.computing')}</Text>
+        <CancelButton size="small" onCancel={onCancel} cancelling={cancelling} />
+      </div>
+    )
+  }
+  const line = floorLineOf(view, error)
+  if (line === null) return null
+  const tooltip = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div>{t('moa_floor.provisional_note')}</div>
+      {view !== null && view.provedLower !== null && view.kind !== 'proved' && <div>{t('moa_floor.proved_lower', { lower: view.provedLower })}</div>}
+      {view !== null && view.reason !== null && <div>{view.reason.key !== null ? t(view.reason.key) : view.reason.text}</div>}
+      {error !== null && <div>{t('moa_floor.error', { message: error })}</div>}
+    </div>
+  )
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', margin: '0 4px' }}>
+      <Space size={4}>
+        <Text
+          type={line.tone === 'success' ? 'success' : line.tone === 'error' ? 'danger' : line.tone === 'warning' ? 'warning' : 'secondary'}
+          style={labelStyle}
+        >
+          {t(line.key, { floor: line.floor ?? '' })}
+        </Text>
+        <Tooltip title={tooltip}>
+          <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
+        </Tooltip>
+      </Space>
+      {line.retry && <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>{t('moa_floor.retry')}</Button>}
+    </div>
+  )
 }
 
 export function WeightAdjuster({
@@ -48,10 +109,8 @@ export function WeightAdjuster({
   recoilWeight,
   priceWeight,
   onWeightChange,
-  useEvoErgo,
-  onUseEvoErgoChange,
-  useTchebycheff,
-  onUseTchebycheffChange,
+  useTrueErgo,
+  onUseTrueErgoChange,
   useBudget,
   onUseBudgetChange,
   maxPrice,
@@ -74,6 +133,11 @@ export function WeightAdjuster({
   useExactMOAFloor,
   onUseExactMOAFloorChange,
   computingMOAFloor,
+  moaFloor,
+  moaFloorError,
+  onCancelMOAFloor,
+  cancellingMOAFloor,
+  onRetryMOAFloor,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
   const [slidersMode, setSlidersMode] = useState(() => localStorage.getItem('weightUiSliders') === 'true')
@@ -106,7 +170,7 @@ export function WeightAdjuster({
           label: <span style={{ userSelect: 'none' }}>{t('optimize.header')}</span>,
           extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onWeightChange(33, 34, 33) }} /></Tooltip>,
           children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <Space size="small" wrap>
                 <Button size="small" onClick={() => onWeightChange(0, 100, 0)}>{t('optimize.preset_recoil')}</Button>
                 <Button size="small" onClick={() => onWeightChange(100, 0, 0)}>{t('optimize.preset_ergo')}</Button>
@@ -118,21 +182,12 @@ export function WeightAdjuster({
               </Space>
               <div style={toggleRowStyle}>
                 <Space size={4}>
-                  <Text type="secondary" style={labelStyle}>{t('optimize.evo_ergo')}</Text>
-                  <Tooltip title={t('optimize.evo_ergo_tooltip')}>
+                  <Text type="secondary" style={labelStyle}>{t('optimize.true_ergo')}</Text>
+                  <Tooltip title={t('optimize.true_ergo_tooltip')}>
                     <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
                   </Tooltip>
                 </Space>
-                <Segmented size="small" value={useEvoErgo ? 'on' : 'off'} onChange={(v) => onUseEvoErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
-              </div>
-              <div style={toggleRowStyle}>
-                <Space size={4}>
-                  <Text type="secondary" style={labelStyle}>{t('optimize.tchebycheff')}</Text>
-                  <Tooltip title={t('optimize.tchebycheff_tooltip')}>
-                    <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
-                  </Tooltip>
-                </Space>
-                <Segmented size="small" value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                <Segmented size="small" value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <Text type="secondary" style={labelStyle}>{t('optimize.weight_ui_label')}</Text>
@@ -175,7 +230,7 @@ export function WeightAdjuster({
           label: <span style={{ userSelect: 'none' }}>{t('constraints.header')}</span>,
           extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} /></Tooltip>,
           children: (
-            <Space direction="vertical" style={{ width: '100%' }}>
+            <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={toggleRowStyle}>
                   <Space size={4}>
@@ -186,7 +241,7 @@ export function WeightAdjuster({
                   </Space>
                   <Segmented size="small" value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                 </div>
-                {preventOverswing && (
+                {(useTrueErgo || preventOverswing) && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '0 4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Space size={4}>
@@ -304,6 +359,16 @@ export function WeightAdjuster({
                         </Space>
                         <Segmented size="small" value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                       </div>
+                      {useExactMOAFloor && (
+                        <MoaFloorStatus
+                          computing={computingMOAFloor}
+                          view={moaFloor}
+                          error={moaFloorError}
+                          onCancel={onCancelMOAFloor}
+                          cancelling={cancellingMOAFloor}
+                          onRetry={onRetryMOAFloor}
+                        />
+                      )}
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <Slider
                           style={{ flex: 1, margin: '4px 8px 24px 8px' }}

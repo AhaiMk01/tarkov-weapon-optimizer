@@ -2,6 +2,49 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.0.0] — 2026-10-12
+
+### Changed
+- **New solver model**: Builds are now solved on a model of the real part tree, checked against an independent reference on every rule (slots, required slots, conflicts, presets, barters, stash, quantities, MOA, TrueErgo). Precise answers are proved optimal; the bigger guns (AK and M4 families) that used to time out now prove their best build in a few seconds.
+- **Auto picks the mode for you**: Precise for every normal request. With TrueErgo or Prevent Overswing, the largest guns use Fast so the answer comes back in time; those results say "build found" and are marked approximate.
+- **Plain results**: The result says "best build" only when it is proved. Anything else says what it is ("build found", "not proved"), and the technical detail (bounds, gap, model) sits in a collapsed Details section.
+- **One copy per part in Fast**: Fast installs each part at most once unless you allow repeats.
+
+### Added
+- **Advanced menu**: Precision (Auto, Fast, Precise), allow repeated parts, and Sweet Spot.
+- **Lowest MOA finder**: Turning on the MOA limit finds the lowest MOA the gun can reach and sets the slider range.
+- **Cancel keeps the build**: Cancelling a search shows the best verified build found so far.
+
+### Fixed
+- A request could crash on some guns when the solver returned an internal error; it now retries and returns a result.
+- Some searches could report a build as best when a better one existed, or call a weapon impossible when it was not. Every shown build is re-checked part by part, and "impossible" needs two independent confirmations.
+- Prevent Overswing MOA searches stopped early with a wide range; they now finish.
+
+### Removed
+- The old LP builder and the npm `highs` package. The app uses one pinned HiGHS build.
+
+## [v2.14.0] — 2026-09-29
+
+### Added
+- **Overswing strength**: When a build overswings, the TED card now also says how hard aiming in kicks the weapon, as a percentage. It is 0% at 3 kg of effective weight (weight x (1 - ergonomics / 100)) and 100% at 7 kg, so "Overswing strength 45%" separates a slight overswing from an unusable one. It uses the same gear modifier as TED, and is nonzero exactly when TED is negative.
+- **TED per part**: Each part in the build shows how much TED it adds (green) or costs (red): the build's TED minus its TED without that part. It appears next to the ergonomics tag in every view and as a TED column in the table view, for Optimize, Explore and Gunsmith results. It is arithmetic on the finished build, not a re-solve, so it explains why a heavy high-ergonomics part was or was not worth taking. Deltas under 0.05 are hidden.
+
+## [v2.13.0] — 2026-09-29
+
+### Changed
+- **EvoErgo is now TrueErgo, and it optimises the real number**: The old mode maximised an approximation of weight-adjusted ergonomics. It now maximises TrueErgoDelta (TED) itself: effective ergonomics (clamped to 0-100, after the armour/gear modifier) minus the weight penalty `max(0, 100 - 300/W)`, which is zero at or under 3 kg. The stat card shows TED, and reads "No overswing" at TED >= 0. The setting carries over from the old EvoErgo toggle.
+- **Tchebycheff balances the real objectives**: The ideal and nadir points are computed in the same axes the final solve uses (raw ergonomics or TED, recoil, purchase cost), and each endpoint keeps every constraint you set. If an endpoint cannot be certified the request reports that instead of substituting a default ideal point.
+- **One time limit per request**: The limit now covers the ideal-point endpoints and the search together, and `solve_time_ms` reports the whole call rather than the last sub-solve.
+
+### Fixed
+- **Prevent Overswing could call a feasible weapon infeasible**: The weight limit was enforced with tangent lines to a concave curve, which sit on the wrong side of it and cut off valid builds. Picking one part could remove another that fit. Weight is now handled by splitting it into intervals, each with a secant bound that is valid only inside its interval. A build is accepted only after its exact TED is recomputed from the reconstructed parts.
+- **TrueErgo search could return a worse build as optimal**: Fractional or rounded placements are rejected, and a build that breaks a hard limit after reconstruction is discarded rather than reported.
+- **Honest status when the search stops early**: Results report `optimal` only when the gap between the best build and the proven bound is within tolerance. If a node or time limit stops the search first, a verified build is shown as `feasible` (not proven optimal), and with no verified build the result is `incomplete` rather than `infeasible`. The result banner shows the lower and upper bound, the gap and the tolerance.
+- **Precise placement for nonlinear modes**: TrueErgo and Prevent Overswing always use exact slot placement, since bounds computed on the faster model would not describe a build you can actually assemble.
+
+### Removed
+- The quadratic EED display and the linear "ergo minus 15 kg" claims in the methodology guide.
+
 ## [v2.12.0] — 2026-09-20
 
 ### Added

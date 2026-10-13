@@ -1,18 +1,31 @@
 /**
- * Pareto frontier exploration.
- * Ported from optimizer.py:explore_pareto()
+ * Pareto frontier exploration: the sweep-target generation (Phase 2.7b, ADR 0013 section 6).
+ * Ported from optimizer.py:explore_pareto(); the target generation is the pre-cutover one, now exposed as a recorded schedule.
+ *
+ * The sweep solves one objective axis at a time with the third axis ignored, and steps a constraint on the swept axis:
+ *
+ *   ignore    endpoint low      endpoint high     steps (a lower bound on / an upper bound on)
+ *   price     min recoil        max ergonomics    minErgonomics = e   (ergonomics axis; minimize recoil)
+ *   recoil    min price         max ergonomics    minErgonomics = e   (ergonomics axis; minimize price)
+ *   ergo      min recoil        min price         maxRecoilV = r      (recoil axis; maximize ergonomics)
+ *
+ * The two endpoints are the first two scheduled targets. After both have returned, the range between their achieved values is divided into steps
+ * of `max(1, range / max(steps, 10))` (recoil axis: `range / max(steps, 10)`), and each step target is generated from the achieved value of the
+ * previous one (a step whose build already reaches beyond the next grid value moves the cursor there). That is `SweepSchedule.extend`; every
+ * generated target is recorded in the response's `sweep_schedule` and classified exactly once by `runExplore` (`exploreSweep.ts`).
+ *
+ * A schedule is single-use (the generator keeps the cursor). `buildSweepSchedule` returns a schedule with NO targets for a request that cannot
+ * be swept (an unknown weapon or axis, a non-finite `steps`); `runExplore` reports that as `invalid` with no points and no solve.
  */
 
-import type { ItemLookup, CompatibilityMap, TraderLevels } from './types.ts';
-import type { ExplorePoint, OptimizeResponse } from '../api/client.ts';
-import { solve } from './solver.ts';
-import type { SolveParams } from './solver.ts';
+import type { ItemLookup, CompatibilityMap, PrecisionRequest, SolveParams, TraderLevels } from './types.ts';
+import type { ExploreAxis, ExploreRunRequest, SettledTarget, SweepSchedule, SweepTarget } from './exploreSweep.ts';
 
 export interface ParetoParams {
   weaponId: string;
   itemLookup: ItemLookup;
   compatibilityMap: CompatibilityMap;
-  ignore: 'price' | 'recoil' | 'ergo';
+  ignore: ExploreAxis;
   maxPrice?: number | null;
   minErgonomics?: number | null;
   maxRecoilV?: number | null;
@@ -25,7 +38,7 @@ export interface ParetoParams {
   excludeItems?: string[] | null;
   includeCategories?: string[][] | null;
   excludeCategories?: string[] | null;
-  useEvoErgo?: boolean;
+  useTrueErgo?: boolean;
   preventOverswing?: boolean;
   equipErgoModifier?: number | null;
   steps?: number;
@@ -34,14 +47,23 @@ export interface ParetoParams {
   barterAvailable?: boolean;
   barterExcludeDogtags?: boolean;
   playerLevel?: number | null;
+  /** Stash multiset (validated by the operation layer), forwarded to every target's solve. */
+  ownedItems?: readonly string[];
   preciseMode?: boolean;
+  /** Fast only: allow several copies of one part (default false: one copy of each part). Forwarded to every target's solve. */
+  allowRepeatedParts?: boolean;
+  /** What the caller asked for, echoed on every point's `precision_request`. */
+  precisionRequest?: PrecisionRequest;
 }
 
-function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight' | 'maxRecoilV' | 'minErgonomics' | 'maxPrice'> {
+function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight'> {
   return {
     weaponId: p.weaponId,
     itemLookup: p.itemLookup,
     compatibilityMap: p.compatibilityMap,
+    maxPrice: p.maxPrice,
+    minErgonomics: p.minErgonomics,
+    maxRecoilV: p.maxRecoilV,
     maxRecoilSum: p.maxRecoilSum,
     minMagCapacity: p.minMagCapacity,
     minSightingRange: p.minSightingRange,
@@ -51,7 +73,7 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     excludeItems: p.excludeItems,
     includeCategories: p.includeCategories,
     excludeCategories: p.excludeCategories,
-    useEvoErgo: p.useEvoErgo ?? false,
+    useTrueErgo: p.useTrueErgo ?? false,
     preventOverswing: p.preventOverswing ?? false,
     equipErgoModifier: p.equipErgoModifier,
     traderLevels: p.traderLevels,
@@ -59,213 +81,120 @@ function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'rec
     barterAvailable: p.barterAvailable ?? false,
     barterExcludeDogtags: p.barterExcludeDogtags ?? false,
     playerLevel: p.playerLevel,
+    ...(p.ownedItems === undefined ? {} : { ownedItems: p.ownedItems }),
     preciseMode: p.preciseMode,
+    ...(p.allowRepeatedParts === undefined ? {} : { allowRepeatedParts: p.allowRepeatedParts }),
+    precisionRequest: p.precisionRequest,
   };
 }
 
-export async function explorePareto(params: ParetoParams): Promise<ExplorePoint[]> {
-  const { ignore, maxPrice, minErgonomics, maxRecoilV } = params;
-  const steps = params.steps ?? 10;
-  const weapon = params.itemLookup[params.weaponId];
-  if (!weapon || weapon.type !== 'gun') return [];
-  const nakedRecoilV = weapon.stats.naked_recoil_v;
+const gunOf = (params: ParetoParams) => {
+  const weapon = Object.hasOwn(params.itemLookup, params.weaponId) ? params.itemLookup[params.weaponId] : undefined;
+  return weapon !== undefined && weapon.type === 'gun' ? weapon : null;
+};
 
-  const base = buildBaseParams(params);
-  const frontier: ExplorePoint[] = [];
+/** The request of a sweep, as `runExplore` reads it: the shared Optimize request, the axis, the precision flags and the weapon's naked recoil. */
+export function exploreRunRequest(params: ParetoParams): ExploreRunRequest {
+  const weapon = gunOf(params);
+  return {
+    ignore: params.ignore,
+    base: buildBaseParams(params),
+    precisionRequest: params.precisionRequest ?? (params.preciseMode ? 'precise' : 'fast'),
+    ...(params.preciseMode === undefined ? {} : { preciseMode: params.preciseMode }),
+    nakedRecoilV: weapon === null ? 0 : weapon.stats.naked_recoil_v,
+  };
+}
 
-  async function runSolve(weights: { ergoWeight: number; recoilWeight: number; priceWeight: number }, overrides: Partial<SolveParams> = {}): Promise<OptimizeResponse> {
-    return solve({
-      ...base,
-      ergoWeight: weights.ergoWeight,
-      recoilWeight: weights.recoilWeight,
-      priceWeight: weights.priceWeight,
-      maxPrice: maxPrice,
-      minErgonomics: minErgonomics,
-      maxRecoilV: maxRecoilV,
-      ...overrides,
-    });
-  }
+// Tiny tiebreaker on the secondary weights: the pre-cutover sweep weights, kept so the generated targets are unchanged. Must be small enough not
+// to collapse the Pareto frontier.
+const TB = 0.0001;
+type Weights = SweepTarget['weights'];
+const RECOIL_WEIGHTS: Weights = { ergoWeight: TB, recoilWeight: 1, priceWeight: TB };
+const ERGO_WEIGHTS: Weights = { ergoWeight: 1, recoilWeight: TB, priceWeight: TB };
+const PRICE_WEIGHTS: Weights = { ergoWeight: TB, recoilWeight: TB, priceWeight: 1 };
 
-  // Tiny tiebreaker on secondary weights prevents multi-slot over-constraint
-  // from blocking items (see lpBuilder.ts slot mutex). Must be small enough
-  // not to collapse the Pareto frontier.
-  const TB = 0.0001;
-  const RECOIL_WEIGHTS = { ergoWeight: TB, recoilWeight: 1, priceWeight: TB };
-  const ERGO_WEIGHTS = { ergoWeight: 1, recoilWeight: TB, priceWeight: TB };
-  const PRICE_WEIGHTS = { ergoWeight: TB, recoilWeight: TB, priceWeight: 1 };
+const isAxis = (ignore: unknown): ignore is ExploreAxis => ignore === 'price' || ignore === 'recoil' || ignore === 'ergo';
 
-  function addPoint(result: OptimizeResponse) {
-    if (result.status === 'infeasible' || !result.final_stats) return;
-    const stats = result.final_stats;
-    const recoilMultiplier = nakedRecoilV > 0 ? stats.recoil_vertical / nakedRecoilV : 1;
-    frontier.push({
-      ergo: Math.round(stats.ergonomics * 10) / 10,
-      recoil_pct: Math.round((recoilMultiplier - 1) * 1000) / 10,
-      recoil_v: Math.round(stats.recoil_vertical * 10) / 10,
-      recoil_h: Math.round(stats.recoil_horizontal * 10) / 10,
-      price: Math.round(stats.total_price),
-      selected_items: result.selected_items,
-      selected_preset: result.selected_preset,
-      slot_pairs: result.slot_pairs,
-      status: result.status,
-      solve_time_ms: result.solve_time_ms,
-    });
-  }
+/** The statistics of a settled target that produced a witness, else `null`. */
+const witnessStats = (settled: SettledTarget) => (settled.outcome === 'V' && settled.response?.final_stats ? settled.response.final_stats : null);
 
-  if (ignore === 'price') {
-    const resultLow = await runSolve(RECOIL_WEIGHTS);
-    const resultHigh = await runSolve(ERGO_WEIGHTS);
+/**
+ * The recorded schedule of a sweep: the two endpoint targets, and the step generator that extends it. Single-use.
+ * Endpoint `target_value`s are the ends of the swept axis the endpoint solves for (ergonomics 0 or the user's minimum to 100, recoil 0 to the user's
+ * maximum or the naked recoil); step `target_value`s are the constraint value passed to the solve.
+ */
+export function buildSweepSchedule(params: ParetoParams): SweepSchedule {
+  const none: SweepSchedule = { targets: [] };
+  const weapon = gunOf(params);
+  if (weapon === null || !isAxis(params.ignore)) return none;
+  const stepsRaw = params.steps ?? 10;
+  if (typeof stepsRaw !== 'number' || !Number.isFinite(stepsRaw)) return none;
+  const grid = Math.max(stepsRaw, 10);
+  const { ignore, minErgonomics, maxRecoilV } = params;
+  const nakedRecoilV = Number.isFinite(weapon.stats.naked_recoil_v) ? weapon.stats.naked_recoil_v : 0;
 
-    if (resultLow.status === 'infeasible') return [];
-    let rangeMin = Math.floor(resultLow.final_stats!.ergonomics);
-    let rangeMax = resultHigh.status !== 'infeasible' ? Math.ceil(resultHigh.final_stats!.ergonomics) : 100;
+  const ergoAxis = ignore !== 'ergo';
+  const low = ignore === 'price' ? RECOIL_WEIGHTS : ignore === 'recoil' ? PRICE_WEIGHTS : RECOIL_WEIGHTS;
+  const high = ignore === 'ergo' ? PRICE_WEIGHTS : ERGO_WEIGHTS;
+  const step: Weights = ignore === 'price' ? { ergoWeight: 0.01, recoilWeight: 1, priceWeight: TB }
+    : ignore === 'recoil' ? { ergoWeight: 0.01, recoilWeight: TB, priceWeight: 1 }
+      : { ergoWeight: TB, recoilWeight: 0.01, priceWeight: 1 };
+  const stepOverrides = (value: number): Partial<SolveParams> => (ergoAxis ? { minErgonomics: value } : { minErgonomics, maxRecoilV: value });
+  /** The swept-axis value a witness achieves. */
+  const axisValue = (s: NonNullable<ReturnType<typeof witnessStats>>): number => (ergoAxis ? s.ergonomics : s.recoil_vertical);
 
-    if (minErgonomics != null) rangeMin = Math.max(rangeMin, minErgonomics);
-    rangeMin = Math.max(0, rangeMin);
-    rangeMax = Math.min(100, rangeMax);
-    if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
+  const targets: SweepTarget[] = [
+    { target_index: 0, target_value: ergoAxis ? Math.max(0, minErgonomics ?? 0) : 0, weights: low, overrides: {} },
+    { target_index: 1, target_value: ergoAxis ? 100 : (maxRecoilV ?? nakedRecoilV), weights: high, overrides: {} },
+  ];
 
-    addPoint(resultLow);
-    addPoint(resultHigh);
+  let cursor = NaN;
+  let rangeMax = NaN;
+  let stepSize = NaN;
+  let ready = false;
+  const nextStep = (index: number): SweepTarget[] => {
+    cursor += stepSize;
+    if (!(cursor < rangeMax)) return [];
+    return [{ target_index: index, target_value: cursor, weights: step, overrides: stepOverrides(cursor) }];
+  };
 
-    const stepSize = Math.max(1, (rangeMax - rangeMin) / Math.max(steps, 10));
-    let currentE = rangeMin;
-
-    while (currentE < rangeMax) {
-      currentE += stepSize;
-      if (currentE >= rangeMax) break;
-
-      // AUGMECON: minimize recoil with small augmentation on ergo
-      const result = await runSolve(
-        { ergoWeight: 0.01, recoilWeight: 1, priceWeight: TB },
-        { minErgonomics: currentE }
-      );
-      if (result.status === 'optimal' && result.final_stats) {
-        addPoint(result);
-        const s = result.final_stats.ergonomics;
-        if (s > currentE) {
-          currentE = s;
+  return {
+    targets,
+    extend(settled) {
+      const n = settled.length;
+      if (n === 1) return [];
+      if (n === 2) {
+        const lowStats = witnessStats(settled[0]);
+        if (lowStats === null) return [];
+        const highStats = witnessStats(settled[1]);
+        let rangeMin: number;
+        if (ergoAxis) {
+          rangeMin = Math.floor(lowStats.ergonomics);
+          rangeMax = highStats === null ? 100 : Math.ceil(highStats.ergonomics);
+          if (minErgonomics != null) rangeMin = Math.max(rangeMin, minErgonomics);
+          rangeMin = Math.max(0, rangeMin);
+          rangeMax = Math.min(100, rangeMax);
+          if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
+          stepSize = Math.max(1, (rangeMax - rangeMin) / grid);
+        } else {
+          rangeMin = lowStats.recoil_vertical;
+          rangeMax = highStats === null ? nakedRecoilV : highStats.recoil_vertical;
+          if (maxRecoilV != null) rangeMax = Math.min(rangeMax, maxRecoilV);
+          if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
+          stepSize = (rangeMax - rangeMin) / grid;
         }
+        if (![rangeMin, rangeMax, stepSize].every(Number.isFinite) || !(stepSize > 0)) return [];
+        cursor = rangeMin;
+        ready = true;
+        return nextStep(n);
       }
-    }
-  } else if (ignore === 'recoil') {
-    const resultLow = await runSolve(PRICE_WEIGHTS);
-    const resultHigh = await runSolve(ERGO_WEIGHTS);
-
-    if (resultLow.status === 'infeasible') return [];
-    let rangeMin = Math.floor(resultLow.final_stats!.ergonomics);
-    let rangeMax = resultHigh.status !== 'infeasible' ? Math.ceil(resultHigh.final_stats!.ergonomics) : 100;
-
-    if (minErgonomics != null) rangeMin = Math.max(rangeMin, minErgonomics);
-    rangeMin = Math.max(0, rangeMin);
-    rangeMax = Math.min(100, rangeMax);
-    if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
-
-    addPoint(resultLow);
-    addPoint(resultHigh);
-
-    const stepSize = Math.max(1, (rangeMax - rangeMin) / Math.max(steps, 10));
-    let currentE = rangeMin;
-
-    while (currentE < rangeMax) {
-      currentE += stepSize;
-      if (currentE >= rangeMax) break;
-
-      const result = await runSolve(
-        { ergoWeight: 0.01, recoilWeight: TB, priceWeight: 1 },
-        { minErgonomics: currentE }
-      );
-      if (result.status === 'optimal' && result.final_stats) {
-        addPoint(result);
-        const s = result.final_stats.ergonomics;
-        if (s > currentE) {
-          currentE = s;
-        }
+      if (!ready) return [];
+      const achieved = witnessStats(settled[n - 1]);
+      if (achieved !== null) {
+        const value = axisValue(achieved);
+        if (value > cursor) cursor = value;
       }
-    }
-  } else if (ignore === 'ergo') {
-    const resultLow = await runSolve(RECOIL_WEIGHTS, { minErgonomics: minErgonomics });
-    const resultHigh = await runSolve(PRICE_WEIGHTS, { minErgonomics: minErgonomics });
-
-    if (resultLow.status === 'infeasible') return [];
-    const rangeMin = resultLow.final_stats!.recoil_vertical;
-    let rangeMax = resultHigh.status !== 'infeasible' ? resultHigh.final_stats!.recoil_vertical : nakedRecoilV;
-
-    if (maxRecoilV != null) rangeMax = Math.min(rangeMax, maxRecoilV);
-    if (rangeMax <= rangeMin) rangeMax = rangeMin + 1;
-
-    addPoint(resultLow);
-    addPoint(resultHigh);
-
-    const stepSize = (rangeMax - rangeMin) / Math.max(steps, 10);
-    let currentR = rangeMin;
-
-    while (currentR < rangeMax) {
-      currentR += stepSize;
-      if (currentR >= rangeMax) break;
-
-      const result = await runSolve(
-        { ergoWeight: TB, recoilWeight: 0.01, priceWeight: 1 },
-        { minErgonomics: minErgonomics, maxRecoilV: currentR }
-      );
-      if (result.status === 'optimal' && result.final_stats) {
-        addPoint(result);
-        const s = result.final_stats.recoil_vertical;
-        if (s > currentR) {
-          currentR = s;
-        }
-      }
-    }
-  }
-
-  // Deduplicate
-  const pointsMap = new Map<string, ExplorePoint>();
-
-  if (ignore === 'price') {
-    for (const p of frontier) {
-      const key = `${p.ergo},${p.recoil_v}`;
-      const existing = pointsMap.get(key);
-      if (!existing || p.price < existing.price) pointsMap.set(key, p);
-    }
-  } else if (ignore === 'recoil') {
-    for (const p of frontier) {
-      const key = `${p.ergo},${p.price}`;
-      const existing = pointsMap.get(key);
-      if (!existing || p.recoil_v < existing.recoil_v) pointsMap.set(key, p);
-    }
-  } else if (ignore === 'ergo') {
-    for (const p of frontier) {
-      const key = `${p.recoil_v},${p.price}`;
-      const existing = pointsMap.get(key);
-      if (!existing || p.ergo > existing.ergo) pointsMap.set(key, p);
-    }
-  }
-
-  const deduplicated = [...pointsMap.values()];
-
-  // Pareto filter
-  function isDominated(p: ExplorePoint, others: ExplorePoint[]): boolean {
-    for (const q of others) {
-      if (q === p) continue;
-      if (ignore === 'price') {
-        if (q.ergo >= p.ergo && q.recoil_v <= p.recoil_v && (q.ergo > p.ergo || q.recoil_v < p.recoil_v)) return true;
-      } else if (ignore === 'recoil') {
-        if (q.ergo >= p.ergo && q.price <= p.price && (q.ergo > p.ergo || q.price < p.price)) return true;
-      } else if (ignore === 'ergo') {
-        if (q.recoil_v <= p.recoil_v && q.price <= p.price && (q.recoil_v < p.recoil_v || q.price < p.price)) return true;
-      }
-    }
-    return false;
-  }
-
-  const paretoFrontier = deduplicated.filter(p => !isDominated(p, deduplicated));
-
-  // Sort by X-axis
-  if (ignore === 'price' || ignore === 'recoil') {
-    paretoFrontier.sort((a, b) => a.ergo - b.ergo);
-  } else {
-    paretoFrontier.sort((a, b) => a.recoil_v - b.recoil_v);
-  }
-
-  return paretoFrontier;
+      return nextStep(n);
+    },
+  };
 }

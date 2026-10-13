@@ -1,474 +1,414 @@
 /**
- * HiGHS LP Solver Integration
- * Builds LP string via lpBuilder, solves with HiGHS WASM, decodes result.
+ * Solver entry points: `solve` and `computeIdealPoint` (Stage 2 correctness cutover, Phase 2.4b-3b).
+ *
+ * Two models, one acceptance rule. Nothing is published that the independent physical validator (`physical/validate.ts`) did not accept,
+ * and every published statistic is the validator's exact recomputation.
+ *
+ *  - Precise (`preciseMode: true`): the certified count model of `physical/` (`solvePrecise`, owner decisions 2d and 2e), built through the
+ *    proof layer, with a second opinion on every certificate (decision 5a). Multiple copies, physical slots, the exact wallet, preset/owned
+ *    supply. TrueErgo and Prevent Overswing run its spatial search over total weight, certified.
+ *  - Fast (`preciseMode` false or absent): the template-count model of `physical/specializeFast.ts` on the same physical domain, acquisition and
+ *    request as Precise (the same count model as plain doubles, at most one copy per part unless repeats are allowed), solved on the same
+ *    pinned native build. Its counts are decoded into a rooted occurrence tree and judged by the same exact validator; a rejected point is cut out
+ *    and the model re-solved, and a result that is not a valid physical build is `incomplete`, never published (`physical/solveFast.ts`).
+ *    TrueErgo and Prevent Overswing run the same spatial search over total weight on the count model (owner decision 2b, Phase 2.6b): an
+ *    approximate answer, never a certificate.
+ *
+ * This module only ASSEMBLES. The status, certificate, qualifications, termination and reason of every response come from the pure classifier
+ * (`physical/outcome.ts`, ADR 0013 section 6), fed by the facts `solvePrecise` and `solveFast` report; the optimization metadata is the search's
+ * own bounds (an unknown bound is `null`, never 0). The response is the section 5 transport of `api/client.ts`.
+ * A native failure is a typed error (`SolverError`), never a fabricated result.
+ *
+ * Precision. `precision_request` echoes what the caller asked (`SolveParams.precisionRequest`, else derived from `preciseMode`);
+ * `precision_resolved` is the model that actually ran, which is `preciseMode` and nothing else: a TrueErgo or Prevent Overswing request is NOT
+ * upgraded to Precise (the caller resolves Auto by size, `precisionMode.ts`).
  */
 
-import type { OptimizeResponse, ItemDetail, PresetDetail, FinalStats } from '../api/client';
-import type { SolveParams, GunLookupEntry, IdealPoint } from './types';
+import type { OptimizeResponse, OptimizationMetadata, FinalStats } from '../api/client';
+import type { SolveParams, IdealPoint, ModelQualification, MoaQualification, PhysicalCertificate, PrecisionRequest, PrecisionResolved, SolveStatus } from './types';
 export type { SolveParams, IdealPoint } from './types';
-import { buildLP, MOA_K, EVO_ERGO_K, eedOf, estimateEvoErgoK } from './lpBuilder';
-import { getAvailablePrice } from './dataService';
+import type { ObjectiveAxes } from './trueErgo';
+import { canonicalizeTraderLevels } from './reuseKey';
+import { itemDetails, presetDetail } from './buildDetails';
+import { optimizeEnvelope } from './operationEnvelopes';
+import { withDeadline } from './requestGuard';
+import { fixedGuard, guardStop } from './runtimeGuard';
+import type { RuntimeGuard } from './runtimeGuard';
+import { setHighsBaseUrl } from './native';
+import { axesOfStats } from './physical/objective';
+import { inspectOwnedItems } from './physical/ownedItems';
+import { classifyOptimize, isMoaDependent, observationsOfReason } from './physical/outcome';
+import type { OptimizeOutcome, StopObservations } from './physical/outcome';
+import { PUBLIC_REASONS } from './physical/reasons';
+import { solveFast } from './physical/solveFast';
+import type { FastSummary } from './physical/solveFast';
+import { resolveTolerance, solvePrecise } from './physical/solvePrecise';
+import type { PreciseSummary } from './physical/solvePrecise';
+import type { PhysicalBuild, PhysicalBuildStats } from './physical/validate';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let highs: any = null;
-let highsCorrupted = false;
-
-// Load HiGHS module.  In Node (tests), use the npm package directly.
-// In browser workers, Vite's ES module bundling corrupts the Emscripten
-// runtime, so we load highs.js from public/ at runtime instead.
-async function loadHiGHS() {
-  const base = import.meta.env?.BASE_URL || '/';
-
-  // Node / test environment: use custom WASM build from public/ if present on disk
-  const g = globalThis as unknown as {
-    WorkerGlobalScope?: unknown;
-    window?: unknown;
-    process?: { cwd: () => string };
-  };
-  if (typeof g.WorkerGlobalScope === 'undefined' && typeof g.window === 'undefined') {
-    try {
-      const cwd = g.process?.cwd?.() || '.';
-      // @ts-expect-error — dynamic node import for test environments
-      const fs = await import('fs');
-      // @ts-expect-error — dynamic node import for test environments
-      const path = await import('path');
-      const wasmPath = path.resolve(cwd, 'public/highs.wasm');
-      const jsPath = path.resolve(cwd, 'public/highs.js');
-      if (fs.existsSync(wasmPath) && fs.existsSync(jsPath)) {
-        const wasmBinary = new Uint8Array(fs.readFileSync(wasmPath));
-        const jsSource = fs.readFileSync(jsPath, 'utf8');
-        const exports = {} as Record<string, unknown>;
-        const module = { exports };
-        // @ts-expect-error — dynamic node import for test environments
-        const { createRequire } = await import('module');
-        const nodeRequire = createRequire(import.meta.url);
-        new Function('module', 'exports', 'require', '__dirname', '__filename', jsSource)(
-          module, exports, nodeRequire, cwd, 'highs.js'
-        );
-        const loader = module.exports as unknown as (opts: { wasmBinary: Uint8Array }) => Promise<unknown>;
-        return loader({ wasmBinary });
-      }
-    } catch {
-      // Fallback to stock npm package
-    }
-
-    const loader = (await import('highs')).default;
-    return loader();
-  }
-
-  // Browser: fetch both WASM binary and highs.js source, then evaluate
-  // highs.js with CJS shims.  Vite's ES module bundling corrupts the
-  // Emscripten runtime, so we bypass the bundler entirely.
-  const [wasmResp, jsResp] = await Promise.all([
-    fetch(base + 'highs.wasm'),
-    fetch(base + 'highs.js'),
-  ]);
-  const wasmBinary = new Uint8Array(await wasmResp.arrayBuffer());
-  const jsSource = await jsResp.text();
-
-  // Evaluate highs.js with CJS module/exports shims
-  const exports = {} as Record<string, unknown>;
-  const module = { exports };
-  const fn = new Function('module', 'exports', jsSource);
-  fn(module, exports);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const loader = module.exports as any;
-
-  return loader({ wasmBinary });
+/**
+ * The shipped highs.js solve() returned only Status, ObjectiveValue, Columns and Rows: no dual bound, gap or node count.
+ * Kept for the benchmark experiments that still read it (Phase 2.9); `solve` no longer uses it.
+ * @deprecated
+ */
+export function classifyMipStatus(status: string): 'optimal' | 'infeasible' | 'limit' | 'other' {
+  if (status === 'Optimal') return 'optimal';
+  if (status === 'Infeasible') return 'infeasible';
+  if (
+    status === 'Time limit reached'
+    || status === 'Iteration limit reached'
+    || status === 'Target for objective reached'
+    || status === 'Bound on objective reached'
+  ) return 'limit';
+  return 'other';
 }
 
 /**
- * Computes the ideal z* and nadir reference points across 3 endpoint solves
- * (pure ergo, pure recoil, pure price). Used by augmented Tchebycheff scalarization.
+ * Upper bound only after Optimal: the solver's own objective, with NO fixed margin. The pre-cutover code added a nominal 1e-7 to every
+ * bound; that constant had no error analysis and made a requested tolerance below it impossible to certify. The proved allowance for
+ * native, secant and frame error is Phase 2.5 (`physical/search.ts` `nodeUpperBound` is the seam).
+ * @deprecated Kept for the benchmark experiments that still read it (Phase 2.9); `solve` uses the structured native bound.
+ */
+export function certifiedDualBound(status: string, objectiveValue: number | undefined): number | undefined {
+  if (classifyMipStatus(status) !== 'optimal') return undefined;
+  if (objectiveValue == null || !Number.isFinite(objectiveValue)) return undefined;
+  return objectiveValue;
+}
+
+/**
+ * A MIP column vector may update the incumbent only when every expected decision column is present and integral and exactly one purchase
+ * base is selected, and the independent build validator reports no errors. Pure column check of the legacy template model.
+ * @deprecated Kept for the benchmark experiments that still read it (Phase 2.9); `solve` validates through `physical/validate.ts`.
+ */
+export function incumbentBlockReason(
+  columns: Record<string, { Primal?: number } | undefined>,
+  expectedColumns: readonly string[],
+  nBases: number,
+  validationErrors: readonly string[],
+): string | undefined {
+  for (const name of expectedColumns) {
+    const primal = columns[name]?.Primal;
+    if (primal == null || !Number.isFinite(primal)) return `Missing decision column ${name}`;
+    if (Math.abs(primal - Math.round(primal)) > 1e-7) return `Nonintegral decision column ${name}`;
+  }
+  let bases = 0;
+  for (let b = 1; b <= nBases; b++) {
+    const primal = columns[`base_${b}`]?.Primal;
+    if (primal != null && primal > 0.5) bases++;
+  }
+  if (bases !== 1) return `Decoded solution selected ${bases} purchase bases`;
+  if (validationErrors.length) return `Independent build validation failed: ${validationErrors.join('; ')}`;
+  return undefined;
+}
+
+/**
+ * Solver features supported by this build.
+ * Benchmark runners check this to avoid running candidate flags against legacy code.
+ */
+export const SOLVER_CAPABILITIES = {
+  retainLimitIncumbent: false,
+  branchOrdering: false,
+  initialCandidate: false,
+} as const;
+
+// HiGHS is the pinned native build behind ./native (see vendor/highs/README.md). The loader hash-checks both artifacts and
+// validates the ABI against the committed manifest, and throws a typed error on any mismatch: there is no fallback to the
+// stock npm package or to any other HiGHS. The Vite base is the browser location of highs.js / highs.wasm.
+setHighsBaseUrl((import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL || '/');
+
+/** The clock of a solve with no guard of its own (a direct caller): the page or worker monotonic clock. */
+const defaultNow = (): number => performance.now();
+
+/** Default request budget of a solve that was given neither a guard nor a `timeLimitMs`. */
+export const DEFAULT_SOLVE_TIME_LIMIT_MS = 60_000;
+
+/**
+ * The guard a solve runs under (ADR 0013 section 4D). The request's own guard when it has one (the deadline is the queue-inclusive epoch
+ * deadline; a `timeLimitMs` can only narrow it, never extend it), otherwise a guard built from `timeLimitMs` (no cancel source), which keeps
+ * direct callers and the tests working. Every stage reads this one clock.
+ */
+export function guardOfParams(params: Pick<SolveParams, 'guard' | 'timeLimitMs'>): RuntimeGuard {
+  const limit = Math.max(0, params.timeLimitMs ?? DEFAULT_SOLVE_TIME_LIMIT_MS);
+  if (params.guard === undefined) return fixedGuard(defaultNow() + limit);
+  return params.timeLimitMs === undefined ? params.guard : withDeadline(params.guard, params.guard.now() + limit);
+}
+
+/** The result of one solve plus the objective axes of its build (what a payoff-table endpoint reads). */
+interface Detailed {
+  response: OptimizeResponse;
+  axes?: ObjectiveAxes;
+  /** The payoff table THIS call computed (absent when it was supplied, or the request does not use one). */
+  payoff?: PayoffReport;
+}
+
+/** What one payoff endpoint established: the endpoint cache admits a table only when every endpoint is a qualified Precise certified optimum. */
+export interface EndpointRecord {
+  weights: readonly [number, number, number];
+  status: SolveStatus;
+  physical_certificate: PhysicalCertificate;
+  precision_resolved: PrecisionResolved;
+  model_qualification: ModelQualification;
+  moa_qualification: MoaQualification;
+}
+
+/** A payoff table with the proof state of the three solves that produced it. */
+export interface PayoffReport {
+  idealPoint: IdealPoint;
+  endpoints: readonly EndpointRecord[];
+}
+
+/** A solve response and, when this call computed the Tchebycheff payoff table, the table with its endpoint records. */
+export interface SolveReport {
+  response: OptimizeResponse;
+  payoff: PayoffReport | null;
+}
+
+/** The payoff table could not be computed. `endpoint` is the response of the endpoint solve that failed, when there is one. */
+class PayoffTableError extends Error {
+  readonly reason: string;
+  readonly endpoint: OptimizeResponse | null;
+
+  constructor(reason: string, endpoint: OptimizeResponse | null) {
+    super(`Ideal-point endpoint not certified: ${reason}`);
+    this.name = 'PayoffTableError';
+    this.reason = reason;
+    this.endpoint = endpoint;
+  }
+}
+
+const PAYOFF_WEIGHTS: readonly (readonly [number, number, number])[] = [[100, 0, 0], [0, 100, 0], [0, 0, 100]];
+
+/** The payoff table and the proof state of its three endpoint solves, under one guard (guard before each endpoint, a macrotask yield after it). */
+async function computePayoff(params: SolveParams, guard: RuntimeGuard): Promise<PayoffReport> {
+  const base: SolveParams = { ...params, useTchebycheff: false, idealPoint: undefined, guard, timeLimitMs: undefined };
+  const pay: ObjectiveAxes[] = [];
+  const endpoints: EndpointRecord[] = [];
+  for (const weights of PAYOFF_WEIGHTS) {
+    const stop = guardStop(guard);
+    if (stop !== null) throw new PayoffTableError(stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached, null);
+    const r = await solveDetailed({ ...base, ergoWeight: weights[0], recoilWeight: weights[1], priceWeight: weights[2] });
+    if (r.response.status !== 'optimal' || !r.axes) throw new PayoffTableError(r.response.reason ?? r.response.status, r.response);
+    pay.push(r.axes);
+    const { status, physical_certificate, precision_resolved, model_qualification, moa_qualification } = r.response;
+    endpoints.push({ weights, status, physical_certificate, precision_resolved, model_qualification, moa_qualification });
+    // The payoff solves are sub-solves of one request: yield a macrotask between them so an out-of-band cancel message is dispatched.
+    await guard.yieldMacrotask();
+  }
+  return {
+    idealPoint: {
+      zE: Math.max(...pay.map(p => p.fE)), nadE: Math.min(...pay.map(p => p.fE)),
+      zR: Math.min(...pay.map(p => p.fR)), nadR: Math.max(...pay.map(p => p.fR)),
+      zP: Math.min(...pay.map(p => p.fP)), nadP: Math.max(...pay.map(p => p.fP)),
+    },
+    endpoints,
+  };
+}
+
+/**
+ * Endpoint payoff table (ADR 0013 section 4D): three solves with weights [100, 0, 0], [0, 100, 0] and [0, 0, 100], in the SAME frames as
+ * the final objective (fE = 10 x ergonomics or TED, fR = 1000 x recoil modifier sum, fP = RUB spend). Each endpoint keeps every user
+ * feasibility constraint and must be certified optimal; the six coordinates are derived from those three vectors.
  */
 export async function computeIdealPoint(params: SolveParams): Promise<IdealPoint> {
-  const baseParams: SolveParams = {
-    ...params,
-    useTchebycheff: false,
-    idealPoint: undefined,
-  };
-
-  const [ergoRes, recoilRes, priceRes] = await Promise.all([
-    solve({ ...baseParams, ergoWeight: 100, recoilWeight: 0, priceWeight: 0 }),
-    solve({ ...baseParams, ergoWeight: 0, recoilWeight: 100, priceWeight: 0 }),
-    solve({ ...baseParams, ergoWeight: 0, recoilWeight: 0, priceWeight: 100 }),
-  ]);
-
-  const evalPt = (r: OptimizeResponse) => {
-    const s = r.final_stats;
-    if (!s) return { fE: 500, fR: 0, fP: 100000 };
-    let fE = Math.min(100, Math.max(0, s.ergonomics)) * 10;
-    if (params.useEvoErgo) {
-      const weapon = params.itemLookup[params.weaponId];
-      const baseErgo = weapon?.type === 'gun' ? weapon.stats.naked_ergonomics : 40;
-      const k = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
-      fE = fE - k * 10 * s.total_weight;
-    }
-    const fR = r.selected_items.reduce((a, it) => a + Math.round((it.recoil_modifier ?? 0) * 1000), 0);
-    const fP = s.total_price;
-    return { fE, fR, fP };
-  };
-
-  const pay = [evalPt(ergoRes), evalPt(recoilRes), evalPt(priceRes)];
-  const zE = Math.max(...pay.map(p => p.fE));
-  const nadE = Math.min(...pay.map(p => p.fE));
-  const zR = Math.min(...pay.map(p => p.fR));
-  const nadR = Math.max(...pay.map(p => p.fR));
-  const zP = Math.min(...pay.map(p => p.fP));
-  const nadP = Math.max(...pay.map(p => p.fP));
-
-  return { zE, nadE, zR, nadR, zP, nadP };
+  return (await computePayoff(params, guardOfParams(params))).idealPoint;
 }
 
 export async function solve(params: SolveParams): Promise<OptimizeResponse> {
-  const startTime = performance.now();
-
-    if (params.preventOverswing && (!params.overswingCuts || params.overswingCuts.length === 0)) {
-      const b = Math.max(-0.9, Math.min(0.5, params.equipErgoModifier ?? 0));
-      const cuts: Array<{ slope: number; rhs: number }> = [];
-      let res = await solve({ ...params, preventOverswing: false, overswingCuts: cuts });
-      for (let iter = 0; iter < 4; iter++) {
-        if (res.status !== 'optimal' || !res.final_stats) break;
-        const s = res.final_stats;
-        const eed = eedOf(s.ergonomics, s.total_weight, b);
-        if (eed >= -0.05) break;
-
-        const E_raw = Math.min(100, Math.max(0, s.ergonomics));
-        const E_eff = E_raw * (1 + b);
-        const slopeEff = 2 * 0.0007556 * E_eff + 0.02736;
-        const slopeRaw = slopeEff * (1 + b);
-        const KG = 0.0007556 * E_eff * E_eff + 0.02736 * E_eff + 2.9159;
-        const rhs = KG - slopeEff * E_eff;
-        cuts.push({ slope: slopeRaw, rhs });
-
-        res = await solve({ ...params, preventOverswing: false, overswingCuts: [...cuts] });
-      }
-      return res;
-    }
-
-  try {
-    if (!highs || highsCorrupted) {
-      highs = await loadHiGHS();
-      highsCorrupted = false;
-    }
-    if (params.useTchebycheff && !params.idealPoint) {
-      params.idealPoint = await computeIdealPoint(params);
-    }
-
-
-    const lp = buildLP(params);
-    const result = highs.solve(lp.lpString);
-
-    if (result.Status !== 'Optimal') {
-      return {
-        status: 'infeasible',
-        reason: result.Status === 'Infeasible' ? 'No valid configuration found' : result.Status,
-        selected_items: [],
-        selected_preset: undefined,
-        objective_value: 0,
-        solve_time_ms: performance.now() - startTime,
-      };
-    }
-
-    // Decode solution: read x_i variables
-    const columns = result.Columns || {};
-    const selectedIds: string[] = [];
-    for (let i = 1; i <= lp.nItems; i++) {
-      const col = columns[`x_${i}`];
-      if (col && col.Primal > 0.5) {
-        selectedIds.push(lp.indexToItem[i]);
-      }
-    }
-
-    // Find selected base
-    let selectedBaseId: string | null = null;
-    for (let b = 0; b < lp.nBases; b++) {
-      const col = columns[`base_${b + 1}`];
-      if (col && col.Primal > 0.5) {
-        selectedBaseId = lp.baseIds[b];
-        break;
-      }
-    }
-
-    // Compute stats from raw item data (matching test_compare.py)
-    const weapon = params.itemLookup[params.weaponId] as GunLookupEntry;
-    const wStats = weapon.stats;
-
-    let totalErgo = wStats.naked_ergonomics;
-    let totalRecoilMod = 0;
-    let totalAccuracyMod = 0;
-    let totalWeight = wStats.weight || 0;
-    let barrelCOI = 0; // installed replaceable barrel's centerOfImpact — REPLACES weapon's intrinsic COI when present
-
-    const detailedItems: ItemDetail[] = [];
-
-    for (const itemId of selectedIds) {
-      const entry = params.itemLookup[itemId];
-      if (!entry) continue;
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = entry.data as Record<string, any>;
-      const icon = data.image512pxLink ?? data.imageLink ?? data.image8xLink ?? data.iconLink ?? data.iconLinkFallback;
-      const imageLarge = data.image512pxLink ?? data.imageLink ?? data.image8xLink;
-
-      if (entry.type === 'mod') {
-        const ms = entry.stats;
-        totalErgo += ms.ergonomics || 0;
-        totalRecoilMod += ms.recoil_modifier || 0;
-        totalAccuracyMod += ms.accuracy_modifier || 0;
-        totalWeight += ms.weight || 0;
-        if ((ms.center_of_impact ?? 0) > 0) barrelCOI = ms.center_of_impact;
-
-        // Initialize with no price/source — the buy loop below will fill in
-        // price and source only for items that are actually purchased (buy_i=1).
-        // Items retained from a preset keep price=0 and no source.
-        detailedItems.push({
-          id: itemId,
-          name: data.name ?? 'Unknown',
-          price: 0,
-          icon,
-          image_large: imageLarge || undefined,
-          source: undefined,
-          purchasable: ms.purchasable,
-          reference_price_rub: ms.reference_price_rub,
-          ergonomics: ms.ergonomics || 0,
-          recoil_modifier: ms.recoil_modifier || 0,
-          accuracy_modifier: ms.accuracy_modifier || undefined,
-          weight: ms.weight || undefined,
-          category: ms.category || undefined,
-          handbook_categories: ms.handbook_categories?.length ? ms.handbook_categories : undefined,
-          capacity: ms.capacity || undefined,
-          sighting_range: ms.sighting_range || undefined,
-        });
-      } else {
-        detailedItems.push({
-          id: itemId,
-          name: data.name ?? 'Unknown',
-          price: 0,
-          icon,
-          source: '',
-          ergonomics: 0,
-          recoil_modifier: 0,
-        });
-      }
-    }
-
-    // Compute price using buy variables with trader-filtered prices
-    const traderLevels = params.traderLevels ?? undefined;
-    const fleaAvailable = params.fleaAvailable ?? true;
-    const playerLevel = params.playerLevel ?? null;
-    const barterAvailable = params.barterAvailable ?? false;
-    const barterExcludeDogtags = params.barterExcludeDogtags ?? false;
-
-    let buyPrice = 0;
-    for (let i = 1; i <= lp.nItems; i++) {
-      const itemId = lp.indexToItem[i];
-      const xCol = columns[`x_${i}`];
-      if (!xCol || xCol.Primal < 0.5) continue; // not selected
-      const buyCol = columns[`buy_${i}`];
-      const isBought = buyCol && buyCol.Primal > 0.5;
-      const entry = params.itemLookup[itemId];
-      if (entry?.type !== 'mod') continue;
-      const detail = detailedItems.find(d => d.id === itemId);
-      if (!detail) continue;
-
-      if (isBought) {
-        const [price, src] = getAvailablePrice(entry.stats, traderLevels, fleaAvailable, playerLevel, barterAvailable, barterExcludeDogtags);
-        buyPrice += price;
-        detail.source = src ?? undefined;
-        detail.price = price;
-        if (src?.startsWith('barter:') && entry.stats.offers) {
-          const offer = entry.stats.offers.find(o => o.source === src);
-          if (offer?.barter_requirements) {
-            detail.barter_requirements = offer.barter_requirements;
-          }
-        }
-      } else if (!entry.stats.purchasable) {
-        // FiR / unpurchasable item — show as such
-        detail.source = 'not_purchasable';
-      }
-      // else: preset-retained item — keeps price=0, source=undefined
-    }
-
-    // Base price (use filtered preset price)
-    let basePrice = 0;
-    let presetDetail: PresetDetail | undefined;
-    // Shared weapon info for preset tooltip
-    const weaponTooltip = {
-      caliber: wStats.caliber || undefined,
-      fire_rate: wStats.fire_rate || undefined,
-      fire_modes: wStats.fire_modes?.length ? wStats.fire_modes : undefined,
-      default_ergo: wStats.default_ergonomics || undefined,
-      default_recoil_v: wStats.default_recoil_v || undefined,
-      default_recoil_h: wStats.default_recoil_h || undefined,
-      weight: wStats.weight || undefined,
-    };
-
-    if (selectedBaseId === 'naked') {
-      // Same availability filtering the LP priced this base with, so the
-      // reported price and seller match what the solver actually paid.
-      const [nakedPrice, nakedSource, , nakedLabel] = getAvailablePrice(
-        wStats, traderLevels, fleaAvailable, playerLevel, barterAvailable, barterExcludeDogtags,
-      );
-      basePrice = nakedPrice;
-      const gunData = weapon.data as Record<string, unknown>;
-      presetDetail = {
-        id: params.weaponId,
-        name: (gunData.name as string) ?? 'Naked Gun',
-        price: basePrice,
-        items: [],
-        icon: (gunData.iconLink ?? gunData.iconLinkFallback ?? wStats.default_preset_image) as string | undefined,
-        image_large: (gunData.image512pxLink ?? gunData.imageLink ?? gunData.image8xLink) as string | undefined,
-        source: nakedSource ?? undefined,
-        purchase_label: nakedLabel ?? undefined,
-        ...weaponTooltip,
-      };
-    } else if (selectedBaseId) {
-      const preset = (weapon.presets || []).find(p => p.id === selectedBaseId)
-        || (weapon.all_presets || []).find(p => p.id === selectedBaseId);
-      if (preset) {
-        const [filteredPrice, src, , purchaseLabel] = getAvailablePrice(preset, traderLevels, fleaAvailable, playerLevel, barterAvailable, barterExcludeDogtags);
-        basePrice = filteredPrice;
-        let source = src ?? undefined;
-        let label = purchaseLabel ?? undefined;
-        if (!source && preset.price_source && preset.price_source !== 'not_available') {
-          source = preset.price_source;
-        }
-        if (!label && source === 'fleaMarket') {
-          label = 'Flea Market';
-        }
-        let presetBarterReqs: Array<{ name: string; count: number; unit_price: number }> | undefined;
-        if (source?.startsWith('barter:') && preset.offers) {
-          const offer = preset.offers.find(o => o.source === source);
-          if (offer?.barter_requirements) presetBarterReqs = offer.barter_requirements;
-        }
-        presetDetail = {
-          id: preset.id,
-          name: preset.name,
-          price: filteredPrice,
-          items: preset.items || [],
-          icon: preset.image ?? undefined,
-          image_large: preset.image ?? undefined,
-          source,
-          purchase_label: label,
-          barter_requirements: presetBarterReqs,
-          parts_count: preset.items?.length || undefined,
-          ...weaponTooltip,
-        };
-      }
-    }
-
-    const totalPrice = buyPrice + basePrice;
-
-    // BSG formula: displayed MOA = effectiveBaseCOI * (1 - accMod/100) * MOA_K
-    // effectiveBaseCOI = installed replaceable-barrel COI if any, else weapon's intrinsic COI.
-    const intrinsicCOI = wStats.center_of_impact || 0;
-    const effectiveBaseCOI = barrelCOI > 0 ? barrelCOI : intrinsicCOI;
-    const finalMOA = effectiveBaseCOI * (1 - totalAccuracyMod / 100) * MOA_K;
-
-    const finalStats: FinalStats = {
-      ergonomics: Math.max(0, Math.min(100, totalErgo)),
-      recoil_vertical: wStats.naked_recoil_v * (1 + totalRecoilMod),
-      recoil_horizontal: wStats.naked_recoil_h * (1 + totalRecoilMod),
-      total_price: totalPrice,
-      total_weight: totalWeight,
-      evo_ergo: Math.max(0, Math.min(100, totalErgo)) - EVO_ERGO_K * totalWeight,
-      eed: eedOf(totalErgo, totalWeight, params.equipErgoModifier ?? 0),
-      moa: finalMOA,
-    };
-
-    // Reconstruct slot-item pairs for EFTForge build export.
-    // For multi-slot items (precise mode), read p_{item}_{slot} placement
-    // variables to get exact slot assignments. For single-slot items, use
-    // BFS with greedy matching.
-    const selectedSet = new Set(selectedIds);
-    // Pre-resolve placement for multi-slot items via p_ variables
-    const itemSlotPlacement = new Map<string, Set<string>>(); // itemId → assigned slotIds
-    for (const itemIdx of lp.multiSlotItemIndices) {
-      const itemId = lp.indexToItem[itemIdx];
-      if (!selectedSet.has(itemId)) continue;
-      const slotIndices = lp.itemToSlotIndices.get(itemIdx);
-      if (!slotIndices) continue;
-      for (const slotIdx of slotIndices) {
-        const pVar = columns[`p_${itemIdx}_${slotIdx}`];
-        if (pVar && pVar.Primal > 0.5) {
-          if (!itemSlotPlacement.has(itemId)) itemSlotPlacement.set(itemId, new Set());
-          itemSlotPlacement.get(itemId)!.add(lp.indexToSlot[slotIdx]);
-        }
-      }
-    }
-    // BFS from weapon root in parent-before-child order
-    const slotPairs: [string, string][] = [];
-    const placedItems = new Set<string>(); // each item ID placed at most once
-    const queue = [lp.weaponId];
-    const visited = new Set<string>();
-    while (queue.length > 0) {
-      const ownerId = queue.shift()!;
-      if (visited.has(ownerId)) continue;
-      visited.add(ownerId);
-      for (const [slotId, owner] of Object.entries(lp.slotOwnerMap)) {
-        if (owner !== ownerId) continue;
-        const candidates = lp.slotItemsMap[slotId];
-        if (!candidates) continue;
-        for (const itemId of candidates) {
-          if (!selectedSet.has(itemId)) continue;
-          if (placedItems.has(itemId)) continue;
-          // For multi-slot items, only assign to the slot the solver chose
-          const placements = itemSlotPlacement.get(itemId);
-          if (placements && !placements.has(slotId)) continue;
-          placedItems.add(itemId);
-          slotPairs.push([slotId, itemId]);
-          queue.push(itemId);
-          break;
-        }
-      }
-    }
-
-    return {
-      status: 'optimal',
-      selected_items: detailedItems,
-      selected_preset: presetDetail,
-      objective_value: result.ObjectiveValue || 0,
-      final_stats: finalStats,
-      solve_time_ms: performance.now() - startTime,
-      slot_pairs: slotPairs,
-      ideal_point: params.idealPoint,
-    };
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message
-      : typeof e === 'number' ? `HiGHS WASM exception (code ${e})`
-      : `Unknown solver error: ${String(e)}`;
-    console.error('HiGHS Solve Error:', e);
-    // Mark as corrupted so next solve reinitializes WASM
-    highsCorrupted = true;
-    return {
-      status: 'infeasible',
-      reason: msg,
-      selected_items: [],
-      selected_preset: undefined,
-      objective_value: 0,
-      solve_time_ms: performance.now() - startTime,
-    };
-  }
+  return (await solveDetailed(params)).response;
 }
 
-/**
- * EvoErgo-aware solve. Uses the weapon-specific closed-form tangent estimator
- * k(E_base + 25) to solve in a single LP pass (~9x faster than sweeping),
- * matching the true quadratic EED optimum across >95% of builds.
- * An explicit evoErgoK (tests, tuning) overrides the estimate.
- */
-export async function solveEvoErgo(params: SolveParams): Promise<OptimizeResponse> {
-  if (!params.useEvoErgo) {
-    return solve(params);
-  }
-  const weapon = params.itemLookup[params.weaponId];
-  const baseErgo = weapon?.type === 'gun' ? weapon.stats.naked_ergonomics : 40;
-  const k = params.evoErgoK ?? estimateEvoErgoK(baseErgo, params.equipErgoModifier ?? 0);
+/** {@link solve} plus the payoff table this call computed with the proof state of its endpoints (what the worker endpoint cache admits). */
+export async function solveRequest(params: SolveParams): Promise<SolveReport> {
+  const detailed = await solveDetailed(params);
+  return { response: detailed.response, payoff: detailed.payoff ?? null };
+}
 
-  const res = await solve({ ...params, evoErgoK: k });
-  if (res.status === 'optimal') {
-    res.evo_ergo_k = k;
+// ---------------------------------------------------------------------------------------------
+// Response assembly (shared by Precise and Fast: both publish a validated PhysicalBuild)
+// ---------------------------------------------------------------------------------------------
+
+/** What every assembled response shares: the caller's precision request, the clock and the payoff table that was used (if any). */
+interface Assembly {
+  precisionRequest: PrecisionRequest;
+  start: number;
+  /** The guard clock: `start` and `solve_time_ms` are read on it. */
+  now: () => number;
+  idealPoint?: IdealPoint;
+  /** The Fast model ran (or would have run) with at most one copy of each part: the response says so (`single_copy`). Never set for Precise. */
+  singleCopy?: boolean;
+}
+
+/** Bounds the search does not have: unknown, never 0. */
+const unknownOptimization = (tolerance: number, nodes: number, termination: OptimizationMetadata['termination']): OptimizationMetadata => ({
+  lower_bound: null, upper_bound: null, absolute_gap: null, tolerance, nodes, termination,
+});
+
+/** The Precise search's own bounds as they travel (`null` for an unknown or unproved value) with the classifier's termination. */
+const preciseOptimization = (summary: PreciseSummary, outcome: OptimizeOutcome): OptimizationMetadata => ({
+  lower_bound: summary.bounds.lower,
+  upper_bound: summary.bounds.upper,
+  absolute_gap: summary.bounds.gap,
+  tolerance: summary.tolerance,
+  nodes: summary.nodes,
+  termination: outcome.termination,
+});
+
+/**
+ * The Fast model has no proof frame: no physical upper bound or gap (its node bounds belong to the approximate model and never travel). Its lower
+ * bound is the downward enclosure of the exact score of the verified witness, when there is one. `nodes` counts the outer spatial calls of a TED
+ * request's weight search (0 for a request with no spatial dimension), never native MIP nodes.
+ */
+const fastOptimization = (summary: FastSummary, outcome: OptimizeOutcome, scoreLower: number | null): OptimizationMetadata => ({
+  ...unknownOptimization(summary.tolerance, summary.nodes, outcome.termination),
+  lower_bound: scoreLower,
+});
+
+/** The fields every response takes from the classified outcome. */
+const outcomeFields = (assembly: Assembly, outcome: OptimizeOutcome) => ({
+  status: outcome.status,
+  precision_request: assembly.precisionRequest,
+  precision_resolved: outcome.precision_resolved,
+  model_qualification: outcome.model_qualification,
+  moa_qualification: outcome.moa_qualification,
+  physical_certificate: outcome.physical_certificate,
+  ...(outcome.reason === undefined ? {} : { reason: outcome.reason }),
+  ...(assembly.singleCopy === true ? { single_copy: true as const } : {}),
+});
+
+/** A response with no build: an emptiness, a limit or a refusal. The objective is `null`, the manifest empty. */
+function noBuildResponse(assembly: Assembly, outcome: OptimizeOutcome, optimization: OptimizationMetadata): Detailed {
+  return {
+    response: {
+      ...outcomeFields(assembly, outcome),
+      selected_items: [],
+      selected_item_ids: [],
+      slot_pairs: [],
+      objective_value: null,
+      optimization,
+      solve_time_ms: assembly.now() - assembly.start,
+      ...(assembly.idealPoint === undefined ? {} : { ideal_point: assembly.idealPoint }),
+    },
+  };
+}
+
+function finalStatsOf(stats: PhysicalBuildStats): FinalStats {
+  return {
+    ergonomics: stats.ergonomics,
+    recoil_vertical: stats.recoilVertical,
+    recoil_horizontal: stats.recoilHorizontal,
+    total_price: stats.spend,
+    total_weight: stats.weight,
+    true_ergo_delta: stats.ted,
+    overswing_pct: stats.overswingPercent,
+    moa: stats.moa,
+  };
+}
+
+/** The published build: the installed multiset, placements, base and statistics all come from the validated build and its exact stats. */
+function buildResponse(
+  params: SolveParams, assembly: Assembly, build: PhysicalBuild, stats: PhysicalBuildStats, score: number, outcome: OptimizeOutcome, optimization: OptimizationMetadata,
+): Detailed {
+  const axes = axesOfStats(stats, params.useTrueErgo === true);
+  const response: OptimizeResponse = {
+    ...outcomeFields(assembly, outcome),
+    selected_items: itemDetails(params, build, stats),
+    selected_item_ids: build.placements.map(p => p.itemId),
+    selected_preset: presetDetail(params, build, stats),
+    slot_pairs: build.placements.map(p => ({ ...p })),
+    objective_value: score,
+    optimization,
+    final_stats: finalStatsOf(stats),
+    solve_time_ms: assembly.now() - assembly.start,
+    ...(assembly.idealPoint === undefined ? {} : { ideal_point: assembly.idealPoint }),
+  };
+  return { response, axes };
+}
+
+// ---------------------------------------------------------------------------------------------
+// Precise
+// ---------------------------------------------------------------------------------------------
+
+async function solveExact(params: SolveParams, guard: RuntimeGuard, assembly: Assembly): Promise<Detailed> {
+  const result = await solvePrecise({ params, guard });
+  const { outcome, summary } = result;
+  if (result.kind !== 'build') return noBuildResponse(assembly, outcome, preciseOptimization(summary, outcome));
+  const { best } = result;
+  return buildResponse(params, assembly, best.build, best.stats, best.score, outcome, preciseOptimization(summary, outcome));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Fast
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * The approximate model's outcome: a verified build is `optimal` / `approximate_optimal` when the native solve was Optimal (the build is the best
+ * point of the approximate model that the exact validator accepts), otherwise `feasible` with the solver's stop reason; emptiness is incomplete
+ * with the approximate-model reason, never infeasible.
+ */
+async function solveApproximate(params: SolveParams, guard: RuntimeGuard, assembly: Assembly): Promise<Detailed> {
+  const result = await solveFast({ params, guard });
+  const { outcome, summary } = result;
+  if (result.kind !== 'build') return noBuildResponse(assembly, outcome, fastOptimization(summary, outcome, null));
+  const { best } = result;
+  return buildResponse(params, assembly, best.build, best.stats, best.score, outcome, fastOptimization(summary, outcome, best.scoreLower));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Request driver
+// ---------------------------------------------------------------------------------------------
+
+async function solveDetailed(input: SolveParams): Promise<Detailed> {
+  const guard = guardOfParams(input);
+  const now = guard.now;
+  const start = now();
+  // What the caller asked for.
+  const precisionRequest: PrecisionRequest = input.precisionRequest ?? (input.preciseMode ? 'precise' : 'fast');
+  const moaDependent = isMoaDependent(input);
+  const owned = inspectOwnedItems(input.ownedItems);
+  if (!owned.ok) {
+    // Before hashing, caching or any model work: nothing resolved, the search never started.
+    return { response: optimizeEnvelope('invalid_owned_items', { precisionRequest, moaDependent, tolerance: resolveTolerance(input.objectiveTolerance), elapsedMs: now() - start }) };
   }
-  return res;
+  // The normalized request: the stash is the validated frozen snapshot, the guard the one clock of every stage below.
+  let params: SolveParams = { ...input, precisionRequest, ownedItems: owned.items, guard, timeLimitMs: undefined };
+  if (params.traderLevels) params.traderLevels = canonicalizeTraderLevels(params.traderLevels) as SolveParams['traderLevels'];
+  const mode = params.preciseMode ? 'precise' : 'fast';
+  // Owner decision 2c: Fast installs at most one copy of each part unless the request allows repeats; Precise ignores the option.
+  const singleCopy = mode === 'fast' && params.allowRepeatedParts !== true;
+  const tolerance = resolveTolerance(params.objectiveTolerance);
+  /** A request that stopped before its search started: no build, no proof, the factual cause. */
+  const unstarted = (observed: StopObservations, idealPoint?: IdealPoint): Detailed => noBuildResponse(
+    { precisionRequest, start, now, idealPoint, singleCopy },
+    classifyOptimize({ mode, moaDependent, end: 'unproved', witness: false, searchFinished: false, observed }),
+    unknownOptimization(tolerance, 0, 'limit'),
+  );
+  /** The stop the guard reports now (cancel before deadline, section 6), as an observation. */
+  const guardObservation = (stop: 'cancelled' | 'deadline'): StopObservations => (stop === 'cancelled' ? { cancelled: true } : { deadline: true });
+  // Stage guard: nothing runs for a request that was cancelled or ran out of time before its first stage.
+  const entryStop = guardStop(guard);
+  if (entryStop !== null) return unstarted(guardObservation(entryStop));
+  let payoff: PayoffReport | undefined;
+  if (params.useTchebycheff && !params.idealPoint) {
+    try {
+      payoff = await computePayoff(params, guard);
+      params = { ...params, idealPoint: payoff.idealPoint };
+    } catch (error) {
+      if (error instanceof PayoffTableError) {
+        // An endpoint that proves the request empty proves it for every objective; any other failure leaves the table unavailable.
+        const endpoint = error.endpoint;
+        const empty = endpoint !== null && (endpoint.status === 'infeasible' || endpoint.reason === PUBLIC_REASONS.provisionalMoaModelInfeasible
+          || endpoint.reason === PUBLIC_REASONS.approximateModelInfeasible || endpoint.reason === PUBLIC_REASONS.fastProvisionalMoaModelInfeasible);
+        if (empty) return { response: { ...endpoint, solve_time_ms: now() - start } };
+        // The table is a prerequisite of the objective, but the stop is reported as what actually stopped the endpoint (its own factual reason).
+        return unstarted(observationsOfReason(error.reason));
+      }
+      throw error;
+    }
+  }
+  const idealPoint = params.useTchebycheff ? params.idealPoint : undefined;
+  const midStop = guardStop(guard);
+  if (midStop !== null) return unstarted(guardObservation(midStop), idealPoint);
+  const assembly: Assembly = { precisionRequest, start, now, idealPoint, singleCopy };
+  const detailed = await (params.preciseMode ? solveExact(params, guard, assembly) : solveApproximate(params, guard, assembly));
+  return payoff === undefined ? detailed : { ...detailed, payoff };
 }

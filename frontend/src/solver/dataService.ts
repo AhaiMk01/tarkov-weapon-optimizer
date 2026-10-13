@@ -5,13 +5,30 @@
  */
 
 import type {
-  ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetInfo, TraderLevels,
+  ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetComponent, PresetInfo,
 } from './types.ts';
-import { DEFAULT_TRADER_LEVELS } from './types.ts';
 import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
+import { barterIngredientCount, barterLotSize, presetComponentCount, SourceDataError } from './sourceErrors.ts';
+import { barterLotPrice } from './physical/barterPrice.ts';
+
+// A barter lot is priced by the exact total of its decoded binary64 leaves rounded half up (ADR 0010 section 2); see physical/barterPrice.ts.
+export { barterLotPrice };
 
 const API_URL = 'https://api.tarkov.dev/graphql';
-const CACHE_VERSION = 15;
+/**
+ * Version of the normalized payloads kept in IndexedDB. A cached entry written under any other
+ * version is ignored and refetched.
+ *
+ *  - 16: preset `containsItems[].count` and barter ingredient counts are validated, never
+ *    defaulted to 1 (ADR 0013 section 4A), and the GraphQL fallback query carries `count`.
+ *    Payloads cached at 15 were normalized with the `?? 1` default and must not be reused.
+ *  - 17: the payload carries the source item `types` of guns and mods, `allowedItems` entries
+ *    are `{ id, types }` (the only way the blueprint can tell ammunition from a part), each
+ *    barter carries `rewardItems` (its lot size), and the GraphQL fallback selects the whole
+ *    category chain with ids. Payloads cached at 16 lack all of these: a camora slot would read
+ *    as an empty required slot and a barter lot as one unit, so they must not be reused.
+ */
+export const CACHE_VERSION = 17;
 const CACHE_TTL_MS = 3600 * 1000; // 1 hour
 const DB_NAME = 'tarkov-optimizer-cache';
 const DB_VERSION = 1;
@@ -19,10 +36,58 @@ const STORE_NAME = 'graphql-cache';
 
 // --- GraphQL Queries ---
 
-const GUNS_QUERY = `
+/**
+ * Category levels the fallback queries request in full (id, name, normalizedName), counting the item's own category. The JSON API
+ * adapter hands over the whole chain (4 to 7 levels on the pinned capture); GraphQL has no unbounded recursion, so the queries nest
+ * this many levels and then ONE sentinel level that selects only `id`. A response whose chain reaches the sentinel is deeper than the
+ * query and is rejected (`assertCategoryChainsComplete`) instead of silently losing ancestors that category filters must match.
+ */
+export const CATEGORY_CHAIN_LEVELS = 10;
+
+/** `bsgCategory { ... }` nested to {@link CATEGORY_CHAIN_LEVELS} full levels plus the id-only sentinel. */
+function categorySelection(withChildren: boolean): string {
+  let selection = 'parent { id }';
+  for (let level = CATEGORY_CHAIN_LEVELS; level >= 1; level--) {
+    const children = level === 1 && withChildren ? ' children { id }' : '';
+    const fields = `id name normalizedName${children} ${selection}`;
+    selection = level === 1 ? `bsgCategory { ${fields} }` : `parent { ${fields} }`;
+  }
+  return selection;
+}
+
+/** A barter and the units it delivers: `rewardItems[].count` is the lot size (`offeredItem.count` of the JSON API). */
+const BARTERS_FOR = `bartersFor {
+      trader { name normalizedName }
+      level
+      requiredItems {
+        item { id name avg24hPrice basePrice iconLink }
+        count
+      }
+      rewardItems {
+        item { id }
+        count
+      }
+    }`;
+
+/** Slots with each allowed item's `types`: ammunition (`ammo`) is outside the physical build domain. */
+const SLOTS = `slots {
+          id
+          name
+          nameId
+          required
+          filters {
+            allowedItems {
+              id
+              types
+            }
+          }
+        }`;
+
+export const GUNS_QUERY = `
 query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
   items(gameMode: $gameMode, lang: $lang, types: gun) {
     id
+    types
     basePrice
     avg24hPrice
     buyFor {
@@ -41,14 +106,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
         }
       }
     }
-    bartersFor {
-      trader { name normalizedName }
-      level
-      requiredItems {
-        item { id name avg24hPrice basePrice iconLink }
-        count
-      }
-    }
+    ${BARTERS_FOR}
     accuracyModifier
     conflictingSlotIds
     ergonomicsModifier
@@ -65,10 +123,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
     iconLinkFallback
     iconLink
     handbookCategories { name }
-    bsgCategory {
-      id
-      name
-    }
+    ${categorySelection(false)}
     properties {
       ... on ItemPropertiesWeapon {
         caliber
@@ -104,6 +159,7 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
             item {
               id
             }
+            count
           }
           buyFor {
             source
@@ -122,26 +178,9 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
             priceRUB
             price
           }
-          bartersFor {
-            trader { name normalizedName }
-            level
-            requiredItems {
-              item { id name avg24hPrice basePrice iconLink }
-              count
-            }
-          }
+          ${BARTERS_FOR}
         }
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
         defaultPreset {
           baseImageLink
           gridImageLinkFallback
@@ -160,10 +199,11 @@ query AllGuns($lang: LanguageCode, $gameMode: GameMode) {
 }
 `;
 
-const MODS_QUERY = `
+export const MODS_QUERY = `
 query AllMods($lang: LanguageCode, $gameMode: GameMode) {
   items(gameMode: $gameMode, lang: $lang, types: mods) {
     id
+    types
     basePrice
     avg24hPrice
     buyFor {
@@ -179,14 +219,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
         }
       }
     }
-    bartersFor {
-      trader { name normalizedName }
-      level
-      requiredItems {
-        item { id name avg24hPrice basePrice iconLink }
-        count
-      }
-    }
+    ${BARTERS_FOR}
     accuracyModifier
     ergonomicsModifier
     recoilModifier
@@ -207,33 +240,13 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
       ... on ItemPropertiesWeaponMod {
         ergonomics
         recoilModifier
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
       }
       ... on ItemPropertiesBarrel {
         ergonomics
         recoilModifier
         centerOfImpact
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
       }
       ... on ItemPropertiesMagazine {
         ergonomics
@@ -249,17 +262,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
         sightingRange
         sightModes
         zoomLevels
-        slots {
-          id
-          name
-          nameId
-          required
-          filters {
-            allowedItems {
-              id
-            }
-          }
-        }
+        ${SLOTS}
       }
     }
     imageLinkFallback
@@ -267,15 +270,7 @@ query AllMods($lang: LanguageCode, $gameMode: GameMode) {
     baseImageLink
     minLevelForFlea
     handbookCategories { name }
-    bsgCategory {
-      id
-      name
-      normalizedName
-      parent { name parent { name } }
-      children {
-        id
-      }
-    }
+    ${categorySelection(true)}
   }
 }
 `;
@@ -367,8 +362,29 @@ type RawItem = Record<string, any>;
 interface GunQueryResult { items: RawItem[] }
 interface ModQueryResult { items: RawItem[] }
 
+/**
+ * Reject a GraphQL response whose `bsgCategory` chain reached the sentinel level: the query asked for
+ * {@link CATEGORY_CHAIN_LEVELS} full levels and one id-only sentinel, so a chain of more nodes is deeper
+ * than the query and its ancestors would be missing from category matching (INTERPRETATIONS.md choice 5).
+ */
+export function assertCategoryChainsComplete(items: readonly RawItem[], what: string): void {
+  for (const item of items) {
+    let depth = 0;
+    for (let node = item?.bsgCategory; node && depth <= CATEGORY_CHAIN_LEVELS; node = node.parent) depth++;
+    if (depth > CATEGORY_CHAIN_LEVELS) {
+      throw new SourceDataError(
+        'category_chain_truncated',
+        String(item?.id ?? ''),
+        String(item?.bsgCategory?.id ?? ''),
+        depth,
+        `GraphQL ${what} item ${String(item?.id ?? '')}: category chain is deeper than the ${CATEGORY_CHAIN_LEVELS} levels the query requests; ancestors would be missing from category matching`,
+      );
+    }
+  }
+}
+
 /** Fetch guns and mods via the legacy GraphQL endpoint. */
-async function fetchAllDataFromGraphQL(
+export async function fetchAllDataFromGraphQL(
   lang: string,
   gameMode: string,
 ): Promise<{ guns: RawItem[]; mods: RawItem[] }> {
@@ -376,6 +392,8 @@ async function fetchAllDataFromGraphQL(
     runQuery<GunQueryResult>(GUNS_QUERY, { lang, gameMode }),
     runQuery<ModQueryResult>(MODS_QUERY, { lang, gameMode }),
   ]);
+  assertCategoryChainsComplete(gunsData.items, 'gun');
+  assertCategoryChainsComplete(modsData.items, 'mod');
   return { guns: gunsData.items, mods: modsData.items };
 }
 
@@ -411,23 +429,6 @@ export async function fetchAllData(lang: string, gameMode: string): Promise<{ gu
 
 // --- Data Extraction (ported from optimizer.py) ---
 
-function hasValidPrice(item: RawItem): boolean {
-  const buyFor = item.buyFor ?? [];
-  for (const offer of buyFor) {
-    if (typeof offer === 'object' && offer && (offer.priceRUB ?? 0) > 0) {
-      return true;
-    }
-  }
-  const bartersFor = item.bartersFor ?? [];
-  if (Array.isArray(bartersFor) && bartersFor.length > 0) return true;
-  // Include mods listed in API without buyFor when they have a BSG reference price (still not "purchasable")
-  const ap = item.avg24hPrice;
-  const bp = item.basePrice;
-  if (typeof ap === 'number' && ap > 0) return true;
-  if (typeof bp === 'number' && bp > 0) return true;
-  return false;
-}
-
 function extractConflictingItems(item: RawItem): string[] {
   const conflicts = item.conflictingItems ?? [];
   if (!conflicts.length) return [];
@@ -436,17 +437,25 @@ function extractConflictingItems(item: RawItem): string[] {
     .map((c: { id: string }) => c.id);
 }
 
+/**
+ * Slots of an item. An allowed item is a bare id (a payload that carries no item types) or an object `{ id, types }`
+ * (GraphQL `allowedItems { id types }`, which the JSON adapter also produces). The ids stay in `allowedItems`; those whose
+ * `types` include `ammo` are also listed in `ammoItems`, the only record that an allowed id is ammunition (ammunition is not
+ * an `ItemLookup` entry). A bare id or an object without a type list is never classified as ammunition.
+ */
 function extractSlots(itemData: RawItem): SlotInfo[] {
   const props = itemData.properties;
   if (!props?.slots) return [];
   return props.slots.map((slot: RawItem) => {
     const allowedIds: string[] = [];
+    const ammoIds: string[] = [];
     const filters = slot.filters;
     if (filters && typeof filters === 'object') {
       const allowedItems = filters.allowedItems ?? [];
       for (const item of allowedItems) {
         if (typeof item === 'object' && item) {
           allowedIds.push(item.id);
+          if (Array.isArray(item.types) && item.types.includes('ammo')) ammoIds.push(item.id);
         } else if (typeof item === 'string') {
           allowedIds.push(item);
         }
@@ -458,11 +467,20 @@ function extractSlots(itemData: RawItem): SlotInfo[] {
       nameId: slot.nameId as string,
       required: slot.required ?? false,
       allowedItems: allowedIds,
+      ...(ammoIds.length > 0 ? { ammoItems: ammoIds } : {}),
     };
   });
 }
 
-function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetInfo[] {
+/**
+ * Factory presets of a gun with their supplied component stock.
+ *
+ * `containsItems` entries become count-bearing components: each count is validated (a finite
+ * nonnegative integer, never defaulted; absent/null/malformed throws a `SourceDataError` naming the
+ * preset and the item) and repeated entries for one item are summed. The receiver's own entry is
+ * base identity, not stock, so it is dropped from `items` and carried in `receiver_id` instead.
+ */
+export function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetInfo[] {
   const props = gun.properties ?? {};
   const presetsData = props.presets ?? [];
   if (!presetsData.length) return [];
@@ -471,13 +489,21 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
   for (const preset of presetsData) {
     if (typeof preset !== 'object' || !preset) continue;
 
-    const presetItems: string[] = [];
+    const supplied = new Map<string, number>();
     const containsItems = preset.containsItems ?? [];
     for (const contained of containsItems) {
-      if (typeof contained === 'object' && contained?.item?.id) {
-        presetItems.push(contained.item.id);
-      }
+      if (typeof contained !== 'object' || !contained?.item?.id) continue;
+      const itemId: string = contained.item.id;
+      const count = presetComponentCount(contained.count, {
+        presetId: preset.id ?? '',
+        presetName: preset.name ?? preset.shortName,
+        itemId,
+        itemName: contained.item.name,
+      });
+      if (itemId === gun.id) continue;
+      supplied.set(itemId, (supplied.get(itemId) ?? 0) + count);
     }
+    const presetItems: PresetComponent[] = [...supplied].map(([itemId, count]) => ({ itemId, count }));
 
     const presetImage =
       preset.image512pxLink ?? preset.imageLink ??
@@ -506,7 +532,7 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
     }
     const bartersFor = preset.bartersFor ?? [];
     if (Array.isArray(bartersFor)) {
-      offers.push(...extractBarterOffers(bartersFor));
+      offers.push(...extractBarterOffers(bartersFor, preset.id));
     }
     offers.sort((a, b) => a.price - b.price);
     let lowestPrice = 0;
@@ -521,6 +547,7 @@ function extractAllPresets(gun: RawItem, includeUnpurchasable = false): PresetIn
       presets.push({
         id: preset.id ?? '',
         name: preset.name ?? preset.shortName ?? 'Unknown',
+        receiver_id: gun.id,
         items: presetItems,
         image: presetImage,
         price: lowestPrice,
@@ -537,8 +564,8 @@ function extractGunStats(gun: RawItem): GunStats {
   const props = gun.properties ?? {};
   const buyFor = gun.buyFor ?? [];
 
-  // Every offer is kept, with its trader level, so the naked base can go
-  // through getAvailablePrice() like mods and presets do. Collapsing to a
+  // Every offer is kept, with its trader level, so the naked base is gated by
+  // the physical domain (physical/acquisition.ts) like mods and presets. Collapsing to a
   // single cheapest price here is what let the bare receiver bypass trader
   // loyalty levels and TRADER_DISABLED entirely.
   //
@@ -564,10 +591,10 @@ function extractGunStats(gun: RawItem): GunStats {
   offers.sort((a, b) => a.price - b.price);
 
   // Cheapest offer ignoring availability settings — display fallback only.
-  // Callers that must respect trader levels use getAvailablePrice(stats).
+  // Callers that must respect trader levels read the offers (physical/acquisition.ts).
   // No offers means no purchase path: price 0 + 'not_available', the same
   // convention extractAllPresets uses. (This used to be a 999999999 sentinel,
-  // which getAvailablePrice's no-offers fallback read as a real price and
+  // which the pre-cutover pricing's no-offers fallback read as a real price and
   // reported as *available* — every caller then needed a magic ceiling to
   // undo it.)
   let lowestPrice = 0;
@@ -615,8 +642,34 @@ function extractGunStats(gun: RawItem): GunStats {
   };
 }
 
+/**
+ * Units one barter delivers (its lot size), read from GraphQL `rewardItems` (`offeredItem.count` of the JSON API). The entries
+ * for the offered item are validated (an integer >= 1, never defaulted) and summed. A barter with no `rewardItems` field at all
+ * comes from a payload that predates lot sizes (the pinned snapshot) and has no lot size: `undefined`, which `lotSizeOf` reads
+ * as one unit. A present but malformed `rewardItems` is a source error.
+ */
+function extractBarterLotSize(barter: Record<string, unknown>, offeredItemId: string | undefined): number | undefined {
+  const rewardItems = barter.rewardItems;
+  if (rewardItems === undefined) return undefined;
+  const subject = { offeredItemId: offeredItemId ?? '' };
+  if (!Array.isArray(rewardItems)) {
+    throw new SourceDataError('barter_lot_size', subject.offeredItemId, subject.offeredItemId, rewardItems,
+      `Barter for ${subject.offeredItemId}: rewardItems must be a list, got ${typeof rewardItems}`);
+  }
+  let lot = 0;
+  let found = false;
+  for (const entry of rewardItems as Array<{ item?: { id?: string }; count?: unknown } | null>) {
+    if (offeredItemId !== undefined && entry?.item?.id !== offeredItemId) continue;
+    found = true;
+    lot += barterLotSize(entry?.count, subject);
+  }
+  // No entry for the offered item reads as an absent count: a barter never lists nothing it delivers.
+  if (!found) barterLotSize(undefined, subject);
+  return lot;
+}
+
 /** Convert bartersFor entries into OfferInfo with "barter:" source prefix. */
-function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
+function extractBarterOffers(bartersFor: unknown[], offeredItemId?: string): OfferInfo[] {
   const offers: OfferInfo[] = [];
   for (const barter of bartersFor) {
     if (typeof barter !== 'object' || !barter) continue;
@@ -625,27 +678,37 @@ function extractBarterOffers(bartersFor: unknown[]): OfferInfo[] {
     if (!trader) continue;
     const level = typeof b.level === 'number' ? b.level : 1;
     const requiredItems = (b.requiredItems ?? []) as Array<{
-      item?: { name?: string; avg24hPrice?: number | null; basePrice?: number | null; iconLink?: string };
-      count?: number;
+      item?: { id?: string; name?: string; avg24hPrice?: number | null; basePrice?: number | null; iconLink?: string };
+      count?: unknown;
     }>;
-    let totalCost = 0;
+    const ingredients: { count: number; unitPrice: number }[] = [];
     const reqs: import('./types').BarterRequirement[] = [];
     for (const ri of requiredItems) {
-      const count = ri.count ?? 1;
+      // No default: an absent/null/negative ingredient quantity is a source error, never 1.
+      const count = barterIngredientCount(ri.count, {
+        offeredItemId: offeredItemId ?? '',
+        itemId: ri.item?.id ?? '',
+        itemName: ri.item?.name,
+      });
       const price = ri.item?.avg24hPrice ?? ri.item?.basePrice ?? 0;
-      totalCost += count * price;
+      ingredients.push({ count, unitPrice: price });
       reqs.push({ name: ri.item?.name ?? 'Unknown', count, unit_price: price, icon: ri.item?.iconLink || undefined });
     }
-    if (totalCost <= 0) continue;
+    // The lot size is validated for every barter record, like its ingredient counts: an unusable record is a source error even
+    // when the barter is then skipped for a non-positive total. It is never defaulted.
+    const lotSize = extractBarterLotSize(b, offeredItemId);
+    const lotPrice = barterLotPrice(ingredients);
+    if (lotPrice === null) continue;
     const requiresDogtag = reqs.some(r => /dogtag/i.test(r.name));
     offers.push({
-      price: Math.round(totalCost),
+      price: lotPrice,
       source: `barter:${trader.normalizedName ?? trader.name ?? 'unknown'}`,
       vendor_name: trader.name ?? '',
       vendor_normalized: trader.normalizedName ?? '',
       trader_level: level,
       barter_requirements: reqs,
       requires_dogtag: requiresDogtag || undefined,
+      ...(lotSize !== undefined ? { lot_size: lotSize } : {}),
     });
   }
   return offers;
@@ -707,7 +770,7 @@ function extractModStats(mod: RawItem): ModStats {
   }
   const bartersFor = mod.bartersFor ?? [];
   if (Array.isArray(bartersFor)) {
-    offers.push(...extractBarterOffers(bartersFor));
+    offers.push(...extractBarterOffers(bartersFor, mod.id));
   }
   offers.sort((a, b) => a.price - b.price);
   const purchasable = offers.length > 0;
@@ -783,7 +846,8 @@ export function buildItemLookup(guns: RawItem[], mods: RawItem[]): ItemLookup {
     };
   }
   for (const mod of mods) {
-    if (!hasValidPrice(mod)) continue;
+    // Every mod stays, priced or not (ADR 0013 section 4A): a mod with no legal standalone offer is
+    // capped by preset supply plus owned stock downstream, never dropped and never given a stand-in price.
     lookup[mod.id] = {
       type: 'mod',
       data: mod,
@@ -796,85 +860,22 @@ export function buildItemLookup(guns: RawItem[], mods: RawItem[]): ItemLookup {
   return lookup;
 }
 
-// --- Price Availability ---
-
-export function getAvailablePrice(
-  stats: {
-    purchasable?: boolean;
-    offers?: OfferInfo[];
-    price?: number;
-    price_source?: string;
-    min_level_flea?: number;
-  },
-  traderLevels: TraderLevels = DEFAULT_TRADER_LEVELS,
-  fleaAvailable = true,
-  playerLevel: number | null = null,
-  barterAvailable = false,
-  barterExcludeDogtags = false,
-): [number, string | null, boolean, string | null] {
-  if (stats.purchasable === false) {
-    return [0, 'not_purchasable', false, null];
-  }
-
-  const minLevelFlea = stats.min_level_flea ?? 0;
-  const offers = stats.offers;
-
-  if (!offers || !offers.length) {
-    const defaultPrice = stats.price ?? 0;
-    if (defaultPrice > 0 && fleaAvailable) {
-      if (playerLevel !== null && minLevelFlea > playerLevel) {
-        return [0, null, false, null];
-      }
-      return [defaultPrice, stats.price_source ?? 'market', true, null];
-    }
-    return [0, null, false, null];
-  }
-
-  let bestPrice: number | null = null;
-  let bestSource: string | null = null;
-  let bestLabel: string | null = null;
-
-  for (const offer of offers) {
-    const price = offer.price;
-    const source = offer.source;
-    // Skip barter offers when barter toggle is off
-    if (!barterAvailable && source.startsWith('barter:')) continue;
-    if (barterExcludeDogtags && offer.requires_dogtag) continue;
-    const requiredLevel = offer.trader_level;
-    const vendor = (offer.vendor_normalized ?? '').toLowerCase();
-
-    if (source === 'fleaMarket') {
-      if (!fleaAvailable) continue;
-      if (playerLevel !== null && minLevelFlea > playerLevel) continue;
-    } else {
-      const traderLevel = traderLevels[vendor] ?? 4;
-      if (requiredLevel !== null && requiredLevel > traderLevel) continue;
-    }
-
-    if (bestPrice === null || price < bestPrice) {
-      bestPrice = price;
-      bestSource = source;
-      bestLabel =
-        source === 'fleaMarket'
-          ? 'Flea Market'
-          : (offer.vendor_name || offer.vendor_normalized || source);
-    }
-  }
-
-  if (bestPrice !== null) {
-    return [bestPrice, bestSource, true, bestLabel];
-  }
-  return [0, null, false, null];
-}
-
 // --- State Cache ---
 
-interface LoadedState {
+export interface LoadedState {
   guns: RawItem[];
   mods: RawItem[];
   itemLookup: ItemLookup;
   loadedAt: number;
+  /**
+   * Identity of this load: a reload, a replacement (`seedDataCache`) and a cache clear all produce a NEW state, so everything derived from the
+   * data (physical blueprints, structural bounds, endpoint tables) is tied to it and never survives a replacement that kept the same
+   * language and game mode names (ADR 0013 section 4D).
+   */
+  generation: number;
 }
+
+let loadGeneration = 0;
 
 const VALID_LANGS = new Set(['en', 'ru', 'zh', 'es', 'de', 'fr', 'it', 'ja', 'ko', 'pl', 'pt', 'tr', 'cs', 'hu', 'ro', 'sk']);
 
@@ -898,11 +899,25 @@ export async function ensureDataLoaded(lang: string, gameMode: string): Promise<
 
   const { guns, mods } = await fetchAllData(lang, gameMode);
   const itemLookup = buildItemLookup(guns, mods);
-  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now() };
+  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now(), generation: ++loadGeneration };
   stateCache.set(key, state);
   return state;
 }
 
+/** Forget every loaded state, so the next load rebuilds the lookup (and everything derived from it) from the cached or fetched payloads. */
+export function clearLoadedState(): void {
+  stateCache.clear();
+}
+
 export function getLoadedState(lang: string, gameMode: string): LoadedState | undefined {
   return stateCache.get(`${lang}:${gameMode}`);
+}
+
+export function seedDataCache(lang: string, gameMode: string, guns: RawItem[], mods: RawItem[]): LoadedState {
+  lang = normalizeLang(lang);
+  const key = `${lang}:${gameMode}`;
+  const itemLookup = buildItemLookup(guns, mods);
+  const state: LoadedState = { guns, mods, itemLookup, loadedAt: Date.now(), generation: ++loadGeneration };
+  stateCache.set(key, state);
+  return state;
 }

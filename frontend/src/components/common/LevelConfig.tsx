@@ -39,7 +39,7 @@ export function LevelConfig({
         label: <span style={{ userSelect: 'none' }}>{t('sidebar.player_trader_access')}</span>,
         extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onFleaChange(true); onBarterChange(false); onBarterExcludeDogsChange(true); onPlayerLevelChange(60); onTraderLevelsChange({ ...DEFAULT_TRADER_LEVELS }) }} /></Tooltip>,
         children: (
-          <Space direction="vertical" style={{ width: '100%' }}>
+          <Space orientation="vertical" style={{ width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <Text type="secondary" style={{ fontSize: 12 }}>{t('sidebar.flea_market_access')}</Text>
               <Segmented size="small" value={fleaAvailable ? 'on' : 'off'} onChange={v => onFleaChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
