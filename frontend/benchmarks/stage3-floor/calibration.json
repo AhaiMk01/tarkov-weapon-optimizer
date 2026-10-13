@@ -1,0 +1,66 @@
+{
+  "M4A1 @ 25000": {
+    "weaponId": "5447a9cd4bdc2dbd208b4567",
+    "maxPrice": 25000,
+    "status": "infeasible",
+    "certificate": "certified_infeasible",
+    "ergonomics": null,
+    "ms": 217
+  },
+  "M4A1 @ 40000": {
+    "weaponId": "5447a9cd4bdc2dbd208b4567",
+    "maxPrice": 40000,
+    "status": "infeasible",
+    "certificate": "certified_infeasible",
+    "ergonomics": null,
+    "ms": 117
+  },
+  "M4A1 @ 60000": {
+    "weaponId": "5447a9cd4bdc2dbd208b4567",
+    "maxPrice": 60000,
+    "status": "infeasible",
+    "certificate": "certified_infeasible",
+    "ergonomics": null,
+    "ms": 213
+  },
+  "M4A1 @ 100000": {
+    "weaponId": "5447a9cd4bdc2dbd208b4567",
+    "maxPrice": 100000,
+    "status": "optimal",
+    "certificate": "certified_optimal",
+    "ergonomics": 93,
+    "ms": 3736
+  },
+  "M4A1 @ 150000": {
+    "weaponId": "5447a9cd4bdc2dbd208b4567",
+    "maxPrice": 150000,
+    "status": "optimal",
+    "certificate": "certified_optimal",
+    "ergonomics": 100,
+    "ms": 673
+  },
+  "AK-74N @ 25000": {
+    "weaponId": "5644bd2b4bdc2d3b4c8b4572",
+    "maxPrice": 25000,
+    "status": "infeasible",
+    "certificate": "certified_infeasible",
+    "ergonomics": null,
+    "ms": 86
+  },
+  "AK-74N @ 40000": {
+    "weaponId": "5644bd2b4bdc2d3b4c8b4572",
+    "maxPrice": 40000,
+    "status": "optimal",
+    "certificate": "certified_optimal",
+    "ergonomics": 69.5,
+    "ms": 294
+  },
+  "AK-74N @ 60000": {
+    "weaponId": "5644bd2b4bdc2d3b4c8b4572",
+    "maxPrice": 60000,
+    "status": "optimal",
+    "certificate": "certified_optimal",
+    "ergonomics": 85.6,
+    "ms": 852
+  }
+}

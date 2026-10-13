@@ -5,3 +5,6 @@ phase210m2/results/
 
 # Stage 3 workstream 3.4 raw results (benchmarks/stage3-fast/run.sh); the summary is committed.
 stage3-fast/results/
+
+# Stage 3 workstream 3.7 raw results (benchmarks/stage3-floor/run.sh); cases.json and summary.md are committed.
+stage3-floor/results/

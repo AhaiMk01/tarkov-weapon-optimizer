@@ -1,0 +1,352 @@
+{
+  "schema": 1,
+  "workstream": "Stage 3 workstream 3.7 (ADR 0013 section 7, MOA floor measurement)",
+  "frozenAt": "2026-10-13T00:10:23.814Z",
+  "identities": {
+    "snapshot": {
+      "path": "frontend/benchmarks/snapshot.json",
+      "sha256": "219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c"
+    },
+    "highs": {
+      "manifestPath": "frontend/public/highs-build-manifest.json",
+      "manifestSha256": "e9cf34f8f9b64cf3945b79a82374bc5c12ee7d45aa9cef6338fdb41bdc5067c6",
+      "version": "1.15.1",
+      "commit": "04024d701f79feb8e2f18bc3df0dffc04ef05088",
+      "hConfigGithash": "04024d701f79",
+      "artifacts": {
+        "highs.js": {
+          "sha256": "52e09bb470bd7eb388df891d1910477b32c24ba5820aceb9df5bade5ef7c6a7e",
+          "bytes": 65744
+        },
+        "highs.wasm": {
+          "sha256": "e035d2aa6b6426511c4231604a79fc87bf0eeb1675eddf12580e639daecaa2ed",
+          "bytes": 3595678
+        }
+      },
+      "onDisk": {
+        "highs.js": "52e09bb470bd7eb388df891d1910477b32c24ba5820aceb9df5bade5ef7c6a7e",
+        "highs.wasm": "e035d2aa6b6426511c4231604a79fc87bf0eeb1675eddf12580e639daecaa2ed"
+      }
+    },
+    "toolchain": {
+      "node": "v26.7.0",
+      "tsx": "tsx v4.23.15",
+      "platform": "win32-x64"
+    },
+    "source": {
+      "gitTip": "74066da4590d8ccd2f1de1f5aef7a86577fa12b8",
+      "srcTree": "7921d95056ebf262aa5ef4523edcc55470a6e6e9",
+      "srcStatus": "clean"
+    }
+  },
+  "policy": {
+    "note": "Production constants, not chosen here: default budget 30000 ms (DEFAULT_FLOOR_TIME_LIMIT_MS), at most 14 threshold trials (MOA_FLOOR_MAX_TRIALS), bracket tolerance 0.02 MOA, native stop mip_max_improving_sols=1, Precise. bench.ts asserts them at run time.",
+    "timeLimitMs": 30000,
+    "maxTrials": 14,
+    "bracketTolerance": 0.02,
+    "nativeStop": {
+      "mip_max_improving_sols": 1
+    }
+  },
+  "plan": {
+    "repetitions": 3,
+    "cacheStates": [
+      "cold",
+      "warm"
+    ],
+    "cacheStateDefinition": {
+      "cold": "first floor request of a fresh node process: no HiGHS instance, no blueprint memo, no compatibility map (the item lookup is built from the snapshot before the request is sent, as a loaded IndexedDB/JSON data set would be)",
+      "warm": "the identical request sent again to the same worker runtime right after the cold one finished: HiGHS instantiated, blueprint memoized on the same lookup, compatibility map cached; no result cache exists for floors"
+    },
+    "shards": 8,
+    "plannedRequests": 78,
+    "denominatorRule": "every planned request counts in every rate, including errors, crashes and missing results"
+  },
+  "cases": [
+    {
+      "id": "L1-M4A1",
+      "group": "large",
+      "weapon": "M4A1",
+      "intent": "large platform, plain floor (ordinary Auto plain resolves Precise here)",
+      "request": {
+        "weapon_id": "5447a9cd4bdc2dbd208b4567",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "L2-AK74N",
+      "group": "large",
+      "weapon": "AK-74N",
+      "intent": "large platform, plain floor",
+      "request": {
+        "weapon_id": "5644bd2b4bdc2d3b4c8b4572",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "L3-AKM",
+      "group": "large",
+      "weapon": "AKM",
+      "intent": "large platform, plain floor",
+      "request": {
+        "weapon_id": "59d6088586f774275f37482f",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "L4-NL545DI",
+      "group": "large",
+      "weapon": "NL545 DI",
+      "intent": "large platform, plain floor",
+      "request": {
+        "weapon_id": "68c16b9ab6b75a8a480520a6",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "C1-MP5",
+      "group": "control",
+      "weapon": "MP5",
+      "intent": "smaller control, plain floor",
+      "request": {
+        "weapon_id": "5926bb2186f7744b1c6c6e60",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "C2-SR25",
+      "group": "control",
+      "weapon": "SR-25",
+      "intent": "smaller control (DMR), plain floor",
+      "request": {
+        "weapon_id": "5df8ce05b11454561e39243b",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "C3-M870",
+      "group": "control",
+      "weapon": "M870",
+      "intent": "smaller control (shotgun), plain floor",
+      "request": {
+        "weapon_id": "5a7828548dc32e5a9c28b516",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "C4-M45A1",
+      "group": "control",
+      "weapon": "M45A1",
+      "intent": "smaller control (pistol), plain floor",
+      "request": {
+        "weapon_id": "5f36a0e5fbf956000b716b65",
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "T1-M4A1-TE-PO",
+      "group": "trueErgo",
+      "weapon": "M4A1",
+      "intent": "TrueErgo-flavoured floor on a large platform (ordinary Auto with TrueErgo resolves Fast; the floor stays Precise): TrueErgo + Prevent Overswing, gear -25%. The floor drops the TrueErgo objective (constant zero) but keeps TED >= 0 as a hard constraint, so the spatial weight search runs",
+      "request": {
+        "weapon_id": "5447a9cd4bdc2dbd208b4567",
+        "use_true_ergo": true,
+        "prevent_overswing": true,
+        "equip_ergo_modifier": -0.25,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "T2-NL545DI-TE-PO",
+      "group": "trueErgo",
+      "weapon": "NL545 DI",
+      "intent": "TrueErgo-flavoured floor on a large platform: TrueErgo + Prevent Overswing, gear -15%",
+      "request": {
+        "weapon_id": "68c16b9ab6b75a8a480520a6",
+        "use_true_ergo": true,
+        "prevent_overswing": true,
+        "equip_ergo_modifier": -0.15,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "R1-SR25-PO",
+      "group": "nonlinear",
+      "weapon": "SR-25",
+      "intent": "nonlinear rejected-candidate path: heavy DMR with Prevent Overswing at gear -30%, where TED >= 0 is expected to bind near the accuracy-optimal builds, so decoded candidates that overswing are expected to be rejected by the exact validator and cut (telemetry rejectedCandidates)",
+      "request": {
+        "weapon_id": "5df8ce05b11454561e39243b",
+        "prevent_overswing": true,
+        "equip_ergo_modifier": -0.3,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "N1-SR25-PO-60",
+      "group": "no_witness",
+      "weapon": "SR-25",
+      "intent": "difficult infeasible / no-witness candidate: Prevent Overswing at gear -60% on a heavy DMR (TED >= 0 then needs raw ergonomics well above what an SR-25 is expected to reach at its weight); the seed itself must find a TED-feasible build or prove emptiness through the nonlinear weight search, and may spend the whole deadline",
+      "request": {
+        "weapon_id": "5df8ce05b11454561e39243b",
+        "prevent_overswing": true,
+        "equip_ergo_modifier": -0.6,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    },
+    {
+      "id": "N2-AKM-ERGO80-60K",
+      "group": "no_witness",
+      "weapon": "AKM",
+      "intent": "difficult infeasible / no-witness candidate: AKM with minimum ergonomics 80 under a 60,000 RUB budget (expected to be at or beyond the reachable combination); the seed may prove emptiness, find a build, or spend the deadline",
+      "request": {
+        "weapon_id": "59d6088586f774275f37482f",
+        "max_price": 60000,
+        "min_ergonomics": 80,
+        "trader_levels": {
+          "prapor": 4,
+          "skier": 4,
+          "peacekeeper": 4,
+          "mechanic": 4,
+          "jaeger": 4,
+          "ref": 4
+        },
+        "player_level": 50,
+        "flea_available": true,
+        "barter_available": false,
+        "barter_exclude_dogtags": true
+      }
+    }
+  ]
+}
