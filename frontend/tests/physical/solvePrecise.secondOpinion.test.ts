@@ -63,7 +63,7 @@ test('settling: no two agreeing solves, a timeout, an unqualified solve or Infea
   assert.equal(split.settled, false);
   assert.equal(split.evaluation.verdict, 'unresolved');
   assert.equal(split.evaluation.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
-  assert.equal(split.evaluation.evidence?.nativeDual, 100, 'the bound is still the largest qualified one');
+  assert.equal(split.evaluation.evidence, null, 'G1: an unsettled node carries no bound, not even the largest qualified one');
   assert.equal(split.evaluation.candidate?.score, 100);
   assert.equal(split.evaluation.finished, true, 'every native search finished; only the certificate is withheld');
   const timedOut = settleOpinions([optimal(100), none(PUBLIC_REASONS.timeLimitReached)], TOL, true);
@@ -71,16 +71,21 @@ test('settling: no two agreeing solves, a timeout, an unqualified solve or Infea
   assert.equal(timedOut.evaluation.reason, PUBLIC_REASONS.timeLimitReached, 'the factual stop of the second solve');
   assert.equal(timedOut.evaluation.finished, false, 'the second opinion did not finish');
   assert.equal(timedOut.evaluation.candidate?.score, 100, 'the verified build is kept');
+  assert.equal(timedOut.evaluation.evidence, null, 'G1: the first solve alone gives no bound');
   const unqualified = settleOpinions([optimal(100), none(PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, true)], TOL, true);
   assert.equal(unqualified.evaluation.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
   assert.equal(unqualified.evaluation.finished, true);
   const empty = settleOpinions([infeasible(), infeasible()], TOL, true);
   assert.deepEqual([empty.settled, empty.evaluation.verdict], [true, 'infeasible']);
   const twoOfThree = settleOpinions([infeasible(), optimal(5, null), infeasible()], TOL, true);
-  assert.deepEqual([twoOfThree.settled, twoOfThree.evaluation.verdict], [true, 'infeasible'], 'two qualified Infeasible verdicts and no verified build');
+  assert.deepEqual([twoOfThree.settled, twoOfThree.evaluation.verdict], [false, 'unresolved'], 'G2: a qualified Optimal (it always has a point) blocks impossible');
   const contradicted = settleOpinions([infeasible(), optimal(5, 5), infeasible()], TOL, true);
   assert.deepEqual([contradicted.settled, contradicted.evaluation.verdict], [false, 'unresolved'], 'a verified build refutes the Infeasible verdicts');
   assert.equal(contradicted.evaluation.candidate?.score, 5);
+  const twoAgainstLimitPoint = settleOpinions([infeasible(), { ...none(PUBLIC_REASONS.nativeSolutionLimitReached), evidence: { nativeDual: 0, qualified: true, frameError: 0 }, point: true }, infeasible()], TOL, true);
+  assert.deepEqual([twoAgainstLimitPoint.settled, twoAgainstLimitPoint.evaluation.verdict], [false, 'unresolved'], 'G2: a qualified limit stop with a point blocks impossible too');
+  const twoAgainstUnqualifiedPoint = settleOpinions([infeasible(), { ...none(PUBLIC_REASONS.requiredProofPrerequisiteUnavailable), evidence: { nativeDual: 0, qualified: false, frameError: 0 }, point: true }, infeasible()], TOL, true);
+  assert.deepEqual([twoAgainstUnqualifiedPoint.settled, twoAgainstUnqualifiedPoint.evaluation.verdict], [true, 'infeasible'], 'an unqualified point proves nothing');
   const lonely = settleOpinions([infeasible(), none(PUBLIC_REASONS.timeLimitReached)], TOL, true);
   assert.deepEqual([lonely.settled, lonely.evaluation.verdict, lonely.evaluation.reason], [false, 'unresolved', PUBLIC_REASONS.timeLimitReached], 'an infeasibility needs both verdicts');
 });
@@ -157,7 +162,7 @@ test('the same lie on the third seed only: the first two agree, no third solve i
   assert.equal(built(result).summary.telemetry.thirdOpinions, 0);
 });
 
-test('three solves that all disagree: no certificate (two agreeing solves are needed), the best verified build and the largest bound are kept', async () => {
+test('three solves that all disagree: no certificate (two agreeing solves are needed), the best verified build is kept and no bound is published (G1)', async () => {
   const lookup = choice([{ id: 'a', ergo: 10 }, { id: 'b', ergo: 25 }, { id: 'c', ergo: 17 }]);
   const b = countColumn(lookup, 'b');
   const c = countColumn(lookup, 'c');
@@ -171,7 +176,9 @@ test('three solves that all disagree: no certificate (two agreeing solves are ne
   assert.equal(outcome.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
   assert.equal(outcome.termination, 'optimal', 'every native search finished; only the certificate is withheld');
   assert.equal(summary.telemetry.unsettledDisagreements, 1);
-  assert.ok(summary.bounds.upper !== null && summary.bounds.upper >= 25);
+  assert.equal(summary.bounds.upper, null, 'G1: no two solves agreed, so no checked bound exists and none is published');
+  assert.equal(summary.bounds.gap, null);
+  assert.ok(summary.bounds.lower !== null && summary.bounds.lower <= 25, 'the lower bound is the verified build');
 });
 
 test('a second opinion that times out or is not qualified withholds the certificate; the verified build stays, with the factual reason', async () => {
@@ -186,6 +193,7 @@ test('a second opinion that times out or is not qualified withholds the certific
   assert.equal(built(timed).outcome.reason, PUBLIC_REASONS.timeLimitReached);
   assert.equal(built(timed).outcome.termination, 'limit');
   assert.equal(built(timed).summary.telemetry.thirdOpinions, 0, 'a solve that proved nothing is no disagreement');
+  assert.equal(built(timed).summary.bounds.upper, null, 'G1: the first opinion alone is no checked bound');
   const tampering: SolveFn = async (lp, options, extras) => {
     const real = await nativeSolve(lp, options, extras);
     if (options.random_seed !== SECOND || real.readback === null) return real;
@@ -200,7 +208,7 @@ test('a second opinion that times out or is not qualified withholds the certific
   assert.equal(built(unqualified).outcome.termination, 'optimal');
 });
 
-test('an infeasibility needs both verdicts: a timed-out second opinion leaves the request incomplete; a qualified Optimal with no valid build is outvoted by a third Infeasible', async () => {
+test('an infeasibility needs both verdicts: a timed-out second opinion leaves the request incomplete; a found point blocks impossible (G2: [Infeasible, Optimal with a point, Infeasible] stays unresolved)', async () => {
   const lookup = choice([{ id: 'a', ergo: 10 }]);
   const params = paramsOf(lookup, { maxPrice: 10 }); // every spend is above 10: infeasible
   const timing: SolveFn = async (lp, options, extras) => {
@@ -218,13 +226,18 @@ test('an infeasibility needs both verdicts: a timed-out second opinion leaves th
     const uncapped = await nativeSolve(lp.replace(/\n {2}lim_price:[^\n]*/, ''), options);
     return { ...real, modelStatus: uncapped.modelStatus, colNames: uncapped.colNames, colValues: uncapped.colValues, objectiveValue: uncapped.objectiveValue, mipDualBound: uncapped.mipDualBound } as NativeResult;
   };
-  const empty = await solvePrecise({ params, deadline: FAR(), solve: claiming });
-  assert.equal(empty.kind, 'empty');
-  assert.equal(empty.outcome.status, 'infeasible');
-  assert.equal(empty.outcome.physical_certificate, 'certified_infeasible');
-  assert.equal(empty.summary.telemetry.disagreements, 1);
-  assert.equal(empty.summary.telemetry.thirdOpinions, 1);
-  assert.equal(empty.summary.telemetry.confirmedInfeasible, 1);
+  const blocked = await solvePrecise({ params, deadline: FAR(), solve: claiming });
+  assert.equal(blocked.kind, 'incomplete', 'the two Infeasible verdicts do not settle the node against the qualified point');
+  assert.equal(blocked.outcome.reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
+  assert.notEqual(blocked.outcome.physical_certificate, 'certified_infeasible');
+  assert.equal(blocked.summary.telemetry.disagreements, 1);
+  assert.equal(blocked.summary.telemetry.thirdOpinions, 1);
+  assert.equal(blocked.summary.telemetry.confirmedInfeasible, 0);
+  assert.equal(blocked.summary.bounds.upper, null, 'G1: no checked bound');
+  // Without the lying seed the same request is certified infeasible: the block is the point, not the request.
+  const honest = await solvePrecise({ params, deadline: FAR() });
+  assert.equal(honest.kind, 'empty');
+  assert.equal(honest.outcome.physical_certificate, 'certified_infeasible');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -283,4 +296,30 @@ test('Fast: a SolveError on the default seed is retried with the next seed inste
   assert.ok(solve.seeds.includes(PRECISE_RANDOM_SEEDS[1]), 'the retry used the next seed of the list');
   const never = await solveFast({ params: paramsOf(lookup), deadline: FAR(), solve: inconclusiveOn([undefined, ...PRECISE_RANDOM_SEEDS]) });
   assert.equal(never.kind, 'incomplete', 'every seed inconclusive: no build, no throw');
+});
+
+// ---------------------------------------------------------------------------------------------
+// Only checked bounds (owner, 2026-10-12, G1)
+// ---------------------------------------------------------------------------------------------
+
+test('G1: a limit-stopped first opinion with a qualified dual bound publishes its build but no bound; the same request settled publishes one', async () => {
+  const lookup = choice([{ id: 'a', ergo: 10 }, { id: 'b', ergo: 25 }]);
+  // Seed 0 answers with the honest point and dual bound, but as a time-limit stop: a qualified single solve, which used to be published as the upper bound.
+  const stopped: SolveFn = async (lp, options, extras) => {
+    const real = await nativeSolve(lp, options, extras);
+    return Number(options.random_seed ?? 0) === FIRST ? ({ ...real, modelStatus: { code: 13, name: 'TimeLimit' } } as unknown as NativeResult) : real;
+  };
+  for (const edgeIntegrality of ['integer', 'relaxed-first'] as const) {
+    const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve: stopped, edgeIntegrality });
+    assert.deepEqual(installed(result), ['b'], edgeIntegrality);
+    const { certified, summary } = built(result);
+    assert.equal(certified, false, edgeIntegrality);
+    assert.equal(summary.bounds.upper, null, `${edgeIntegrality}: the single solve's dual bound is not a checked bound`);
+    assert.equal(summary.bounds.gap, null, edgeIntegrality);
+    assert.equal(summary.bounds.lower, 25, `${edgeIntegrality}: the verified build is the lower bound`);
+  }
+  const settled = await solvePrecise({ params: paramsOf(lookup), deadline: FAR() });
+  assert.equal(built(settled).certified, true);
+  const upper = built(settled).summary.bounds.upper;
+  assert.ok(upper !== null && upper >= 25 && upper - 25 < 1e-9, 'two agreeing solves: the checked bound is published');
 });

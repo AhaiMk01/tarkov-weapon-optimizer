@@ -84,8 +84,12 @@ if (process.version !== frozen.identities.toolchain.node) fail('node version');
 // Production source identity: the frontend/src tree at the tip and a clean working copy of it (the tip itself may move with test-only commits).
 const gitTip = execSync('git rev-parse HEAD', { encoding: 'utf8', cwd: here('../..') }).trim();
 const srcTree = execSync('git rev-parse HEAD:frontend/src', { encoding: 'utf8', cwd: here('../..') }).trim();
-if (srcTree !== frozen.identities.source.srcTree) fail('frontend/src tree');
-if (execSync('git status --porcelain -- src', { encoding: 'utf8', cwd: here('../..') }).trim() !== '') fail('frontend/src has uncommitted changes');
+// Declared post-fix reruns (s3fix2, owner decisions F1/F2 2026-10-12): FLOOR_BENCH_POST_FIX=1 measures the CHANGED working copy of src. The source identity is
+// then recorded as the hash of the uncommitted src diff, and such runs are reported separately, never mixed with the frozen measurement.
+const postFix = process.env.FLOOR_BENCH_POST_FIX === '1';
+const srcDiffSha256 = postFix ? createHash('sha256').update(execSync('git diff HEAD -- src', { encoding: 'utf8', cwd: here('../..') })).digest('hex') : null;
+if (srcTree !== frozen.identities.source.srcTree && !postFix) fail('frontend/src tree');
+if (!postFix && execSync('git status --porcelain -- src', { encoding: 'utf8', cwd: here('../..') }).trim() !== '') fail('frontend/src has uncommitted changes');
 // The production policy constants the cases were frozen against.
 if (MOA_FLOOR_DEFAULT_TIME_LIMIT_MS !== frozen.policy.timeLimitMs || DEFAULT_FLOOR_TIME_LIMIT_MS !== frozen.policy.timeLimitMs) fail('floor budget');
 if (MOA_FLOOR_MAX_TRIALS !== frozen.policy.maxTrials) fail('trial cap');
@@ -183,7 +187,7 @@ async function measure(cache: 'cold' | 'warm', runtime: ReturnType<typeof create
   // Set by the floor driver while the request ran (the control flow analysis cannot see that through the await).
   const baseParams = capture.baseParams as SolveParams | null;
   const line: Record<string, unknown> = {
-    case: frozenCase.id, group: frozenCase.group, weapon: frozenCase.weapon, rep, cache, casesFile, casesSha256, gitTip,
+    case: frozenCase.id, group: frozenCase.group, weapon: frozenCase.weapon, rep, cache, casesFile, casesSha256, gitTip, postFix, srcDiffSha256,
     endToEndMs, deadlineOvershootMs: at - deadline, messageType: message.type, snapshots,
   };
   if (message.type === 'error') {

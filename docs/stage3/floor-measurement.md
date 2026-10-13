@@ -186,7 +186,8 @@ validated MOA, display_floor >= floor. The smallest TED among the witnesses of P
 
 ### Findings
 
-**F1: a Prevent Overswing floor stops after 2 trials with ~29 s unused.** Reproduction:
+**F1: a Prevent Overswing floor stops after 2 trials with ~29 s unused.** (**Resolved** 2026-10-12 by owner decision F1, "skip the second
+solve for splits": see section 7.) Reproduction:
 `benchmarks/stage3-floor/repro-ted-second-opinion-solution-limit.ts`. Seen in 12 of 12 runs of R1 and N1.
 
 1. The trial-2 query at cap 1.0315 (bisection between lo 0.5315 and the seed's hi 1.5315) has two weight nodes.
@@ -207,7 +208,8 @@ stop". It is still a liveness loss, caused by how the scoped native stop interac
 the ADR asks for, is not visible in that counter. Production is unchanged. Whether F1 is a defect or the intended conservative outcome is for the
 owner and the implementer to decide.
 
-**F2 (minor, diagnostic only): every floor witness is labelled `nativeStop: 'solution_limit'`.** Reproduction:
+**F2 (minor, diagnostic only): every floor witness is labelled `nativeStop: 'solution_limit'`.** (**Resolved** 2026-10-12 by owner decision
+F2: see section 7.) Reproduction:
 `benchmarks/stage3-floor/repro-native-stop-label.ts`.
 
 - The label also appears when the native solve completed `Optimal`, and its Precise outcome carries the factual reason `Native solution limit
@@ -268,3 +270,61 @@ constant, or copied production query lines.
   (budget-bounded ergonomics at and just above the certified maximum, a near-boundary minimum ergonomics under a budget, aggressive Prevent
   Overswing) were not hard enough on this snapshot. A follow-up could search for one systematically, for example by timing seed emptiness over
   many guns with tight multi-constraint domains. That search would itself need predeclaration.
+
+## 7. F1 and F2 resolved (s3fix2, 2026-10-12)
+
+Owner decisions of 2026-10-12, implemented on `impl/stage2-correctness-cutover` after `dae163a` (uncommitted at the time of the rerun):
+
+- **F1, "skip the second solve for splits".** A first opinion that leads only to a split of the weight range (a qualified `Optimal` of an
+  inexact node with no verified build and a split point, whose bound would not fathom the node) is no longer sent to the decision-5a second
+  opinion. The node is returned as the search verdict `split`: it is split, its bound is not used, nothing is pruned and nothing is certified
+  from it (`leadsOnlyToSplit` / `splitOnly` in `src/solver/physical/solvePrecise.ts`, verdict `split` in `search.ts`; proof:
+  `docs/proofs/count-model.md`, Proposition F1). Pruning, optimality, infeasibility and every published bound keep the full rule.
+- **F2.** A witness's `nativeStop` is now the HiGHS model status of the solve that produced it (`VerifiedBuild.nativeStatus`): `Optimal` reads
+  `optimal`, `SolutionLimit` reads `solution_limit`, anything else `other`. The `nativeStopOf` comment no longer claims TED-only relabelling.
+  The first-witness short-circuit's reason is that solve's real stop (`Native solution limit reached` after a native solution limit,
+  `Required proof prerequisite unavailable` after a native `Optimal` whose second opinion was not run).
+
+**Reproductions after the change.** `repro-ted-second-opinion-solution-limit.ts` now returns a witness at 1.0210 MOA for the Prevent Overswing
+query (cap 1.0315), with native statuses Infeasible, Infeasible (the node under 3 kg, settled), then Optimal (seed 0) twice on the node over
+3 kg (seed 0: the node's overswinging relaxed optimum, now a split point; then the first child node's relaxed text, whose verified witness
+ends the query), and no seed-11 `SolutionLimit`. `repro-native-stop-label.ts` prints
+`nativeStop: 'optimal'` with every native call `Optimal` ("not reproduced").
+
+**Rerun of the frozen cases** (R1, N1, the plain control C2 on the same gun, and the TrueErgo + Prevent Overswing control T1; same 3
+repetitions x cold/warm, same frozen requests and policy). `bench.ts` refuses a changed `src`, so the rerun used the declared override
+`FLOOR_BENCH_POST_FIX=1`, which records `postFix: true` and the SHA-256 of the uncommitted `src` diff in every result line; the frozen identities
+are otherwise checked as before. Results: `frontend/benchmarks/stage3-floor/results/s3fix2/` (git-ignored). The 4 cases ran on 4 shards;
+the before column is the primary run of section 4. Every run of a case gave the same status, trials, hi and lo. Every response witness passed
+the production validator (accepted, floor >= validated MOA, display floor >= floor).
+
+| case | before: status, stop | before: trials, hi, lo, gap | after: status, stop | after: trials, hi, lo, gap | after: end-to-end ms median (max) | native calls before / after |
+|---|---|---|---|---|---|---|
+| R1-SR25-PO | model_witnessed, query_stopped (Native solution limit reached) | 2, 1.5315, 0.5315, 1.0000 | **model_proved**, proved | 7, **1.0210**, 1.0057, 0.0153 | 1062 (1284) | 9 / 29 |
+| N1-SR25-PO-60 | model_witnessed, query_stopped (Native solution limit reached) | 2, 1.5315, 0.5315, 1.0000 | **model_proved**, proved | 6, **1.0777**, 1.0662, 0.0116 | 4944 (5578) | 9 / 37 |
+| C2-SR25 (plain control) | model_proved, proved | 7, 1.0210, 1.0057, 0.0153 | model_proved, proved | 7, 1.0210, 1.0057, 0.0153 | 716 (985) | 15 / 15 |
+| T1-M4A1-TE-PO (TrueErgo + PO control) | model_proved, proved | 7, 0.8044, 0.7975, 0.0069 | model_proved, proved | 7, 0.8044, 0.7975, 0.0069 | 2601 (2915) | 24 / 24 |
+
+- R1 now proves the same floor as its plain control C2 (1.0210 MOA, the same witness value): with gear -30% the SR-25's MOA-optimal builds
+  do not overswing, so Prevent Overswing does not change the minimum. N1 (gear -60%) proves a higher floor, 1.0777 MOA: Prevent Overswing does
+  bind at that gear, which the old 1.0 MOA bracket could not show. Both use 6 to 7 trials and at most 5.6 s of the 30 s budget.
+- The controls are unchanged in status, trials, bounds and native call count.
+- Witness labels after the change: R1 12 `optimal`; N1 12 `optimal` and 6 `solution_limit` (a native `SolutionLimit` produced those
+  witnesses); C2 12 `optimal` (before: 12 `solution_limit`); T1 24 `optimal` (before: 24 `solution_limit`). The labels now agree with the
+  recorded native statuses.
+- Timings are node timings on the same machine as section 1, with other workloads running at the same time (other agents' processes), so
+  the millisecond columns are indicative only.
+
+**Optimize impact of F1** (not a floor measurement; `frontend/benchmarks/phase210m2/bench.ts`, profile `trueErgoPO` = TrueErgo + Prevent
+Overswing at gear -30%, 172 pinned guns, 60 s, 12 processes, before = `dae163a` exported, after = the change): certificates identical
+(143 certified optimal + 29 certified infeasible in both), scores identical on every gun; 47 split-only nodes on 37 guns replace 47 second
+opinions (native solves 1,510 -> 1,463); total wall time 937 s -> 847 s (per-gun ratio median 0.92). Plain and TrueErgo without Prevent
+Overswing produce no overswing split points, so F1 does not touch them (0 split-only nodes on 344 runs).
+
+Reproduction of the rerun, from `frontend/`:
+
+```
+FLOOR_BENCH_POST_FIX=1 bash benchmarks/stage3-floor/run.sh benchmarks/stage3-floor/results/s3fix2 4 --only R1-SR25-PO,N1-SR25-PO-60,C2-SR25,T1-M4A1-TE-PO
+bash benchmarks/phase210m2/run.sh <checkout> benchmarks/phase210m2/results <label> 12 --profiles trueErgoPO
+```
+

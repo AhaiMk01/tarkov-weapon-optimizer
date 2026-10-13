@@ -124,18 +124,19 @@ test('a Precise build is a witness whatever ended the native search: optimal, so
   assert.equal(build.outcome.termination, 'optimal');
   assert.equal(optimal.witness.nativeStop, 'optimal', 'a single-root constant-zero solve finishes natively');
 
-  const limited = floorQueryResultOf(request, params, null, {
-    ...build, certified: false, outcome: { ...build.outcome, status: 'feasible', physical_certificate: 'feasible', termination: 'limit', reason: PUBLIC_REASONS.nativeSolutionLimitReached },
+  // The label is the native status of the solve that produced the witness (F2, owner 2026-10-12), never inferred from the query's reason.
+  assert.equal(build.best.nativeStatus, 'Optimal');
+  const stopped = (nativeStatus: string, reason: string, termination: 'limit' | 'optimal') => floorQueryResultOf(request, params, null, {
+    ...build, best: { ...build.best, nativeStatus }, certified: false, outcome: { ...build.outcome, status: 'feasible', physical_certificate: 'feasible', termination, reason },
   });
+  const limited = stopped('SolutionLimit', PUBLIC_REASONS.nativeSolutionLimitReached, 'limit');
   assert.equal(limited.kind === 'witness' && limited.witness.nativeStop, 'solution_limit');
-  const timed = floorQueryResultOf(request, params, null, {
-    ...build, certified: false, outcome: { ...build.outcome, status: 'feasible', physical_certificate: 'feasible', termination: 'limit', reason: PUBLIC_REASONS.timeLimitReached },
-  });
+  const timed = stopped('TimeLimit', PUBLIC_REASONS.timeLimitReached, 'limit');
   assert.equal(timed.kind === 'witness' && timed.witness.nativeStop, 'other');
-  const withheld = floorQueryResultOf(request, params, null, {
-    ...build, certified: false, outcome: { ...build.outcome, status: 'feasible', physical_certificate: 'feasible', termination: 'optimal', reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable },
-  });
+  const withheld = stopped('Optimal', PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, 'optimal');
   assert.equal(withheld.kind === 'witness' && withheld.witness.nativeStop, 'optimal', 'the native search completed; only the proof was withheld');
+  const relabelled = stopped('Optimal', PUBLIC_REASONS.nativeSolutionLimitReached, 'limit');
+  assert.equal(relabelled.kind === 'witness' && relabelled.witness.nativeStop, 'optimal', 'F2: a solution-limit REASON does not relabel a native Optimal');
 
   // A trial's witness must meet its cap exactly or it is rejected, never adopted.
   const tooTight = floorQueryResultOf(request, params, build.best.stats.moa - 0.001, build);

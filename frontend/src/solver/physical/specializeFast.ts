@@ -126,6 +126,28 @@ export interface FastEdge {
   readonly max: number;
 }
 
+/**
+ * The read-through precondition (count-model proof section 3.3, review GAP 8a): `range / 2^k` must be EXACT, endpoint by endpoint, or the scaled
+ * column's domain could exclude a build's value (an underflow below about 2^-1022 loses bits). Checked by the round trip `scaled * 2^k === range`;
+ * a failure is an internal error (`INEXACT_READ_THROUGH`), never a silent bound. Exported for tests.
+ */
+export function readThroughRange(range: Interval, factor: number, column: string): Interval {
+  const scaled: Interval = { lo: range.lo / factor, hi: range.hi / factor };
+  if (!(scaled.lo * factor === range.lo && scaled.hi * factor === range.hi)) {
+    throw new PhysicalModelError('INEXACT_READ_THROUGH', `The read-through of ${column} by ${factor} is not exact on [${range.lo}, ${range.hi}]`, { column, factor, lo: range.lo, hi: range.hi });
+  }
+  return scaled;
+}
+
+/** `value * 2^k`, asserted exact by the round trip (no overflow, no underflow): the objective coefficient of a read-through column. Exported for tests. */
+export function exactPowerOfTwoProduct(value: number, factor: number, column: string): number {
+  const product = value * factor;
+  if (!(Number.isFinite(product) && product / factor === value)) {
+    throw new PhysicalModelError('INEXACT_READ_THROUGH', `The read-through coefficient of ${column} (${value} x ${factor}) is not exact`, { column, factor, value });
+  }
+  return product;
+}
+
 /** How the paid deficit of one template is modelled. */
 export type FastSupplyMode =
   /** No standalone offer: copies are limited by preset plus owned supply. */
@@ -1019,8 +1041,8 @@ class FastSpecializer {
       if (scale.exponent === 0 || scale.withheld !== null) continue;
       const name = nameN[scale.column];
       const range = axisRange[scale.column];
-      // dividing by a power of two is exact (no denormal at these magnitudes), so the enclosure of the scaled column is the scaled enclosure
-      const scaled: Interval = { lo: range.lo / scale.factor, hi: range.hi / scale.factor };
+      // dividing by a power of two is exact unless it underflows, so the enclosure of the scaled column is the scaled enclosure: asserted, not assumed
+      const scaled = readThroughRange(range, scale.factor, scale.column);
       this.declareAux(name, scaled.lo, scaled.hi);
       this.emit(`${name}_def`, [[scale.column, 1], [name, -scale.factor]], '=', 0, `${name} definition`);
       readThrough[scale.column] = { column: name, range: scaled, factor: scale.factor };
@@ -1032,7 +1054,7 @@ class FastSpecializer {
     let objective: Interval | null = null;
     for (const t of plan.terms) {
       const through = readThrough[t.column];
-      const value = t.emitted * through.factor; // an exact product: a power of two
+      const value = exactPowerOfTwoProduct(t.emitted, through.factor, t.column); // an exact product: a power of two (asserted)
       terms.push([through.column, -value]);
       coefficients.push({ column: through.column, value, formula: formulas[t.column] });
       const part = iScale(value, through.range);

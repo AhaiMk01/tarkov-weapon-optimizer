@@ -1,6 +1,6 @@
 // Phase 2.10 milestone 2 measurement: Precise (`solvePrecise`) on every pinned gun, plain and TrueErgo, 60 s per request.
 //
-//   npx tsx benchmarks/phase210m2/bench.ts --out <dir> --label <before|after> --shard <k> --of <n> [--limit-ms 60000] [--profiles plain,trueErgo]
+//   npx tsx benchmarks/phase210m2/bench.ts --out <dir> --label <before|after> --shard <k> --of <n> [--limit-ms 60000] [--profiles plain,trueErgo,trueErgoPO]
 //     [--edges integer|relaxed-first] [--guns MP5,M4A1] [--snapshot <path>]
 //
 // One JSON line per (gun, profile) is appended to <dir>/<label>-<k>.jsonl as soon as it is measured (node's test runner buffers its output, a
@@ -53,6 +53,8 @@ const request = (id: string, profile: string): SolveParams => ({
   ergoWeight: 1, recoilWeight: 1, priceWeight: 0.1, fleaAvailable: true, barterAvailable: false, barterExcludeDogtags: true, playerLevel: 50,
   traderLevels: { prapor: 4, skier: 4, peacekeeper: 4, mechanic: 4, jaeger: 4, ref: 4 }, equipErgoModifier: 0,
   ...(profile === 'trueErgo' ? { useTrueErgo: true } : {}),
+  // s3fix2 supplement: TrueErgo with Prevent Overswing at gear -30% (the overswing split points that decision F1 changes are only produced here).
+  ...(profile === 'trueErgoPO' ? { useTrueErgo: true, preventOverswing: true, equipErgoModifier: -0.3 } : {}),
 });
 
 const wanted = only === '' ? null : new Set(only.split(','));

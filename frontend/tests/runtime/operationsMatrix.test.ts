@@ -246,7 +246,9 @@ for (const op of SEARCH_OPERATIONS) {
     if (op.kind === 'optimize') {
       assertOptimizeStop(op, response, { status: 'feasible', reason: R.timeLimitReached, termination: 'limit', build: true });
       const r = asOptimize(response);
-      assert.ok(r.optimization.upper_bound !== null, 'the first opinion\'s qualified bound is retained as justified');
+      assert.equal(r.optimization.upper_bound, null, 'G1 (owner, 2026-10-12): the first opinion alone is no checked bound, so none is published');
+      assert.equal(r.optimization.absolute_gap, null);
+      assert.ok(r.optimization.lower_bound !== null, 'the verified build still gives the lower bound');
     } else if (op.kind === 'explore') {
       const r = asExplore(response);
       assert.equal(r.curve_status, 'partial', 'rule 3: V >= 1 with U');

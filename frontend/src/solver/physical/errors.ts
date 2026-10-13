@@ -34,7 +34,9 @@ export type PhysicalModelErrorCode =
    */
   | 'CYCLIC_PART_GRAPH'
   /** A solution vector cannot be read as a physical build: a missing or non-integral decision column, an unrooted placement. */
-  | 'DECODE_FAILED';
+  | 'DECODE_FAILED'
+  /** A power-of-two read-through of an objective axis is not exact (an underflow or overflow of the scaled range or coefficient). An internal fault. */
+  | 'INEXACT_READ_THROUGH';
 
 export class PhysicalModelError extends Error {
   readonly code: PhysicalModelErrorCode;

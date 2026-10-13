@@ -18,6 +18,8 @@
  *   - {@link joinBounds} is the ONE place bounds are composed into the global upper bound: the incumbent's exact score, every live node, and
  *     every node closed WITHOUT a proof of emptiness (exactness or tolerance), all in the same frame. Nodes proved empty contribute nothing.
  *     An unknown bound makes the composition unknown, so no finite sibling and no time-limit primal can hide it;
+ *   - a `split` evaluation (owner decision F1, 2026-10-12) only splits its node: its evidence is ignored, its children inherit the node's own bound,
+ *     and nothing is pruned, so a verdict the caller did not settle never enters a bound;
  *   - the lower bound reported is the DOWNWARD enclosure of the verified incumbent's exact score, the incumbent's part of the upper bound its
  *     exact score (the upward enclosure when reported);
  *   - the tolerance is tested against the exact gap `UB - score` (fathoming a node, certifying the search), never a floating difference.
@@ -71,6 +73,11 @@ export interface SearchNode {
   readonly interval: SearchInterval | null;
   /** Proved upper bound of the best score in this node as a double (the smallest double at least it); `Infinity` until one is proved. */
   readonly bound: number;
+  /**
+   * The exact score of the incumbent when the node is handed out, `null` without one. A hint for the evaluator only: Precise uses it to tell a
+   * first opinion that would only split the node from one whose bound would fathom it (owner decision F1, 2026-10-12, `solvePrecise.ts`).
+   */
+  readonly incumbentExact: Rat | null;
 }
 
 export interface Candidate<P> {
@@ -97,7 +104,14 @@ export type NodeVerdict =
   /** The node was not resolved: a limit, or an unconfirmable infeasibility verdict. Stops the search. */
   | 'unresolved'
   /** A candidate failed decoding or independent validation for a reason the relaxation cannot explain. Stops the search. */
-  | 'failed';
+  | 'failed'
+  /**
+   * The node is split at `splitAt` and nothing else (owner decision F1, 2026-10-12): no build is found, nothing is pruned and NO bound is taken
+   * from the evaluation (its `evidence` is ignored); both children inherit the node's own bound. Splitting discards no region, so it needs no
+   * settled verdict. Only an inexact node with an interval can be split; an interval too narrow to split stops the search as an unsplittable
+   * `solved` node does.
+   */
+  | 'split';
 
 export interface NodeEvaluation<P> {
   verdict: NodeVerdict;
@@ -308,7 +322,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     const node = live.shift() as LiveNode;
     let evaluation: NodeEvaluation<P>;
     try {
-      evaluation = await options.evaluate({ id: node.id, interval: node.interval, bound: node.up });
+      evaluation = await options.evaluate({ id: node.id, interval: node.interval, bound: node.up, incumbentExact });
     } catch (error) {
       // A native failure ends the search: it travels as a typed error, with what the search had established BEFORE it (the failing node is
       // still live, so it counts toward the upper bound; it is not counted among the completed nodes).
@@ -323,6 +337,18 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     if (evaluation.candidate !== null) {
       const exact = candidateExact(evaluation.candidate);
       if (incumbentExact === null || ratCmp(exact, incumbentExact) > 0) { incumbent = evaluation.candidate; incumbentExact = exact; }
+    }
+    if (evaluation.verdict === 'split') {
+      // Owner decision F1: a split discards nothing (the two closed children cover the node), and it carries no bound: the children inherit the
+      // node's OWN bound, never the evaluation's evidence, so an unsettled verdict can neither prune a region nor enter a published bound.
+      const halves = node.interval === null ? null : splitInterval(node.interval, evaluation.splitAt);
+      if (halves === null) {
+        live.push(liveNode(node.interval, node.bound, node.id));
+        stopReason = INTERVAL_RESOLUTION_REASON;
+        break;
+      }
+      live.push(liveNode(halves[0], node.bound), liveNode(halves[1], node.bound));
+      continue;
     }
     const bound = nodeBound(node.bound, evaluation.evidence);
     if (evaluation.verdict === 'infeasible') continue;

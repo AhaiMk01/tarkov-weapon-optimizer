@@ -252,14 +252,16 @@ export function witnessScopeOf(request: MoaFloorRequest, cap: number | null): Wi
 }
 
 /**
- * The native stop of a build-yielding result, from the facts the classifier recorded (termination and the factual reason). A first-witness stop of
- * a weight search (`stopAtFirstWitness`, TED requests only) reports the same reason as a native solution limit, so it reads as `solution_limit`:
- * a trace diagnostic, never an input of the search.
+ * The native stop of a build-yielding result: how the native solve that produced the WITNESS ended, read from the HiGHS model status the pipeline
+ * recorded on the build (`VerifiedBuild.nativeStatus`, owner decision F2, 2026-10-12). Every floor query runs under the first-witness policy
+ * (`stopAtFirstWitness`, TED or not), so the query's own reason says how the search stopped, not how the native solve ended; this label keeps the two
+ * apart (ADR 0013 section 6: a native `Optimal` completion and a native solution-limit stop are distinct). A trace diagnostic, never an input of the search.
  */
 function nativeStopOf(result: Extract<PreciseResult, { kind: 'build' }>): FloorNativeStop {
-  const { outcome } = result;
-  if (outcome.reason === PUBLIC_REASONS.nativeSolutionLimitReached) return 'solution_limit';
-  return outcome.termination === 'optimal' ? 'optimal' : 'other';
+  const status = result.best.nativeStatus;
+  if (status === 'Optimal') return 'optimal';
+  if (status === 'SolutionLimit') return 'solution_limit';
+  return 'other';
 }
 
 /**

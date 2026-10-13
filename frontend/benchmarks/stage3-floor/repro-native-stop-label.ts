@@ -1,3 +1,5 @@
+// RESOLVED (owner decision F2, 2026-10-12, s3fix2): `nativeStop` is now the HiGHS status of the solve that produced the witness
+// (`VerifiedBuild.nativeStatus`). After the change this script prints nativeStop "optimal" and "not reproduced". Kept as the regression reproduction.
 // Minimal reproduction (Stage 3 workstream 3.7 finding, not fixed here): a MOA floor witness is labelled `nativeStop: 'solution_limit'` (and its
 // Precise outcome carries the factual reason `Native solution limit reached`) although the native solve that produced it COMPLETED with model status
 // `Optimal`. ADR 0013 section 6 keeps a native `Optimal` completion and an unfinished native solution-limit stop distinct, and the header of

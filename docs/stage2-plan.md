@@ -157,6 +157,19 @@ is approximate. Decisions:
      integral relaxed point that validates is used as the node's build; a fractional or rejected relaxed point, or no settled relaxed verdict, leaves the
      node unresolved (no certificate, best verified build kept). Production solves relaxed-first, so an integer-text Infeasible that follows a feasible
      relaxation of the same text is never certified. The guard is sound but not complete: a relaxation that shares the false verdict is not detected.
+   **Three more follow-up decisions (owner, 2026-10-12, Stage 3 proof review and floor measurement):**
+   - **Skip the second solve for splits (F1).** A node verdict that leads ONLY to a split of the weight range (a qualified Optimal of an inexact node
+     with no verified build and a split point, whose bound would not fathom the node) is not confirmed: the node is split (search verdict `split`),
+     its bound is not used, nothing is pruned and nothing is certified from it. Everything that prunes, certifies optimality, certifies infeasibility
+     or contributes a published bound keeps the full rule above. Proof: `docs/proofs/count-model.md` Proposition F1. Effect: the Prevent Overswing floor
+     cases R1/N1 of `docs/stage3/floor-measurement.md` (finding F1) no longer stop after two trials.
+   - **Only checked bounds (G1).** A published upper bound and gap (Optimize, Gunsmith, Explore rows, every status) come only from settled verdicts (two
+     agreeing qualified solves). A node that ends unresolved or failed carries no bound of its own (a limit-stopped first opinion, a timed-out or
+     unqualified second opinion, a disagreement, a relaxed try carried through the fallback, a rejected solve's dual bound, the floor's first-witness
+     short-circuit); it keeps its settled parent's bound, unknown at a root, and an unknown live bound makes the published upper bound and gap `null`.
+     The Details view shows "unknown".
+   - **A found point blocks impossible (G2).** Two Infeasible verdicts never settle a node against a qualified opinion that returned a primal point (an
+     Optimal, or a qualified limit stop with a point) or a verified build, on the integer and the relaxed-edge text alike; the node stays unresolved.
 5b. **Integrality tolerance 1e-7, primal and dual 1e-9 (owner, 2026-10-06).** On that fixture only the integrality
    tolerance matters (likely: HiGHS rounds a derived integer bound such as 1.9999999982 down under 1e-9 and cuts off the
    optimum). A looser integrality tolerance can only enlarge a bound and every candidate is validated exactly, so the

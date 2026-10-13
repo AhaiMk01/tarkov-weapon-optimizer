@@ -49,15 +49,30 @@
  *   - when they disagree, a third seed breaks the tie: the node is settled only by two agreeing solves, its bound is then the largest qualified
  *     bound of all three, and an infeasibility needs two qualified Infeasible verdicts and no verified build among the three;
  *   - a second or third solve that times out, stops on a limit or is not qualified settles nothing: the certificate is withheld (the node stays
- *     unresolved with the factual reason, its qualified bound and its verified builds kept), and so does a disagreement no two solves resolve.
+ *     unresolved with the factual reason and its verified builds kept, but NO bound: see "Only checked bounds"), and so does a disagreement no two
+ *     solves resolve;
+ *   - a found point blocks impossible (owner, 2026-10-12, G2): two Infeasible verdicts never settle a node against a qualified opinion that returned a
+ *     primal point (an Optimal, or a qualified limit stop with a point) or a verified build, on the integer and the relaxed-edge text alike; the node
+ *     stays unresolved.
  * `SearchTelemetry` counts the second and third solves, the disagreements and the time they cost.
+ *
+ * Splits need no second opinion (owner, 2026-10-12, decision F1). A first opinion that leads ONLY to a split of the weight range (a qualified Optimal of an
+ * inexact node with no verified build and a split point, whose bound would not fathom the node) is not confirmed: the node is returned as a `split`
+ * evaluation, which the search splits without reading its bound (`search.ts`). Splitting discards nothing, so it needs no certificate, and the shortcut
+ * issues none: no bound, no pruning, no infeasibility. A first opinion whose bound WOULD fathom the node against the incumbent goes through the full rule.
+ *
+ * Only checked bounds (owner, 2026-10-12, G1). A node's bound enters the search, and so any published upper bound or gap, only from a SETTLED verdict
+ * (two agreeing qualified solves). An unresolved or failed node carries no bound of its own (`evidence: null`, enforced once in `evaluate`), whatever
+ * single solve it saw: a limit-stopped first opinion, a timed-out or unqualified second opinion, a disagreement, a relaxed try carried through the
+ * fallback, a rejected solve's dual bound, or the first-witness short-circuit of a floor query. Such a node keeps the bound it inherited from a settled
+ * parent, unknown at a root, and an unknown live bound makes the published upper bound and gap unknown (null on the wire).
  *
  * Inconclusive solves (owner, 2026-10-12: "retry seeds, never throw"). HiGHS 1.15.1 returns `SolveError` under the production options on some small,
  * valid count models for some seeds (reference/harness/countGates.nativeDefects.differential.test.ts). Such a solve (`SolveError`, `PresolveError`,
  * `PostsolveError` on a text HiGHS read without error: `nativeSolve.ts`) is an INCONCLUSIVE opinion: it is no verdict, it is not counted among the
  * (at most three, decision 5a) qualified opinions, and the node moves on to the next seed of `PRECISE_RANDOM_SEEDS`, for its first opinion as for
  * its second and third. When the seeds run out before two qualified verdicts agree, the node is unresolved with `Required proof prerequisite
- * unavailable`: no certificate, its verified builds and qualified bounds kept. A malformed text or a native call that throws still raises its typed error.
+ * unavailable`: no certificate, its verified builds kept and no bound (G1). A malformed text or a native call that throws still raises its typed error.
  *
  * Infeasibility needs the relaxation to agree (owner, 2026-10-12: "relaxation must agree"). HiGHS 1.15.1 also reported a FEASIBLE integer count text
  * Infeasible under every production seed (fuzz world 30001860, TrueErgo, weight node [2.5, 2.5]) while the relaxed-edge text of the same node found the
@@ -103,7 +118,7 @@ import type { NativeAssessment } from './nativeProof';
 import { axesOfStats } from './objective';
 import { exactAxes, exactObjectiveScore, scoreEnclosure, upperBoundExact } from './proof';
 import type { BoundEvidence } from './proof';
-import { ratCmp, ratSub, ratToNumber, type Rat } from './exact';
+import { ratCmp, ratFromDouble, ratSub, ratToNumber, type Rat } from './exact';
 import { ratAbs, ratRoundUp } from './rational';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
 import type { OptimizeOutcome } from './outcome';
@@ -177,6 +192,8 @@ export interface VerifiedBuild {
   /** The largest double at most the exact score (the proof lower bound) and the smallest at least it (the incumbent's part of the upper bound). */
   scoreLower: number;
   scoreUpper: number;
+  /** The HiGHS model status of the solve that produced this build (`Optimal`, `SolutionLimit`, `TimeLimit`, ...): the floor trace's `nativeStop` (F2). */
+  nativeStatus: string;
 }
 
 export interface SearchTelemetry {
@@ -226,6 +243,8 @@ export interface SearchTelemetry {
   relaxationVetoes: number;
   /** Integer-text Infeasible verdicts overturned by a verified build of the relaxed-edge text (a native false Infeasible caught). */
   relaxationRescues: number;
+  /** Nodes split on a first opinion alone (decision F1: a qualified Optimal with no verified build and a split point that would not fathom the node). */
+  splitOnlyNodes: number;
   /** The largest count model of the search: columns and rows. */
   columns: number;
   rows: number;
@@ -279,7 +298,9 @@ export interface PreciseContext {
   nativeStop?: Pick<HighsOptions, 'mip_max_improving_sols'>;
   /**
    * End the weight search at the first verified build (the first-witness policy of a MOA floor query): the result is a `build` that is not
-   * certified, with the factual reason `Native solution limit reached`. Only a search with a node still live stops this way.
+   * certified and carries no bound (G1), with the factual reason of the witness's own native stop (F2: `Native solution limit reached` after a
+   * native solution limit, `Required proof prerequisite unavailable` after a native Optimal whose second opinion was not run). Only a search with a
+   * node still live stops this way.
    */
   stopAtFirstWitness?: boolean;
   /**
@@ -374,7 +395,15 @@ export interface Opinion {
   inconclusive?: boolean;
   /** The solve returned a primal point (feasible within the native tolerances), so its text is not infeasible as far as this solve can tell. */
   point?: boolean;
+  /** The HiGHS model status of the solve (absent for a solve that reached no status the judge reads: an Infeasible, a stop before a result). */
+  nativeStatus?: string;
 }
+
+/**
+ * A qualified opinion found a point of its text (G2): an Optimal verdict (always with a point), or a qualified solve of any other status that returned a
+ * primal point (a limit stop with a point). Unqualified points prove nothing.
+ */
+const foundPoint = (o: Opinion): boolean => o.verdict === 'optimal' || (o.point === true && o.evidence !== null && o.evidence.qualified);
 
 /** Two QUALIFIED verdicts agree: both Infeasible, or both Optimal with proved bounds within the tolerance of each other (exact comparison). */
 export function opinionsAgree(a: Opinion, b: Opinion, tolerance: number): boolean {
@@ -394,7 +423,9 @@ const betterCandidate = <P>(a: Candidate<P> | null, b: Candidate<P> | null): Can
 
 /**
  * Settle a node from its opinions (decision 5a, see the header): two agreeing qualified verdicts settle it; the bound is the largest qualified Optimal
- * bound of all the solves, the candidate the best verified build of all of them; anything else withholds the certificate. Pure: exported for tests.
+ * bound of all the solves, the candidate the best verified build of all of them; anything else withholds the certificate AND the bound (G1: an unsettled
+ * node carries no bound). Two agreeing Infeasible verdicts settle nothing against a verified build or a qualified point of any opinion (G2). Pure:
+ * exported for tests.
  */
 export function settleOpinions(opinions: readonly Opinion[], tolerance: number, exact: boolean): { evaluation: NodeEvaluation<VerifiedBuild>; settled: boolean } {
   let candidate: Candidate<VerifiedBuild> | null = null;
@@ -416,14 +447,29 @@ export function settleOpinions(opinions: readonly Opinion[], tolerance: number, 
   }
   const splitAt = candidate?.payload.stats.weight ?? opinions.find(o => o.splitAt !== undefined)?.splitAt;
   const split = splitAt === undefined ? {} : { splitAt };
-  const evidence = bound?.evidence ?? null;
-  if (agreed === 'optimal') return { settled: true, evaluation: { verdict: 'solved', evidence, candidate, exact, ...split } };
-  if (agreed === 'infeasible' && candidate === null) return { settled: true, evaluation: { verdict: 'infeasible', evidence: null, candidate: null, exact } };
-  // Nothing agreed (or two Infeasible verdicts against a verified build): no certificate. The factual reason is that of the last solve when it
-  // proved nothing (a timeout, a limit, an unqualified solve), otherwise the disagreement itself, a proof prerequisite that is unavailable.
+  if (agreed === 'optimal') return { settled: true, evaluation: { verdict: 'solved', evidence: bound?.evidence ?? null, candidate, exact, ...split } };
+  // G2: a found point blocks impossible. A verified build, or a qualified point of any opinion, refutes two Infeasible verdicts.
+  if (agreed === 'infeasible' && candidate === null && !opinions.some(foundPoint)) {
+    return { settled: true, evaluation: { verdict: 'infeasible', evidence: null, candidate: null, exact } };
+  }
+  // Nothing agreed (or two Infeasible verdicts against a point): no certificate, and no bound (G1: only a settled verdict carries one). The factual
+  // reason is that of the last solve when it proved nothing (a timeout, a limit, an unqualified solve), otherwise the disagreement itself, a proof
+  // prerequisite that is unavailable.
   const last = opinions[opinions.length - 1];
   const reason = last.verdict === 'none' && last.reason !== undefined ? last.reason : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable;
-  return { settled: false, evaluation: { verdict: 'unresolved', evidence, candidate, exact, reason, finished: opinions.every(o => o.finished), ...split } };
+  return { settled: false, evaluation: { verdict: 'unresolved', evidence: null, candidate, exact, reason, finished: opinions.every(o => o.finished), ...split } };
+}
+
+/**
+ * Decision F1 (owner, 2026-10-12), pure: does this first opinion lead ONLY to a split of the node's weight range? It must be a qualified Optimal of an
+ * inexact node with an interval, with no verified build, no rejected point and a split point, and its bound must not fathom the node: with an
+ * incumbent, a bound within the tolerance of it (or no proved bound) would close the node, which needs the full decision-5a rule. Exported for tests.
+ */
+export function leadsOnlyToSplit(first: Opinion, exact: boolean, node: Pick<SearchNode, 'interval' | 'incumbentExact'>, tolerance: number): boolean {
+  if (exact || node.interval === null || first.verdict !== 'optimal' || first.candidate !== null || first.rejected !== undefined || first.splitAt === undefined) return false;
+  if (node.incumbentExact === null) return true;
+  const proved = upperBoundExact(first.evidence);
+  return proved !== null && ratCmp(ratSub(proved, node.incumbentExact), ratFromDouble(tolerance)) > 0;
 }
 
 export async function solvePrecise(context: PreciseContext): Promise<PreciseResult> {
@@ -439,7 +485,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
     secondOpinions: 0, thirdOpinions: 0, disagreements: 0, unsettledDisagreements: 0, secondOpinionMs: 0,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, inconclusiveSolves: 0, extraSeedSolves: 0, relaxationChecks: 0, relaxationVetoes: 0, relaxationRescues: 0,
-    columns: 0, rows: 0,
+    splitOnlyNodes: 0, columns: 0, rows: 0,
   };
   const moaDependent = isMoaDependent(params);
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
@@ -549,7 +595,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
           scoreLower: enclosure.lower,
           scoreUpper: enclosure.upper,
           scoreExact: enclosure.exact,
-          payload: { build: decoded.build, stats, axes, score: enclosure.nominal, scoreLower: enclosure.lower, scoreUpper: enclosure.upper },
+          payload: { build: decoded.build, stats, axes, score: enclosure.nominal, scoreLower: enclosure.lower, scoreUpper: enclosure.upper, nativeStatus: status },
         };
         // A build verified in THIS solve cannot score above the solve's proved upper bound. The shortfall (how far the bound falls below the
         // witness) is the native solver's own floating-point noise, which no proved allowance covers (the pinned build exports no node duals):
@@ -606,7 +652,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       return { verdict: 'infeasible', evidence: null, candidate: null, finished: true };
     }
     if (outcome.presolveRescue) telemetry.presolveRescues++;
-    return judge(model, lpText, outcome.result, relaxed);
+    return { ...judge(model, lpText, outcome.result, relaxed), nativeStatus: outcome.result.modelStatus.name };
   };
 
   /**
@@ -629,10 +675,14 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
    */
   const confirm = async (model: CountModel, lpText: string, first: Opinion, relaxed: boolean, next: number): Promise<NodeEvaluation<VerifiedBuild>> => {
     // The first-witness policy of a MOA floor query takes the first verified build and stops: no certificate is asked of it, so no second opinion is
-    // spent on it (ADR 0013 section 6). An infeasibility verdict of a floor query is still confirmed: it is what raises the proved lower bound.
+    // spent on it (ADR 0013 section 6), and its single solve gives the node no bound (G1). Its reason is the solve's real native stop (F2): a native
+    // limit's own reason, or, for a native Optimal, the withheld certificate (the second opinion was not run). An infeasibility verdict of a floor query
+    // is still confirmed: it is what raises the proved lower bound.
     if (context.stopAtFirstWitness === true && first.candidate !== null) {
+      const status = first.nativeStatus ?? first.candidate.payload.nativeStatus;
       return {
-        verdict: 'unresolved', evidence: first.evidence, candidate: first.candidate, exact: model.exact, reason: PUBLIC_REASONS.nativeSolutionLimitReached,
+        verdict: 'unresolved', evidence: null, candidate: first.candidate, exact: model.exact,
+        reason: status === 'Optimal' ? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable : reasonOfNativeLimit(status),
         finished: first.finished, ...(first.splitAt === undefined ? {} : { splitAt: first.splitAt }),
       };
     }
@@ -665,18 +715,19 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     return evaluation;
   };
 
-  /** A first opinion that bears no certificate, as the node's evaluation. */
+  /** A first opinion that bears no certificate, as the node's evaluation: its verified build is kept, its single-solve bound is not (G1). */
   const unconfirmed = (model: CountModel, opinion: Opinion): NodeEvaluation<VerifiedBuild> => ({
     verdict: 'unresolved',
-    evidence: opinion.evidence,
+    evidence: null,
     candidate: opinion.candidate,
     exact: model.exact,
     reason: opinion.reason ?? PUBLIC_REASONS.requiredProofPrerequisiteUnavailable,
     finished: opinion.finished,
     ...(opinion.splitAt === undefined ? {} : { splitAt: opinion.splitAt }),
   });
+  /** A rejected point that cannot be cut out: the node fails, and the rejected solve's dual bound is not kept (G1). */
   const failed = (model: CountModel, opinion: Opinion): NodeEvaluation<VerifiedBuild> => ({
-    verdict: 'failed', evidence: opinion.evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished: opinion.finished,
+    verdict: 'failed', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.independentBuildValidationFailed, finished: opinion.finished,
   });
   /** The interrupt a guard reports, as an unresolved evaluation. */
   const interrupted = (model: CountModel, stop: 'cancelled' | 'deadline'): NodeEvaluation<VerifiedBuild> => ({
@@ -687,17 +738,17 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
    * "Relaxation must agree" (owner, 2026-10-12; see the header). `integerInfeasible` is the settled Infeasible evaluation of the INTEGER text of a node with
    * `cuts`; the node is infeasible only when the relaxed-edge text with the same cuts is settled Infeasible too. `knownPoint`: the relaxed text with these
    * cuts was already solved in this node without settling Infeasible, or a verified build of the node exists, so the relaxation cannot agree and no solve
-   * is spent (its evidence, a qualified relaxed bound, still bounds the node).
+   * is spent. Whatever single solve the node then rests on gives it no bound (G1). `node`: the search node, for the split-only shortcut (decision F1).
    */
   const relaxationAgrees = async (
-    model: CountModel, cuts: readonly IntegerNoGood[], integerInfeasible: NodeEvaluation<VerifiedBuild>, knownPoint: { evidence: BoundEvidence | null } | null,
+    model: CountModel, cuts: readonly IntegerNoGood[], integerInfeasible: NodeEvaluation<VerifiedBuild>, knownPoint: boolean, node: SearchNode,
   ): Promise<NodeEvaluation<VerifiedBuild>> => {
     // A model with no slot edge: its relaxed-edge text IS its integer text, so the settled verdict already is the relaxation's.
     if (model.edges.length === 0) return integerInfeasible;
-    if (knownPoint !== null) {
+    if (knownPoint) {
       telemetry.relaxationVetoes++;
       // Both native searches of an exact node ran to completion; only the infeasibility is withheld. An inexact node still needs refining.
-      return { verdict: 'unresolved', evidence: knownPoint.evidence, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: model.exact };
+      return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: model.exact };
     }
     telemetry.relaxationChecks++;
     const lpText = appendCuts(model.lpRelaxedEdges(), cuts);
@@ -711,19 +762,31 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       return evaluation;
     }
     if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) {
-      // An integral relaxed optimum is a point of the integer text: its Infeasible verdict was false. The point is settled like any relaxed optimum.
+      // An integral relaxed optimum is a point of the integer text: its Infeasible verdict was false. The point is settled like any relaxed optimum, or
+      // only splits the node (decision F1).
       telemetry.relaxationRescues++;
-      return confirm(model, lpText, first, true, next);
+      return splitOnly(model, first, node) ?? confirm(model, lpText, first, true, next);
     }
     telemetry.relaxationVetoes++;
     if (first.candidate !== null) telemetry.relaxationRescues++;
     // A fractional or rejected relaxed point, no verdict, or a stop: the node is not infeasible, and it is not settled either.
     const interrupt = first.verdict === 'none' && first.reason !== undefined && INTERRUPT_REASONS.has(first.reason);
     return {
-      verdict: 'unresolved', evidence: first.evidence, candidate: first.candidate, exact: model.exact,
+      verdict: 'unresolved', evidence: null, candidate: first.candidate, exact: model.exact,
       reason: interrupt ? (first.reason as string) : PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: first.finished,
       ...(first.splitAt === undefined ? {} : { splitAt: first.splitAt }),
     };
+  };
+
+  /**
+   * Decision F1: the first opinion leads only to a split of the weight range (a qualified Optimal of an inexact node with no verified build, a split point and
+   * no rejected point) and its bound would not fathom the node against the incumbent (so the search would split it whatever the second opinion said). Then
+   * the node is split without a second opinion and without a bound: the `split` evaluation. `null` when the full rule applies.
+   */
+  const splitOnly = (model: CountModel, first: Opinion, node: SearchNode): NodeEvaluation<VerifiedBuild> | null => {
+    if (!leadsOnlyToSplit(first, model.exact, node, tolerance) || first.splitAt === undefined) return null;
+    telemetry.splitOnlyNodes++;
+    return { verdict: 'split', evidence: null, candidate: null, exact: false, splitAt: first.splitAt };
   };
 
   const evaluate = async (node: SearchNode): Promise<NodeEvaluation<VerifiedBuild>> => {
@@ -732,12 +795,15 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       telemetry.provedEmptyNodes++;
       return { verdict: 'infeasible', evidence: null, candidate: null, exact: true };
     }
-    const evaluation = await evaluateNative(model);
+    const evaluation = await evaluateNative(model, node);
     if (evaluation.verdict === 'infeasible') telemetry.confirmedInfeasible++;
+    // G1, the one place it is enforced: only a SETTLED verdict carries a bound into the search (and so into a published upper bound or gap). An
+    // unresolved, failed or split node keeps the bound it inherited from a settled parent (unknown at a root).
+    if (evaluation.verdict !== 'solved' && evaluation.evidence !== null) return { ...evaluation, evidence: null };
     return evaluation;
   };
 
-  const evaluateNative = async (model: CountModel): Promise<NodeEvaluation<VerifiedBuild>> => {
+  const evaluateNative = async (model: CountModel, node: SearchNode): Promise<NodeEvaluation<VerifiedBuild>> => {
     // Relaxed slot edges first: an integral optimum of the relaxation is an optimum of the integer model, judged and confirmed exactly as one, and an
     // infeasible relaxation leaves the integer model nothing either. Anything else falls back to the integer model of the node.
     let relaxedRejection: Opinion | null = null;
@@ -750,16 +816,18 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
      * The relaxed-edge text WITHOUT cuts was solved and did not settle Infeasible (it had a point, or no verdict): an Infeasible verdict of the uncut
      * integer text cannot be confirmed by it, and solving the same text with the same seeds again would only repeat the answer.
      */
-    let relaxedUncut: { evidence: BoundEvidence | null } | null = null;
+    let relaxedUncut = false;
     if (relaxEdges && model.edges.length > 0) {
       const lpText = model.lpRelaxedEdges();
       telemetry.relaxedEdgeSolves++;
       const { opinion: first, next } = await firstOpinion(model, lpText, true);
       if (first.verdict === 'infeasible') return confirm(model, lpText, first, true, next);
-      if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) return confirm(model, lpText, first, true, next);
+      if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) {
+        return splitOnly(model, first, node) ?? confirm(model, lpText, first, true, next);
+      }
       if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.timeLimitReached && first.evidence === null) return unconfirmed(model, first);
       telemetry.relaxedEdgeFallbacks++;
-      relaxedUncut = { evidence: first.verdict === 'optimal' ? first.evidence : null };
+      relaxedUncut = true;
       if (first.rejected !== undefined) relaxedRejection = first;
       else if (first.candidate !== null || (first.reason !== undefined && !INTERRUPT_REASONS.has(first.reason))) kept = first;
       // The integer re-solve is a stage of its own: yield so a cancel message is dispatched, then guard. What the relaxed solve observed outranks the
@@ -810,13 +878,15 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       }
       if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.independentBuildValidationFailed) return withKept(failed(model, first));
       if (first.verdict === 'none') return withKept(unconfirmed(model, first));
+      const split = splitOnly(model, first, node);
+      if (split !== null) return withKept(split);
       const evaluation = await confirm(model, lpText, first, false, next);
       if (evaluation.verdict !== 'infeasible') return withKept(evaluation);
       // A settled Infeasible of the INTEGER text: only the relaxation can make it the node's verdict. A verified build of the node (kept from the relaxed
       // try; cuts only ever remove rejected points) refutes the agreement, and so does the uncut relaxed text that was already solved without settling
       // Infeasible (production's relaxed-first try: its point, or its lack of a verdict, would only be repeated).
-      const knownPoint = kept?.candidate != null ? { evidence: null } : cuts.length === 0 ? relaxedUncut : null;
-      return withKept(await relaxationAgrees(model, cuts, evaluation, knownPoint));
+      const knownPoint = kept?.candidate != null || (cuts.length === 0 && relaxedUncut);
+      return withKept(await relaxationAgrees(model, cuts, evaluation, knownPoint, node));
     }
   };
 

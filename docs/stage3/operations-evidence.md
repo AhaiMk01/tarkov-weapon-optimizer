@@ -63,7 +63,8 @@ Observed envelopes (all asserted in M):
 - **Optimize family.** A stop with no witness is `incomplete`/`none` with a null objective and a null LB. A stop with a witness is
   `feasible`/`feasible` with the build and its LB. Termination is `limit` whenever the search is unfinished. A validation failure after a completed
   search is `optimal`. A withheld proof is `feasible` with termination `optimal`, `upper_bound: null` and `absolute_gap: null`. A deadline during the
-  second opinion keeps the first opinion's qualified UB. A request that reached the model reports its resolved model; a pre-model stop (stash, queue,
+  second opinion publishes no UB and no gap (`null`; owner decision "Only checked bounds", 2026-10-12: the first opinion alone is not a checked
+  bound) and keeps the verified build and its LB. A request that reached the model reports its resolved model; a pre-model stop (stash, queue,
   cancel while queued) reports null resolved fields, nodes 0 and `limit`.
 - **Explore.**
   - Entry stops are `invalid` with `[]` points, no schedule and no rows.

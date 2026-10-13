@@ -1,3 +1,6 @@
+// RESOLVED (owner decision F1, 2026-10-12, s3fix2): a first opinion that leads only to a split is no longer confirmed (search verdict `split`,
+// `leadsOnlyToSplit` in src/solver/physical/solvePrecise.ts). After the change this script prints a witness at 1.0210 MOA for the Prevent Overswing query
+// and the native log shows no seed-11 SolutionLimit (see docs/stage3/floor-measurement.md, F1 resolved). Kept as the regression reproduction.
 // Minimal reproduction of Stage 3 workstream 3.7 finding F1 (not fixed here; production is untouched): a Prevent Overswing floor query stops
 // WITHOUT a witness or an emptiness after ~0.6 s, because the decision-5a second opinion of a TED weight node runs under the floor's native stop
 // `mip_max_improving_sols = 1` and HiGHS reports `SolutionLimit` (objective 0 = dual bound 0, gap closed) where the first opinion of the same node

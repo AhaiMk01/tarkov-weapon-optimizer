@@ -1,8 +1,10 @@
 # The certified count model of Precise: domain-wide lifting and projection proof
 
-Status: **draft for adversarial review** (Stage 3, workstream 3.2; ADR 0013 section 7; refs #40). Written against branch
-`impl/stage2-correctness-cutover` at commit `a19041c`. Every `file:line` below is at that commit; paths are relative to `frontend/`
-unless they start with `docs/`. Documentation only: no code, test, oracle or ledger was changed.
+Status: **Revision 1 (2026-10-12)**, after the adversarial review (`docs/proofs/count-model.review.md`) and the owner decisions of
+2026-10-12 (F1, G1, G2, GAP 8a; section 12 maps every review finding to its change). Stage 3, workstream 3.2; ADR 0013 section 7; refs #40.
+Written against branch `impl/stage2-correctness-cutover` at commit `a19041c`; Revision 1 re-cites every `file:line` at the working tree of
+the Revision 1 change (base `dae163a` plus the code changes of section 12; no file under `reference/oracle/` changed, so oracle citations
+are unchanged). Paths are relative to `frontend/` unless they start with `docs/`.
 
 ADR 0013 section 7 asks for "the mathematical domain-wide lifting/projection proof for repaired precise placement/acquisition and
 conservative bounds, including all conflict/required/rootedness/quantity assumptions". This document is that proof for the model
@@ -36,7 +38,7 @@ owner decisions 4, 5, 5a and 5b state them.
 ### Notation
 
 - `w` the weapon, `r` the request (`SolveParams` after normalization), `tau = resolveTolerance(r.objectiveTolerance)`
-  (`src/solver/physical/solvePrecise.ts:339-341`), default `1e-5` (`:298`).
+  (`src/solver/physical/solvePrecise.ts:360-362`), default `1e-5` (`:319`).
 - `Q` the rationals. Every binary64 value `x` of the data or request denotes the exact rational `[x]` it encodes (oracle `fromBinary64`,
   production `ratFromDouble`, `src/solver/physical/exact.ts:61`); INTERPRETATIONS.md choice 3.
 - For a build `B`: `n_t(B)` the number of installed copies of template `t`; `e_{rho,c}(B)` the number of copies of `c` installed in a
@@ -67,10 +69,10 @@ without throwing. In particular:
 - **(P3)** no slot mixes ammunition and parts (`MIXED_AMMO_SLOT`, `blueprint.ts:369-379`); ammunition-only slots are removed
   (INTERPRETATIONS.md choice 15); presets are on their own receiver with nonnegative integer counts (`BAD_PRESET`, `blueprint.ts:287-303`).
 - **(P4)** at most `DEFAULT_MAX_OCCURRENCES = 4,000,000` item occurrences (`blueprint.ts:54`, `:447-453`). Production never passes another
-  limit (`solvePrecise.ts:155`).
+  limit (`solvePrecise.ts:170`).
 
 A request is **accepted** when `prepareSubproblemDomain` and `specializeCount` accept it (finite caps, levels and weights, a valid
-`owned_items` multiset, an ideal point when Tchebycheff is on: `src/solver/physical/specializeFast.ts:324-362`,
+`owned_items` multiset, an ideal point when Tchebycheff is on: `src/solver/physical/specializeFast.ts:346-384`,
 `src/solver/physical/ownedItems.ts`, `src/solver/physical/acquisition.ts:49-69`). Malformed input is a typed error, never a verdict, and is
 out of scope.
 
@@ -147,8 +149,8 @@ Occurrence masks (`domain.ts:238-289`): **viable** bottom-up (template-level act
 ### 1.4 The count model as emitted
 
 `specializeCount(blueprint, domain, r, node?)` (`src/solver/physical/specializeCount.ts:129-138`) asserts Lemma 1 on the domain
-(`specializeCount.ts:66-81`) and calls `specializeFast(..., { certified: true })` (`specializeFast.ts:1268-1338`). For an empty domain it
-returns a one-row contradiction (`specializeFast.ts:1192-1235`) and production never solves it (`solvePrecise.ts:457-462`).
+(`specializeCount.ts:66-81`) and calls `specializeFast(..., { certified: true })` (`specializeFast.ts:1290-1360`). For an empty domain it
+returns a one-row contradiction (`specializeFast.ts:1214-1257`) and production never solves it (`solvePrecise.ts:503-508`).
 
 **Template graph** (`src/solver/physical/templateGraph.ts:61-140`). `T_act` = receiver + templates with an active occurrence (`:66-68`).
 For each raw id `rho` owned by an active template: `C(rho)` = the union over active occurrences of the owner of the templates of their active
@@ -161,59 +163,61 @@ max over d in C(rho) of K_c(d)`.
 
 | Column | Domain | Kind | Code |
 | --- | --- | --- | --- |
-| `base_b`, `b in Bases` | [0,1] | binary | `specializeFast.ts:575-578` |
-| `n_t`, `t in T_act \ {0}` | [0, U_t] | integer (binary if `U_t = 1`) | `:579-582` |
-| `e_rho_c`, graph slot `rho`, `c in C(rho)` | [0, min(U_owner(rho), U_c)] | integer | `:583-594` |
-| `z_t` (only for `U_t > 1` and `t` in a conflict clique, a slot-conflict row or the MOA rows) | [0,1] | binary | `:598-610` |
-| `lot_t_k` (`lots` mode) | [0, ceil(surrogateMax_t / size_k)] | integer | `:654-660` |
-| `raw_ergo, capped_ergo, rec_mod, rec_axis, price_axis, weight, acc_total` | active-range enclosures | continuous | `:786-812` |
-| clamp binaries `c1_*`, `c2_*` | [0,1] | binary | `:758-774` |
-| `gear_ergo, eff_ergo, ted` (TED requests) | exact enclosures | continuous | `:828-869` |
-| `ergo_axis`, `*_n` (power-of-two read-throughs), `tch_t`, `total_obj` | exact or outward enclosures | continuous | `:871-873`, `:1018-1027`, `:1074-1082` |
+| `base_b`, `b in Bases` | [0,1] | binary | `specializeFast.ts:597-600` |
+| `n_t`, `t in T_act \ {0}` | [0, U_t] | integer (binary if `U_t = 1`) | `:601-604` |
+| `e_rho_c`, graph slot `rho`, `c in C(rho)` | [0, min(U_owner(rho), U_c)] | integer | `:605-616` |
+| `z_t` (only for `U_t > 1` and `t` in a conflict clique, a slot-conflict row or the MOA rows) | [0,1] | binary | `:620-632` |
+| `lot_t_k` (`lots` mode) | [0, ceil(surrogateMax_t / size_k)] | integer | `:676-682` |
+| `raw_ergo, capped_ergo, rec_mod, rec_axis, price_axis, weight, acc_total` | active-range enclosures | continuous | `:808-834` |
+| clamp binaries `c1_*`, `c2_*` | [0,1] | binary | `:780-796` |
+| `gear_ergo, eff_ergo, ted` (TED requests) | exact enclosures | continuous | `:850-891` |
+| `ergo_axis`, `*_n` (power-of-two read-throughs), `tch_t`, `total_obj` | exact or outward enclosures | continuous | `:893-895`, `:1040-1049`, `:1096-1104` |
 
 Here `surrogateMax_t = max(0, U_t - own_t)`.
 
-**Row families** (row names are matched to families by `familyOfRow`, `specializeFast.ts:267-292`, `:442-445`; a row with no variable
-left after merging is dropped when true and becomes a `contra_k` row `zero_col >= 1` when false, `:509-540`):
+**Row families** (row names are matched to families by `familyOfRow`, `specializeFast.ts:289-314`, `:464-467`; a row with no variable
+left after merging is dropped when true and becomes a `contra_k` row `zero_col >= 1` when false, `:531-562`):
 
 | Family | Rows | Code |
 | --- | --- | --- |
-| base choice | `sum_b base_b = 1` | `:672-674` |
-| parentage | `in_t: n_t - sum_{rho : t in C(rho)} e_rho_t = 0` | `:679-684` |
-| slot capacity / required | root `rho`: `sum_c e = 1` if required, `<= 1` if optional and `|C(rho)| > 1` (else the column bound `<= 1`); mod `rho`: `sum_c e - n_owner(rho) = 0` if required, `<= 0` otherwise | `:686-694` |
-| presence link | `n_t - U_t z_t <= 0`, `z_t - n_t <= 0` | `:605-607` |
-| template conflict | for each clique `K` of `cliqueCover(conflict pairs, T_act)`: `sum_{t in K} pres_t <= 1`, `pres_t = n_t` if `U_t = 1`, else `z_t` | `:708-710`, `:395-439` |
-| slot conflict | for each active blocker `t` and blocked raw id `rho` that is a graph slot: `sum_c e_rho_c + V_rho pres_t <= V_rho`, `V_rho = min(U_owner(rho), sum_c max(e_rho_c))` | `:711-723`, `:698-702` |
-| includes | `incl_t: n_t >= 1` (an unknown or inactive id: constant false row); `catreq_g: sum_{t active, chain(t) meets g} n_t >= 1` | `:726-740` |
-| supply cap | `capped` `t`: `n_t - sum_b q_{b,t} base_b <= own_t` | `:631-635` |
-| lot cover | `lots` `t`: `sum_k size_k lot_t_k - n_t + sum_b q_{b,t} base_b >= -own_t` | `:654-665` |
-| wallet | `price_axis - sum_b price_b base_b - sum_{linear t} unit_t n_t - sum lot prices x lot = 0` | `:876-880` |
-| statistics | `raw_ergo = erg_0 + sum n_t erg_t`; `rec_mod = sum n_t rec_t`; `rec_axis = 1000 rec_mod`; `weight = w_0 + sum n_t w_t` (TED or a weight cap); `acc_total = sum n_t acc_t` (MOA cap) | `:814-820` |
-| first clamp | general three-regime clamp `capped_ergo = clamp(raw_ergo, 0, 100)` | `:821`, `:758-774` |
-| gear and second clamp | `gear_ergo = f capped_ergo` (one row if `f` is a double, else `f_lo capped <= gear <= f_hi capped`); `eff_ergo = clamp(gear_ergo, 0, 100)` | `:825-842` |
-| TED | node rows on `weight`; `ted - eff_ergo + slope weight = -intercept`; `ted >= 0` under Prevent Overswing | `:791-811`, `:843-869` |
-| caps | `price_axis <= max_price`; `capped_ergo >= min_ergonomics`; recoil caps padded (below); magazine/sighting `sum_{t: value_t >= L} n_t >= 1` unless the receiver reaches `L`; `weight <= max_weight` | `:884-918` |
-| MOA | per active positive-COI template `t`: `(c_t/100) acc - M_t pres_t [+ M_t sum_{coi_b > coi_t} pres_b] >= c_t - L - M_t` padded; fallback `(c_0/100) acc + M_fb sum_b pres_b >= c_0 - L` padded | `:938-961`, `proof.ts:129-176` |
+| base choice | `sum_b base_b = 1` | `:694-696` |
+| parentage | `in_t: n_t - sum_{rho : t in C(rho)} e_rho_t = 0` | `:701-706` |
+| slot capacity / required | root `rho`: `sum_c e = 1` if required, `<= 1` if optional and `|C(rho)| > 1` (else the column bound `<= 1`); mod `rho`: `sum_c e - n_owner(rho) = 0` if required, `<= 0` otherwise | `:708-716` |
+| presence link | `n_t - U_t z_t <= 0`, `z_t - n_t <= 0` | `:627-629` |
+| template conflict | for each clique `K` of `cliqueCover(conflict pairs, T_act)`: `sum_{t in K} pres_t <= 1`, `pres_t = n_t` if `U_t = 1`, else `z_t` | `:730-732`, `:417-461` |
+| slot conflict | for each active blocker `t` and blocked raw id `rho` that is a graph slot: `sum_c e_rho_c + V_rho pres_t <= V_rho`, `V_rho = min(U_owner(rho), sum_c max(e_rho_c))` | `:733-745`, `:720-724` |
+| includes | `incl_t: n_t >= 1` (an unknown or inactive id: constant false row); `catreq_g: sum_{t active, chain(t) meets g} n_t >= 1` | `:748-762` |
+| supply cap | `capped` `t`: `n_t - sum_b q_{b,t} base_b <= own_t` | `:653-657` |
+| lot cover | `lots` `t`: `sum_k size_k lot_t_k - n_t + sum_b q_{b,t} base_b >= -own_t` | `:676-687` |
+| wallet | `price_axis - sum_b price_b base_b - sum_{linear t} unit_t n_t - sum lot prices x lot = 0` | `:898-902` |
+| statistics | `raw_ergo = erg_0 + sum n_t erg_t`; `rec_mod = sum n_t rec_t`; `rec_axis = 1000 rec_mod`; `weight = w_0 + sum n_t w_t` (TED or a weight cap); `acc_total = sum n_t acc_t` (MOA cap) | `:836-842` |
+| first clamp | general three-regime clamp `capped_ergo = clamp(raw_ergo, 0, 100)` | `:843`, `:780-796` |
+| gear and second clamp | `gear_ergo = f capped_ergo` (one row if `f` is a double, else `f_lo capped <= gear <= f_hi capped`); `eff_ergo = clamp(gear_ergo, 0, 100)` | `:847-864` |
+| TED | node rows on `weight`; `ted - eff_ergo + slope weight = -intercept`; `ted >= 0` under Prevent Overswing | `:813-833`, `:865-891` |
+| caps | `price_axis <= max_price`; `capped_ergo >= min_ergonomics`; recoil caps padded (below); magazine/sighting `sum_{t: value_t >= L} n_t >= 1` unless the receiver reaches `L`; `weight <= max_weight` | `:906-940` |
+| MOA | per active positive-COI template `t`: `(c_t/100) acc - M_t pres_t [+ M_t sum_{coi_b > coi_t} pres_b] >= c_t - L - M_t` padded; fallback `(c_0/100) acc + M_fb sum_b pres_b >= c_0 - L` padded | `:960-983`, `proof.ts:129-176` |
 | objective | `total_obj = sum_j c'_j axis_j - tch_t`; Tchebycheff `tch_t + c'_e ergo_axis >= rhs`, `tch_t - c'_a axis_a >= rhs` padded | `:1001-1109`, `proof.ts:297-359` |
 
 Here `c_t = [coi_t] K` (exact), the emitted coefficient of `acc` is the nearest double of `[coi_t] x 10000/29089` (`proof.ts:151-161`),
 `M_t` is the smallest double at least the exact need `max(0, max over A in [a_lo, a_hi] of c_t (1 - A/100) - L)`, raised to `1e-6` when
 positive (`proof.ts:129-140`). The dominance terms are written iff barrels of different COI are active and (`moaDominance = 'always'` or
-`L < 0` and `a_hi > 100`) (`specializeFast.ts:946-948`).
+`L < 0` and `a_hi > 100`) (`specializeFast.ts:968-970`).
 
 **Padding (the proof layer).** A *constructed* row (a coefficient that is not a binary64 leaf: the recoil-sum coefficient, the MOA
 `c/100` coefficients, the Tchebycheff `c_a`) is emitted with right-hand side `paddedRhs` (`proof.ts:92-103`): for target row
 `sum a_i y_i (>= | <=) r` with emitted coefficients `a'_i` and column magnitude bounds `B_i`, the need is `r -/+ sum |a'_i - a_i| B_i`
 (exact) and the emitted value is the largest double `<=` the need (`>=`) or the smallest `>=` it (`<=`). Every other coefficient is a
-binary64 leaf of the data, a small integer, or a power of two, so the text *is* the model there.
+binary64 leaf of the data, a small integer, or a power of two, so the text *is* the model there. One constructed right-hand side is padded the
+same way: the vertical recoil cap `cap - nakedV` (`specializeFast.ts:915-918`, `paddedRhs` with a zero deficit), which Theorem L treats as a
+padded row.
 
 **Target model `M*`.** The same columns and rows with every constructed coefficient at its exact rational value and no padding.
 
-**Texts.** `lp(cuts)` is `M^E` with integer no-good cuts spliced in (`specializeFast.ts:1299`, `src/solver/physical/fastCut.ts:44-102`);
-`lpRelaxedEdges()` is the same text with every `e_rho_c` continuous over its declared domain (`specializeFast.ts:1300`, `lpText.ts:150-153`).
+**Texts.** `lp(cuts)` is `M^E` with integer no-good cuts spliced in (`specializeFast.ts:1321`, `src/solver/physical/fastCut.ts:44-102`);
+`lpRelaxedEdges()` is the same text with every `e_rho_c` continuous over its declared domain (`specializeFast.ts:1322`, `lpText.ts:150-153`).
 
 **Node.** For a TED request (TrueErgo or Prevent Overswing) the model is specialized on a weight node `[lo, hi]`: rows on `weight`, and the
-penalty line of `secantOfPenalty` on the node clipped to the active weight range (`specializeFast.ts:796-811`, `:843-856`,
+penalty line of `secantOfPenalty` on the node clipped to the active weight range (`specializeFast.ts:818-833`, `:865-878`,
 `src/solver/physical/spatial.ts:81-107`).
 
 ---
@@ -248,7 +252,7 @@ nothing.
 **Code assertion.** `assertCountModelApplies` (`specializeCount.ts:66-81`) checks the conclusion on the very domain: for every active
 occurrence and every slot it owns, the distinct active candidate templates equal `C(rho)` (or the empty set when `rho` is no graph slot)
 (`specializeCount.ts:87-120`). A failure throws `DOMAIN_INCONSISTENT`, which `solvePrecise` reports as a `SolverError`, never as a fallback
-(`solvePrecise.ts:464-469`). The assertion is redundant on the declared domain (Lemma 1), so a failure would mean a defect of the blueprint
+(`solvePrecise.ts:510-515`). The assertion is redundant on the declared domain (Lemma 1), so a failure would mean a defect of the blueprint
 or the masks.
 
 ### Lemma 2 (the masks lose no physical build)
@@ -325,14 +329,16 @@ subnormal sums are exact. The receiver contributes to weight and ergonomics only
 **Lemma A (acquisition is exact).** Fix a base `b` and counts `n`. For each `t` let `d_t = max(0, n_t - q_{b,t} - own_t)`.
 
 1. *Dominance.* The minimum whole-lot cover cost of `d_t` over `Lots_t` equals that over `L_t = nonDominatedLots(Lots_t)`
-   (`specializeFast.ts:377-388`). An offer is dropped only when an earlier offer in the order (price ascending, size descending) has price
+   (`specializeFast.ts:399-410`). An offer is dropped only when an earlier offer in the order (price ascending, size descending) has price
    `<=` and size `>=` (the running `largest` is attained by a kept offer); replacing each dropped lot by its dominator keeps the cover and does
    not raise the cost. Repeated equal offers are dropped likewise.
 2. *Lot bounds.* Some minimum cover has `lot_k <= ceil(d_t / size_k) <= ceil(surrogateMax_t / size_k)`: among minimum covers take one with
    the fewest lots; if `lot_k > ceil(d_t/size_k)`, dropping one lot of kind `k` leaves `size_k ceil(d_t/size_k) >= d_t` units and does not
-   raise the cost (prices are `>= 0`: trader and flea prices are positive, a barter price is the rounded positive total, `acquisition.ts:93-106`),
-   contradicting minimality of the lot count. And `d_t <= surrogateMax_t` because `n_t <= U_t` (Lemma 3).
-3. *Modes* (`specializeFast.ts:619-668`): `capped` (no legal offer): the oracle allows no paid unit, so the rule is `n_t <= q_{b,t} + own_t`,
+   raise the cost (prices are `>= 0`: trader and flea prices are positive, `acquisition.ts:93-106`; a barter lot price is accepted when
+   `>= 0`, `acquisition.ts:102`, and is the barter's positive exact total rounded half-up to an integer, so a total in `(0, 1/2)` is a **free
+   lot** of price `0`, `barterPrice.ts:22-23`, oracle `acquisition.ts:79-81`, identically in both; a free lot is still a cost `>= 0`, which is all
+   this step uses), contradicting minimality of the lot count. And `d_t <= surrogateMax_t` because `n_t <= U_t` (Lemma 3).
+3. *Modes* (`specializeFast.ts:641-690`): `capped` (no legal offer): the oracle allows no paid unit, so the rule is `n_t <= q_{b,t} + own_t`,
    which is the `supcap` row. `covered` (`surrogateMax_t = 0`): `own_t >= U_t >= n_t`, so `d_t = 0`, cost 0, no row needed. `linear`
    (no preset supply, no stock, and either one non-dominated lot of size 1 or `U_t = 1`): `d_t = n_t`; with one non-dominated unit lot every
    legal lot has size 1 and the cheapest price is `lots[0].price`, so the cover costs `n_t x lots[0].price`; with `U_t = 1` a cover of at most
@@ -341,8 +347,12 @@ subnormal sums are exact. The receiver contributes to weight and ergonomics only
 4. *Wallet.* With base binaries summing to one, `price_axis = price_b + sum_t cost_t(lots)`, and `price_b` is the oracle's base price
    (cheapest legal lot of the base). Hence for every model point with base `b` and counts `n`, `price_axis >= spend(b, n)`, with equality at a
    minimum cover, which `Lambda` chooses. The bound `price_axis <= priceUpper` holds at `Lambda(B)` because a minimum cover costs at most
-   `sum_k price_k maxLots_k`, and `priceUpper` is the floating sum of these terms widened by `sumEnclosure` (`:667`), an enclosure by the
-   argument of Lemma N.
+   `sum_k price_k maxLots_k` (plus the base price), and `priceUpper` is the floating sum of these terms widened by `sumEnclosure`
+   (`specializeFast.ts:643-689`). Unlike the sums of Lemma N, each term is a floating **product** (`unitPrice * maxCopies`, `:671`;
+   `lot.price * lot.maxLots`, `:680`), which adds one rounding of relative size `u` per term. The widening still covers it: a sum of `N`
+   rounded products in evaluation order differs from the exact sum by at most `gamma_N` times the sum of absolute values, and `priceTerms`
+   (`:644`, `:672`, `:681`) starts at `bases.length >= 1` and counts every product term, so the `m` handed to `sumEnclosure` is at least
+   `N` (the number of roundings on any term's path) and `(m+1) u >= gamma_m >= gamma_N` covers it, as in Lemma N (P4 bounds `m`).
 
 There is no explicit deficit surrogate column `u_i`. ADR 0009 principle 1 describes an "unreduced Stage 3 baseline" with `u_i`; the count
 model substitutes it into the cover row and applies the dominance, lot-bound and linear reductions, and the decoded deficit `d_i` is never read
@@ -363,8 +373,12 @@ generated (Lemma C).*
   `f_lo <= f <= f_hi` (`proof.ts:196-202`). `ted` in `differenceEnclosure(eff, lineEnclosure)` (`proof.ts:496-498`, `spatial.ts:126-131`)
   because `W` lies in the clipped node. Lots and `price_axis`: Lemma A. `iScale`/`iAdd` (`numeric.ts:44-54`) round each endpoint once and
   move it one ulp outward, which encloses the exact product or sum; `ratEnclosure` rounds exact rationals outward; so `ergo_axis`,
-  `total_obj` and the read-through columns (power-of-two division is exact) contain their values. `tch_t` in
-  `[max_a lo_a, max_a hi_a]` because every deviation lies in its own range (`specializeFast.ts:1054-1075`).
+  `total_obj` and the read-through columns contain their values. The read-through domain is `range / 2^k`, exact endpoint by endpoint:
+  this is a precondition, and since Revision 1 it is **asserted**, not assumed: `readThroughRange` (`specializeFast.ts:134-140`, used at
+  `:1045`) checks the round trip `scaled * 2^k === range` and throws the internal error `INEXACT_READ_THROUGH` otherwise (an underflow below
+  about `2^-1022`), and `exactPowerOfTwoProduct` (`:143-149`, used at `:1057`) checks the coefficient `c 2^k` the same way (no overflow, no
+  underflow). So a model is built only when the division is exact (review GAP 8a). `tch_t` in
+  `[max_a lo_a, max_a hi_a]` because every deviation lies in its own range (`specializeFast.ts:1076-1097`).
 - **Base choice.** One base, accessible (R-base).
 - **Parentage `in_t`.** Each copy of `t` has exactly one parent slot (R-root, R-cap), whose raw id `rho` has `t in C(rho)` (Corollary 1).
 - **Slot capacity and required occupancy.** For a mod-owned `rho`, the physical slots of id `rho` are exactly the slots of the
@@ -373,7 +387,7 @@ generated (Lemma C).*
   slot (Corollary 1), so no required slot is missing from the rows.
 - **Presence link.** `z_t = [n_t >= 1]` satisfies `n_t <= U_t z_t` (Lemma 3) and `z_t <= n_t`.
 - **Template conflicts.** Every clique of `cliqueCover` is a set of pairwise conflicting templates: the candidates are the common neighbours
-  of the seed pair and are filtered to neighbours of every added member (`specializeFast.ts:420-434`). By R-tconf at most one member is
+  of the seed pair and are filtered to neighbours of every added member (`specializeFast.ts:442-456`). By R-tconf at most one member is
   present.
 - **Slot conflicts.** If the blocker `t` is present then `o_rho(B) = 0` (R-sconf, P1: every slot of id `rho` is a slot of the owner's copies;
   the blocker's own host slot included), so the row reads `0 + V_rho <= V_rho`. If absent, `o_rho <= V_rho` because `o_rho <= n_owner <=
@@ -383,7 +397,7 @@ generated (Lemma C).*
 - **Supply cap, lot cover, wallet.** Lemma A.
 - **Statistics.** The rows are equalities over binary64 leaves with integer counts: their real values are the oracle's exact sums
   (fromBinary64 of the same leaves; INTERPRETATIONS.md choice 3).
-- **Clamps.** The three-regime clamp with `m = ceil(nextUp(max(|lo|, |hi|, cap) + cap))` (`specializeFast.ts:758-774`): for the regime of the
+- **Clamps.** The three-regime clamp with `m = ceil(nextUp(max(|lo|, |hi|, cap) + cap))` (`specializeFast.ts:780-796`): for the regime of the
   exact value every row holds (low: source `<= 0`, target `= 0`; mid: `0 <= source <= cap`, target `=` source; high: source `>= cap`, target
   `= cap`), and the rows of the other regimes are slack because `m >= max(|lo|, |hi|, cap) + cap` (the floating sum is within half an ulp of
   the real one, so `nextUp` of it is at least the real sum). The target bounds `[clamp(lo), clamp(hi)] subset [0, 100]` force `target = 0`
@@ -458,7 +472,7 @@ on a node whose line is `q` itself (`hi <= 3`), and for a request that reads no 
 
 *Proof.* `in_t` gives `n(x) = n(E)`, so Lemma D applies. Templates of `T` are active (edges only lead to active templates), so R-excl holds
 and no template has `supply = none`. R-base: the base column ranges over accessible bases. R-tconf: every conflict pair of active templates
-lies in some clique (every pair is seeded if uncovered, `specializeFast.ts:417-436`) and `pres_t = [n_t >= 1]` (presence link or `n_t`
+lies in some clique (every pair is seeded if uncovered, `specializeFast.ts:439-458`) and `pres_t = [n_t >= 1]` (presence link or `n_t`
 binary); pairs with the receiver are masked; an inactive side is never present. R-self: `U_t = 1` for a self-listing template
 (`templateGraph.ts:161`). R-sconf: `o_rho(T) = sum_c e_rho_c`, and the row with `pres_t = 1` forces it to 0; a blocked raw id that is no
 graph slot has no active candidate, so its occupancy is 0. R-incl: the rows. R-qcap: `supcap`. R-price: Lemma A (`spend <= price_axis <=
@@ -498,7 +512,7 @@ exact `c_a` of `proof.ts:275-291`, identical to `score.ts:46-61`), emits the nea
     frameError = roundUp( sum_j |c'_j - c_j| max(|lo_j|, |hi_j|) )
 
 over the axis column domains. An axis whose coefficient HiGHS would filter is read through `axis_n = axis / 2^k` with the exact coefficient
-`c' 2^k` (`proof.ts:378-392`, `specializeFast.ts:1018-1040`): the objective function is unchanged. If no `k <= 40` works, `withheld` is set and
+`c' 2^k` (`proof.ts:378-392`, `specializeFast.ts:1040-1062`): the objective function is unchanged. If no `k <= 40` works, `withheld` is set and
 every solve is unqualified (`nativeProof.ts:92`).
 
 **Lemma O.** *For every point `x` whose axis columns lie in their domains, `|obj^E(x) - obj*(x)| <= frameError`, where `obj^E` and `obj*`
@@ -513,7 +527,7 @@ are over `[0, 100]` in the code (`specialize.ts:24`) and the oracle (`constants.
 ADR 0007 principle 5 still writes the clamp domain as `[0, 1000]`; the oracle and the code agree on 100.
 
 The incumbent is scored from the validator's exact rational statistics (`exactObjectiveScore`, `proof.ts:418-431`, the same formula as
-`score.ts:63-81` with the same resolved weights, `solvePrecise.ts:545`), never from solver values; its enclosure
+`score.ts:63-81` with the same resolved weights, `solvePrecise.ts:591`), never from solver values; its enclosure
 `[roundDown(s), roundUp(s)]` gives the published lower bound (`proof.ts:443-445`).
 
 ### 4.2 The TED spatial search
@@ -531,18 +545,45 @@ is at an end. QED
 Consequences: on every node the model's `ted` is at least the exact TED of the build (Theorem L), so the node's optimum (and any qualified
 bound of it) bounds the best exact score in the node, and Prevent Overswing is relaxed, never tightened. A *singleton* node (`lo = hi`) and
 a node within the free region are `exact` (`spatial.ts:83-90`): the line is `q` up to `shift` (at most one ulp of `q`), so a qualified bound
-there exceeds the node optimum by at most `gain x shift` (`specializeFast.ts:1086-1097`), which only makes the bound more conservative. The
+there exceeds the node optimum by at most `gain x shift` (`specializeFast.ts:1108-1119`), which only makes the bound more conservative. The
 `shift` and the gear-neighbour error are reported but need not be added to any bound, because both act in the relaxing direction.
 
-**Node cover.** The roots are the active weight range clipped by `max_weight` and split at 3 kg (`solvePrecise.ts:347-353`); a split gives
-the two closed halves `[lo, p]`, `[p, hi]` (`search.ts:172-180`). Every `B in F_phys` has `W(B)` in the active range (Lemma N) and
+**Node cover.** The roots are the active weight range clipped by `max_weight` and split at 3 kg (`solvePrecise.ts:368-374`); a split gives
+the two closed halves `[lo, p]`, `[p, hi]` (`search.ts:186-194`). Every `B in F_phys` has `W(B)` in the active range (Lemma N) and
 `W(B) <= max_weight` when capped, so `W(B)` lies in some root and, after every split, in some child: the leaves of the search tree cover
 `F_phys` at every moment.
 
-**Certified optimality transfers.** The search (`search.ts:255-369`) keeps every node either live (its inherited bound), closed as
-`infeasible`, or closed as `solved` (exact, or within `tau` of the incumbent: `:336-343`, `:269-279`), the latter two contributing their bound
-to `fathomed`. The global upper bound is `join(incumbent, fathomed, live)` (`:286-295`), an unknown bound absorbing (`:144-149`).
-`certified` requires no stop and `UB - score(incumbent) <= tau` on exact rationals (`:367`). By the node cover and Theorem B below, each
+**Proposition F1 (the split-only shortcut is sound and issues nothing).** *Owner decision F1 (2026-10-12): when the first opinion of an inexact
+node is a qualified Optimal with no verified build, no rejected point and a split point `p`, and (with an incumbent `I`) its proved bound
+`U` satisfies `U - score(I) > tau` (`leadsOnlyToSplit`, `solvePrecise.ts:468-473`, applied by `splitOnly`, `:786-790`, at `:768`, `:826` and
+`:881`), the node is returned as the evaluation `split` without a second opinion. Then (i) the node cover is preserved, (ii) the evaluation
+contributes no bound, prunes no region and certifies nothing, and (iii) every certificate still rests only on settled verdicts.*
+
+*Proof.* (i) The search handles `split` in one place (`search.ts:341-352`): it splits the node's interval at `p` (clamped) into the two
+closed halves `[lo, p']`, `[p', hi]` (`splitInterval`, `:186-194`), which cover the node, and pushes both live; when the interval cannot be
+split it pushes the node itself back live and stops (the resolution reason). In both cases every `B` of the node lies in a live node, so
+nothing is discarded. (ii) The branch never reads `evaluation.evidence` (Precise sets `evidence: null` anyway, `:789`, and `evaluate`
+nulls the evidence of every non-`solved` verdict, `:800-802`); a candidate, which a `split` carries only when `withKept` adds a build
+verified by another solve of the node, updates the incumbent like any verified build (`search.ts:337-340`). Each child is created with the
+node's OWN bound (`node.bound`), which is the parent's settled bound or unknown, never `U`. It neither fathoms (no `withinTolerance` test,
+no join into `fathomed`) nor marks anything infeasible, and the search cannot complete while the children are live. So no published bound,
+gap, emptiness or certificate depends on the single solve. (iii) A certificate (optimality or emptiness) needs the search to complete (`:393`), i.e. every node to be
+closed as `infeasible` or `solved`, each by a settled verdict (or an exact `provedEmpty`); a `split` closes nothing, so it can only add live
+nodes that must themselves be closed that way. The guard in `leadsOnlyToSplit` keeps the full decision-5a rule exactly where the single
+solve would have closed the node: a first opinion whose own bound is within `tau` of the incumbent (or has no proved bound while an
+incumbent exists) is confirmed as before. When the guard passes, `U - score(I) > tau`, and a settled verdict's bound is the LARGEST
+qualified bound of its opinions (`solvePrecise.ts:432-438`), hence `>= U`: had the node been confirmed and settled, it would not have been
+within `tau` and would have been split (`search.ts:362-375`), with children inheriting a bound instead of the parent's. The shortcut only
+drops that settled bound from the children. QED
+
+The shortcut can make a search split where the confirmed bound would have been within `tau` of a LATER incumbent (the incumbent can improve
+after the node was handed out); the children are then solved again, which costs time and loses nothing. It never runs on an exact node
+(where a `solved` verdict closes the node and is certificate-bearing) or on a root without an interval.
+
+**Certified optimality transfers.** The search (`search.ts:269-395`) keeps every node either live (its inherited bound), closed as
+`infeasible`, closed as `solved` (exact, or within `tau` of the incumbent: `:362-369`, `:283-293`), the latter two contributing their bound
+to `fathomed`, or replaced by its two live halves (`split`, Proposition F1, `:341-352`). The global upper bound is `join(incumbent, fathomed, live)` (`:300-309`), an unknown bound absorbing (`:158-163`).
+`certified` requires no stop and `UB - score(incumbent) <= tau` on exact rationals (`:393`). By the node cover and Theorem B below, each
 closed-solved or live node's bound is at least the best exact score in it, and an infeasible node holds no build (Theorem I); hence
 `UB >= OPT`, and certified implies `score(incumbent) >= OPT - tau`.
 
@@ -561,10 +602,14 @@ declared tolerances and matrix thresholds are in force, presolve is off, and no 
 (with the solved text's cuts, or its relaxed-edge variant). Every `B` in the node lifts to a point of it (Theorem L; Lemma C for cuts;
 the relaxed text contains the integer text). By A1, `D >= max obj^E >= obj^E(Lambda(B)) >= score(B) - frameError` (Lemma O). QED
 
-The search turns this into node bounds in one place (`search.ts:129-133`: the tighter of the parent's bound and the proved one; unqualified
-evidence leaves the parent's bound, unknown at a root) and composes them in one place (`:144-149`, `:286-295`). Published values are enclosed
-upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`:289-293`), and an unknown bound travels as `null`
-(`search.ts:232-238`). The published lower bound is `roundDown(score(incumbent)) <= score(incumbent) <= OPT`.
+The search turns this into node bounds in one place (`search.ts:143-147`: the tighter of the parent's bound and the proved one; unqualified
+evidence leaves the parent's bound, unknown at a root) and composes them in one place (`:158-163`, `:300-309`). Since Revision 1 only a
+**settled** verdict reaches that place with evidence: `evaluate` replaces the evidence of every `unresolved`, `failed` or `split` evaluation
+by `null` (`solvePrecise.ts:800-802`), and `settleOpinions` returns `null` evidence whenever it does not settle (`:459-460`). So every node
+bound, and therefore every published upper bound and gap, is a maximum of bounds each backed by two agreeing qualified solves (A1 and A3),
+or unknown (G1 closed, below). Published values are enclosed
+upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`:303-307`), and an unknown bound travels as `null`
+(`search.ts:246-252`). The published lower bound is `roundDown(score(incumbent)) <= score(incumbent) <= OPT`.
 
 ### What the native assumptions cover, and what they do not
 
@@ -577,27 +622,41 @@ upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`:289-
   (`1.1e-5`). This is a known deviation from A1, accepted by the owner (`nativeProof.ts:47`). It is not detected unless a verified build of the
   same node beats the bound.
 - **The bound sanity guard is sound but not complete, and is not part of the proof.** `judge` withholds a qualified bound that a build verified
-  in the same solve beats by more than `max(tau, 1e-9 max(1, |bound|))` (`solvePrecise.ts:558-568`). It can only remove bounds (making the
+  in the same solve beats by more than `max(tau, 1e-9 max(1, |bound|))` (`solvePrecise.ts:604-614`). It can only remove bounds (making the
   result less certified), so it cannot make a bound unsound. It detects only shortfalls that a verified build of the same node exposes, and
   its threshold scales with the request tolerance (with a loose `tau` it accepts large shortfalls). **GAP G8 (documentation):** the code
   comment calls it "a sanity guard on the proof inputs, not an allowance"; that is right, and nothing in the proof may lean on it.
 - **Decision 5a (second opinion).** A certificate-bearing node verdict (a qualified Optimal whose bound enters a certified gap, or a qualified
-  Infeasible) is settled only by two agreeing qualified solves with different seeds, a third on disagreement (`solvePrecise.ts:380-427`,
-  `:630-666`); the settled bound is the *largest* qualified bound among all the node's opinions (`:401-407`), so a disagreeing lower bound
+  Infeasible) is settled only by two agreeing qualified solves with different seeds, a third on disagreement (`solvePrecise.ts:409-473`,
+  `:676-716`); the settled bound is the *largest* qualified bound among all the node's opinions (`:432-438`), so a disagreeing lower bound
   never wins. The assumption is that two agreeing solves are not wrong the same way (A3).
 - **Retry seeds, never throw.** An inconclusive solve (`SolveError`, `PresolveError`, `PostsolveError`) is no opinion (`nativeSolve.ts:179-181`,
-  `solvePrecise.ts:617-623`, `:644-651`); running out of seeds leaves the node unresolved (no certificate). This affects completeness only.
+  `solvePrecise.ts:663-669`, `:694-701`); running out of seeds leaves the node unresolved (no certificate). This affects completeness only.
 - **Limit-stopped solves.** `boundEvidenceOf` takes the MIP dual bound of any qualified solve, including a time- or solution-limited one
-  (`nativeProof.ts:162-164`); such a bound bounds a *live* node. A1 is assumed for interrupted solves as well.
+  (`nativeProof.ts:162-164`). Since Revision 1 such a bound never reaches the search: a limit stop is no verdict, so it never settles a node,
+  and its node keeps only its inherited bound (G1). Its evidence is still read for one purpose: a qualified limit stop that returned a primal
+  point blocks an Infeasible settlement (G2).
 
-**GAP G1 (affects published non-certificate bounds).** Decision 5a's second opinion guards only certificate-bearing verdicts. A node that
-stops unresolved can keep the qualified bound of a *single* solve: a limit-stopped first opinion (`solvePrecise.ts:812`, `unconfirmed`), a
-second opinion that times out after a qualified Optimal (`:654-655`, then `settleOpinions` keeps the first bound, `:419-426`), or a relaxed
-first try whose bound is carried through the fallback (`:762`, used by `relaxationAgrees`, `:700`). That bound is published as `upper_bound` of
-a `feasible` or `incomplete` result. It is sound under A1, but A1 alone is exactly what decision 5a says is violated about once in 10,000
-solves (a wrong Optimal with a wrong dual bound). So a published non-certificate upper bound carries a weaker guarantee than a certificate.
-*To close:* either state this in `NATIVE_FRAME.assumptions` and the result Details ("the upper bound of an uncertified result rests on one
-solve"), or publish only settled (two-opinion) bounds and report `null` otherwise.
+**G1 (closed in Revision 1, owner decision "Only checked bounds", 2026-10-12).** Before Revision 1 a node that stopped unresolved or failed
+could keep the qualified bound of a *single* solve, and that bound was published as `upper_bound` (and gap) of a `feasible` or `incomplete`
+result, resting on A1 alone. The sources were (review finding 4 added the last two):
+
+1. a limit-stopped first opinion (`unconfirmed`, `solvePrecise.ts:719-727`, reached at `:880` and, for the relaxed text, `:828`);
+2. a second or third opinion that times out, stops on a limit or is not qualified, after a qualified Optimal, and an unresolved disagreement
+   (`:704-705`, then `settleOpinions`, `:459-460`);
+3. the relaxed first try's bound carried through the fallback into `relaxationAgrees` (`relaxedUncut`, `:830`; the veto return, `:751`) and
+   the unresolved return of `relaxationAgrees` (`:774-778`);
+4. `failed` evaluations, which carried the rejected solve's dual bound (`failed`, `:729-731`, reached at `:874`, `:879` and `:839`);
+5. the `stopAtFirstWitness` short-circuit of a MOA floor query (`:681-688`).
+
+Each now carries `evidence: null` at its source, and `evaluate` enforces the rule once for every verdict other than `solved`
+(`:800-802`). A node without a settled verdict therefore keeps its inherited bound: the settled bound of its parent, or unknown at a root.
+Because `joinBounds` makes an unknown bound absorbing (`search.ts:158-163`), a search that stops with such a node live publishes **no**
+finite upper bound and no gap (`null` on the wire, `transportedBounds`, `:246-252`): this is explicit and intended. The lower bound (the
+verified incumbent) is still published. The result Details show an unknown bound as "unknown", never as a number
+(`components/common/ResultStatus.tsx:79-96`, `resultView.ts:228-235`). Explore rows and Gunsmith results take their bounds from the same
+summary (`solver.ts:247-254`); the MOA floor publishes no upper bound (its `hi` is a validated witness and its `lo` a settled qualified
+emptiness, `moaFloor.ts:272-279`).
 
 ### What is not proved
 
@@ -613,38 +672,46 @@ solve"), or publish only settled (two-opinion) bounds and report `null` otherwis
 
 ### Theorem I (soundness)
 
-*Under A2-A4 (and with no assumption at all in cases (a) and (b)), if `solvePrecise` returns `kind: 'empty'`, then `F_phys = empty`.*
+*Under A2-A4 (and with no assumption at all in case (a) and case (b).1), if `solvePrecise` returns `kind: 'empty'`, then `F_phys = empty`.*
 
 *Proof.* `kind: 'empty'` arises in two ways.
 
-(a) `domain.empty` (`solvePrecise.ts:457-462`): no accessible base, or a root required slot with no viable candidate (`domain.ts:258-268`).
+(a) `domain.empty` (`solvePrecise.ts:503-508`): no accessible base, or a root required slot with no viable candidate (`domain.ts:258-268`).
 By Lemma 2 a physical build would make the domain nonempty. Exact, no native call.
 
-(b) The spatial search completed with no incumbent and nothing fathomed (`search.ts:366`): every leaf node was closed `infeasible`. By the
+(b) The spatial search completed with no incumbent and nothing fathomed (`search.ts:392`): every leaf node was closed `infeasible`. By the
 node cover, it suffices that each `infeasible` verdict implies the node holds no physical build. The verdict comes only from:
 
-1. `model.provedEmpty` (`solvePrecise.ts:731-734`): a constant false row; such rows are implied by the oracle's rules for every build of
+1. `model.provedEmpty` (`solvePrecise.ts:794-797`): a constant false row; such rows are implied by the oracle's rules for every build of
    the node (Theorem L, constant rows), so the node is empty. Exact.
 2. The relaxed-edge text settled Infeasible by two agreeing qualified verdicts with no verified build among the opinions: in the
-   relaxed-first try (`:757-758`) or in `relaxationAgrees` (`:703-711`). The relaxed text contains `Lambda(B)` for every `B` in the node and
+   relaxed-first try (`:823-824`) or in `relaxationAgrees` (`:754-762`). The relaxed text contains `Lambda(B)` for every `B` in the node and
    every cut is satisfied by it (Theorem L, Lemma C). Under A4 the relaxed text has no real feasible point, so no `B` exists.
-3. An integer text with no edge column settled Infeasible (`:696`): its relaxed text is identical, same argument.
+3. An integer text with no edge column settled Infeasible (`:747`). Its relaxed text is the same text, so no independent relaxation check
+   exists: the verdict rests on **A3 alone** (two agreeing qualified solves of an integer text), not on an independent A4 check (review
+   GAP 8b). This matters only for edge-free models, which are trivial (no graph slot, a base choice only); the 2026-10-12 defect that motivated
+   "relaxation must agree" was an integer text WITH edges.
 
-An integer-text Infeasible never becomes a node verdict by itself: `evaluateNative` passes it to `relaxationAgrees` (`:813-819`), which
-returns `infeasible` only in cases 2 and 3 above; a known relaxed point or a verified build vetoes it (`:697-701`, `:818`). `withKept` never
-changes an infeasible verdict (`:779`). QED
+An integer-text Infeasible never becomes a node verdict by itself: `evaluateNative` passes it to `relaxationAgrees` (`:883-889`), which
+returns `infeasible` only in cases 2 and 3 above; a known relaxed point or a verified build vetoes it (`:748-752`, `:888`). `withKept` never
+changes an infeasible verdict (`:847`). QED
 
 For a MOA-dependent request the same emptiness is reported as model-relative (`incomplete` / `Provisional MOA model infeasible`); the
 statement proved is the same, relative to the provisional MOA model that the oracle also uses.
 
-**GAP G2 (certificate hardening; sound under A3).** `settleOpinions` settles Infeasible when two qualified opinions say Infeasible, even if a
-third qualified opinion returned an Optimal *with a primal point* (fractional relaxed point or rejected point, so no verified build)
-(`solvePrecise.ts:408-421`). Concretely, on a relaxed-edge text: seed 0 says Infeasible; seed 11 says Optimal with a fractional edge point
-(`judge` returns `verdict: 'optimal', candidate: null`, `:522-528`); seed 29 says Infeasible; then seeds 0 and 29 agree and the node is
-certified empty. Under A3 (two agreeing solves are not both wrong) this is sound. But a primal point within `1e-9` of a relaxed text whose
-integer counterpart is feasible whenever the relaxation is (Lemma TU) is positive evidence against emptiness, and the code already records it
-(`Opinion.point`, set at `:518` and `:583`, read nowhere). *To close:* treat a qualified opinion with `point === true` like a verified build in
-`settleOpinions` (no Infeasible settlement against it), or record the majority rule explicitly as part of A3.
+**G2 (closed in Revision 1, owner decision "A found point blocks impossible", 2026-10-12).** Before Revision 1 `settleOpinions` settled
+Infeasible on two qualified Infeasible opinions even when a third qualified opinion had returned a primal point without a verified build (a
+fractional relaxed point, a point rejected only for overswinging on an inexact node, a rejected boundary point), on the relaxed **and** on the
+integer text (review finding 5); `Opinion.point` was computed (`judge`, `solvePrecise.ts:564`, returned at `:565`, `:573`, `:615`, `:623`,
+`:629`) and read nowhere. Now `foundPoint` (`:406`) is true for every opinion with verdict `optimal` (which always has a point) and for every
+other opinion whose solve was qualified and returned a point (a qualified limit stop with a point), and `settleOpinions` settles Infeasible
+only when no opinion has a verified build and none has a found point (`:452-454`); otherwise the node is unresolved with
+`Required proof prerequisite unavailable` and no bound (G1). This applies to every text `settleOpinions` judges: the relaxed-first try
+(`:824`), the integer text (`:883`) and `relaxationAgrees` (`:757`). A point that validates is already a candidate (a rescue); an unqualified
+point proves nothing and does not block. Infeasibility therefore needs, among at most three qualified opinions, two Infeasible verdicts and
+no point at all, a strictly stronger condition than A3 requires. Unit test: `settleOpinions([infeasible, optimal-with-point, infeasible])` is
+unresolved (`tests/physical/solvePrecise.secondOpinion.test.ts`), and end to end the same sequence on a relaxed text leaves the request
+`incomplete`.
 
 ### Completeness (what makes a certified infeasibility reachable)
 
@@ -652,15 +719,18 @@ The converse "`F_phys` empty implies certified infeasible" is **not** proved and
 
 *Proposition I'. If `F_phys` is empty and the emitted node models have no integer point (in exact arithmetic), and the native solver
 answers correctly within the deadline with two agreeing seeds, then production reports `empty`.* By Lemma TU (section 7) the uncut
-relaxed-edge text then has no point either, so the relaxed-first try (`:757-758`) settles Infeasible on every node and the search completes
+relaxed-edge text then has no point either, so the relaxed-first try (`:823-824`) settles Infeasible on every node and the search completes
 empty.
 
 **GAP G3 (affects completeness only).** `F_phys` empty does not imply that `M^E` has no integer point: `M^E` is an outer relaxation, so a
 build that violates an exact recoil or MOA cap by less than its padding, or an overswinging build on a relaxed node, is a model point. Such
 points are decoded, rejected by the validator and cut out (Lemma C); after the cuts the integer text may be infeasible while the relaxed text
 with the same cuts keeps a fractional point (cut rows break total unimodularity), and `relaxationAgrees` then vetoes the infeasibility
-(`:718-726`). The node also fails after `MAX_REJECTIONS_PER_NODE = 16` rejections (`:311`, `:805-806`), and six seeds can run out
-(`:327`). In all these cases the result is `incomplete`, never a wrong certificate. *To close (if wanted):* an exact infeasibility proof for
+(`:770-778`). The node also fails after `MAX_REJECTIONS_PER_NODE = 16` rejections (`:332`, `:873-874`), and six seeds can run out
+(`:348`). One more source of rejections (review GAP 7): `model.exact` is also true on a node whose gear factor is not a double (it ignores
+the gear neighbours, `specializeFast.ts:1331`), so under Prevent Overswing an overswinging optimum of such an "exact" node is not a split
+point but a rejection, and is cut (`solvePrecise.ts:620-629`). The cut is valid (TED is a function of the signature, Lemma F), but such a
+node can exhaust the 16 rejections and fail. In all these cases the result is `incomplete`, never a wrong certificate. *To close (if wanted):* an exact infeasibility proof for
 the residual boundary region (e.g. solving the target model `M*` with exact arithmetic on the cut region), out of scope for Stage 3.
 
 ---
@@ -674,13 +744,16 @@ a polytope with integral vertices. Consequently, the uncut relaxed-edge text is 
 same optimal value.*
 
 *Proof.* Edge columns occur only in `in_t` (coefficient `-1`, one row per child template), in the slot or required row of their raw id
-(`+1`), and in the slot-conflict rows of their raw id (`+1`) (`specializeFast.ts:676-724`; no statistic, cap, MOA, objective or node row
-reads an edge, `:776-1109`). With the other columns fixed these rows read: for each template `t`, `sum_rho e_rho_t = n_t`; for each graph slot
+(`+1`), and in the slot-conflict rows of their raw id (`+1`) (`specializeFast.ts:698-746`; no statistic, cap, MOA, objective or node row
+reads an edge, `:798-1131`). With the other columns fixed these rows read: for each template `t`, `sum_rho e_rho_t = n_t`; for each graph slot
 `rho`, `sum_c e_rho_c (<= | =) n_owner` (or 1); for each blocker, `sum_c e_rho_c <= V_rho (1 - pres_t)`; and `0 <= e <= max`. The matrix
 has one template-block row and a set of identical slot-block rows per column: the incidence matrix of a bipartite graph with duplicated
-rows, plus identity rows, which is totally unimodular (duplicated rows add no new square submatrix with nonzero determinant). The
+rows, plus column bounds, which is totally unimodular (duplicated rows add no new square submatrix with nonzero determinant). The
 right-hand sides are integers (counts, binaries, `V_rho`, column bounds). So the polytope is integral, and a nonempty bounded one has an
 integral vertex. The objective does not read `e`. QED
+
+Lemma TU is used only for completeness and tightness (Proposition I', Theorem R.2 "nothing is lost", R.3, the R.4 veto rationale and the G2
+motivation). No soundness step depends on it: soundness of the relaxed-first path needs only that the relaxed text is a relaxation (R.1).
 
 ### Theorem R (relaxed-first preserves every certificate)
 
@@ -688,20 +761,20 @@ integral vertex. The objective does not read `e`. QED
    (`lpText.ts:150-153`). Its qualified dual bound is therefore an upper bound of the integer text's maximum and, by Theorem B, of the node's
    best exact score.
 2. *An integral relaxed optimum is an optimum of the integer text.* If every edge of the relaxed point is within `1e-9` of an integer
-   (`solvePrecise.ts:522-528`), the point satisfies the integer text within the native tolerances; its value equals the relaxed optimum, which
+   (`solvePrecise.ts:568-574`), the point satisfies the integer text within the native tolerances; its value equals the relaxed optimum, which
    is at least the integer optimum, so it is an integer optimum. Its decoded build is validated exactly and scored exactly
-   (`:529-571`), and the node is settled by the second opinion on the relaxed text (`:759`), whose bound is the relaxed bound (item 1).
+   (`:575-617`), and the node is settled by the second opinion on the relaxed text (`:825`), whose bound is the relaxed bound (item 1).
    Lemma TU adds that, without cuts, the relaxed optimum value *equals* the integer optimum value, so nothing is lost in bound tightness.
 3. *An infeasible relaxed text certifies the node empty* (Theorem I, case 2); by Lemma TU this loses nothing without cuts.
-4. *The fallback preserves certificates.* A fractional or rejected relaxed point, or a stop, falls back to the integer text (`:760-775`); what
-   the relaxed try verified (a build, an observed failure) is kept (`kept`, `withKept`, `:748`, `:778-789`), and its bound is not used for the
-   integer evaluation's settlement. An integer-text Infeasible after a relaxed point is vetoed (`:818`): by Lemma TU the two native answers
+4. *The fallback preserves certificates.* A fractional or rejected relaxed point, or a stop, falls back to the integer text (`:828-843`); what
+   the relaxed try verified (a build, an observed failure) is kept (`kept`, `withKept`, `:814`, `:846-857`), and its bound is not used for the
+   integer evaluation's settlement, nor, since Revision 1, as node evidence on the veto path (G1: `relaxedUncut` is a flag, `:830`). An integer-text Infeasible after a relaxed point is vetoed (`:888`): by Lemma TU the two native answers
    contradict each other, so refusing to certify is the correct conservative choice.
 
 ### Lemma C (cuts lose no physical build)
 
 *Let the integer text of a node return a qualified point `x` whose rounded decision vector `E = (base, e)` decodes to a rejected build, or
-does not decode (`decoded.ok === false`), and let the cut `integerNoGood(E)` be added (`solvePrecise.ts:801-810`). Then no `B in F_phys` has
+does not decode (`decoded.ok === false`), and let the cut `integerNoGood(E)` be added (`solvePrecise.ts:869-878`). Then no `B in F_phys` has
 `sigma(B) = E`, and every point of the text other than those with decision vector `E` still satisfies the cut.*
 
 *Proof.* The cut excludes exactly the integer decision vector `E` (`fastCut.ts:44-83`: a column at a bound contributes its deviation, an
@@ -709,7 +782,8 @@ interior column two indicator binaries whose rows force `x_j >= E_j + 1` or `x_j
 cut and `decodeFast` round with `Math.round` (`decodeFast.ts:40`, `fastCut.ts:53`), so they see the same `E`. Suppose `B in F_phys` with
 `sigma(B) = E`. Then `E` with `n(E) = n(B)` satisfies the structural rows (Theorem L), so `decodeFast(E)` succeeds (Lemma D) with a tree `T`,
 `sigma(T) = E`. By Lemma F, `T in F_phys`, so the validator accepts it (A-VAL, completeness direction: the production validator rejects no
-build the oracle accepts). This contradicts the rejection. Points rejected *only* for overswinging on an inexact node are not cut
+build the oracle accepts; A-VAL is used here exactly in its restated scope, since `decodeFast` produces a build with path-derived instance
+ids and no claimed spend or provenance, `decodeFast.ts:1-21`). This contradicts the rejection. Points rejected *only* for overswinging on an inexact node are not cut
 (`:574-579`): they refine the node instead. QED
 
 `Lambda(B)` for a valid `B` therefore satisfies every cut (its decision vector differs from every cut vector), including in the relaxed text
@@ -717,23 +791,31 @@ with cuts (`appendCuts` keeps the cut binaries binary, `fastCut.ts:86-102`).
 
 Note: Lemma C uses the validator in the *completeness* direction (accepting every oracle-valid build). If the production validator wrongly
 rejected a valid build, a cut could remove a physical build, and a later "infeasible" or a bound could be wrong. This is why A-VAL is stated
-in both directions (section 9.1).
+in both directions (section 9.1). It is stated only for builds with path-derived instance ids and no claims: the production validator has
+rejections the oracle cannot raise (`INSTANCE_ID_NOT_PATH_DERIVED` under `requirePathInstanceIds: true`, which Precise sets,
+`solvePrecise.ts:520`; `CLAIMED_SPEND_MISMATCH` / `CLAIMED_ACQUISITION_MISMATCH`, `validate.ts:35-37`, `:93-95`), and none of them can fire on
+a decoded build.
 
 ---
 
 ## 8. The main theorem
 
 **Theorem S.** *Let `w` be in the declared domain, `r` accepted, and A-DATA, A-VAL, A-ARITH, A-PARSE, A1-A4 hold. Then
-`solvePrecise(r)` (`solvePrecise.ts:429-850`) satisfies:*
+`solvePrecise(r)` (`solvePrecise.ts:475-920`) satisfies:*
 
-1. *Every published build is in `F_phys` and its published score is its exact score.* (`decodeFast` + exact validation, `:529-571`; only
-   validated candidates enter the search, `search.ts:323-326`.)
+1. *Every published build is in `F_phys` and its published score is its exact score.* (`decodeFast` + exact validation, `:575-617`; only
+   validated candidates enter the search, `search.ts:337-340`.)
 2. *If the result is a certified build, `score(B*) >= OPT - tau`* (section 4.2 with Theorem B; the bounds used are settled, decision 5a).
 3. *If the result is `empty`, `F_phys = empty`* (Theorem I).
-4. *Every published lower bound is `<= score(B*) <= OPT`; every published finite upper bound is `>= OPT`*, the latter under A1 for every solve
-   whose bound it uses (GAP G1 for unsettled bounds).
-5. *For a request without TED, and on exact TED nodes, the model solved is the target model up to the padding, and the target model is an
-   exact reformulation of the physical domain* (Theorem E).
+4. *Every published lower bound is `<= score(B*) <= OPT`; every published finite upper bound is `>= OPT`*, under A1 and A3: every node bound it
+   joins comes from a settled verdict (two agreeing qualified solves) or is inherited from one, and any node without one makes the published
+   upper bound unknown (`null`), never finite (G1, closed).
+5. *For a request without TED, and on a TED node with `hi <= 3` and a double gear factor, the model solved is the target model up to the
+   padding, and the target model is an exact reformulation of the physical domain* (Theorem E). This is narrower than `model.exact`
+   (`specializeFast.ts:1331`), which is also true on singleton `constant_exact` nodes, whose penalty line sits up to one ulp below `q`, and on
+   nodes with a non-double gear factor, whose `gear_def_lo` / `gear_def_hi` rows are inequalities (review GAP 6). On those nodes the model is
+   a relaxation in the relaxing direction (Lemma T and Theorem L), which is all soundness needs; `model.exact` there only means "a `solved`
+   verdict closes the node", and it makes overswinging optima rejections (G3).
 
 All five statements are subject to the owner-accepted native deviations of decisions 4 and 5b (section 5): "`>= OPT`" means
 "`>= OPT - eps_native`" with `eps_native` unquantified, assumed zero and observed below `1e-11` except one `1.1e-5` integrality case that the
@@ -749,7 +831,7 @@ sanity guard caught.
 | --- | --- | --- | --- |
 | A0 | Declared domain (P1-P4) and accepted request | everywhere | the blueprint guard; 172/172 pinned guns prepare |
 | A-DATA | The oracle's domain, transported through the bridge, is the domain of section 1.2 over the production `ItemLookup` and `SolveParams` (trader canonicalization, per-item flea gate, exact barter prices from the data layer, trader-only receivers, dropped non-mod allowlist entries, removed camora slots, category chains, receiver magazine capacity 0, defaults of weights and levels) | Lemma 2, every rule mapping | `reference/bridge/*.test.ts`, harness |
-| A-VAL | `preparePhysicalValidator(...).validate` accepts a build iff the oracle's `inspectBuild` does (soundness for witnesses; completeness for Lemma C) | Theorem S.1, Lemma C | validator agreement tests (`f6acab1`); exact-rational reimplementation (`src/solver/physical/validate.ts:1-45`) |
+| A-VAL | For every build with path-derived instance ids and no claimed spend or provenance (every build `decodeFast` produces), `preparePhysicalValidator(...).validate` accepts it iff the oracle's `inspectBuild` does. Soundness (accepts only oracle-valid builds) is what every witness depends on; **completeness** (rejects no oracle-valid build) is what every certificate depends on through the cuts of Lemma C. Production-only rejections (`INSTANCE_ID_NOT_PATH_DERIVED`, `CLAIMED_SPEND_MISMATCH`, `CLAIMED_ACQUISITION_MISMATCH`) are outside this scope and cannot fire on a decoded build | Theorem S.1, Lemma C | validator agreement tests (`f6acab1`); exact-rational reimplementation (`src/solver/physical/validate.ts:1-45`); review `lift.mts`: 33,542 oracle-accepted builds decoded and accepted |
 | A-ARITH | IEEE binary64 JavaScript numbers; BigInt rationals are exact; `ratRoundDown`/`ratRoundUp` return the largest double `<=` / smallest `>=` (their loops check the postcondition exactly, `src/solver/physical/rational.ts:37-66`); `ratFromDouble` decodes exactly | proof layer, Lemmas N, A, M, O, T | unit tests of `exact.ts`, `rational.ts` |
 | A-PARSE | `parseLpText` + `compareReadback` decide model equality; the readback is the model HiGHS solved | Theorem B, I | `NATIVE_FRAME.assumptions[1]`; `docs/stage3/native-evidence.md` section 1 |
 
@@ -765,7 +847,7 @@ sanity guard caught.
 No claim is taken from a presolved solve (`nativeProof.ts:148-150`, `nativeSolve.ts:168-211`, decision 5), and statuses that report no verdict
 are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 
-### 9.3 Code behaviour the proof relies on (at `a19041c`)
+### 9.3 Code behaviour the proof relies on (Revision 1 working tree, base `dae163a`)
 
 | Behaviour | Location |
 | --- | --- |
@@ -773,39 +855,44 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 | One owner template per raw slot id (P1) | `blueprint.ts:381-397` |
 | Template-level masks, viability, contradictions, activity | `domain.ts:198-231`, `:238-255`, `:258-268`, `:270-289` |
 | Union candidate sets, Kahn order, copy bounds | `templateGraph.ts:74-115`, `:117-128`, `:147-179` |
-| Lemma 1 asserted on every domain, failure is a solver error | `specializeCount.ts:66-120`, `solvePrecise.ts:464-469` |
-| Certified mode: no single-copy restriction, proof layer | `specializeFast.ts:357-360`, `specializeCount.ts:133` |
-| Columns and bounds | `specializeFast.ts:573-610`, `:654-660`, `:786-812` |
-| Supply, cover, wallet | `specializeFast.ts:619-668`, `:876-880` |
-| Structure rows | `specializeFast.ts:672-695` |
-| Conflict rows, clique cover | `specializeFast.ts:395-439`, `:698-724` |
-| Includes | `specializeFast.ts:726-740` |
-| Statistics, clamps, gear, TED, node rows | `specializeFast.ts:758-882` |
-| Caps (recoil padded) | `specializeFast.ts:884-918` |
-| MOA rows and dominance | `specializeFast.ts:938-961`, `proof.ts:129-176` |
-| Objective plan, frame error, read-through | `specializeFast.ts:1001-1109`, `proof.ts:275-392` |
-| Constant rows dropped or contradictions | `specializeFast.ts:509-540` |
-| Relaxed text | `specializeFast.ts:1300`, `lpText.ts:150-153` |
+| Lemma 1 asserted on every domain, failure is a solver error | `specializeCount.ts:66-120`, `solvePrecise.ts:510-515` |
+| Certified mode: no single-copy restriction, proof layer | `specializeFast.ts:379-382`, `specializeCount.ts:133` |
+| Columns and bounds | `specializeFast.ts:595-632`, `:676-682`, `:808-834` |
+| Supply, cover, wallet | `specializeFast.ts:641-690`, `:898-902` |
+| Structure rows | `specializeFast.ts:694-717` |
+| Conflict rows, clique cover | `specializeFast.ts:417-461`, `:720-746` |
+| Includes | `specializeFast.ts:748-762` |
+| Statistics, clamps, gear, TED, node rows | `specializeFast.ts:780-904` |
+| Caps (recoil padded) | `specializeFast.ts:906-940` |
+| MOA rows and dominance | `specializeFast.ts:960-983`, `proof.ts:129-176` |
+| Objective plan, frame error, read-through | `specializeFast.ts:1023-1131`, `proof.ts:275-392` |
+| Read-through exactness asserted (GAP 8a) | `specializeFast.ts:134-149`, `:1045`, `:1057` |
+| Constant rows dropped or contradictions | `specializeFast.ts:531-562` |
+| Relaxed text | `specializeFast.ts:1322`, `lpText.ts:150-153` |
 | Active-range enclosures | `bounds.ts:33-83`, `numeric.ts:60-64` |
 | Padded right-hand sides | `proof.ts:92-103` |
 | Penalty lines | `spatial.ts:81-131` |
 | Decoder | `decodeFast.ts:35-124` |
-| Cuts | `fastCut.ts:44-102`, `solvePrecise.ts:801-810` |
+| Cuts | `fastCut.ts:44-102`, `solvePrecise.ts:869-878` |
 | Qualification and bound evidence | `nativeProof.ts:85-170` |
-| Native options (presolve off, tolerances 1e-9 / 1e-7) | `nativeSolve.ts:100-117`, `solvePrecise.ts:479` |
-| Opinions, second opinion, settlement | `solvePrecise.ts:380-427`, `:587-666` |
-| Relaxation must agree | `solvePrecise.ts:692-727`, `:813-819` |
-| Relaxed-first strategy | `solvePrecise.ts:336`, `:740-790` |
-| Bound sanity guard (not relied on) | `solvePrecise.ts:304-309`, `:558-568` |
-| Search: node bounds, join, fathoming, certified, empty | `search.ts:129-149`, `:255-369` |
-| Root intervals | `solvePrecise.ts:347-353`, `:823-827` |
+| Native options (presolve off, tolerances 1e-9 / 1e-7) | `nativeSolve.ts:100-117`, `solvePrecise.ts:525` |
+| Opinions, second opinion, settlement | `solvePrecise.ts:409-473`, `:633-716` |
+| A found point blocks impossible (G2) | `solvePrecise.ts:406`, `:452-454` |
+| Only checked bounds (G1): no evidence on any non-settled verdict | `solvePrecise.ts:459-460`, `:681-688`, `:719-731`, `:751`, `:774-778`, `:800-802` |
+| Split-only shortcut (F1) | `solvePrecise.ts:468-473`, `:786-790`, `:768`, `:826`, `:881`; `search.ts:108-114`, `:341-352` |
+| Witness native stop (F2) | `solvePrecise.ts:598`, `:655`, `:681-688`; `moaFloor.ts:254-264` |
+| Relaxation must agree | `solvePrecise.ts:743-790`, `:883-889` |
+| Relaxed-first strategy | `solvePrecise.ts:357`, `:806-858` |
+| Bound sanity guard (not relied on) | `solvePrecise.ts:325-330`, `:604-614` |
+| Search: node bounds, join, fathoming, certified, empty | `search.ts:143-163`, `:269-395` |
+| Root intervals | `solvePrecise.ts:368-374`, `:893-897` |
 
 ### 9.4 Scope
 
 - **In scope:** `solvePrecise` on the declared domain for every accepted request (weighted and Tchebycheff, every cap, includes, excludes,
   presets, stash, barters with whole lots, TrueErgo and Prevent Overswing, MOA caps), and therefore every operation insofar as it consumes a
   `solvePrecise` result (Optimize, Gunsmith optimization, ideal-point endpoint solves, MOA floor trials: `src/solver/solver.ts:332`,
-  `src/solver/moaFloor.ts:313`).
+  `src/solver/moaFloor.ts:315`).
 - **Out of scope:** cyclic part data (an internal error); `SLOT_ID_COLLISION`, `MIXED_AMMO_SLOT`, `BAD_PRESET`, `OCCURRENCE_LIMIT` and other typed
   input errors; Fast (`solveFast`), beyond its witness contract (every published Fast witness passes the same validator); the correctness of
   HiGHS; the composition logic of the operations themselves (floor bisection, Explore classification, payoff-table derivation), whose
@@ -818,17 +905,20 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 
 | Id | Severity | Statement | To close |
 | --- | --- | --- | --- |
-| G1 | Affects published non-certificate bounds | The upper bound of an unresolved node can come from a single qualified solve (limit stop, a second opinion that timed out, a relaxed try carried through the fallback) and is published for `feasible` / `incomplete` results; decision 5a's second opinion covers certificate-bearing verdicts only | State it in `NATIVE_FRAME.assumptions` and the Details text, or publish only settled bounds (`null` otherwise) |
-| G2 | Certificate hardening (sound under A3) | Two qualified Infeasible opinions settle a node even against a third qualified opinion that returned a primal point (`Opinion.point` is set and never read) | Treat `point === true` like a verified build in `settleOpinions`, or record the majority rule in A3 |
-| G3 | Affects completeness only | Certified infeasibility (and optimality) is not complete: padding and tolerance boundary points, cuts that break total unimodularity of the relaxed text, 16 rejections per node, six seeds | Accepted as is; an exact boundary proof would close it |
+| G1 | **Closed (Revision 1)** | Was: the upper bound of an unresolved or failed node could come from a single qualified solve (five sources, section 5) and was published for `feasible` / `incomplete` results. Now only settled verdicts carry a bound (enforced once in `evaluate`); a node without one makes the published upper bound and gap `null` | Done: owner decision "Only checked bounds" (2026-10-12) |
+| G2 | **Closed (Revision 1)** | Was: two qualified Infeasible opinions settled a node against a third qualified opinion with a primal point, on relaxed and integer texts. Now any found point or verified build blocks the Infeasible settlement | Done: owner decision "A found point blocks impossible" (2026-10-12) |
+| G3 | Affects completeness only | Certified infeasibility (and optimality) is not complete: padding and tolerance boundary points, cuts that break total unimodularity of the relaxed text, 16 rejections per node (including overswing rejections on `model.exact` nodes with a non-double gear factor, review GAP 7), six seeds | Accepted as is; an exact boundary proof would close it |
 | G4 | Assumption (affects the scope of every certificate if wrong) | A-DATA: the bridge transport of the oracle's domain to the production data model is corroborated, not proved | A written mapping proof of `reference/bridge/toFixture.ts`, or accept as tested |
 | G5 | Assumption (affects witnesses and, through Lemma C, certificates if wrong) | A-VAL: production validator equals oracle validator in both directions; corroborated by the agreement tests | A side-by-side rule proof of `validate.ts` against `reference/oracle/validate.ts`, or accept as tested |
 | G6 | Documentation | ADR 0009 principle 1 describes an explicit `u_i` surrogate; the count model substitutes it into the lot cover with dominance, lot-bound and linear reductions (proved exact in Lemma A). ADR 0007 principle 5 writes clamps over `[0, 1000]`; the code and oracle use 100. ADR 0003 states pairwise or per-instance conflict rows; the count model uses a clique cover of presence rows (proved exact in Theorems L and P) | An amendment note citing this proof |
 | G7 | Documentation (robustness) | `copyBounds` relies on Kahn's order covering every active template, without an assertion; true on the declared domain (Lemma 3) | `assert(topological.length === activeTemplateCount)` |
 | G8 | Documentation | The bound sanity guard scales with the request tolerance and detects only shortfalls a same-node build exposes; the proof does not rely on it | None needed; keep the comment honest |
+| G9 | **Closed (Revision 1)** | Review GAP 8a: the power-of-two read-through was assumed exact; an underflow could exclude a build's value from a scaled column's domain | Done: asserted (`readThroughRange`, `exactPowerOfTwoProduct`), internal error otherwise |
+| G10 | Assumption (documentation) | Review GAP 8b: an edge-free integer text's settled Infeasible has no independent relaxation check; it rests on A3 alone | Stated in Theorem I case 3; edge-free models are trivial |
 
-No code defect that makes a published certificate wrong under the stated assumptions was found. G1 and G2 are the two places where the code
-gives a weaker guarantee than its surrounding comments suggest; neither is a counterexample to a certificate under A1-A4.
+No code defect that makes a published certificate wrong under the stated assumptions was found. G1 and G2, the two places where the code gave
+a weaker guarantee than its surrounding comments suggested, are closed in Revision 1; neither was a counterexample to a certificate under
+A1-A4.
 
 ---
 
@@ -849,3 +939,42 @@ gives a weaker guarantee than its surrounding comments suggest; neither is a cou
   production assertion runs on every domain.
 - **Phase 2.10 measurement:** 172 pinned guns certified in both profiles with the same optimum as the occurrence model wherever both certified
   (`docs/stage2-plan.md`, decision 2d, Phase 2.10 result).
+
+---
+
+## 12. Revision 1 (2026-10-12)
+
+Revision 1 answers the adversarial review (`docs/proofs/count-model.review.md`, findings numbered as there) and records the owner decisions
+of 2026-10-12 (F1, G1, G2, GAP 8a). Code changes are in `src/solver/physical/solvePrecise.ts`, `search.ts`, `specializeFast.ts`,
+`errors.ts` and `src/solver/moaFloor.ts`; no oracle, ledger or baseline file changed. Every `file:line` of this document was re-cited at the
+Revision 1 working tree (the cited lines moved by the code changes; oracle and unchanged files keep their lines).
+
+| Review finding | Verdict there | Change in Revision 1 |
+| --- | --- | --- |
+| 1. Lemma TU | OK (wording) | "identity rows" now reads "column bounds"; a sentence says TU is used only for completeness and tightness (section 7). |
+| 2. Theorem R | OK (R.4 to point to G1) | R.4 says the relaxed bound no longer travels as node evidence on the veto path (`relaxedUncut` is a flag; G1). |
+| 3. Lemma C / A-VAL | GAP (documentation) | A-VAL restated for builds with path-derived instance ids and no claimed spend or provenance; the completeness half is named as the one certificates depend on through cuts; the production-only rejections are listed and shown not to fire on decoded builds (section 7 note, section 9.1). |
+| 4. G1, scope wider | GAP (bounds of uncertified results) | **Closed by code** (owner decision "Only checked bounds"): all five single-solve sources (limit-stopped first opinion; timed-out, limit-stopped or unqualified second opinion and unresolved disagreements; relaxed try carried through the fallback and `relaxationAgrees`' unresolved return; `failed` evaluations with the rejected solve's dual bound; the `stopAtFirstWitness` short-circuit) carry no evidence, and `evaluate` enforces it once for every non-`solved` verdict. A node without a settled verdict keeps its inherited bound; a live unknown bound makes the published upper bound and gap `null`, explicitly. Section 5 (G1), Theorem S.4, section 10. |
+| 5. G2, also on integer texts | GAP (certificate hardening) | **Closed by code** (owner decision "A found point blocks impossible"): `foundPoint` (an Optimal, or a qualified solve with a primal point) or a verified build blocks the Infeasible settlement in `settleOpinions`, on every text it judges (relaxed-first, integer, `relaxationAgrees`). Section 6 (G2), section 10. Test: `[infeasible, optimal-with-point, infeasible]` is unresolved. |
+| 6. Lemma 1, Cor. 1, Lemma 3, Lemma D, Theorem P | OK | none. |
+| 7. Lemma A | CITATION + GAP | Barter lot prices are `>= 0` (accepted at `acquisition.ts:102`), with the free-lot rounding remark (a total in `(0, 1/2)` rounds half-up to `0`, identically in production and oracle); `priceUpper` is justified through `priceTerms`, which counts every product term, so the `sumEnclosure` widening covers the extra product rounding (Lemma A items 2 and 4). |
+| 8. Lemma M | OK | none. |
+| 9a. S.5 vs Theorem E | GAP (documentation) | Theorem S.5 now reads "a TED node with `hi <= 3` and a double gear factor", and says what `model.exact` additionally covers (singleton `constant_exact` nodes up to one ulp below `q`, non-double gear factors) and why that is still sound (relaxing direction). |
+| 9b. Overswing rejections on exact nodes | GAP (completeness only) | Added to G3: such points are cut, not refined, and can exhaust the 16 rejections. |
+| 9c. Read-through "exact division" | GAP (documentation; certificates only on pathological data) | **Closed by code** (GAP 8a): `readThroughRange` asserts the round trip `scaled * 2^k === range` and `exactPowerOfTwoProduct` the coefficient product; failure is the internal error `INEXACT_READ_THROUGH` (Theorem L; register G9). Test: `tests/physical/readThrough.test.ts`. |
+| 10. Theorem I case 3 (edge-free) | GAP (documentation) | Case 3 now says the verdict rests on A3 alone, not on an independent A4 check (GAP 8b; register G10). |
+| 11. Citations | 1 CITATION, 2 nits | The barter citation is fixed (item 7); section 1.4 mentions the padded vertical recoil right-hand side; the `Opinion.point` citation now lists where it is computed and returned, and that it is read (G2). |
+
+New in Revision 1, not from the review:
+
+- **Proposition F1 (owner decision F1, "skip the second solve for splits").** A first opinion that leads only to a split (a qualified Optimal of
+  an inexact node with no verified build, no rejected point and a split point, whose bound would not fathom the node against the incumbent) is
+  returned as a `split` evaluation without a second opinion. Section 4.2 proves that a split discards nothing (the closed halves cover the
+  node), that the evaluation contributes no bound, prunes nothing and certifies nothing (the search never reads its evidence; the children
+  inherit the node's own bound), and that every certificate still rests on settled verdicts; a first opinion whose bound would fathom keeps
+  the full decision-5a rule. Measured effect: Stage 3 floor finding F1 resolved (`docs/stage3/floor-measurement.md`).
+- **Witness native stop (owner decision F2).** A floor witness's `nativeStop` is the HiGHS status of the solve that produced it
+  (`VerifiedBuild.nativeStatus`), and the first-witness short-circuit's reason is that solve's real stop. Not a proof step (a trace
+  diagnostic); listed in section 9.3.
+- **Theorem S.4** no longer carries the G1 caveat: every published finite upper bound rests on settled verdicts (A1 and A3).
+

@@ -353,3 +353,40 @@ test('"finished" is search completion only: a finished last node whose proof or 
   assert.equal(done.completed, true);
   assert.equal(done.finished, true);
 });
+
+// Owner decision F1 (2026-10-12): a `split` evaluation only splits its node. It discards nothing and contributes no bound: a bogus evidence that would
+// fathom everything is ignored, the children inherit the node's own bound, and an interrupted search after a split publishes no bound from it.
+test('a split verdict splits without pruning and without a bound: its evidence is ignored, the children inherit the node\'s own bound', async () => {
+  const c = clock();
+  const seen: (Rat | null)[] = [];
+  let splits = 0;
+  const evaluate = async (node: SearchNode): Promise<NodeEvaluation<FakeBuild>> => {
+    seen.push(node.incumbentExact);
+    if (node.interval !== null && node.interval.lo === 3 && node.interval.hi === 12) {
+      splits++;
+      // A bound below every build: if it were read, the search would fathom the heavy region and miss the optimum `d`.
+      return { verdict: 'split', evidence: proved(-1000), candidate: null, exact: false, splitAt: 6 };
+    }
+    return relaxedNode(BUILDS, node);
+  };
+  const result = await runSpatialSearch({ roots, evaluate, tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9 });
+  assert.equal(splits, 1);
+  assert.equal(result.incumbent?.payload.name, 'd', 'nothing was pruned: the optimum is found');
+  assert.equal(result.certified, true);
+  assert.ok(result.upperBound >= OPTIMUM, 'the ignored evidence never entered the bound');
+  assert.ok(seen.some(s => s !== null), 'the evaluator sees the incumbent once there is one');
+  // Stopped right after the split: the two children are live with the node's own (root: unknown) bound, so no bound is published.
+  const stopped = await runSpatialSearch({ roots: [{ lo: 3, hi: 12 }], evaluate, tolerance: 1e-9, maxNodes: 1, now: c.now, deadline: 1e9 });
+  assert.equal(stopped.stopReason, PUBLIC_REASONS.nodeLimitReached);
+  assert.equal(stopped.upperBound, Infinity);
+  assert.equal(transportedBounds(stopped).upper, null);
+  // A split of an interval too narrow to split stops with the resolution reason; the node stays live with its own bound.
+  const narrow = await runSpatialSearch({
+    roots: [{ lo: 5, hi: 5 + 1e-12 }],
+    evaluate: async () => ({ verdict: 'split', evidence: proved(-1000), candidate: null, exact: false, splitAt: 5 }),
+    tolerance: 1e-9, maxNodes: 512, now: c.now, deadline: 1e9,
+  });
+  assert.match(narrow.stopReason ?? '', /Numerical interval resolution/);
+  assert.equal(narrow.upperBound, Infinity, 'the split evidence is no bound');
+  assert.equal(narrow.empty, false);
+});

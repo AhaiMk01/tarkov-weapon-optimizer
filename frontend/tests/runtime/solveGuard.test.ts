@@ -214,14 +214,17 @@ test('a native exception is a typed SolverError carrying the completion metadata
   );
 });
 
-test('the first-witness policy ends a Precise weight search at its first verified build, without a certificate and without calling it a timeout', async () => {
+test('the first-witness policy ends a Precise weight search at its first verified build, without a certificate, without calling it a timeout, with the real native stop (F2) and no bound (G1)', async () => {
   const lookup = choice();
   const params = paramsOf(lookup, { ergoWeight: 100, useTrueErgo: true });
   const first = await solvePrecise({ params, guard: drivenGuard(), stopAtFirstWitness: true });
   assert.equal(first.kind, 'build');
   if (first.kind !== 'build') return;
   assert.equal(first.certified, false);
-  assert.equal(first.reason, 'Native solution limit reached');
+  // The witness's solve completed natively (Optimal): the reason is the withheld certificate (no second opinion), never a native solution limit (F2).
+  assert.equal(first.best.nativeStatus, 'Optimal');
+  assert.equal(first.reason, 'Required proof prerequisite unavailable');
+  assert.equal(first.summary.bounds.upper, null, 'G1: a single solve gives no published bound');
   assert.equal(first.summary.nodes, 1);
   assert.equal(first.outcome.status, 'feasible');
   const full = await solvePrecise({ params, guard: drivenGuard() });

@@ -27,6 +27,7 @@ and the shared loader `tests/native/evidence/pinned.ts`. Everything else cited e
 | 7 | Second-opinion paths | PASS (existing tests) |
 | 8 | Pinned loader only, no stock HiGHS | PASS (existing tests) |
 | 9 | Native defects the count-model gates found (workstream 3.1): `SolveError` made a valid request throw; a false integer-text `Infeasible` the seed-only second opinion would certify | FIXED 2026-10-12 (owner decisions under 5a: retry seeds, never throw; relaxation must agree), section 9 |
+| 10 | Proof review follow-ups: single-solve bounds published (G1), Infeasible settled against a found point (G2), read-through exactness assumed (GAP 8a), floor findings F1/F2 | FIXED 2026-10-12 (owner decisions under 5a: only checked bounds; a found point blocks impossible; skip the second solve for splits; F2 label), section 10 |
 
 No production defect was found that makes a published certificate or bound wrong. Two observations for the owner are listed
 at the end. The two native defects of row 9 (a thrown request, and a verdict a node could have been certified on) are handled since
@@ -152,9 +153,9 @@ agreeing solves; a timeout or unqualified solve withholds; infeasibility needs t
 |---|---|
 | Agree | "agreement: two Infeasible verdicts, or two Optimal bounds within the tolerance; never a solve that proved nothing"; "the same lie on the third seed only: the first two agree, no third solve is spent"; `tests/physical/countModel.pinned.test.ts` "guns the occurrence model can still prove: …" (`disagreements === 0` on real guns) |
 | Disagree, third seed settles (certified) | "a wrong Optimal on the first seed (the defect mode): the second seed disagrees, the third breaks the tie, and the certified optimum is the true one"; "settling: two agreeing solves settle a node, with the largest qualified bound of ALL the solves …" |
-| Disagree, unsettled | "three solves that all disagree: no certificate (two agreeing solves are needed), the best verified build and the largest bound are kept" (status `feasible`, termination `optimal`, `unsettledDisagreements` 1) |
+| Disagree, unsettled | "three solves that all disagree: no certificate (two agreeing solves are needed), the best verified build is kept and no bound is published (G1)" (status `feasible`, termination `optimal`, `unsettledDisagreements` 1, `upper_bound` null since 2026-10-12, section 10) |
 | Timeout / unqualified second solve withholds | "a second opinion that times out or is not qualified withholds the certificate; the verified build stays, with the factual reason"; pure: "settling: no two agreeing solves, a timeout, an unqualified solve or Infeasible verdicts against a verified build withhold the certificate" |
-| Infeasible needs two verdicts and no verified build | "an infeasibility needs both verdicts: a timed-out second opinion leaves the request incomplete; a qualified Optimal with no valid build is outvoted by a third Infeasible"; pure settle test ("a verified build refutes the Infeasible verdicts", "an infeasibility needs both verdicts"); `tests/physical/countModel.proof.test.ts` "an infeasibility verdict from a solve whose parsed model differs from the text is not emptiness; with an honest solver the request is proved empty" (`secondOpinions === 1`) |
+| Infeasible needs two verdicts and no verified build (and, since 2026-10-12, no found point: section 10) | "an infeasibility needs both verdicts: a timed-out second opinion leaves the request incomplete; a found point blocks impossible (G2: [Infeasible, Optimal with a point, Infeasible] stays unresolved)"; pure settle test ("a verified build refutes the Infeasible verdicts", "an infeasibility needs both verdicts"); `tests/physical/countModel.proof.test.ts` "an infeasibility verdict from a solve whose parsed model differs from the text is not emptiness; with an honest solver the request is proved empty" (`secondOpinions === 1`) |
 | Every solve counted | `tests/physical/solvePrecise.test.ts` "a plain request is one native solve and its second opinion (decision 5a) …" |
 
 The lying solvers replay the defect mode (a wrong `Optimal` with a matching wrong dual bound) on chosen seeds while staying
@@ -215,6 +216,42 @@ Phase 2.10 production run `afterrelaxed-*.jsonl`): plain 153 certified optimal +
 TrueErgo 153 + 19 (unchanged), 1,041 s total (was 1,050 s), max 47 s (was 49 s). Same optimum on every gun, same native solve counts (310 and 1,474),
 no inconclusive solve, no extra seed, no relaxation check, veto or rescue: the 19 infeasible guns are empty by domain, and the one native infeasible
 node of the TrueErgo run was settled on its relaxed text. No certificate was lost or gained.
+
+## 10. Only checked bounds, found points, split-only nodes, witness native stop (Stage 3 follow-up 2, 2026-10-12)
+
+Owner decisions (docs/stage2-plan.md, under 5a), from the proof review (`docs/proofs/count-model.review.md`) and the floor measurement
+(`docs/stage3/floor-measurement.md`); proof: `docs/proofs/count-model.md` Revision 1.
+
+- **Only checked bounds (G1).** A node that is not settled carries no bound: `settleOpinions` returns `evidence: null` when it does not settle,
+  `unconfirmed`, `failed`, the relaxation veto, `relaxationAgrees`' unresolved return and the floor's first-witness short-circuit all carry
+  none, and `evaluate` enforces it once for every verdict other than `solved`. A search that stops with such a node live publishes `upper_bound`
+  and `absolute_gap` `null`; the lower bound (verified build) stays.
+- **A found point blocks impossible (G2).** `settleOpinions` settles `Infeasible` only when no opinion has a verified build and none has a found
+  point (an `Optimal`, or a qualified solve that returned a primal point).
+- **Skip the second solve for splits (F1).** A qualified `Optimal` of an inexact node with no verified build and a split point, whose bound would
+  not fathom the node, is split at once (search verdict `split`, telemetry `splitOnlyNodes`); the split carries no bound.
+- **F2.** `VerifiedBuild.nativeStatus` records the HiGHS status of the solve that produced the build; the floor's `nativeStop` is read from it.
+- **GAP 8a.** `readThroughRange` / `exactPowerOfTwoProduct` assert the power-of-two read-through round trip; failure is `INEXACT_READ_THROUGH`.
+
+| Test | What it asserts |
+|---|---|
+| `tests/physical/solvePrecise.secondOpinion.test.ts` settling tests (updated) | An unsettled node (disagreement, timeout) carries `evidence: null`. `[infeasible, optimal-with-point, infeasible]` and `[infeasible, qualified limit stop with a point, infeasible]` are unresolved; an unqualified point does not block. |
+| same file, "an infeasibility needs both verdicts: … a found point blocks impossible (G2 …)" (updated) | End to end on the relaxed-first path: seeds 0 and 29 say `Infeasible`, seed 11 returns a qualified point: `incomplete`, `confirmedInfeasible` 0, no bound; the honest solver still certifies the same request infeasible. |
+| same file, "three solves that all disagree: … no bound is published (G1)", "a second opinion that times out …" (updated), "G1: a limit-stopped first opinion with a qualified dual bound …" (new) | `bounds.upper` and `bounds.gap` are `null` for an unsettled result, on integer and relaxed-first edges, while the verified build is the lower bound; settled, the checked bound is published. The new test fails on `dae163a`. |
+| `tests/runtime/operationsMatrix.test.ts` "deadline during the second opinion" (updated) | Optimize, Auto and Gunsmith through the real worker: `upper_bound` and `absolute_gap` `null`, `lower_bound` kept. |
+| `tests/physical/search.test.ts` "a split verdict splits without pruning and without a bound …" (new) | A `split` whose evidence would fathom everything is ignored: the optimum is still found and certified; stopped right after the split, the published bound is unknown; an unsplittable interval stops with the resolution reason and no bound; the evaluator sees the incumbent. |
+| `tests/physical/solvePrecise.splitOnly.test.ts` (new) | `leadsOnlyToSplit` is true only for a qualified `Optimal` of an inexact node with an interval, no verified build, no rejected point and a split point, whose bound is more than the tolerance above the incumbent (or no incumbent); end to end on the pinned SR-25 (frozen floor case R1, trial 2) the query returns a witness, no seed-11 `SolutionLimit` is spent, `splitOnlyNodes >= 1` and no bound is published. |
+| `tests/runtime/solveGuard.test.ts` "the first-witness policy …" (updated), `tests/solver/moaFloor.native.test.ts` "a Precise build is a witness whatever ended the native search …" (updated) | The first witness carries `nativeStatus` `Optimal` and the reason `Required proof prerequisite unavailable` (not a native solution limit) and no bound; `nativeStop` follows the native status, never the query's reason. |
+| `tests/physical/readThrough.test.ts` (new) | The read-through round-trips on game magnitudes; an endpoint that underflows, a NaN, and a coefficient product that overflows or underflows throw `INEXACT_READ_THROUGH`. |
+
+**Measured on the 172 pinned guns** (Precise, 60 s, 12 processes; `frontend/benchmarks/phase210m2/results/s3fix2-*.jsonl`, summary
+`summary-s3fix-vs-s3fix2.md`, against `s3fix-*.jsonl`): plain 153 certified optimal + 19 certified infeasible, TrueErgo 153 + 19, both unchanged;
+the same optimum on every gun; the same native solve counts (310 and 1,474) and second opinions (153 and 730); 0 split-only nodes (no overswing
+split points without Prevent Overswing). Every certified result still publishes a finite upper bound (they are settled). Wall time 109 s ->
+139 s plain and 1,041 s -> 1,155 s TrueErgo with identical native work: machine contention from other processes during the run (about 40 node
+processes of other workstreams were running), not the change; a rerun of the plain profile alone took 118 s (`s3fix2plain-*.jsonl`).
+With Prevent Overswing (profile `trueErgoPO`, gear -30%, before = `dae163a` exported; `poBefore-*` / `poAfter-*.jsonl`): 143 + 29 certified in
+both, identical scores, 47 split-only nodes on 37 guns, native solves 1,510 -> 1,463, wall time 937 s -> 847 s. No certificate lost or gained.
 
 ## Observations for the owner
 
