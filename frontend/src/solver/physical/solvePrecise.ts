@@ -319,7 +319,33 @@ export interface PreciseContext {
   edgeIntegrality?: 'relaxed-first' | 'integer';
   /** The split-only shortcut (`leadsOnlyToSplit`); default `PRECISE_SPLIT_SHORTCUT`. A floor query (`stopAtFirstWitness` or `nativeStop`) always uses 'f1'. */
   splitShortcut?: SplitShortcut;
+  /**
+   * Opt-in wall-time breakdown (benchmarks only, `benchmarks/phase210m2/bench.ts --timing on`): when set, the stages below add their time to it. It only
+   * reads the clock, so a result is the same with or without it; production never sets it.
+   */
+  timing?: PreciseTiming;
 }
+
+/** The opt-in stage timing of one request (`PreciseContext.timing`), milliseconds on the request's clock. The categories are disjoint. */
+export interface PreciseTiming {
+  /** `specializeCount` per spatial node: the count model, its proof record and its integer LP text. */
+  specializeMs: number;
+  specializeCalls: number;
+  /** Further LP texts: the relaxed-edge text (built once per model) and texts with cuts appended. */
+  lpTextMs: number;
+  /** Native solves: the whole call, and inside it HiGHS's text read (parse), the run, and the rest (names, readback and solution marshalling). */
+  nativeMs: number;
+  nativeCalls: number;
+  nativeReadMs: number;
+  nativeRunMs: number;
+  nativeMarshalMs: number;
+  /** Decode, independent validation, exact scoring and the bound check of each solved answer (the readback check excluded: `SearchTelemetry.readbackMs`). */
+  judgeMs: number;
+}
+
+export const emptyPreciseTiming = (): PreciseTiming => ({
+  specializeMs: 0, specializeCalls: 0, lpTextMs: 0, nativeMs: 0, nativeCalls: 0, nativeReadMs: 0, nativeRunMs: 0, nativeMarshalMs: 0, judgeMs: 0,
+});
 
 // ---------------------------------------------------------------------------------------------
 // The pipeline
@@ -564,18 +590,49 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     requirePathInstanceIds: true,
   });
   const useTrueErgo = params.useTrueErgo === true;
-  const solveFn = context.solve ?? nativeSolve;
+  const timing = context.timing;
+  const baseSolve = context.solve ?? nativeSolve;
+  const solveFn: SolveFn = timing === undefined ? baseSolve : async (lpText, options, extras) => {
+    const started = now();
+    const result = await baseSolve(lpText, options, extras);
+    const total = now() - started;
+    timing.nativeMs += total;
+    timing.nativeCalls++;
+    const wall = (result as Partial<NativeResult>).wallMs;
+    if (wall !== undefined) {
+      timing.nativeReadMs += wall.read;
+      timing.nativeRunMs += wall.run;
+      timing.nativeMarshalMs += total - wall.read - wall.run;
+    }
+    return result;
+  };
+  /** Time `body` into `timing[key]` when timing is on. */
+  const timed = <T>(key: 'lpTextMs', body: () => T): T => {
+    if (timing === undefined) return body();
+    const started = now();
+    try {
+      return body();
+    } finally {
+      timing[key] += now() - started;
+    }
+  };
   const relaxEdges = (context.edgeIntegrality ?? PRECISE_EDGE_INTEGRALITY) === 'relaxed-first';
   const optionsOf = (seed: number): HighsOptions => ({ ...nativeSolveOptions(tolerance), ...context.nativeStop, random_seed: seed });
 
   /** The model of one node; a request with no TED has one model, built once. */
   let rootModel: CountModel | null = null;
   const modelOf = (interval: SearchInterval | null): CountModel => {
+    const started = timing === undefined ? 0 : now();
+    const calls = timing === undefined || (interval === null && rootModel !== null) ? 0 : 1;
     const model = interval === null
       ? (rootModel ??= specializeCount(blueprint, domain, params))
       : specializeCount(blueprint, domain, params, { weightMin: interval.lo, weightMax: interval.hi });
     telemetry.columns = Math.max(telemetry.columns, model.stats.columns);
     telemetry.rows = Math.max(telemetry.rows, model.stats.rows);
+    if (timing !== undefined) {
+      timing.specializeMs += now() - started;
+      timing.specializeCalls += calls;
+    }
     return model;
   };
 
@@ -696,7 +753,12 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       return { verdict: 'infeasible', evidence: null, candidate: null, finished: true };
     }
     if (outcome.presolveRescue) telemetry.presolveRescues++;
-    return { ...judge(model, lpText, outcome.result, relaxed), nativeStatus: outcome.result.modelStatus.name };
+    if (timing === undefined) return { ...judge(model, lpText, outcome.result, relaxed), nativeStatus: outcome.result.modelStatus.name };
+    const started = now();
+    const readbackBefore = telemetry.readbackMs;
+    const judged = judge(model, lpText, outcome.result, relaxed);
+    timing.judgeMs += now() - started - (telemetry.readbackMs - readbackBefore);
+    return { ...judged, nativeStatus: outcome.result.modelStatus.name };
   };
 
   /**
@@ -795,7 +857,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: model.exact };
     }
     telemetry.relaxationChecks++;
-    const lpText = appendCuts(model.lpRelaxedEdges(), cuts);
+    const lpText = timed('lpTextMs', () => appendCuts(model.lpRelaxedEdges(), cuts));
     const { opinion: first, next } = await firstOpinion(model, lpText, true);
     if (first.verdict === 'infeasible') {
       const evaluation = await confirm(model, lpText, first, true, next);
@@ -865,7 +927,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
      */
     let relaxedUncut = false;
     if (relaxEdges && model.edges.length > 0) {
-      const lpText = model.lpRelaxedEdges();
+      const lpText = timed('lpTextMs', () => model.lpRelaxedEdges());
       telemetry.relaxedEdgeSolves++;
       const { opinion: first, next } = await firstOpinion(model, lpText, true);
       if (first.verdict === 'infeasible') return confirm(model, lpText, first, true, next);
@@ -911,7 +973,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         const stop = guardStop(guard);
         if (stop !== null) return withKept(interrupted(model, stop));
       }
-      const lpText = model.lp(cuts);
+      const lpText = timed('lpTextMs', () => model.lp(cuts));
       const { opinion: first, next } = await firstOpinion(model, lpText, false);
       if (first.rejected !== undefined) {
         // The rejected point is cut out and the node solved again, so the valid builds beside it are still found; only a repeated rejection
