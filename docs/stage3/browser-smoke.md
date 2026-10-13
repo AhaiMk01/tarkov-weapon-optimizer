@@ -18,7 +18,7 @@ antd's dialog close animation never finished. Playwright renders headless, so th
 | 3 | Explore | M4A1, ergonomics ↔ recoil, 10 targets (TrueErgo still on, so Auto → Fast) | Progress `8 / 9`, then complete: 10 of 10 targets with a verified build, 9 approximate points, curve "完整" (complete) | PASS, see note N1 |
 | 4 | Gunsmith | Part 1 (MP-133) | `53 ms · 精确`, proved optimal, preset-based build, ergonomics exactly 45.0 against the ≥ 45 condition | PASS |
 | 5 | Manifest copy | Copy button | "已复制到剪贴板" (copied to clipboard) | PASS |
-| 6 | EFTForge export | EFTForge button | A new tab opens `https://www.eftforge.com?build=<lz-string>`, the same format as released v2.12. EFTForge itself redirected to its v2.0.0 release notes and the `?build=` parameter was gone | PASS (our side), see note N2 |
+| 6 | EFTForge export | EFTForge button | A new tab opens `https://www.eftforge.com?build=<lz-string>`, the same format as released v2.12. EFTForge itself redirected to its v2.0.0 release notes and the `?build=` parameter was gone | PASS, see note N2 |
 | 7 | MOA floor | Max MOA on, precise floor off then on | "正在查找最低 MOA…" (finding the lowest MOA) with Cancel, then "最低 MOA：0.81" (lowest MOA 0.81), slider range 0.81–2.41, same in both modes | PASS |
 | 8 | Advanced menu | Open Advanced | Precision Auto / Fast / Precise; allow repeated parts (greyed out under Precise, decision 2c); Sweet Spot | PASS |
 | 9 | Cancel, nullable status | Advanced → Precise, M4A1 TrueErgo + MOA cap 0.89, cancel while solving | "已取消——显示目前已找到的配装" (cancelled, showing the build found so far). Details: valid build, not proved optimal; provisional MOA model; checked bounds [13104, 13338], gap 234. MOA 0.866 is within the cap | PASS |
@@ -33,11 +33,14 @@ Screenshots: `docs/stage3/smoke/smoke-01-m4a1-auto-precise.png`, `smoke-02-explo
 
 ## Notes for the verdict
 
-- **N1 (wording, minor):** the Explore summary shows the always-on definition line "每个目标都有已验证的配装，或已证明不存在配装" (every
-  target has a verified build or is proved to have none) next to the status sentence. While the sweep is still partial this reads as a
-  contradiction, and once it completes the sentence appears twice.
-- **N2 (external):** the EFTForge link has the same format as released v2.12, but EFTForge v2.0.0 (2026-09-28) appears to drop the `?build=`
-  parameter on load. If so, the export no longer opens the build on the live site either. It was not investigated further on the third-party
-  site; this needs an EFTForge-side check before release.
-- **N3 (wording, minor):** the Details sentence for an approximate result says it "comes from the Fast model, or relies on the provisional MOA
-  model" instead of naming which one applies.
+- **N1 (wording), fixed:** the Explore Details showed the always-on line "every target has a verified build or is proved to have none" next
+  to the curve status sentence, which contradicted "partial" mid-run and repeated "complete" afterwards. The line and its now-unused locale
+  key `explore.coverage_all_resolved` are removed; the curve status sentence carries the meaning (`ExploreStatus.tsx`).
+- **N2 (EFTForge), not a defect:** EFTForge still imports `?build=<lz-string>` for external sites (`app.js` `_checkUrlBuildParam`: it reads
+  the parameter, removes it from the address so a refresh does not re-import, then calls `importBuildFromCode`), and its decoder still accepts
+  the legacy LZ `{v: 1, g, p}` payload (`modules/build-codes.js` `decodeBuildCode`). The release-notes page was its "unseen news" overlay
+  (`modules/news.js`), which opens automatically on a first visit in a fresh browser profile and covered the imported build. Checked
+  read-only from EFTForge's public scripts on 2026-10-12.
+- **N3 (wording), fixed:** the Details sentence for an approximate result no longer lists "the Fast model or the provisional MOA model"; it
+  points to the labels beside the title, which name the actual cause (`results.authority_approximate_optimal_detail`, zh first, English in the
+  other locales as before).

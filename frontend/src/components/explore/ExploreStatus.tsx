@@ -49,9 +49,8 @@ export function CoverageDetails({ response, fallbackReason }: { response: Explor
         <CoverageCounts response={response} />
       </Space>
       <Text type="secondary" style={{ fontSize: 12 }}>{t(curveMeaningKey(response.curve_status))}</Text>
-      {coverage.unresolved.length === 0 ? (
-        <Text type="secondary">{t('explore.coverage_all_resolved')}</Text>
-      ) : (
+      {/* Nothing to list when every target is resolved: the curve status sentence above already says so (a sweep still running has its own status). */}
+      {coverage.unresolved.length === 0 ? null : (
         <Table<UnresolvedTarget>
           size="small"
           pagination={false}
