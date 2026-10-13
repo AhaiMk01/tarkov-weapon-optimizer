@@ -2,14 +2,26 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
-## [Unreleased]
+## [v3.0.0] — 2026-10-12
+
+### Changed
+- **New solver model**: Builds are now solved on a model of the real part tree, checked against an independent reference on every rule (slots, required slots, conflicts, presets, barters, stash, quantities, MOA, TrueErgo). Precise answers are proved optimal; the bigger guns (AK and M4 families) that used to time out now prove their best build in a few seconds.
+- **Auto picks the mode for you**: Precise for every normal request. With TrueErgo or Prevent Overswing, the largest guns use Fast so the answer comes back in time; those results say "build found" and are marked approximate.
+- **Plain results**: The result says "best build" only when it is proved. Anything else says what it is ("build found", "not proved"), and the technical detail (bounds, gap, model) sits in a collapsed Details section.
+- **One copy per part in Fast**: Fast installs each part at most once unless you allow repeats.
+
+### Added
+- **Advanced menu**: Precision (Auto, Fast, Precise), allow repeated parts, and Sweet Spot.
+- **Lowest MOA finder**: Turning on the MOA limit finds the lowest MOA the gun can reach and sets the slider range.
+- **Cancel keeps the build**: Cancelling a search shows the best verified build found so far.
 
 ### Fixed
-- **Shared deadline across Sweet Spot endpoints and solve**: `computeIdealPoint` and the main `solve()` now strictly share one total deadline, resolving a budget reset where uncached Sweet Spot requests took 2× the requested deadline.
-- **Required-slot placement counting**: Required-slot rows in `buildLP` now count `p_{item}_{slot}` placement variables for multi-slot items instead of `x_{item}`, preventing an item that could fill multiple slots from satisfying every required slot it might occupy.
-- **Incumbent candidate eligibility gate**: Candidate builds must have complete integral decision columns, exactly one purchase base, and clean independent build validation before becoming incumbents.
-- **Relaxation bound preservation under Prevent Overswing**: Solved relaxation upper bounds are preserved even when the decoded build fails exact Prevent Overswing, refining the interval instead of discarding the proved upper bound.
-- **Spatial node accounting**: `optimization.nodes` strictly counts actual MIP solves against the spatial node budget; pre-solve pruning does not consume budget.
+- A request could crash on some guns when the solver returned an internal error; it now retries and returns a result.
+- Some searches could report a build as best when a better one existed, or call a weapon impossible when it was not. Every shown build is re-checked part by part, and "impossible" needs two independent confirmations.
+- Prevent Overswing MOA searches stopped early with a wide range; they now finish.
+
+### Removed
+- The old LP builder and the npm `highs` package. The app uses one pinned HiGHS build.
 
 ## [v2.14.0] — 2026-09-29
 
