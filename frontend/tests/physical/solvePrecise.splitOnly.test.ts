@@ -35,7 +35,9 @@ test('leadsOnlyToSplit: only a qualified Optimal of an inexact node, with no ver
   assert.equal(leadsOnlyToSplit(optimalPoint(10, { evidence: null }), false, node(5), TOL), false, 'no proved bound against an incumbent: full rule');
   assert.equal(leadsOnlyToSplit(optimalPoint(10), true, node(null), TOL), false, 'an exact node is never split');
   assert.equal(leadsOnlyToSplit(optimalPoint(10), false, { interval: null, incumbentExact: null }, TOL), false, 'a root with no interval cannot be split');
-  assert.equal(leadsOnlyToSplit(optimalPoint(10, { candidate: build }), false, node(null), TOL), false, 'a verified build: full rule (it may be a certificate)');
+  assert.equal(leadsOnlyToSplit(optimalPoint(10, { candidate: build }), false, node(null), TOL, { mode: 'f1' }), false, "'f1': a verified build takes the full rule");
+  // The 2026-10-13 extension (production): a build is a witness, and the bound need only clear it too (tests/physical/solvePrecise.splitWitness.test.ts).
+  assert.equal(leadsOnlyToSplit(optimalPoint(10, { candidate: build }), false, node(null), TOL), true, 'a bound clearly above the own build: split');
   assert.equal(leadsOnlyToSplit(optimalPoint(10, { rejected: new Map() as never }), false, node(null), TOL), false, 'a rejected point is cut, not split');
   assert.equal(leadsOnlyToSplit(optimalPoint(10, { splitAt: undefined }), false, node(null), TOL), false, 'a fractional relaxed point has no split point');
   assert.equal(leadsOnlyToSplit({ ...optimalPoint(10), verdict: 'none' }, false, node(null), TOL), false, 'a limit stop is no verdict');

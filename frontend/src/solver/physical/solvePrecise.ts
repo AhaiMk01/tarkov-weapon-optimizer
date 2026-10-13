@@ -60,6 +60,11 @@
  * inexact node with no verified build and a split point, whose bound would not fathom the node) is not confirmed: the node is returned as a `split`
  * evaluation, which the search splits without reading its bound (`search.ts`). Splitting discards nothing, so it needs no certificate, and the shortcut
  * issues none: no bound, no pruning, no infeasibility. A first opinion whose bound WOULD fathom the node against the incumbent goes through the full rule.
+ * Extended (owner, 2026-10-13, amending F1; `PRECISE_SPLIT_SHORTCUT` 'witness'): the first opinion may carry a verified build. Its proved bound must then
+ * exceed by more than the tolerance BOTH the incumbent and every verified build the evaluation brings (its own, and a build kept from the relaxed try),
+ * so the node would be split even after its own build became the incumbent, whatever the exact bound. The build is returned with the `split` as a
+ * witness (validated exactly, it may become the incumbent); its single-solve bound is not (G1). The interval must be splittable at the split point (a
+ * node at the resolution limit needs a settled verdict), and a MOA floor query (`stopAtFirstWitness`, `nativeStop`) keeps the 2026-10-12 rule.
  *
  * Only checked bounds (owner, 2026-10-12, G1). A node's bound enters the search, and so any published upper bound or gap, only from a SETTLED verdict
  * (two agreeing qualified solves). An unresolved or failed node carries no bound of its own (`evidence: null`, enforced once in `evaluate`), whatever
@@ -123,7 +128,7 @@ import { ratAbs, ratRoundUp } from './rational';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
 import type { OptimizeOutcome } from './outcome';
 import { PUBLIC_REASONS, reasonOfNativeLimit } from './reasons';
-import { candidateExact, runSpatialSearch, transportedBounds } from './search';
+import { candidateExact, runSpatialSearch, splitInterval, transportedBounds } from './search';
 import type { Candidate, NodeEvaluation, SearchInterval, SearchNode } from './search';
 import { assertCountModelApplies, specializeCount } from './specializeCount';
 import type { CountModel } from './specializeCount';
@@ -243,8 +248,10 @@ export interface SearchTelemetry {
   relaxationVetoes: number;
   /** Integer-text Infeasible verdicts overturned by a verified build of the relaxed-edge text (a native false Infeasible caught). */
   relaxationRescues: number;
-  /** Nodes split on a first opinion alone (decision F1: a qualified Optimal with no verified build and a split point that would not fathom the node). */
+  /** Nodes split on a first opinion alone (decision F1 as extended 2026-10-13: a qualified Optimal whose bound would not fathom the node), all of them. */
   splitOnlyNodes: number;
+  /** Of `splitOnlyNodes`, those whose first opinion carried a verified build (the 2026-10-13 extension; 0 under 'f1'). */
+  splitWitnessNodes: number;
   /** The largest count model of the search: columns and rows. */
   columns: number;
   rows: number;
@@ -310,6 +317,8 @@ export interface PreciseContext {
    * `PRECISE_EDGE_INTEGRALITY` ('relaxed-first', decided by the Phase 2.10 measurement).
    */
   edgeIntegrality?: 'relaxed-first' | 'integer';
+  /** The split-only shortcut (`leadsOnlyToSplit`); default `PRECISE_SPLIT_SHORTCUT`. A floor query (`stopAtFirstWitness` or `nativeStop`) always uses 'f1'. */
+  splitShortcut?: SplitShortcut;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -355,6 +364,14 @@ export const MAX_QUALIFIED_OPINIONS = 3;
  * request certified (4 had stopped at 60 s with integer edges only); 17 of 877 relaxed node solves fell back to the integer model; the same optimum everywhere.
  */
 export const PRECISE_EDGE_INTEGRALITY: 'relaxed-first' | 'integer' = 'relaxed-first';
+export type SplitShortcut = 'witness' | 'f1';
+/**
+ * The split-only shortcut of production Precise (see `leadsOnlyToSplit`, `PreciseContext.splitShortcut`). 'witness' (owner, 2026-10-13, amending decision
+ * F1): a first opinion with a verified build is split without a second opinion too, when its bound is more than the tolerance above the incumbent and
+ * every build of the node. 'f1': the 2026-10-12 rule exactly (no verified build), kept as the measured baseline. Measurement:
+ * `docs/stage3/split-shortcut.md`.
+ */
+export const PRECISE_SPLIT_SHORTCUT: SplitShortcut = 'witness';
 
 /** The tolerance as requested; only a missing, non-finite or negative value falls back to the default. */
 export function resolveTolerance(requested: number | undefined): number {
@@ -460,16 +477,43 @@ export function settleOpinions(opinions: readonly Opinion[], tolerance: number, 
   return { settled: false, evaluation: { verdict: 'unresolved', evidence: null, candidate, exact, reason, finished: opinions.every(o => o.finished), ...split } };
 }
 
+/** What `leadsOnlyToSplit` needs besides the first opinion. */
+export interface SplitShortcutOptions {
+  /** The rule (default `PRECISE_SPLIT_SHORTCUT`). */
+  mode?: SplitShortcut;
+  /** Other verified builds the node's evaluation hands the search with the split (a build kept from the relaxed try): the bound must clear them too. */
+  others?: readonly (Candidate<VerifiedBuild> | null)[];
+}
+
 /**
- * Decision F1 (owner, 2026-10-12), pure: does this first opinion lead ONLY to a split of the node's weight range? It must be a qualified Optimal of an
- * inexact node with an interval, with no verified build, no rejected point and a split point, and its bound must not fathom the node: with an
- * incumbent, a bound within the tolerance of it (or no proved bound) would close the node, which needs the full decision-5a rule. Exported for tests.
+ * Decision F1 (owner, 2026-10-12; extended 2026-10-13), pure: does this first opinion lead ONLY to a split of the node's weight range, whatever its bound's
+ * exact value? It must be a qualified Optimal of an inexact node with an interval, with no rejected point and a split point.
+ *   - 'f1' (the 2026-10-12 rule): no verified build; with an incumbent, a proved bound more than the tolerance above it.
+ *   - 'witness' (2026-10-13): the interval can be split at the split point (else the node needs a settled verdict), and the proved bound is more than the
+ *     tolerance above the REFERENCE, the best of the incumbent, the opinion's own verified build and `others` (every build the search receives with the
+ *     evaluation, which it adds to the incumbent before it splits). With no reference at all (no incumbent, no build) nothing can be fathomed: true.
+ * Whenever the bound is within the tolerance of the reference (or unproved while a reference exists) the single solve could close the node, which needs
+ * the full decision-5a rule: false. Exported for tests.
  */
-export function leadsOnlyToSplit(first: Opinion, exact: boolean, node: Pick<SearchNode, 'interval' | 'incumbentExact'>, tolerance: number): boolean {
-  if (exact || node.interval === null || first.verdict !== 'optimal' || first.candidate !== null || first.rejected !== undefined || first.splitAt === undefined) return false;
-  if (node.incumbentExact === null) return true;
+export function leadsOnlyToSplit(
+  first: Opinion, exact: boolean, node: Pick<SearchNode, 'interval' | 'incumbentExact'>, tolerance: number, options: SplitShortcutOptions = {},
+): boolean {
+  if (exact || node.interval === null || first.verdict !== 'optimal' || first.rejected !== undefined || first.splitAt === undefined) return false;
+  const mode = options.mode ?? PRECISE_SPLIT_SHORTCUT;
+  let reference: Rat | null = node.incumbentExact;
+  if (mode === 'f1') {
+    if (first.candidate !== null) return false;
+  } else {
+    if (splitInterval(node.interval, first.splitAt) === null) return false;
+    for (const witness of [first.candidate, ...(options.others ?? [])]) {
+      if (witness === null) continue;
+      const score = candidateExact(witness);
+      if (reference === null || ratCmp(score, reference) > 0) reference = score;
+    }
+  }
+  if (reference === null) return true;
   const proved = upperBoundExact(first.evidence);
-  return proved !== null && ratCmp(ratSub(proved, node.incumbentExact), ratFromDouble(tolerance)) > 0;
+  return proved !== null && ratCmp(ratSub(proved, reference), ratFromDouble(tolerance)) > 0;
 }
 
 export async function solvePrecise(context: PreciseContext): Promise<PreciseResult> {
@@ -485,7 +529,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
     secondOpinions: 0, thirdOpinions: 0, disagreements: 0, unsettledDisagreements: 0, secondOpinionMs: 0,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, inconclusiveSolves: 0, extraSeedSolves: 0, relaxationChecks: 0, relaxationVetoes: 0, relaxationRescues: 0,
-    splitOnlyNodes: 0, columns: 0, rows: 0,
+    splitOnlyNodes: 0, splitWitnessNodes: 0, columns: 0, rows: 0,
   };
   const moaDependent = isMoaDependent(params);
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
@@ -778,15 +822,18 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     };
   };
 
+  /** The rule of this call: a MOA floor query keeps the 2026-10-12 rule (its first-witness policy and solution limit are unchanged). */
+  const shortcutMode: SplitShortcut = context.stopAtFirstWitness === true || context.nativeStop !== undefined ? 'f1' : (context.splitShortcut ?? PRECISE_SPLIT_SHORTCUT);
   /**
-   * Decision F1: the first opinion leads only to a split of the weight range (a qualified Optimal of an inexact node with no verified build, a split point and
-   * no rejected point) and its bound would not fathom the node against the incumbent (so the search would split it whatever the second opinion said). Then
-   * the node is split without a second opinion and without a bound: the `split` evaluation. `null` when the full rule applies.
+   * Decision F1 (extended 2026-10-13): the first opinion leads only to a split of the weight range (`leadsOnlyToSplit`: its bound would not fathom the node
+   * against the incumbent, its own build and `others`, so the search would split it whatever the second opinion said). Then the node is split without a
+   * second opinion and without a bound: the `split` evaluation, carrying the opinion's verified build as a witness. `null` when the full rule applies.
    */
-  const splitOnly = (model: CountModel, first: Opinion, node: SearchNode): NodeEvaluation<VerifiedBuild> | null => {
-    if (!leadsOnlyToSplit(first, model.exact, node, tolerance) || first.splitAt === undefined) return null;
+  const splitOnly = (model: CountModel, first: Opinion, node: SearchNode, others: readonly (Candidate<VerifiedBuild> | null)[] = []): NodeEvaluation<VerifiedBuild> | null => {
+    if (!leadsOnlyToSplit(first, model.exact, node, tolerance, { mode: shortcutMode, others }) || first.splitAt === undefined) return null;
     telemetry.splitOnlyNodes++;
-    return { verdict: 'split', evidence: null, candidate: null, exact: false, splitAt: first.splitAt };
+    if (first.candidate !== null) telemetry.splitWitnessNodes++;
+    return { verdict: 'split', evidence: null, candidate: first.candidate, exact: false, splitAt: first.splitAt };
   };
 
   const evaluate = async (node: SearchNode): Promise<NodeEvaluation<VerifiedBuild>> => {
@@ -878,7 +925,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       }
       if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.independentBuildValidationFailed) return withKept(failed(model, first));
       if (first.verdict === 'none') return withKept(unconfirmed(model, first));
-      const split = splitOnly(model, first, node);
+      const split = splitOnly(model, first, node, [kept?.candidate ?? null]);
       if (split !== null) return withKept(split);
       const evaluation = await confirm(model, lpText, first, false, next);
       if (evaluation.verdict !== 'infeasible') return withKept(evaluation);

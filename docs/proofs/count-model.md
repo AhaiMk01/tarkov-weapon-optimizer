@@ -2,6 +2,7 @@
 
 Status: **Revision 1 (2026-10-12)**, after the adversarial review (`docs/proofs/count-model.review.md`) and the owner decisions of
 2026-10-12 (F1, G1, G2, GAP 8a; section 12 maps every review finding to its change). Stage 3, workstream 3.2; ADR 0013 section 7; refs #40.
+**Amendment 2026-10-13** (owner, F1 extended to first opinions with a verified build): Proposition F1' in section 4.2, section 13.
 Written against branch `impl/stage2-correctness-cutover` at commit `a19041c`; Revision 1 re-cites every `file:line` at the working tree of
 the Revision 1 change (base `dae163a` plus the code changes of section 12; no file under `reference/oracle/` changed, so oracle citations
 are unchanged). Paths are relative to `frontend/` unless they start with `docs/`.
@@ -580,6 +581,42 @@ The shortcut can make a search split where the confirmed bound would have been w
 after the node was handed out); the children are then solved again, which costs time and loses nothing. It never runs on an exact node
 (where a `solved` verdict closes the node and is certificate-bearing) or on a root without an interval.
 
+**Proposition F1' (the shortcut with a witness, owner 2026-10-13).** *Production's rule (`PRECISE_SPLIT_SHORTCUT = 'witness'`,
+`leadsOnlyToSplit`, `solvePrecise.ts:498-517`, applied by `splitOnly`, `:832-837`, at `:812`, `:873` and `:928`) also returns `split` without a
+second opinion when the first opinion `o` of an inexact node `N` with interval `[lo, hi]` is a qualified Optimal with no rejected point and a
+split point `p`, possibly WITH a verified build `B_o`, provided (a) `splitInterval([lo, hi], p)` is not `null`, and (b) `o` has a proved bound
+`U` with `U - R > tau`, where `R` is the largest exact score among the incumbent `I` handed out with the node (`SearchNode.incumbentExact`), `B_o`
+and every other verified build `K` the evaluation hands the search (the build `withKept` adds from the relaxed try, passed as `others` at `:928`);
+with no incumbent and no build the condition holds vacuously (as in F1). The evaluation carries `B_o` as its candidate (`:836`). A MOA floor query
+(`stopAtFirstWitness` or `nativeStop`) uses the 2026-10-12 rule (`:826`). Then (i), (ii) and (iii) of Proposition F1 hold, and additionally
+(iv) every build the evaluation carries is a valid witness, and (v) no value of `U`, right or wrong, can make the shortcut prune, fathom,
+certify or publish anything.*
+
+*Proof.* (i) By (a) the search's `split` branch (`search.ts:344-353`) always takes the two closed halves, never the resolution stop, so the
+node is replaced by two live nodes that cover it. (ii) As in F1: the branch never reads `evidence` (it is `null` at the source and nulled again in
+`evaluate`, `solvePrecise.ts:849`), and both children are created with `node.bound`, the node's settled-or-unknown inherited bound, never `U`.
+(iii) As in F1: `split` closes no node, and a certificate needs every node closed by a settled verdict or an exact `provedEmpty`. (iv) `B_o`
+and `K` passed the independent validator and carry the exact rational score of the validator's statistics (`judge`, Theorem S.1, A-VAL
+soundness); whether the solve that produced a point was right, wrong or unconfirmed is irrelevant to a validated build, so the search may add
+it to the incumbent like any other (`search.ts:340-343`, BEFORE the `split` branch). The published lower bound is the downward enclosure of
+the incumbent's exact score and stays `<= OPT`. (v) The decision-5a defect is a wrong Optimal whose bound may be wrong in either direction.
+If `U` is too high (above the best score in `N`), the shortcut splits `N`, which is sound by (i) to (iii) for any `U`: splitting needs no
+correct bound. If `U` is too low and still `U - R > tau`, the same holds. If `U` is too low with `U - R <= tau` (or `U` is unproved), condition
+(b) fails and the full decision-5a rule runs: a second opinion with another seed, a third on disagreement, and a settled bound equal to the
+LARGEST qualified bound among the opinions (`settleOpinions`, `:447-478`), so the low `U` can neither fathom the node nor enter a bound. In
+every case the only use of `U` is the comparison in (b), and both outcomes of it are sound.
+
+*What the rule keeps of the 2026-10-12 decision.* The search updates the incumbent with the evaluation's candidates before it decides, so when
+it reaches the `split` branch the incumbent's exact score is `max(score(I), score(B_o), score(K)) = R` (the candidate the search receives is the
+better of `B_o` and `K`, `withKept`). Had the node been confirmed and settled, its bound `S` would be `>= U > R + tau` (the largest qualified
+bound), so it would not have been within `tau` of the updated incumbent and the search would have split it (`search.ts:362-375`), the
+children inheriting `min(node.bound, S)` instead of `node.bound`; had it not settled, the search would have stopped (unresolved). So the rule
+fires only where the full rule would split or stop, never where it would fathom (b), close an exact node, certify emptiness (the opinion is an
+Optimal with a point, which blocks impossible, G2) or stop at the resolution limit (a). The cost side is the same as F1's: a child without
+the parent's settled bound cannot be fathomed by a later incumbent before it is evaluated (measured: `docs/stage3/split-shortcut.md`).
+Theorem S is unaffected: its proof uses the node cover, the settled origin of every bound, the validated incumbent and the closure condition
+of `completed`, and F1' preserves each. QED
+
 **Certified optimality transfers.** The search (`search.ts:269-395`) keeps every node either live (its inherited bound), closed as
 `infeasible`, closed as `solved` (exact, or within `tau` of the incumbent: `:362-369`, `:283-293`), the latter two contributing their bound
 to `fathomed`, or replaced by its two live halves (`split`, Proposition F1, `:341-352`). The global upper bound is `join(incumbent, fathomed, live)` (`:300-309`), an unknown bound absorbing (`:158-163`).
@@ -879,7 +916,8 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 | Opinions, second opinion, settlement | `solvePrecise.ts:409-473`, `:633-716` |
 | A found point blocks impossible (G2) | `solvePrecise.ts:406`, `:452-454` |
 | Only checked bounds (G1): no evidence on any non-settled verdict | `solvePrecise.ts:459-460`, `:681-688`, `:719-731`, `:751`, `:774-778`, `:800-802` |
-| Split-only shortcut (F1) | `solvePrecise.ts:468-473`, `:786-790`, `:768`, `:826`, `:881`; `search.ts:108-114`, `:341-352` |
+| Split-only shortcut (F1) | `solvePrecise.ts:468-473`, `:786-790`, `:768`, `:826`, `:881`; `search.ts:108-114`, `:341-352` (Revision 1 lines; see section 13) |
+| Split-only shortcut with a witness (F1', 2026-10-13) | `solvePrecise.ts:498-517`, `:826-837`, `:812`, `:873`, `:928`, `:849`; `search.ts:340-353` |
 | Witness native stop (F2) | `solvePrecise.ts:598`, `:655`, `:681-688`; `moaFloor.ts:254-264` |
 | Relaxation must agree | `solvePrecise.ts:743-790`, `:883-889` |
 | Relaxed-first strategy | `solvePrecise.ts:357`, `:806-858` |
@@ -978,3 +1016,17 @@ New in Revision 1, not from the review:
   diagnostic); listed in section 9.3.
 - **Theorem S.4** no longer carries the G1 caveat: every published finite upper bound rests on settled verdicts (A1 and A3).
 
+---
+
+## 13. Amendment of 2026-10-13: the split-only shortcut with a witness
+
+Owner decision (2026-10-13, amending F1). The F1 shortcut required "no verified build"; nearly every TrueErgo node finds one (the relaxed-edge
+optimum is integral), so F1 fired on 0 of 730 TrueErgo nodes while second opinions were about half of TrueErgo time
+(`docs/stage3/ted-seed.md`). Proposition F1' (section 4.2) admits a first opinion with a verified build when its bound is more than `tau` above
+the incumbent, its own build and any other build the evaluation brings, and the interval can be split at its split point; the build is kept
+as a witness, the bound is not used. Floor queries keep the 2026-10-12 rule. The 2026-10-12 rule stays selectable (`splitShortcut: 'f1'`) as
+the measured baseline. Theorem S is unaffected; no oracle, ledger or baseline file changed. Code: `src/solver/physical/solvePrecise.ts`
+(`leadsOnlyToSplit`, `splitOnly`, `PRECISE_SPLIT_SHORTCUT`, telemetry `splitWitnessNodes`), comments in `search.ts`. Tests:
+`tests/physical/solvePrecise.splitWitness.test.ts`. Measurement: `docs/stage3/split-shortcut.md` (172 pinned guns, identical certificates,
+scores and published bounds). Line citations of sections 4.2 and 9.3 that name F1' are at this amendment's working tree; the Revision 1
+citations of Proposition F1 are left as written.

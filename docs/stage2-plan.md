@@ -163,6 +163,12 @@ is approximate. Decisions:
      its bound is not used, nothing is pruned and nothing is certified from it. Everything that prunes, certifies optimality, certifies infeasibility
      or contributes a published bound keeps the full rule above. Proof: `docs/proofs/count-model.md` Proposition F1. Effect: the Prevent Overswing floor
      cases R1/N1 of `docs/stage3/floor-measurement.md` (finding F1) no longer stop after two trials.
+     **F1 extended (owner, 2026-10-13).** A first opinion WITH a verified build is split without a second opinion too, when its proved bound is
+     more than the tolerance above the incumbent and every build the node brings (its own, a build kept from the relaxed try), so the node would be
+     split even after its own build became the incumbent, and its interval can be split at the split point. The build is kept as a witness, the
+     single-solve bound is not used (G1). Floor queries keep the 2026-10-12 rule. Proof: `docs/proofs/count-model.md` Proposition F1'. Effect
+     (`docs/stage3/split-shortcut.md`, 172 pinned guns, 60 s): identical certificates, scores and published bounds; TrueErgo second opinions
+     730 -> 486, native solves 1,474 -> 1,230; Prevent Overswing second opinions 701 -> 502.
    - **Only checked bounds (G1).** A published upper bound and gap (Optimize, Gunsmith, Explore rows, every status) come only from settled verdicts (two
      agreeing qualified solves). A node that ends unresolved or failed carries no bound of its own (a limit-stopped first opinion, a timed-out or
      unqualified second opinion, a disagreement, a relaxed try carried through the fallback, a rejected solve's dual bound, the floor's first-witness

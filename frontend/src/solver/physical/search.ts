@@ -18,8 +18,9 @@
  *   - {@link joinBounds} is the ONE place bounds are composed into the global upper bound: the incumbent's exact score, every live node, and
  *     every node closed WITHOUT a proof of emptiness (exactness or tolerance), all in the same frame. Nodes proved empty contribute nothing.
  *     An unknown bound makes the composition unknown, so no finite sibling and no time-limit primal can hide it;
- *   - a `split` evaluation (owner decision F1, 2026-10-12) only splits its node: its evidence is ignored, its children inherit the node's own bound,
- *     and nothing is pruned, so a verdict the caller did not settle never enters a bound;
+ *   - a `split` evaluation (owner decision F1, 2026-10-12, extended 2026-10-13) only splits its node: its evidence is ignored, its children inherit
+ *     the node's own bound, and nothing is pruned, so a verdict the caller did not settle never enters a bound; a verified build it carries is a
+ *     witness like any other (it updates the incumbent before the split);
  *   - the lower bound reported is the DOWNWARD enclosure of the verified incumbent's exact score, the incumbent's part of the upper bound its
  *     exact score (the upward enclosure when reported);
  *   - the tolerance is tested against the exact gap `UB - score` (fathoming a node, certifying the search), never a floating difference.
@@ -75,7 +76,8 @@ export interface SearchNode {
   readonly bound: number;
   /**
    * The exact score of the incumbent when the node is handed out, `null` without one. A hint for the evaluator only: Precise uses it to tell a
-   * first opinion that would only split the node from one whose bound would fathom it (owner decision F1, 2026-10-12, `solvePrecise.ts`).
+   * first opinion that would only split the node from one whose bound would fathom it (owner decision F1, 2026-10-12, extended 2026-10-13,
+   * `solvePrecise.ts`).
    */
   readonly incumbentExact: Rat | null;
 }
@@ -106,10 +108,11 @@ export type NodeVerdict =
   /** A candidate failed decoding or independent validation for a reason the relaxation cannot explain. Stops the search. */
   | 'failed'
   /**
-   * The node is split at `splitAt` and nothing else (owner decision F1, 2026-10-12): no build is found, nothing is pruned and NO bound is taken
-   * from the evaluation (its `evidence` is ignored); both children inherit the node's own bound. Splitting discards no region, so it needs no
-   * settled verdict. Only an inexact node with an interval can be split; an interval too narrow to split stops the search as an unsplittable
-   * `solved` node does.
+   * The node is split at `splitAt` and nothing else (owner decision F1, 2026-10-12, extended 2026-10-13): nothing is pruned and NO bound is taken
+   * from the evaluation (its `evidence` is ignored); both children inherit the node's own bound. A verified build it carries (`candidate`) is a
+   * witness and updates the incumbent like any other. Splitting discards no region, so it needs no settled verdict. Only an inexact node with an
+   * interval can be split; an interval too narrow to split stops the search as an unsplittable `solved` node does (Precise never asks for that
+   * under its 2026-10-13 rule, which requires a splittable interval).
    */
   | 'split';
 

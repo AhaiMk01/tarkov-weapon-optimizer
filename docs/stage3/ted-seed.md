@@ -47,3 +47,5 @@ verified build (the relaxed-edge optimum is integral), so decision F1's split-on
 TrueErgo nodes and 47 Prevent Overswing nodes. A node whose first opinion bound is more than the tolerance above both the incumbent and its own
 build is split whatever the second opinion says; letting such a node split without a second opinion (keeping its build as a witness) would
 remove most second opinions on internal nodes. That is a change to owner decision F1 and needs the owner.
+
+**Follow-up (owner, 2026-10-13):** that extension was tried; see `split-shortcut.md` (TrueErgo second opinions 730 -> 486, identical certificates).

@@ -1,7 +1,7 @@
 // Phase 2.10 milestone 2 measurement: Precise (`solvePrecise`) on every pinned gun, plain and TrueErgo, 60 s per request.
 //
 //   npx tsx benchmarks/phase210m2/bench.ts --out <dir> --label <before|after> --shard <k> --of <n> [--limit-ms 60000] [--profiles plain,trueErgo,trueErgoPO]
-//     [--edges integer|relaxed-first] [--guns MP5,M4A1] [--snapshot <path>]
+//     [--edges integer|relaxed-first] [--split-shortcut on|off] [--guns MP5,M4A1] [--snapshot <path>]
 //
 // One JSON line per (gun, profile) is appended to <dir>/<label>-<k>.jsonl as soon as it is measured (node's test runner buffers its output, a
 // plain script with appendFileSync does not), so an interrupted run keeps what it measured. The same script runs on the tip before the change
@@ -37,6 +37,9 @@ const snapshotPath = arg('snapshot', fileURLToPath(new URL('../snapshot.json', i
 const only = arg('guns', '');
 /** After the change only: the node strategy of Precise (`PreciseContext.edgeIntegrality`); the tip ignores it. */
 const edges = arg('edges', '');
+/** The split-only shortcut (`PreciseContext.splitShortcut`): 'on' is the 2026-10-13 rule ('witness'), 'off' the 2026-10-12 rule ('f1'); default: production. */
+const splitShortcut = arg('split-shortcut', '');
+if (splitShortcut !== '' && splitShortcut !== 'on' && splitShortcut !== 'off') throw new Error('--split-shortcut must be on or off');
 
 mkdirSync(outDir, { recursive: true });
 const outFile = join(outDir, `${label}-${shard}.jsonl`);
@@ -85,7 +88,10 @@ for (const gun of guns) {
     const started = performance.now();
     let line: Record<string, unknown>;
     try {
-      const context = { params, deadline: performance.now() + limitMs, ...(edges === '' ? {} : { edgeIntegrality: edges }) };
+      const context = {
+        params, deadline: performance.now() + limitMs, ...(edges === '' ? {} : { edgeIntegrality: edges }),
+        ...(splitShortcut === '' ? {} : { splitShortcut: splitShortcut === 'on' ? 'witness' : 'f1' }),
+      };
       const result = await solvePrecise(context as Parameters<typeof solvePrecise>[0]);
       const ms = performance.now() - started;
       const r = result as unknown as {
@@ -94,7 +100,7 @@ for (const gun of guns) {
         summary: { nodes: number; bounds: { lower: number | null; upper: number | null; gap: number | null }; telemetry: Record<string, unknown> };
       };
       line = {
-        gun: gun.shortName, id: gun.id, profile, label, edges: edges || null, ms, kind: r.kind, status: r.outcome.status, certificate: r.outcome.physical_certificate,
+        gun: gun.shortName, id: gun.id, profile, label, edges: edges || null, splitShortcut: splitShortcut || null, ms, kind: r.kind, status: r.outcome.status, certificate: r.outcome.physical_certificate,
         reason: r.outcome.reason ?? null, score: r.best?.score ?? null, bounds: r.summary.bounds, nodes: r.summary.nodes, telemetry: r.summary.telemetry, size,
       };
     } catch (error) {
