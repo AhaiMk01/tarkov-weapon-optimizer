@@ -5,7 +5,8 @@ Status: **Revision 1 (2026-10-12)**, after the adversarial review (`docs/proofs/
 **Amendment 2026-10-13** (owner, F1 extended to first opinions with a verified build): Proposition F1' in section 4.2, section 13.
 Written against branch `impl/stage2-correctness-cutover` at commit `a19041c`; Revision 1 re-cites every `file:line` at the working tree of
 the Revision 1 change (base `dae163a` plus the code changes of section 12; no file under `reference/oracle/` changed, so oracle citations
-are unchanged). Paths are relative to `frontend/` unless they start with `docs/`.
+are unchanged). On 2026-10-13 the citations were re-cited at `a5ab8e4` (branch `perf/ted-seed-incumbent`), except those marked as
+Revision 1 lines. Paths are relative to `frontend/` unless they start with `docs/`.
 
 ADR 0013 section 7 asks for "the mathematical domain-wide lifting/projection proof for repaired precise placement/acquisition and
 conservative bounds, including all conflict/required/rootedness/quantity assumptions". This document is that proof for the model
@@ -39,7 +40,7 @@ owner decisions 4, 5, 5a and 5b state them.
 ### Notation
 
 - `w` the weapon, `r` the request (`SolveParams` after normalization), `tau = resolveTolerance(r.objectiveTolerance)`
-  (`src/solver/physical/solvePrecise.ts:360-362`), default `1e-5` (`:319`).
+  (`src/solver/physical/solvePrecise.ts:441-443`), default `1e-5` (`:381`).
 - `Q` the rationals. Every binary64 value `x` of the data or request denotes the exact rational `[x]` it encodes (oracle `fromBinary64`,
   production `ratFromDouble`, `src/solver/physical/exact.ts:61`); INTERPRETATIONS.md choice 3.
 - For a build `B`: `n_t(B)` the number of installed copies of template `t`; `e_{rho,c}(B)` the number of copies of `c` installed in a
@@ -70,7 +71,7 @@ without throwing. In particular:
 - **(P3)** no slot mixes ammunition and parts (`MIXED_AMMO_SLOT`, `blueprint.ts:369-379`); ammunition-only slots are removed
   (INTERPRETATIONS.md choice 15); presets are on their own receiver with nonnegative integer counts (`BAD_PRESET`, `blueprint.ts:287-303`).
 - **(P4)** at most `DEFAULT_MAX_OCCURRENCES = 4,000,000` item occurrences (`blueprint.ts:54`, `:447-453`). Production never passes another
-  limit (`solvePrecise.ts:170`).
+  limit (`solvePrecise.ts:187`).
 
 A request is **accepted** when `prepareSubproblemDomain` and `specializeCount` accept it (finite caps, levels and weights, a valid
 `owned_items` multiset, an ideal point when Tchebycheff is on: `src/solver/physical/specializeFast.ts:346-384`,
@@ -151,7 +152,7 @@ Occurrence masks (`domain.ts:238-289`): **viable** bottom-up (template-level act
 
 `specializeCount(blueprint, domain, r, node?)` (`src/solver/physical/specializeCount.ts:129-138`) asserts Lemma 1 on the domain
 (`specializeCount.ts:66-81`) and calls `specializeFast(..., { certified: true })` (`specializeFast.ts:1290-1360`). For an empty domain it
-returns a one-row contradiction (`specializeFast.ts:1214-1257`) and production never solves it (`solvePrecise.ts:503-508`).
+returns a one-row contradiction (`specializeFast.ts:1214-1257`) and production never solves it (`solvePrecise.ts:614-619`).
 
 **Template graph** (`src/solver/physical/templateGraph.ts:61-140`). `T_act` = receiver + templates with an active occurrence (`:66-68`).
 For each raw id `rho` owned by an active template: `C(rho)` = the union over active occurrences of the owner of the templates of their active
@@ -253,7 +254,7 @@ nothing.
 **Code assertion.** `assertCountModelApplies` (`specializeCount.ts:66-81`) checks the conclusion on the very domain: for every active
 occurrence and every slot it owns, the distinct active candidate templates equal `C(rho)` (or the empty set when `rho` is no graph slot)
 (`specializeCount.ts:87-120`). A failure throws `DOMAIN_INCONSISTENT`, which `solvePrecise` reports as a `SolverError`, never as a fallback
-(`solvePrecise.ts:510-515`). The assertion is redundant on the declared domain (Lemma 1), so a failure would mean a defect of the blueprint
+(`solvePrecise.ts:621-626`). The assertion is redundant on the declared domain (Lemma 1), so a failure would mean a defect of the blueprint
 or the masks.
 
 ### Lemma 2 (the masks lose no physical build)
@@ -369,7 +370,7 @@ generated (Lemma C).*
 
 *Proof, family by family.*
 
-- **Column bounds.** Counts and edges: Lemma 3. Statistics: Lemma N (the declared domains are exactly those enclosures, `:786-812`).
+- **Column bounds.** Counts and edges: Lemma 3. Statistics: Lemma N (the declared domains are exactly those enclosures, `specializeFast.ts:808-834`).
   `capped_ergo` in `[clamp(lo), clamp(hi)]` by monotonicity of the clamp. `gear` in `gearEnclosure` because `capped >= 0` and
   `f_lo <= f <= f_hi` (`proof.ts:196-202`). `ted` in `differenceEnclosure(eff, lineEnclosure)` (`proof.ts:496-498`, `spatial.ts:126-131`)
   because `W` lies in the clipped node. Lots and `price_axis`: Lemma A. `iScale`/`iAdd` (`numeric.ts:44-54`) round each endpoint once and
@@ -528,7 +529,7 @@ are over `[0, 100]` in the code (`specialize.ts:24`) and the oracle (`constants.
 ADR 0007 principle 5 still writes the clamp domain as `[0, 1000]`; the oracle and the code agree on 100.
 
 The incumbent is scored from the validator's exact rational statistics (`exactObjectiveScore`, `proof.ts:418-431`, the same formula as
-`score.ts:63-81` with the same resolved weights, `solvePrecise.ts:591`), never from solver values; its enclosure
+`score.ts:63-81` with the same resolved weights, `solvePrecise.ts:779`), never from solver values; its enclosure
 `[roundDown(s), roundUp(s)]` gives the published lower bound (`proof.ts:443-445`).
 
 ### 4.2 The TED spatial search
@@ -549,8 +550,8 @@ a node within the free region are `exact` (`spatial.ts:83-90`): the line is `q` 
 there exceeds the node optimum by at most `gain x shift` (`specializeFast.ts:1108-1119`), which only makes the bound more conservative. The
 `shift` and the gear-neighbour error are reported but need not be added to any bound, because both act in the relaxing direction.
 
-**Node cover.** The roots are the active weight range clipped by `max_weight` and split at 3 kg (`solvePrecise.ts:368-374`); a split gives
-the two closed halves `[lo, p]`, `[p, hi]` (`search.ts:186-194`). Every `B in F_phys` has `W(B)` in the active range (Lemma N) and
+**Node cover.** The roots are the active weight range clipped by `max_weight` and split at 3 kg (`solvePrecise.ts:449-455`); a split gives
+the two closed halves `[lo, p]`, `[p, hi]` (`search.ts:189-197`). Every `B in F_phys` has `W(B)` in the active range (Lemma N) and
 `W(B) <= max_weight` when capped, so `W(B)` lies in some root and, after every split, in some child: the leaves of the search tree cover
 `F_phys` at every moment.
 
@@ -582,34 +583,34 @@ after the node was handed out); the children are then solved again, which costs 
 (where a `solved` verdict closes the node and is certificate-bearing) or on a root without an interval.
 
 **Proposition F1' (the shortcut with a witness, owner 2026-10-13).** *Production's rule (`PRECISE_SPLIT_SHORTCUT = 'witness'`,
-`leadsOnlyToSplit`, `solvePrecise.ts:498-517`, applied by `splitOnly`, `:832-837`, at `:812`, `:873` and `:928`) also returns `split` without a
+`leadsOnlyToSplit`, `solvePrecise.ts:562-581`, applied by `splitOnly`, `:998-1003`, at `:978`, `:1045` and `:1100`) also returns `split` without a
 second opinion when the first opinion `o` of an inexact node `N` with interval `[lo, hi]` is a qualified Optimal with no rejected point and a
 split point `p`, possibly WITH a verified build `B_o`, provided (a) `splitInterval([lo, hi], p)` is not `null`, and (b) `o` has a proved bound
 `U` with `U - R > tau`, where `R` is the largest exact score among the incumbent `I` handed out with the node (`SearchNode.incumbentExact`), `B_o`
-and every other verified build `K` the evaluation hands the search (the build `withKept` adds from the relaxed try, passed as `others` at `:928`);
-with no incumbent and no build the condition holds vacuously (as in F1). The evaluation carries `B_o` as its candidate (`:836`). A MOA floor query
-(`stopAtFirstWitness` or `nativeStop`) uses the 2026-10-12 rule (`:826`). Then (i), (ii) and (iii) of Proposition F1 hold, and additionally
+and every other verified build `K` the evaluation hands the search (the build `withKept` adds from the relaxed try, passed as `others` at `:1100`);
+with no incumbent and no build the condition holds vacuously (as in F1). The evaluation carries `B_o` as its candidate (`:1002`). A MOA floor query
+(`stopAtFirstWitness` or `nativeStop`) uses the 2026-10-12 rule (`:992`). Then (i), (ii) and (iii) of Proposition F1 hold, and additionally
 (iv) every build the evaluation carries is a valid witness, and (v) no value of `U`, right or wrong, can make the shortcut prune, fathom,
 certify or publish anything.*
 
-*Proof.* (i) By (a) the search's `split` branch (`search.ts:344-353`) always takes the two closed halves, never the resolution stop, so the
+*Proof.* (i) By (a) the search's `split` branch (`search.ts:352-363`) always takes the two closed halves, never the resolution stop, so the
 node is replaced by two live nodes that cover it. (ii) As in F1: the branch never reads `evidence` (it is `null` at the source and nulled again in
-`evaluate`, `solvePrecise.ts:849`), and both children are created with `node.bound`, the node's settled-or-unknown inherited bound, never `U`.
+`evaluate`, `solvePrecise.ts:1021`), and both children are created with `node.bound`, the node's settled-or-unknown inherited bound, never `U`.
 (iii) As in F1: `split` closes no node, and a certificate needs every node closed by a settled verdict or an exact `provedEmpty`. (iv) `B_o`
 and `K` passed the independent validator and carry the exact rational score of the validator's statistics (`judge`, Theorem S.1, A-VAL
 soundness); whether the solve that produced a point was right, wrong or unconfirmed is irrelevant to a validated build, so the search may add
-it to the incumbent like any other (`search.ts:340-343`, BEFORE the `split` branch). The published lower bound is the downward enclosure of
+it to the incumbent like any other (`search.ts:348-351`, BEFORE the `split` branch). The published lower bound is the downward enclosure of
 the incumbent's exact score and stays `<= OPT`. (v) The decision-5a defect is a wrong Optimal whose bound may be wrong in either direction.
 If `U` is too high (above the best score in `N`), the shortcut splits `N`, which is sound by (i) to (iii) for any `U`: splitting needs no
 correct bound. If `U` is too low and still `U - R > tau`, the same holds. If `U` is too low with `U - R <= tau` (or `U` is unproved), condition
 (b) fails and the full decision-5a rule runs: a second opinion with another seed, a third on disagreement, and a settled bound equal to the
-LARGEST qualified bound among the opinions (`settleOpinions`, `:447-478`), so the low `U` can neither fathom the node nor enter a bound. In
+LARGEST qualified bound among the opinions (`settleOpinions`, `:511-542`), so the low `U` can neither fathom the node nor enter a bound. In
 every case the only use of `U` is the comparison in (b), and both outcomes of it are sound.
 
 *What the rule keeps of the 2026-10-12 decision.* The search updates the incumbent with the evaluation's candidates before it decides, so when
 it reaches the `split` branch the incumbent's exact score is `max(score(I), score(B_o), score(K)) = R` (the candidate the search receives is the
 better of `B_o` and `K`, `withKept`). Had the node been confirmed and settled, its bound `S` would be `>= U > R + tau` (the largest qualified
-bound), so it would not have been within `tau` of the updated incumbent and the search would have split it (`search.ts:362-375`), the
+bound), so it would not have been within `tau` of the updated incumbent and the search would have split it (`search.ts:373-387`), the
 children inheriting `min(node.bound, S)` instead of `node.bound`; had it not settled, the search would have stopped (unresolved). So the rule
 fires only where the full rule would split or stop, never where it would fathom (b), close an exact node, certify emptiness (the opinion is an
 Optimal with a point, which blocks impossible, G2) or stop at the resolution limit (a). The cost side is the same as F1's: a child without
@@ -617,10 +618,10 @@ the parent's settled bound cannot be fathomed by a later incumbent before it is 
 Theorem S is unaffected: its proof uses the node cover, the settled origin of every bound, the validated incumbent and the closure condition
 of `completed`, and F1' preserves each. QED
 
-**Certified optimality transfers.** The search (`search.ts:269-395`) keeps every node either live (its inherited bound), closed as
-`infeasible`, closed as `solved` (exact, or within `tau` of the incumbent: `:362-369`, `:283-293`), the latter two contributing their bound
-to `fathomed`, or replaced by its two live halves (`split`, Proposition F1, `:341-352`). The global upper bound is `join(incumbent, fathomed, live)` (`:300-309`), an unknown bound absorbing (`:158-163`).
-`certified` requires no stop and `UB - score(incumbent) <= tau` on exact rationals (`:393`). By the node cover and Theorem B below, each
+**Certified optimality transfers.** The search (`search.ts:278-406`) keeps every node either live (its inherited bound), closed as
+`infeasible`, closed as `solved` (exact, or within `tau` of the incumbent: `:373-380`, `:292-302`), the latter two contributing their bound
+to `fathomed`, or replaced by its two live halves (`split`, Proposition F1, `:352-363`). The global upper bound is `join(incumbent, fathomed, live)` (`:309-318`), an unknown bound absorbing (`:161-166`).
+`certified` requires no stop and `UB - score(incumbent) <= tau` on exact rationals (`:404`). By the node cover and Theorem B below, each
 closed-solved or live node's bound is at least the best exact score in it, and an infeasible node holds no build (Theorem I); hence
 `UB >= OPT`, and certified implies `score(incumbent) >= OPT - tau`.
 
@@ -639,14 +640,14 @@ declared tolerances and matrix thresholds are in force, presolve is off, and no 
 (with the solved text's cuts, or its relaxed-edge variant). Every `B` in the node lifts to a point of it (Theorem L; Lemma C for cuts;
 the relaxed text contains the integer text). By A1, `D >= max obj^E >= obj^E(Lambda(B)) >= score(B) - frameError` (Lemma O). QED
 
-The search turns this into node bounds in one place (`search.ts:143-147`: the tighter of the parent's bound and the proved one; unqualified
-evidence leaves the parent's bound, unknown at a root) and composes them in one place (`:158-163`, `:300-309`). Since Revision 1 only a
+The search turns this into node bounds in one place (`search.ts:146-150`: the tighter of the parent's bound and the proved one; unqualified
+evidence leaves the parent's bound, unknown at a root) and composes them in one place (`:161-166`, `:309-318`). Since Revision 1 only a
 **settled** verdict reaches that place with evidence: `evaluate` replaces the evidence of every `unresolved`, `failed` or `split` evaluation
-by `null` (`solvePrecise.ts:800-802`), and `settleOpinions` returns `null` evidence whenever it does not settle (`:459-460`). So every node
+by `null` (`solvePrecise.ts:1019-1021`), and `settleOpinions` returns `null` evidence whenever it does not settle (`:540-541`). So every node
 bound, and therefore every published upper bound and gap, is a maximum of bounds each backed by two agreeing qualified solves (A1 and A3),
 or unknown (G1 closed, below). Published values are enclosed
-upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`:303-307`), and an unknown bound travels as `null`
-(`search.ts:246-252`). The published lower bound is `roundDown(score(incumbent)) <= score(incumbent) <= OPT`.
+upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`search.ts:312-316`), and an unknown bound travels as `null`
+(`search.ts:255-261`). The published lower bound is `roundDown(score(incumbent)) <= score(incumbent) <= OPT`.
 
 ### What the native assumptions cover, and what they do not
 
@@ -659,16 +660,16 @@ upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`:303-
   (`1.1e-5`). This is a known deviation from A1, accepted by the owner (`nativeProof.ts:47`). It is not detected unless a verified build of the
   same node beats the bound.
 - **The bound sanity guard is sound but not complete, and is not part of the proof.** `judge` withholds a qualified bound that a build verified
-  in the same solve beats by more than `max(tau, 1e-9 max(1, |bound|))` (`solvePrecise.ts:604-614`). It can only remove bounds (making the
+  in the same solve beats by more than `max(tau, 1e-9 max(1, |bound|))` (`solvePrecise.ts:792-802`). It can only remove bounds (making the
   result less certified), so it cannot make a bound unsound. It detects only shortfalls that a verified build of the same node exposes, and
   its threshold scales with the request tolerance (with a loose `tau` it accepts large shortfalls). **GAP G8 (documentation):** the code
   comment calls it "a sanity guard on the proof inputs, not an allowance"; that is right, and nothing in the proof may lean on it.
 - **Decision 5a (second opinion).** A certificate-bearing node verdict (a qualified Optimal whose bound enters a certified gap, or a qualified
-  Infeasible) is settled only by two agreeing qualified solves with different seeds, a third on disagreement (`solvePrecise.ts:409-473`,
-  `:676-716`); the settled bound is the *largest* qualified bound among all the node's opinions (`:432-438`), so a disagreeing lower bound
+  Infeasible) is settled only by two agreeing qualified solves with different seeds, a third on disagreement (`solvePrecise.ts:490-581`,
+  `:886-926`); the settled bound is the *largest* qualified bound among all the node's opinions (`:513-519`), so a disagreeing lower bound
   never wins. The assumption is that two agreeing solves are not wrong the same way (A3).
 - **Retry seeds, never throw.** An inconclusive solve (`SolveError`, `PresolveError`, `PostsolveError`) is no opinion (`nativeSolve.ts:179-181`,
-  `solvePrecise.ts:663-669`, `:694-701`); running out of seeds leaves the node unresolved (no certificate). This affects completeness only.
+  `solvePrecise.ts:868-879`, `:904-911`); running out of seeds leaves the node unresolved (no certificate). This affects completeness only.
 - **Limit-stopped solves.** `boundEvidenceOf` takes the MIP dual bound of any qualified solve, including a time- or solution-limited one
   (`nativeProof.ts:162-164`). Since Revision 1 such a bound never reaches the search: a limit stop is no verdict, so it never settles a node,
   and its node keeps only its inherited bound (G1). Its evidence is still read for one purpose: a qualified limit stop that returned a primal
@@ -678,21 +679,21 @@ upward (`boundToNumber`, `ratRoundUp`), the gap is `roundUp(UB - score)` (`:303-
 could keep the qualified bound of a *single* solve, and that bound was published as `upper_bound` (and gap) of a `feasible` or `incomplete`
 result, resting on A1 alone. The sources were (review finding 4 added the last two):
 
-1. a limit-stopped first opinion (`unconfirmed`, `solvePrecise.ts:719-727`, reached at `:880` and, for the relaxed text, `:828`);
+1. a limit-stopped first opinion (`unconfirmed`, `solvePrecise.ts:929-937`, reached at `:1099` and, for the relaxed text, `:1047`);
 2. a second or third opinion that times out, stops on a limit or is not qualified, after a qualified Optimal, and an unresolved disagreement
-   (`:704-705`, then `settleOpinions`, `:459-460`);
-3. the relaxed first try's bound carried through the fallback into `relaxationAgrees` (`relaxedUncut`, `:830`; the veto return, `:751`) and
-   the unresolved return of `relaxationAgrees` (`:774-778`);
-4. `failed` evaluations, which carried the rejected solve's dual bound (`failed`, `:729-731`, reached at `:874`, `:879` and `:839`);
-5. the `stopAtFirstWitness` short-circuit of a MOA floor query (`:681-688`).
+   (`:914-915`, then `settleOpinions`, `:540-541`);
+3. the relaxed first try's bound carried through the fallback into `relaxationAgrees` (`relaxedUncut`, `:1049`; the veto return, `:961`) and
+   the unresolved return of `relaxationAgrees` (`:984-988`);
+4. `failed` evaluations, which carried the rejected solve's dual bound (`failed`, `:939-941`, reached at `:1093`, `:1098` and `:1058`);
+5. the `stopAtFirstWitness` short-circuit of a MOA floor query (`:891-898`).
 
 Each now carries `evidence: null` at its source, and `evaluate` enforces the rule once for every verdict other than `solved`
-(`:800-802`). A node without a settled verdict therefore keeps its inherited bound: the settled bound of its parent, or unknown at a root.
-Because `joinBounds` makes an unknown bound absorbing (`search.ts:158-163`), a search that stops with such a node live publishes **no**
-finite upper bound and no gap (`null` on the wire, `transportedBounds`, `:246-252`): this is explicit and intended. The lower bound (the
+(`:1019-1021`). A node without a settled verdict therefore keeps its inherited bound: the settled bound of its parent, or unknown at a root.
+Because `joinBounds` makes an unknown bound absorbing (`search.ts:161-166`), a search that stops with such a node live publishes **no**
+finite upper bound and no gap (`null` on the wire, `transportedBounds`, `:255-261`): this is explicit and intended. The lower bound (the
 verified incumbent) is still published. The result Details show an unknown bound as "unknown", never as a number
 (`components/common/ResultStatus.tsx:79-96`, `resultView.ts:228-235`). Explore rows and Gunsmith results take their bounds from the same
-summary (`solver.ts:247-254`); the MOA floor publishes no upper bound (its `hi` is a validated witness and its `lo` a settled qualified
+summary (`solver.ts:349-356`); the MOA floor publishes no upper bound (its `hi` is a validated witness and its `lo` a settled qualified
 emptiness, `moaFloor.ts:272-279`).
 
 ### What is not proved
@@ -713,25 +714,25 @@ emptiness, `moaFloor.ts:272-279`).
 
 *Proof.* `kind: 'empty'` arises in two ways.
 
-(a) `domain.empty` (`solvePrecise.ts:503-508`): no accessible base, or a root required slot with no viable candidate (`domain.ts:258-268`).
+(a) `domain.empty` (`solvePrecise.ts:614-619`): no accessible base, or a root required slot with no viable candidate (`domain.ts:258-268`).
 By Lemma 2 a physical build would make the domain nonempty. Exact, no native call.
 
-(b) The spatial search completed with no incumbent and nothing fathomed (`search.ts:392`): every leaf node was closed `infeasible`. By the
+(b) The spatial search completed with no incumbent and nothing fathomed (`search.ts:403`): every leaf node was closed `infeasible`. By the
 node cover, it suffices that each `infeasible` verdict implies the node holds no physical build. The verdict comes only from:
 
-1. `model.provedEmpty` (`solvePrecise.ts:794-797`): a constant false row; such rows are implied by the oracle's rules for every build of
+1. `model.provedEmpty` (`solvePrecise.ts:1007-1010`): a constant false row; such rows are implied by the oracle's rules for every build of
    the node (Theorem L, constant rows), so the node is empty. Exact.
 2. The relaxed-edge text settled Infeasible by two agreeing qualified verdicts with no verified build among the opinions: in the
-   relaxed-first try (`:823-824`) or in `relaxationAgrees` (`:754-762`). The relaxed text contains `Lambda(B)` for every `B` in the node and
+   relaxed-first try (`:1042-1043`) or in `relaxationAgrees` (`:964-972`). The relaxed text contains `Lambda(B)` for every `B` in the node and
    every cut is satisfied by it (Theorem L, Lemma C). Under A4 the relaxed text has no real feasible point, so no `B` exists.
-3. An integer text with no edge column settled Infeasible (`:747`). Its relaxed text is the same text, so no independent relaxation check
+3. An integer text with no edge column settled Infeasible (`:957`). Its relaxed text is the same text, so no independent relaxation check
    exists: the verdict rests on **A3 alone** (two agreeing qualified solves of an integer text), not on an independent A4 check (review
    GAP 8b). This matters only for edge-free models, which are trivial (no graph slot, a base choice only); the 2026-10-12 defect that motivated
    "relaxation must agree" was an integer text WITH edges.
 
-An integer-text Infeasible never becomes a node verdict by itself: `evaluateNative` passes it to `relaxationAgrees` (`:883-889`), which
-returns `infeasible` only in cases 2 and 3 above; a known relaxed point or a verified build vetoes it (`:748-752`, `:888`). `withKept` never
-changes an infeasible verdict (`:847`). QED
+An integer-text Infeasible never becomes a node verdict by itself: `evaluateNative` passes it to `relaxationAgrees` (`:1102-1108`), which
+returns `infeasible` only in cases 2 and 3 above; a known relaxed point or a verified build vetoes it (`:958-962`, `:1107`). `withKept` never
+changes an infeasible verdict (`:1066`). QED
 
 For a MOA-dependent request the same emptiness is reported as model-relative (`incomplete` / `Provisional MOA model infeasible`); the
 statement proved is the same, relative to the provisional MOA model that the oracle also uses.
@@ -739,12 +740,12 @@ statement proved is the same, relative to the provisional MOA model that the ora
 **G2 (closed in Revision 1, owner decision "A found point blocks impossible", 2026-10-12).** Before Revision 1 `settleOpinions` settled
 Infeasible on two qualified Infeasible opinions even when a third qualified opinion had returned a primal point without a verified build (a
 fractional relaxed point, a point rejected only for overswinging on an inexact node, a rejected boundary point), on the relaxed **and** on the
-integer text (review finding 5); `Opinion.point` was computed (`judge`, `solvePrecise.ts:564`, returned at `:565`, `:573`, `:615`, `:623`,
-`:629`) and read nowhere. Now `foundPoint` (`:406`) is true for every opinion with verdict `optimal` (which always has a point) and for every
+integer text (review finding 5); `Opinion.point` was computed (`judge`, `solvePrecise.ts:752`, returned at `:753`, `:761`, `:803`, `:811`,
+`:817`) and read nowhere. Now `foundPoint` (`:487`) is true for every opinion with verdict `optimal` (which always has a point) and for every
 other opinion whose solve was qualified and returned a point (a qualified limit stop with a point), and `settleOpinions` settles Infeasible
-only when no opinion has a verified build and none has a found point (`:452-454`); otherwise the node is unresolved with
+only when no opinion has a verified build and none has a found point (`:533-535`); otherwise the node is unresolved with
 `Required proof prerequisite unavailable` and no bound (G1). This applies to every text `settleOpinions` judges: the relaxed-first try
-(`:824`), the integer text (`:883`) and `relaxationAgrees` (`:757`). A point that validates is already a candidate (a rescue); an unqualified
+(`:1043`), the integer text (`:1102`) and `relaxationAgrees` (`:967`). A point that validates is already a candidate (a rescue); an unqualified
 point proves nothing and does not block. Infeasibility therefore needs, among at most three qualified opinions, two Infeasible verdicts and
 no point at all, a strictly stronger condition than A3 requires. Unit test: `settleOpinions([infeasible, optimal-with-point, infeasible])` is
 unresolved (`tests/physical/solvePrecise.secondOpinion.test.ts`), and end to end the same sequence on a relaxed text leaves the request
@@ -756,17 +757,17 @@ The converse "`F_phys` empty implies certified infeasible" is **not** proved and
 
 *Proposition I'. If `F_phys` is empty and the emitted node models have no integer point (in exact arithmetic), and the native solver
 answers correctly within the deadline with two agreeing seeds, then production reports `empty`.* By Lemma TU (section 7) the uncut
-relaxed-edge text then has no point either, so the relaxed-first try (`:823-824`) settles Infeasible on every node and the search completes
+relaxed-edge text then has no point either, so the relaxed-first try (`:1042-1043`) settles Infeasible on every node and the search completes
 empty.
 
 **GAP G3 (affects completeness only).** `F_phys` empty does not imply that `M^E` has no integer point: `M^E` is an outer relaxation, so a
 build that violates an exact recoil or MOA cap by less than its padding, or an overswinging build on a relaxed node, is a model point. Such
 points are decoded, rejected by the validator and cut out (Lemma C); after the cuts the integer text may be infeasible while the relaxed text
 with the same cuts keeps a fractional point (cut rows break total unimodularity), and `relaxationAgrees` then vetoes the infeasibility
-(`:770-778`). The node also fails after `MAX_REJECTIONS_PER_NODE = 16` rejections (`:332`, `:873-874`), and six seeds can run out
-(`:348`). One more source of rejections (review GAP 7): `model.exact` is also true on a node whose gear factor is not a double (it ignores
+(`:980-988`). The node also fails after `MAX_REJECTIONS_PER_NODE = 16` rejections (`:394`, `:1092-1093`), and six seeds can run out
+(`:410`). One more source of rejections (review GAP 7): `model.exact` is also true on a node whose gear factor is not a double (it ignores
 the gear neighbours, `specializeFast.ts:1331`), so under Prevent Overswing an overswinging optimum of such an "exact" node is not a split
-point but a rejection, and is cut (`solvePrecise.ts:620-629`). The cut is valid (TED is a function of the signature, Lemma F), but such a
+point but a rejection, and is cut (`solvePrecise.ts:808-817`). The cut is valid (TED is a function of the signature, Lemma F), but such a
 node can exhaust the 16 rejections and fail. In all these cases the result is `incomplete`, never a wrong certificate. *To close (if wanted):* an exact infeasibility proof for
 the residual boundary region (e.g. solving the target model `M*` with exact arithmetic on the cut region), out of scope for Stage 3.
 
@@ -798,20 +799,20 @@ motivation). No soundness step depends on it: soundness of the relaxed-first pat
    (`lpText.ts:150-153`). Its qualified dual bound is therefore an upper bound of the integer text's maximum and, by Theorem B, of the node's
    best exact score.
 2. *An integral relaxed optimum is an optimum of the integer text.* If every edge of the relaxed point is within `1e-9` of an integer
-   (`solvePrecise.ts:568-574`), the point satisfies the integer text within the native tolerances; its value equals the relaxed optimum, which
+   (`solvePrecise.ts:756-762`), the point satisfies the integer text within the native tolerances; its value equals the relaxed optimum, which
    is at least the integer optimum, so it is an integer optimum. Its decoded build is validated exactly and scored exactly
-   (`:575-617`), and the node is settled by the second opinion on the relaxed text (`:825`), whose bound is the relaxed bound (item 1).
+   (`:763-805`), and the node is settled by the second opinion on the relaxed text (`:1044`), whose bound is the relaxed bound (item 1).
    Lemma TU adds that, without cuts, the relaxed optimum value *equals* the integer optimum value, so nothing is lost in bound tightness.
 3. *An infeasible relaxed text certifies the node empty* (Theorem I, case 2); by Lemma TU this loses nothing without cuts.
-4. *The fallback preserves certificates.* A fractional or rejected relaxed point, or a stop, falls back to the integer text (`:828-843`); what
-   the relaxed try verified (a build, an observed failure) is kept (`kept`, `withKept`, `:814`, `:846-857`), and its bound is not used for the
-   integer evaluation's settlement, nor, since Revision 1, as node evidence on the veto path (G1: `relaxedUncut` is a flag, `:830`). An integer-text Infeasible after a relaxed point is vetoed (`:888`): by Lemma TU the two native answers
+4. *The fallback preserves certificates.* A fractional or rejected relaxed point, or a stop, falls back to the integer text (`:1047-1062`); what
+   the relaxed try verified (a build, an observed failure) is kept (`kept`, `withKept`, `:1033`, `:1065-1076`), and its bound is not used for the
+   integer evaluation's settlement, nor, since Revision 1, as node evidence on the veto path (G1: `relaxedUncut` is a flag, `:1049`). An integer-text Infeasible after a relaxed point is vetoed (`:1107`): by Lemma TU the two native answers
    contradict each other, so refusing to certify is the correct conservative choice.
 
 ### Lemma C (cuts lose no physical build)
 
 *Let the integer text of a node return a qualified point `x` whose rounded decision vector `E = (base, e)` decodes to a rejected build, or
-does not decode (`decoded.ok === false`), and let the cut `integerNoGood(E)` be added (`solvePrecise.ts:869-878`). Then no `B in F_phys` has
+does not decode (`decoded.ok === false`), and let the cut `integerNoGood(E)` be added (`solvePrecise.ts:1088-1097`). Then no `B in F_phys` has
 `sigma(B) = E`, and every point of the text other than those with decision vector `E` still satisfies the cut.*
 
 *Proof.* The cut excludes exactly the integer decision vector `E` (`fastCut.ts:44-83`: a column at a bound contributes its deviation, an
@@ -821,7 +822,7 @@ cut and `decodeFast` round with `Math.round` (`decodeFast.ts:40`, `fastCut.ts:53
 `sigma(T) = E`. By Lemma F, `T in F_phys`, so the validator accepts it (A-VAL, completeness direction: the production validator rejects no
 build the oracle accepts; A-VAL is used here exactly in its restated scope, since `decodeFast` produces a build with path-derived instance
 ids and no claimed spend or provenance, `decodeFast.ts:1-21`). This contradicts the rejection. Points rejected *only* for overswinging on an inexact node are not cut
-(`:574-579`): they refine the node instead. QED
+(`solvePrecise.ts:808-813`): they refine the node instead. QED
 
 `Lambda(B)` for a valid `B` therefore satisfies every cut (its decision vector differs from every cut vector), including in the relaxed text
 with cuts (`appendCuts` keeps the cut binaries binary, `fastCut.ts:86-102`).
@@ -830,7 +831,7 @@ Note: Lemma C uses the validator in the *completeness* direction (accepting ever
 rejected a valid build, a cut could remove a physical build, and a later "infeasible" or a bound could be wrong. This is why A-VAL is stated
 in both directions (section 9.1). It is stated only for builds with path-derived instance ids and no claims: the production validator has
 rejections the oracle cannot raise (`INSTANCE_ID_NOT_PATH_DERIVED` under `requirePathInstanceIds: true`, which Precise sets,
-`solvePrecise.ts:520`; `CLAIMED_SPEND_MISMATCH` / `CLAIMED_ACQUISITION_MISMATCH`, `validate.ts:35-37`, `:93-95`), and none of them can fire on
+`solvePrecise.ts:631`; `CLAIMED_SPEND_MISMATCH` / `CLAIMED_ACQUISITION_MISMATCH`, `validate.ts:35-37`, `:93-95`), and none of them can fire on
 a decoded build.
 
 ---
@@ -838,10 +839,10 @@ a decoded build.
 ## 8. The main theorem
 
 **Theorem S.** *Let `w` be in the declared domain, `r` accepted, and A-DATA, A-VAL, A-ARITH, A-PARSE, A1-A4 hold. Then
-`solvePrecise(r)` (`solvePrecise.ts:475-920`) satisfies:*
+`solvePrecise(r)` (`solvePrecise.ts:586-1148`) satisfies:*
 
-1. *Every published build is in `F_phys` and its published score is its exact score.* (`decodeFast` + exact validation, `:575-617`; only
-   validated candidates enter the search, `search.ts:337-340`.)
+1. *Every published build is in `F_phys` and its published score is its exact score.* (`decodeFast` + exact validation, `:763-805`; only
+   validated candidates enter the search, `search.ts:348-351`.)
 2. *If the result is a certified build, `score(B*) >= OPT - tau`* (section 4.2 with Theorem B; the bounds used are settled, decision 5a).
 3. *If the result is `empty`, `F_phys = empty`* (Theorem I).
 4. *Every published lower bound is `<= score(B*) <= OPT`; every published finite upper bound is `>= OPT`*, under A1 and A3: every node bound it
@@ -892,7 +893,7 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 | One owner template per raw slot id (P1) | `blueprint.ts:381-397` |
 | Template-level masks, viability, contradictions, activity | `domain.ts:198-231`, `:238-255`, `:258-268`, `:270-289` |
 | Union candidate sets, Kahn order, copy bounds | `templateGraph.ts:74-115`, `:117-128`, `:147-179` |
-| Lemma 1 asserted on every domain, failure is a solver error | `specializeCount.ts:66-120`, `solvePrecise.ts:510-515` |
+| Lemma 1 asserted on every domain, failure is a solver error | `specializeCount.ts:66-120`, `solvePrecise.ts:621-626` |
 | Certified mode: no single-copy restriction, proof layer | `specializeFast.ts:379-382`, `specializeCount.ts:133` |
 | Columns and bounds | `specializeFast.ts:595-632`, `:676-682`, `:808-834` |
 | Supply, cover, wallet | `specializeFast.ts:641-690`, `:898-902` |
@@ -910,26 +911,26 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 | Padded right-hand sides | `proof.ts:92-103` |
 | Penalty lines | `spatial.ts:81-131` |
 | Decoder | `decodeFast.ts:35-124` |
-| Cuts | `fastCut.ts:44-102`, `solvePrecise.ts:869-878` |
+| Cuts | `fastCut.ts:44-102`, `solvePrecise.ts:1088-1097` |
 | Qualification and bound evidence | `nativeProof.ts:85-170` |
-| Native options (presolve off, tolerances 1e-9 / 1e-7) | `nativeSolve.ts:100-117`, `solvePrecise.ts:525` |
-| Opinions, second opinion, settlement | `solvePrecise.ts:409-473`, `:633-716` |
-| A found point blocks impossible (G2) | `solvePrecise.ts:406`, `:452-454` |
-| Only checked bounds (G1): no evidence on any non-settled verdict | `solvePrecise.ts:459-460`, `:681-688`, `:719-731`, `:751`, `:774-778`, `:800-802` |
+| Native options (presolve off, tolerances 1e-9 / 1e-7) | `nativeSolve.ts:100-117`, `solvePrecise.ts:665` |
+| Opinions, second opinion, settlement | `solvePrecise.ts:490-581`, `:821-926` |
+| A found point blocks impossible (G2) | `solvePrecise.ts:487`, `:533-535` |
+| Only checked bounds (G1): no evidence on any non-settled verdict | `solvePrecise.ts:540-541`, `:891-898`, `:929-941`, `:961`, `:984-988`, `:1019-1021` |
 | Split-only shortcut (F1) | `solvePrecise.ts:468-473`, `:786-790`, `:768`, `:826`, `:881`; `search.ts:108-114`, `:341-352` (Revision 1 lines; see section 13) |
-| Split-only shortcut with a witness (F1', 2026-10-13) | `solvePrecise.ts:498-517`, `:826-837`, `:812`, `:873`, `:928`, `:849`; `search.ts:340-353` |
-| Witness native stop (F2) | `solvePrecise.ts:598`, `:655`, `:681-688`; `moaFloor.ts:254-264` |
-| Relaxation must agree | `solvePrecise.ts:743-790`, `:883-889` |
-| Relaxed-first strategy | `solvePrecise.ts:357`, `:806-858` |
-| Bound sanity guard (not relied on) | `solvePrecise.ts:325-330`, `:604-614` |
-| Search: node bounds, join, fathoming, certified, empty | `search.ts:143-163`, `:269-395` |
-| Root intervals | `solvePrecise.ts:368-374`, `:893-897` |
+| Split-only shortcut with a witness (F1', 2026-10-13) | `solvePrecise.ts:562-581`, `:992-1003`, `:978`, `:1045`, `:1100`, `:1021`; `search.ts:348-363` |
+| Witness native stop (F2) | `solvePrecise.ts:786`, `:855-860`, `:891-898`; `moaFloor.ts:254-264` |
+| Relaxation must agree | `solvePrecise.ts:953-1003`, `:1102-1108` |
+| Relaxed-first strategy | `solvePrecise.ts:419`, `:1025-1077` |
+| Bound sanity guard (not relied on) | `solvePrecise.ts:387-392`, `:792-802` |
+| Search: node bounds, join, fathoming, certified, empty | `search.ts:146-166`, `:278-406` |
+| Root intervals | `solvePrecise.ts:449-455`, `:1112-1116` |
 
 ### 9.4 Scope
 
 - **In scope:** `solvePrecise` on the declared domain for every accepted request (weighted and Tchebycheff, every cap, includes, excludes,
   presets, stash, barters with whole lots, TrueErgo and Prevent Overswing, MOA caps), and therefore every operation insofar as it consumes a
-  `solvePrecise` result (Optimize, Gunsmith optimization, ideal-point endpoint solves, MOA floor trials: `src/solver/solver.ts:332`,
+  `solvePrecise` result (Optimize, Gunsmith optimization, ideal-point endpoint solves, MOA floor trials: `src/solver/solver.ts:434`,
   `src/solver/moaFloor.ts:315`).
 - **Out of scope:** cyclic part data (an internal error); `SLOT_ID_COLLISION`, `MIXED_AMMO_SLOT`, `BAD_PRESET`, `OCCURRENCE_LIMIT` and other typed
   input errors; Fast (`solveFast`), beyond its witness contract (every published Fast witness passes the same validator); the correctness of
