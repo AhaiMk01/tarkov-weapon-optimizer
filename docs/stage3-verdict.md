@@ -67,8 +67,8 @@ From `docs/proofs/count-model.md` §9:
 
 ## Pending owner decisions
 
-1. Post this verdict and the ADR amendment (`docs/adr/amendments/2026-10-12-acyclic-precondition.md`) to #40.
-2. Push `impl/stage2-correctness-cutover` (35 commits since `690edb8`, plus the earlier Stage 2 history).
+1. ~~Post this verdict and the ADR amendment to #40.~~ Done 2026-10-12 after the push.
+2. ~~Push the branch.~~ Pushed 2026-10-12 (owner).
 3. Release shape: CLAUDE.md treats a solver engine change as a MAJOR version (v3.0.0); whether to open a PR to master.
 
 A changelog draft is in `docs/stage3/changelog-draft.md`. It goes into `CHANGELOG.md` only as part of the release.
