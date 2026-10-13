@@ -157,3 +157,25 @@ test('discard() on demand: the next call builds a fresh instance (the app does t
   assert.notEqual(a.runtimeId, b.runtimeId);
   native.discard();
 });
+
+test('concurrent calls: a call never runs on an instance another call discarded while it waited (Sweet Spot runs its endpoints at the same time)', async () => {
+  let loads = 0;
+  const native = new NativeHighs({
+    loader: async () => {
+      const runtime = await loadHighs();
+      loads++;
+      // the first instance traps on its first solve; the call that was waiting beside it must not then solve on it
+      return loads === 1 ? sabotaged(runtime, '_Highs_run', new WebAssembly.RuntimeError('unreachable')) : runtime;
+    },
+  });
+  await native.acquire();
+  // Both calls are started before either runs: the first traps and discards the instance, the second must load a fresh one.
+  const [first, second] = await Promise.allSettled([native.solveStructured(PRECISION_LP), native.solveStructured(PRECISION_LP)]);
+  assert.equal(first.status, 'rejected');
+  assert.ok(first.status === 'rejected' && first.reason instanceof SolverError);
+  assert.equal(second.status, 'fulfilled', 'the waiting call ran on a fresh instance, not on the discarded one');
+  assert.ok(second.status === 'fulfilled' && second.value.modelStatus.name === 'Optimal');
+  assert.equal(loads, 2);
+  assert.equal(native.corruptionDiscards, 1);
+  native.discard();
+});

@@ -60,6 +60,11 @@
  * inexact node with no verified build and a split point, whose bound would not fathom the node) is not confirmed: the node is returned as a `split`
  * evaluation, which the search splits without reading its bound (`search.ts`). Splitting discards nothing, so it needs no certificate, and the shortcut
  * issues none: no bound, no pruning, no infeasibility. A first opinion whose bound WOULD fathom the node against the incumbent goes through the full rule.
+ * Extended (owner, 2026-10-13, amending F1; `PRECISE_SPLIT_SHORTCUT` 'witness'): the first opinion may carry a verified build. Its proved bound must then
+ * exceed by more than the tolerance BOTH the incumbent and every verified build the evaluation brings (its own, and a build kept from the relaxed try),
+ * so the node would be split even after its own build became the incumbent, whatever the exact bound. The build is returned with the `split` as a
+ * witness (validated exactly, it may become the incumbent); its single-solve bound is not (G1). The interval must be splittable at the split point (a
+ * node at the resolution limit needs a settled verdict), and a MOA floor query (`stopAtFirstWitness`, `nativeStop`) keeps the 2026-10-12 rule.
  *
  * Only checked bounds (owner, 2026-10-12, G1). A node's bound enters the search, and so any published upper bound or gap, only from a SETTLED verdict
  * (two agreeing qualified solves). An unresolved or failed node carries no bound of its own (`evidence: null`, enforced once in `evaluate`), whatever
@@ -92,6 +97,12 @@
  * Every result carries its `outcome` (ADR 0013 section 6, `outcome.ts`): the pipeline reports what the search established (an optimum, an
  * emptiness, or neither, whether a verified witness exists, whether the executed search finished, which stops it observed) and the pure
  * classifier chooses the status, certificate, qualifications, termination and reason.
+ *
+ * The solve pool (owner, 2026-10-13; `native/pool.ts`, `speculativeSolves.ts`, `docs/stage3/parallel-pool.md`). With a pool of two or more lanes every
+ * solve runs in a pool worker, and solves the pipeline is likely to read soon are started early: a node's second seed together with its first
+ * (`PRECISE_SPECULATION`) and the first solve of the next live nodes (the search's `lookahead`). The pipeline above is unchanged: it reads an early
+ * answer only when it asks for exactly that text and those options, in its own order, so the opinions, their settlement, the commit order of the
+ * search and the returned build are those of the sequential run. Pool size 1 is the in-thread path, unchanged.
  */
 
 import { SolverError } from '../runtimeErrors';
@@ -111,8 +122,14 @@ import { prepareSubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
 import { appendCuts, integerNoGood } from './fastCut';
 import type { IntegerNoGood } from './fastCut';
-import { NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
+import { PoolWorkerCrashError, acquireNativePool } from '../native/pool';
+import type { SolveLanes } from '../native/pool';
+import {
+  NATIVE_FEASIBILITY_TOLERANCE, PRECISE_PRESOLVE, nativeSolve, nativeSolveOptions, nativeTimeLimitSeconds, solveWithPresolvePolicy,
+} from './nativeSolve';
 import type { PolicyOutcome, PresolveSetting, SolveFn } from './nativeSolve';
+import { PRIORITY_PREFETCH, PRIORITY_SECOND_OPINION, RequestSolves, SolveInterrupted } from './speculativeSolves';
+import type { SpeculationStats } from './speculativeSolves';
 import { assessNativeResult, boundEvidenceOf } from './nativeProof';
 import type { NativeAssessment } from './nativeProof';
 import { axesOfStats } from './objective';
@@ -123,7 +140,7 @@ import { ratAbs, ratRoundUp } from './rational';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
 import type { OptimizeOutcome } from './outcome';
 import { PUBLIC_REASONS, reasonOfNativeLimit } from './reasons';
-import { candidateExact, runSpatialSearch, transportedBounds } from './search';
+import { candidateExact, runSpatialSearch, splitInterval, transportedBounds } from './search';
 import type { Candidate, NodeEvaluation, SearchInterval, SearchNode } from './search';
 import { assertCountModelApplies, specializeCount } from './specializeCount';
 import type { CountModel } from './specializeCount';
@@ -243,11 +260,18 @@ export interface SearchTelemetry {
   relaxationVetoes: number;
   /** Integer-text Infeasible verdicts overturned by a verified build of the relaxed-edge text (a native false Infeasible caught). */
   relaxationRescues: number;
-  /** Nodes split on a first opinion alone (decision F1: a qualified Optimal with no verified build and a split point that would not fathom the node). */
+  /** Nodes split on a first opinion alone (decision F1 as extended 2026-10-13: a qualified Optimal whose bound would not fathom the node), all of them. */
   splitOnlyNodes: number;
+  /** Of `splitOnlyNodes`, those whose first opinion carried a verified build (the 2026-10-13 extension; 0 under 'f1'). */
+  splitWitnessNodes: number;
   /** The largest count model of the search: columns and rows. */
   columns: number;
   rows: number;
+  /**
+   * On a solve pool (`speculativeSolves.ts`): the lanes used and the early solves started, used and abandoned. Not counted in `nativeSolves`, which is
+   * the solves the pipeline read, the same with and without a pool. Absent without a pool.
+   */
+  pool?: { lanes: number } & SpeculationStats;
 }
 
 export interface PreciseSummary {
@@ -287,8 +311,18 @@ export interface PreciseContext {
   /** Without a `guard`: absolute deadline on the `now` clock, milliseconds (no cancel source). One of `guard` and `deadline` is required. */
   deadline?: number;
   now?: () => number;
-  /** Native solve, injectable for tests. */
+  /** Native solve, injectable for tests. An injected `solve` runs without a pool unless `lanes` is given too. */
   solve?: SolveFn;
+  /**
+   * The solve pool (`native/pool.ts`; `docs/stage3/parallel-pool.md`). Default: the shared pool of the context (`acquireNativePool`) when `solve` is not
+   * injected; `null` forces the sequential in-thread path. A pool of one lane is no pool. With a pool the pipeline is unchanged and only starts solves
+   * early (`speculativeSolves.ts`), so every result is the one without it.
+   */
+  lanes?: SolveLanes | null;
+  /** On a pool: which second opinions start together with their first opinion (default `PRECISE_SPECULATION`). */
+  speculation?: Speculation;
+  /** On a pool: how many upcoming nodes get their first solve started early (default `lanes - 2`, at least 0). */
+  prefetchNodes?: number;
   /** Presolve of the first solve of every node (default `PRECISE_PRESOLVE`); tests set 'choose' to exercise the confirmation path. */
   presolve?: PresolveSetting;
   /**
@@ -310,7 +344,35 @@ export interface PreciseContext {
    * `PRECISE_EDGE_INTEGRALITY` ('relaxed-first', decided by the Phase 2.10 measurement).
    */
   edgeIntegrality?: 'relaxed-first' | 'integer';
+  /** The split-only shortcut (`leadsOnlyToSplit`); default `PRECISE_SPLIT_SHORTCUT`. A floor query (`stopAtFirstWitness` or `nativeStop`) always uses 'f1'. */
+  splitShortcut?: SplitShortcut;
+  /**
+   * Opt-in wall-time breakdown (benchmarks only, `benchmarks/phase210m2/bench.ts --timing on`): when set, the stages below add their time to it. It only
+   * reads the clock, so a result is the same with or without it; production never sets it.
+   */
+  timing?: PreciseTiming;
 }
+
+/** The opt-in stage timing of one request (`PreciseContext.timing`), milliseconds on the request's clock. The categories are disjoint. */
+export interface PreciseTiming {
+  /** `specializeCount` per spatial node: the count model, its proof record and its integer LP text. */
+  specializeMs: number;
+  specializeCalls: number;
+  /** Further LP texts: the relaxed-edge text (built once per model) and texts with cuts appended. */
+  lpTextMs: number;
+  /** Native solves: the whole call, and inside it HiGHS's text read (parse), the run, and the rest (names, readback and solution marshalling). */
+  nativeMs: number;
+  nativeCalls: number;
+  nativeReadMs: number;
+  nativeRunMs: number;
+  nativeMarshalMs: number;
+  /** Decode, independent validation, exact scoring and the bound check of each solved answer (the readback check excluded: `SearchTelemetry.readbackMs`). */
+  judgeMs: number;
+}
+
+export const emptyPreciseTiming = (): PreciseTiming => ({
+  specializeMs: 0, specializeCalls: 0, lpTextMs: 0, nativeMs: 0, nativeCalls: 0, nativeReadMs: 0, nativeRunMs: 0, nativeMarshalMs: 0, judgeMs: 0,
+});
 
 // ---------------------------------------------------------------------------------------------
 // The pipeline
@@ -355,6 +417,25 @@ export const MAX_QUALIFIED_OPINIONS = 3;
  * request certified (4 had stopped at 60 s with integer edges only); 17 of 877 relaxed node solves fell back to the integer model; the same optimum everywhere.
  */
 export const PRECISE_EDGE_INTEGRALITY: 'relaxed-first' | 'integer' = 'relaxed-first';
+export type SplitShortcut = 'witness' | 'f1';
+/**
+ * The split-only shortcut of production Precise (see `leadsOnlyToSplit`, `PreciseContext.splitShortcut`). 'witness' (owner, 2026-10-13, amending decision
+ * F1): a first opinion with a verified build is split without a second opinion too, when its bound is more than the tolerance above the incumbent and
+ * every build of the node. 'f1': the 2026-10-12 rule exactly (no verified build), kept as the measured baseline. Measurement:
+ * `docs/stage3/split-shortcut.md`.
+ */
+export const PRECISE_SPLIT_SHORTCUT: SplitShortcut = 'witness';
+/**
+ * Which second opinions start on a solve pool together with their first opinion (`PreciseContext.speculation`):
+ *   - 'always': every first opinion of a node text (outside a MOA floor query) also starts the next seed; when the first then leads only to a split
+ *     (decision F1') or needs no confirmation, that early solve is abandoned unread (CPU spent, no latency);
+ *   - 'unsplittable': only where the split-only shortcut cannot apply (an exact node or a request with no weight interval); elsewhere the second seed
+ *     starts when the first opinion asks for it, as without a pool;
+ *   - 'off': no early second opinions (upcoming nodes may still be prefetched).
+ * A MOA floor query (`stopAtFirstWitness` or `nativeStop`) never speculates: its first witness ends the node without a second opinion.
+ */
+export type Speculation = 'always' | 'unsplittable' | 'off';
+export const PRECISE_SPECULATION: Speculation = 'always';
 
 /** The tolerance as requested; only a missing, non-finite or negative value falls back to the default. */
 export function resolveTolerance(requested: number | undefined): number {
@@ -460,17 +541,47 @@ export function settleOpinions(opinions: readonly Opinion[], tolerance: number, 
   return { settled: false, evaluation: { verdict: 'unresolved', evidence: null, candidate, exact, reason, finished: opinions.every(o => o.finished), ...split } };
 }
 
-/**
- * Decision F1 (owner, 2026-10-12), pure: does this first opinion lead ONLY to a split of the node's weight range? It must be a qualified Optimal of an
- * inexact node with an interval, with no verified build, no rejected point and a split point, and its bound must not fathom the node: with an
- * incumbent, a bound within the tolerance of it (or no proved bound) would close the node, which needs the full decision-5a rule. Exported for tests.
- */
-export function leadsOnlyToSplit(first: Opinion, exact: boolean, node: Pick<SearchNode, 'interval' | 'incumbentExact'>, tolerance: number): boolean {
-  if (exact || node.interval === null || first.verdict !== 'optimal' || first.candidate !== null || first.rejected !== undefined || first.splitAt === undefined) return false;
-  if (node.incumbentExact === null) return true;
-  const proved = upperBoundExact(first.evidence);
-  return proved !== null && ratCmp(ratSub(proved, node.incumbentExact), ratFromDouble(tolerance)) > 0;
+/** What `leadsOnlyToSplit` needs besides the first opinion. */
+export interface SplitShortcutOptions {
+  /** The rule (default `PRECISE_SPLIT_SHORTCUT`). */
+  mode?: SplitShortcut;
+  /** Other verified builds the node's evaluation hands the search with the split (a build kept from the relaxed try): the bound must clear them too. */
+  others?: readonly (Candidate<VerifiedBuild> | null)[];
 }
+
+/**
+ * Decision F1 (owner, 2026-10-12; extended 2026-10-13), pure: does this first opinion lead ONLY to a split of the node's weight range, whatever its bound's
+ * exact value? It must be a qualified Optimal of an inexact node with an interval, with no rejected point and a split point.
+ *   - 'f1' (the 2026-10-12 rule): no verified build; with an incumbent, a proved bound more than the tolerance above it.
+ *   - 'witness' (2026-10-13): the interval can be split at the split point (else the node needs a settled verdict), and the proved bound is more than the
+ *     tolerance above the REFERENCE, the best of the incumbent, the opinion's own verified build and `others` (every build the search receives with the
+ *     evaluation, which it adds to the incumbent before it splits). With no reference at all (no incumbent, no build) nothing can be fathomed: true.
+ * Whenever the bound is within the tolerance of the reference (or unproved while a reference exists) the single solve could close the node, which needs
+ * the full decision-5a rule: false. Exported for tests.
+ */
+export function leadsOnlyToSplit(
+  first: Opinion, exact: boolean, node: Pick<SearchNode, 'interval' | 'incumbentExact'>, tolerance: number, options: SplitShortcutOptions = {},
+): boolean {
+  if (exact || node.interval === null || first.verdict !== 'optimal' || first.rejected !== undefined || first.splitAt === undefined) return false;
+  const mode = options.mode ?? PRECISE_SPLIT_SHORTCUT;
+  let reference: Rat | null = node.incumbentExact;
+  if (mode === 'f1') {
+    if (first.candidate !== null) return false;
+  } else {
+    if (splitInterval(node.interval, first.splitAt) === null) return false;
+    for (const witness of [first.candidate, ...(options.others ?? [])]) {
+      if (witness === null) continue;
+      const score = candidateExact(witness);
+      if (reference === null || ratCmp(score, reference) > 0) reference = score;
+    }
+  }
+  if (reference === null) return true;
+  const proved = upperBoundExact(first.evidence);
+  return proved !== null && ratCmp(ratSub(proved, reference), ratFromDouble(tolerance)) > 0;
+}
+
+/** The key of a search node's interval: the early solves and models of a node are filed under it (`speculativeSolves.ts`). */
+const tagOf = (interval: SearchInterval | null): string => (interval === null ? 'root' : `${interval.lo}:${interval.hi}`);
 
 export async function solvePrecise(context: PreciseContext): Promise<PreciseResult> {
   const { params } = context;
@@ -485,7 +596,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
     secondOpinions: 0, thirdOpinions: 0, disagreements: 0, unsettledDisagreements: 0, secondOpinionMs: 0,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, inconclusiveSolves: 0, extraSeedSolves: 0, relaxationChecks: 0, relaxationVetoes: 0, relaxationRescues: 0,
-    splitOnlyNodes: 0, columns: 0, rows: 0,
+    splitOnlyNodes: 0, splitWitnessNodes: 0, columns: 0, rows: 0,
   };
   const moaDependent = isMoaDependent(params);
   const summary = (partial: Partial<PreciseSummary> & Pick<PreciseSummary, 'nodes'>): PreciseSummary => ({
@@ -520,18 +631,95 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     requirePathInstanceIds: true,
   });
   const useTrueErgo = params.useTrueErgo === true;
-  const solveFn = context.solve ?? nativeSolve;
+  const timing = context.timing;
+  // The solve pool: every solve the pipeline reads goes through `requests` (an early answer, or a solve started now on a lane); without a pool (or with
+  // one lane) the pipeline calls the in-thread solve directly, exactly as before.
+  const lanes = context.lanes !== undefined ? context.lanes : context.solve === undefined ? await acquireNativePool() : null;
+  const requests = lanes !== null && lanes.size >= 2 ? new RequestSolves(lanes, guard, context.solve ?? nativeSolve) : null;
+  const baseSolve = requests?.solve ?? context.solve ?? nativeSolve;
+  const solveFn: SolveFn = timing === undefined ? baseSolve : async (lpText, options, extras) => {
+    const started = now();
+    const result = await baseSolve(lpText, options, extras);
+    const total = now() - started;
+    timing.nativeMs += total;
+    timing.nativeCalls++;
+    const wall = (result as Partial<NativeResult>).wallMs;
+    if (wall !== undefined) {
+      timing.nativeReadMs += wall.read;
+      timing.nativeRunMs += wall.run;
+      timing.nativeMarshalMs += total - wall.read - wall.run;
+    }
+    return result;
+  };
+  /** Time `body` into `timing[key]` when timing is on. */
+  const timed = <T>(key: 'lpTextMs', body: () => T): T => {
+    if (timing === undefined) return body();
+    const started = now();
+    try {
+      return body();
+    } finally {
+      timing[key] += now() - started;
+    }
+  };
   const relaxEdges = (context.edgeIntegrality ?? PRECISE_EDGE_INTEGRALITY) === 'relaxed-first';
   const optionsOf = (seed: number): HighsOptions => ({ ...nativeSolveOptions(tolerance), ...context.nativeStop, random_seed: seed });
 
+  /** A MOA floor query: its first witness ends a node without a second opinion, so nothing is started early for it. */
+  const floorQuery = context.stopAtFirstWitness === true || context.nativeStop !== undefined;
+  const speculation: Speculation = requests === null || floorQuery ? 'off' : (context.speculation ?? PRECISE_SPECULATION);
+  const prefetchDepth = requests === null || floorQuery ? 0 : Math.max(0, Math.floor(context.prefetchNodes ?? requests.size - 2));
+  /** Exactly the options and structured-result requests `solveWithPresolvePolicy` passes for the FIRST solve of a text with this seed (the time limit aside). */
+  const earlyStart = (tag: string, lpText: string, seed: number, priority: number): void => {
+    const remaining = deadline - now();
+    if (requests === null || remaining <= 0) return;
+    const options: HighsOptions = { ...optionsOf(seed), presolve: context.presolve ?? PRECISE_PRESOLVE, time_limit: nativeTimeLimitSeconds(remaining) };
+    requests.prefetch(tag, lpText, options, { includeReadback: true }, priority);
+  };
+  /** Should the first opinion of a text of this node start its second seed at once? (See `Speculation`.) */
+  const speculateFor = (model: CountModel, node: SearchNode): boolean => {
+    if (speculation === 'always') return true;
+    if (speculation === 'unsplittable') return model.exact || node.interval === null;
+    return false;
+  };
+  /** Start the first solve of an upcoming node (its relaxed-edge text, or its integer text when it has no slot edge), as `evaluateNative` will ask for it. */
+  const prefetchNode = (node: SearchNode, rank: number): void => {
+    const tag = tagOf(node.interval);
+    let model = prefetchedModels.get(tag);
+    if (model === undefined) {
+      model = specializeNode(node.interval);
+      prefetchedModels.set(tag, model);
+    }
+    if (model.provedEmpty !== null) return;
+    const lpText = relaxEdges && model.edges.length > 0 ? model.lpRelaxedEdges() : model.lp([]);
+    earlyStart(tag, lpText, PRECISE_RANDOM_SEEDS[0], PRIORITY_PREFETCH + rank);
+  };
+  /** The search's lookahead (a pool only): abandon the early solves of nodes no longer live, start those of the next `prefetchDepth` upcoming nodes. */
+  const lookahead = requests === null ? undefined : (current: SearchNode, upcoming: readonly SearchNode[]): void => {
+    const live = new Set([tagOf(current.interval), ...upcoming.map(n => tagOf(n.interval))]);
+    requests.abandonWhere(tag => !live.has(tag));
+    for (const tag of [...prefetchedModels.keys()]) if (!live.has(tag)) prefetchedModels.delete(tag);
+    upcoming.slice(0, prefetchDepth).forEach((node, rank) => prefetchNode(node, rank));
+  };
+
   /** The model of one node; a request with no TED has one model, built once. */
   let rootModel: CountModel | null = null;
+  /** Models of upcoming nodes built early to prefetch their first solve (a pool only), by node tag; taken by `modelOf` (the same deterministic model). */
+  const prefetchedModels = new Map<string, CountModel>();
+  const specializeNode = (interval: SearchInterval | null): CountModel => (interval === null
+    ? (rootModel ??= specializeCount(blueprint, domain, params))
+    : specializeCount(blueprint, domain, params, { weightMin: interval.lo, weightMax: interval.hi }));
   const modelOf = (interval: SearchInterval | null): CountModel => {
-    const model = interval === null
-      ? (rootModel ??= specializeCount(blueprint, domain, params))
-      : specializeCount(blueprint, domain, params, { weightMin: interval.lo, weightMax: interval.hi });
+    const started = timing === undefined ? 0 : now();
+    const calls = timing === undefined || (interval === null && rootModel !== null) ? 0 : 1;
+    const early = prefetchedModels.get(tagOf(interval));
+    if (early !== undefined) prefetchedModels.delete(tagOf(interval));
+    const model = early ?? specializeNode(interval);
     telemetry.columns = Math.max(telemetry.columns, model.stats.columns);
     telemetry.rows = Math.max(telemetry.rows, model.stats.rows);
+    if (timing !== undefined) {
+      timing.specializeMs += now() - started;
+      timing.specializeCalls += calls;
+    }
     return model;
   };
 
@@ -632,9 +820,21 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   /** One native solve of a node's text with a given seed, judged. Never cuts. */
   const opinionOf = async (model: CountModel, lpText: string, seed: number, relaxed: boolean): Promise<Opinion> => {
     telemetry.nativeSolves++;
-    const outcome: PolicyOutcome = await solveWithPresolvePolicy(lpText, {
-      options: optionsOf(seed), deadline, now, solve: solveFn, presolve: context.presolve, includeReadback: true,
-    });
+    let outcome: PolicyOutcome;
+    try {
+      outcome = await solveWithPresolvePolicy(lpText, {
+        options: optionsOf(seed), deadline, now, solve: solveFn, presolve: context.presolve, includeReadback: true,
+      });
+    } catch (error) {
+      // A pool worker that crashed twice on this solve: an INCONCLUSIVE solve, the next seed is tried (retry seeds, never throw; `native/pool.ts`).
+      if (error instanceof PoolWorkerCrashError) {
+        telemetry.inconclusiveSolves++;
+        return { verdict: 'none', evidence: null, candidate: null, finished: false, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, inconclusive: true };
+      }
+      // A pool solve interrupted by a cancel or the deadline backstop (`speculativeSolves.ts`): no verdict, the pure interrupt as the reason.
+      if (!(error instanceof SolveInterrupted)) throw error;
+      return { verdict: 'none', evidence: null, candidate: null, finished: false, reason: error.stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached };
+    }
     if (outcome.kind === 'unresolved') {
       if (outcome.cause === 'inconclusive') {
         telemetry.inconclusiveSolves++;
@@ -652,7 +852,12 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       return { verdict: 'infeasible', evidence: null, candidate: null, finished: true };
     }
     if (outcome.presolveRescue) telemetry.presolveRescues++;
-    return { ...judge(model, lpText, outcome.result, relaxed), nativeStatus: outcome.result.modelStatus.name };
+    if (timing === undefined) return { ...judge(model, lpText, outcome.result, relaxed), nativeStatus: outcome.result.modelStatus.name };
+    const started = now();
+    const readbackBefore = telemetry.readbackMs;
+    const judged = judge(model, lpText, outcome.result, relaxed);
+    timing.judgeMs += now() - started - (telemetry.readbackMs - readbackBefore);
+    return { ...judged, nativeStatus: outcome.result.modelStatus.name };
   };
 
   /**
@@ -660,10 +865,15 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
    * throw). `next` is the index of the first seed not yet used, where the second opinion starts. When every seed is inconclusive the last (inconclusive)
    * opinion is returned: it proves nothing and its reason is `Required proof prerequisite unavailable`.
    */
-  const firstOpinion = async (model: CountModel, lpText: string, relaxed: boolean): Promise<{ opinion: Opinion; next: number }> => {
+  const firstOpinion = async (model: CountModel, lpText: string, relaxed: boolean, node: SearchNode): Promise<{ opinion: Opinion; next: number }> => {
+    // On a pool, the seed the second opinion would start from runs at the same time as this one (`Speculation`); it is read only if `confirm` asks.
+    const speculate = speculateFor(model, node);
     for (let i = 0; ; i++) {
       if (i > 0) telemetry.extraSeedSolves++;
-      const opinion = await opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[i], relaxed);
+      // The solve read now is queued first (it reaches `solve` synchronously), so the early one never takes the lane it needs.
+      const pending = opinionOf(model, lpText, PRECISE_RANDOM_SEEDS[i], relaxed);
+      if (speculate && i + 1 < PRECISE_RANDOM_SEEDS.length) earlyStart(tagOf(node.interval), lpText, PRECISE_RANDOM_SEEDS[i + 1], PRIORITY_SECOND_OPINION);
+      const opinion = await pending;
       if (opinion.inconclusive !== true || i + 1 >= PRECISE_RANDOM_SEEDS.length) return { opinion, next: i + 1 };
     }
   };
@@ -751,8 +961,8 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       return { verdict: 'unresolved', evidence: null, candidate: null, exact: model.exact, reason: PUBLIC_REASONS.requiredProofPrerequisiteUnavailable, finished: model.exact };
     }
     telemetry.relaxationChecks++;
-    const lpText = appendCuts(model.lpRelaxedEdges(), cuts);
-    const { opinion: first, next } = await firstOpinion(model, lpText, true);
+    const lpText = timed('lpTextMs', () => appendCuts(model.lpRelaxedEdges(), cuts));
+    const { opinion: first, next } = await firstOpinion(model, lpText, true, node);
     if (first.verdict === 'infeasible') {
       const evaluation = await confirm(model, lpText, first, true, next);
       if (evaluation.verdict !== 'infeasible') {
@@ -778,15 +988,18 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     };
   };
 
+  /** The rule of this call: a MOA floor query keeps the 2026-10-12 rule (its first-witness policy and solution limit are unchanged). */
+  const shortcutMode: SplitShortcut = context.stopAtFirstWitness === true || context.nativeStop !== undefined ? 'f1' : (context.splitShortcut ?? PRECISE_SPLIT_SHORTCUT);
   /**
-   * Decision F1: the first opinion leads only to a split of the weight range (a qualified Optimal of an inexact node with no verified build, a split point and
-   * no rejected point) and its bound would not fathom the node against the incumbent (so the search would split it whatever the second opinion said). Then
-   * the node is split without a second opinion and without a bound: the `split` evaluation. `null` when the full rule applies.
+   * Decision F1 (extended 2026-10-13): the first opinion leads only to a split of the weight range (`leadsOnlyToSplit`: its bound would not fathom the node
+   * against the incumbent, its own build and `others`, so the search would split it whatever the second opinion said). Then the node is split without a
+   * second opinion and without a bound: the `split` evaluation, carrying the opinion's verified build as a witness. `null` when the full rule applies.
    */
-  const splitOnly = (model: CountModel, first: Opinion, node: SearchNode): NodeEvaluation<VerifiedBuild> | null => {
-    if (!leadsOnlyToSplit(first, model.exact, node, tolerance) || first.splitAt === undefined) return null;
+  const splitOnly = (model: CountModel, first: Opinion, node: SearchNode, others: readonly (Candidate<VerifiedBuild> | null)[] = []): NodeEvaluation<VerifiedBuild> | null => {
+    if (!leadsOnlyToSplit(first, model.exact, node, tolerance, { mode: shortcutMode, others }) || first.splitAt === undefined) return null;
     telemetry.splitOnlyNodes++;
-    return { verdict: 'split', evidence: null, candidate: null, exact: false, splitAt: first.splitAt };
+    if (first.candidate !== null) telemetry.splitWitnessNodes++;
+    return { verdict: 'split', evidence: null, candidate: first.candidate, exact: false, splitAt: first.splitAt };
   };
 
   const evaluate = async (node: SearchNode): Promise<NodeEvaluation<VerifiedBuild>> => {
@@ -795,7 +1008,13 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       telemetry.provedEmptyNodes++;
       return { verdict: 'infeasible', evidence: null, candidate: null, exact: true };
     }
-    const evaluation = await evaluateNative(model, node);
+    let evaluation: NodeEvaluation<VerifiedBuild>;
+    try {
+      evaluation = await evaluateNative(model, node);
+    } finally {
+      // The node is evaluated: an early solve of its texts that was not read never will be (a text belongs to one node).
+      requests?.abandonWhere(tag => tag === tagOf(node.interval));
+    }
     if (evaluation.verdict === 'infeasible') telemetry.confirmedInfeasible++;
     // G1, the one place it is enforced: only a SETTLED verdict carries a bound into the search (and so into a published upper bound or gap). An
     // unresolved, failed or split node keeps the bound it inherited from a settled parent (unknown at a root).
@@ -818,9 +1037,9 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
      */
     let relaxedUncut = false;
     if (relaxEdges && model.edges.length > 0) {
-      const lpText = model.lpRelaxedEdges();
+      const lpText = timed('lpTextMs', () => model.lpRelaxedEdges());
       telemetry.relaxedEdgeSolves++;
-      const { opinion: first, next } = await firstOpinion(model, lpText, true);
+      const { opinion: first, next } = await firstOpinion(model, lpText, true, node);
       if (first.verdict === 'infeasible') return confirm(model, lpText, first, true, next);
       if (first.verdict === 'optimal' && first.rejected === undefined && (first.candidate !== null || first.splitAt !== undefined)) {
         return splitOnly(model, first, node) ?? confirm(model, lpText, first, true, next);
@@ -864,8 +1083,8 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
         const stop = guardStop(guard);
         if (stop !== null) return withKept(interrupted(model, stop));
       }
-      const lpText = model.lp(cuts);
-      const { opinion: first, next } = await firstOpinion(model, lpText, false);
+      const lpText = timed('lpTextMs', () => model.lp(cuts));
+      const { opinion: first, next } = await firstOpinion(model, lpText, false, node);
       if (first.rejected !== undefined) {
         // The rejected point is cut out and the node solved again, so the valid builds beside it are still found; only a repeated rejection
         // (or no time to try again) fails the node.
@@ -878,7 +1097,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
       }
       if (first.verdict === 'none' && first.reason === PUBLIC_REASONS.independentBuildValidationFailed) return withKept(failed(model, first));
       if (first.verdict === 'none') return withKept(unconfirmed(model, first));
-      const split = splitOnly(model, first, node);
+      const split = splitOnly(model, first, node, [kept?.candidate ?? null]);
       if (split !== null) return withKept(split);
       const evaluation = await confirm(model, lpText, first, false, next);
       if (evaluation.verdict !== 'infeasible') return withKept(evaluation);
@@ -896,7 +1115,16 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
     roots = rootIntervals(weight.lo, weight.hi, params.maxWeight);
   }
   const maxNodes = tedRequest ? Math.max(0, Math.floor(params.maxSpatialNodes ?? DEFAULT_MAX_SPATIAL_NODES)) : Number.POSITIVE_INFINITY;
-  const search = await runSpatialSearch<VerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline, guard, stopAtFirstWitness: context.stopAtFirstWitness });
+  let search: Awaited<ReturnType<typeof runSpatialSearch<VerifiedBuild>>>;
+  try {
+    search = await runSpatialSearch<VerifiedBuild>({
+      roots, evaluate, tolerance, maxNodes, now, deadline, guard, stopAtFirstWitness: context.stopAtFirstWitness, ...(lookahead === undefined ? {} : { lookahead }),
+    });
+  } finally {
+    // Nothing started early outlives the request: queued early solves are dropped and running ones' workers replaced.
+    requests?.abandonAll();
+    if (requests !== null) telemetry.pool = { lanes: requests.size, ...requests.stats };
+  }
   const finished = summary({
     nodes: search.nodes,
     lowerBound: search.lowerBound,

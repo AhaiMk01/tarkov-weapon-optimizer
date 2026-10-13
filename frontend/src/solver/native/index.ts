@@ -6,7 +6,7 @@
 export * from './errors';
 export { COMMITTED_HIGHS_BUILD } from './manifestData';
 export type { HighsBuildIdentity } from './manifestTypes';
-export { loadHighs, setHighsBaseUrl, validateRuntime } from './loadHighs';
+export { getHighsBaseUrl, loadHighs, setHighsBaseUrl, validateRuntime } from './loadHighs';
 export type { HighsRuntime, LoadHighsConfig, LoadedIdentity } from './loadHighs';
 export { HIGHS_OPTION_TYPES, DEFAULT_HIGHS_OPTIONS, validateOption, resolveOptions } from './options';
 export type { HighsOptionName, HighsOptionType, HighsOptionValue, HighsOptions } from './options';

@@ -5,7 +5,10 @@
 //     and through the worker runtime a fresh runtime against one reused runtime (warm data, compatibility-map and endpoint caches);
 //   - across the second-opinion seeds when a certificate is issued: the three `random_seed` values of production Precise (0, 11, 29) are permuted, so
 //     a different seed decides first and confirms second; status, certificate and the certified score must not move (a tie may pick another of the
-//     maximizers; then the score is the same and the build is reported, and a ledger case with a single maximizer must give the same build).
+//     maximizers; then the score is the same and the build is reported, and a ledger case with a single maximizer must give the same build);
+//   - across native pool sizes (docs/stage3/parallel-pool.md): pool size 1 (the in-thread instance) and 3 (worker_threads lanes with early second
+//     opinions and prefetched nodes) give the same response bit for bit, the build included (ledger Precise; MP5, SR-25, M4A1 and AKMS TrueErgo).
+//   - across Sweet Spot's payoff modes (docs/stage3/sweet-spot.md): sequential and concurrent endpoints give the same response bit for bit.
 //
 // On every Stage 1 ledger case in scope (Precise and Fast; the cyclic ones are out of scope) and on pinned real guns (MP5, SR-25 and M4A1 plain; MP5 TrueErgo; MP5 Sweet Spot for the endpoint cache).
 import { test } from 'node:test';
@@ -16,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 import type { OptimizeResponse } from '../../src/api/client';
 import type { LoadedState } from '../../src/solver/dataService';
 import { buildItemLookup } from '../../src/solver/dataService';
-import { solve } from '../../src/solver/solver';
+import { configurePayoff, solve } from '../../src/solver/solver';
 import { DEFAULT_TRADER_LEVELS } from '../../src/solver/types';
 import type { ItemLookup } from '../../src/solver/types';
 import { createWorkerRuntime } from '../../src/solver/workerRuntime';
@@ -26,6 +29,7 @@ import type { LedgerCase } from '../../reference/ledger/index';
 import { OUT_OF_SCOPE_CASES } from '../../reference/harness/scoreboard';
 import { toProduction } from '../../reference/harness/toProduction.differential';
 import { withNative } from '../runtime/operationsMatrix.harness';
+import { configureNativePool, shutdownNativePool } from '../../src/solver/native/pool';
 import type { NativeHook } from '../runtime/operationsMatrix.harness';
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -229,5 +233,110 @@ test('pinned guns: across the second-opinion seed permutations every certificate
       t.diagnostic(`${label}: ${r.status} / ${r.physical_certificate}, objective ${r.objective_value}, build ${buildOf(r) === buildOf(base) ? 'same' : projectionOf(r) === projectionOf(base) ? 'same parts in another legal tree' : 'another maximizer (equal certified score)'}`);
     }
   }
+  assert.deepEqual(problems, []);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The native solve pool (docs/stage3/parallel-pool.md): pool sizes 1 and 3 give the same response bit for bit
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const AKMS = '59ff346386f77477562ff5e2';
+const POOL_SIZES = [1, 3] as const;
+
+/** Run `body` with the shared native pool configured to `size` (1 = no pool, the in-thread instance), then restore the default. */
+async function withPoolSize<T>(size: number, body: () => Promise<T>): Promise<T> {
+  configureNativePool({ size });
+  try {
+    return await body();
+  } finally {
+    await shutdownNativePool();
+    configureNativePool({});
+  }
+}
+
+test('ledger: pool sizes 1 and 3 give the same Precise response bit for bit on every in-scope case', { timeout: 900_000 }, async t => {
+  const problems: string[] = [];
+  const responses = new Map<number, Map<string, string>>();
+  for (const size of POOL_SIZES) {
+    const bySize = new Map<string, string>();
+    responses.set(size, bySize);
+    await withPoolSize(size, async () => {
+      for (const c of IN_SCOPE) {
+        const inputs = inputsOf(c, true);
+        if (inputs.unsupported.length > 0) continue;
+        bySize.set(c.id, fingerprint(await solve(inputs.params)));
+      }
+    });
+  }
+  for (const [id, one] of responses.get(1) as Map<string, string>) {
+    if ((responses.get(3) as Map<string, string>).get(id) !== one) problems.push(`${id}: pool size 3 changed the response`);
+  }
+  t.diagnostic(`${(responses.get(1) as Map<string, string>).size} ledger cases compared`);
+  assert.deepEqual(problems, []);
+  assert.ok((responses.get(1) as Map<string, string>).size >= 100);
+});
+
+test('pinned guns: pool sizes 1 and 3 give the same response bit for bit (MP5, SR-25, M4A1 and AKMS TrueErgo; MP5 plain and Sweet Spot)', { skip, timeout: 900_000 }, async t => {
+  const requests: { name: string; request: Record<string, unknown> }[] = [
+    ...PINNED.filter(p => p.request.precise_mode === 'precise'),
+    { name: 'SR-25 TrueErgo', request: { weapon_id: SR25, ...COMMON, use_true_ergo: true } },
+    { name: 'M4A1 TrueErgo', request: { weapon_id: M4A1, ...COMMON, use_true_ergo: true } },
+    { name: 'AKMS TrueErgo', request: { weapon_id: AKMS, ...COMMON, use_true_ergo: true } },
+    { name: 'M4A1 TrueErgo + Prevent Overswing', request: { weapon_id: M4A1, ...COMMON, use_true_ergo: true, prevent_overswing: true, equip_ergo_modifier: -0.3 } },
+  ];
+  const bySize = new Map<number, string[]>();
+  for (const size of POOL_SIZES) {
+    bySize.set(size, await withPoolSize(size, async () => {
+      const optimize = pinnedRuntime(freshLookup());
+      const out: string[] = [];
+      for (const { name, request } of requests) {
+        const r = await optimize(request);
+        t.diagnostic(`pool ${size} ${name}: ${r.status} / ${r.physical_certificate}, objective ${r.objective_value}, ${r.solve_time_ms.toFixed(0)} ms`);
+        out.push(fingerprint(r));
+      }
+      return out;
+    }));
+  }
+  const problems = requests.filter((_, k) => (bySize.get(1) as string[])[k] !== (bySize.get(3) as string[])[k]).map(r => `${r.name}: pool size 3 changed the response`);
+  assert.deepEqual(problems, []);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Sweet Spot's payoff table (docs/stage3/sweet-spot.md): concurrent endpoints and the TrueErgo skip change no response
+// ---------------------------------------------------------------------------------------------------------------------------
+
+test('pinned guns, Sweet Spot: sequential and concurrent endpoints give the same response bit for bit (pool 1 and 3)', { skip, timeout: 900_000 }, async t => {
+  const SWEET = { ...COMMON, use_tchebycheff: true, price_weight: 1 };
+  const requests: { name: string; request: Record<string, unknown> }[] = [
+    { name: 'MP5 Sweet Spot', request: { weapon_id: MP5, ...SWEET } },
+    { name: 'MP5 Sweet Spot TrueErgo', request: { weapon_id: MP5, ...SWEET, use_true_ergo: true } },
+    { name: 'SR-25 Sweet Spot TrueErgo', request: { weapon_id: SR25, ...SWEET, use_true_ergo: true } },
+    { name: 'MP5 Sweet Spot TrueErgo + Prevent Overswing', request: { weapon_id: MP5, ...SWEET, use_true_ergo: true, prevent_overswing: true, equip_ergo_modifier: -0.3 } },
+  ];
+  const CONFIGS = [{ concurrent: false }, { concurrent: true }];
+  const lookup = freshLookup();
+  const runs: { label: string; prints: string[] }[] = [];
+  for (const size of POOL_SIZES) {
+    for (const config of CONFIGS) {
+      configurePayoff(config);
+      try {
+        const prints = await withPoolSize(size, async () => {
+          const optimize = pinnedRuntime(lookup); // a fresh runtime: an empty endpoint cache, so every table is computed
+          const out: string[] = [];
+          for (const { name, request } of requests) {
+            const r = await optimize(request);
+            assert.equal(r.endpoint_cache, 'miss', name);
+            t.diagnostic(`pool ${size} ${JSON.stringify(config)} ${name}: ${r.status} / ${r.physical_certificate}, objective ${r.objective_value}, ${r.solve_time_ms.toFixed(0)} ms`);
+            out.push(fingerprint(r));
+          }
+          return out;
+        });
+        runs.push({ label: `pool ${size} ${JSON.stringify(config)}`, prints });
+      } finally {
+        configurePayoff({});
+      }
+    }
+  }
+  const problems = runs.slice(1).flatMap(run => requests.filter((_, k) => run.prints[k] !== runs[0].prints[k]).map(r => `${r.name}: ${run.label} changed the response`));
   assert.deepEqual(problems, []);
 });
