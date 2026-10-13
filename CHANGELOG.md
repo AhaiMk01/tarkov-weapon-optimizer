@@ -2,6 +2,16 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.1.0] — 2026-10-13
+
+### Changed
+- **Faster Precise search**: Precise now runs up to 3 solver copies side by side in the browser (one fewer than your CPU cores, at most 3). With TrueErgo the slowest guns finish about 40% sooner. Answers are the same as before, part for part.
+- **Fewer repeat checks**: A TrueErgo search step that will be split anyway no longer waits for a second confirmation, about 20% less time on TrueErgo requests. Together with the parallel solves, a TrueErgo AKMS request drops from about 54 s to about 16 s.
+- **Sweet Spot starts faster**: Its three starting solves (best ergonomics, best recoil, lowest price) now run at the same time; plain Sweet Spot spends about a third less time on them.
+
+### Fixed
+- A rare clash when two solves shared the single in-browser solver copy (Fast mode, or browsers that cannot start extra workers): if one crashed, the other could keep running on the discarded copy.
+
 ## [v3.0.0] — 2026-10-12
 
 ### Changed
