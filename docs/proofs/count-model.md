@@ -1030,3 +1030,14 @@ the measured baseline. Theorem S is unaffected; no oracle, ledger or baseline fi
 `tests/physical/solvePrecise.splitWitness.test.ts`. Measurement: `docs/stage3/split-shortcut.md` (172 pinned guns, identical certificates,
 scores and published bounds). Line citations of sections 4.2 and 9.3 that name F1' are at this amendment's working tree; the Revision 1
 citations of Proposition F1 are left as written.
+
+
+## 14. Amendment of 2026-10-13: concurrent payoff endpoints
+
+Sweet Spot computes its payoff table from three endpoint solves with weights `(100, 0, 0)`, `(0, 100, 0)` and `(0, 0, 100)`
+(`src/solver/solver.ts`, `computePayoff`). Measurement: `docs/stage3/sweet-spot.md`.
+
+**Concurrent endpoints.** The three endpoints now run at the same time (`computePayoff`, `PayoffOptions.concurrent`). This changes no solve:
+each endpoint is an independent `solvePrecise` call, each native solve depends only on its text and options (`docs/stage3/parallel-pool.md`,
+determinism argument), and the outcomes are read in weight order, so the error reported is the one of the first failing endpoint, as before.
+Nothing in this document depends on the order of the endpoint solves. Theorem S, the node cover and Propositions F1 / F1' are unaffected.

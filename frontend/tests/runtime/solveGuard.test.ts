@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildCompatibilityMap } from '../../src/solver/compatibilityMap';
-import { solve, solveRequest } from '../../src/solver/solver';
+import { configurePayoff, solve, solveRequest } from '../../src/solver/solver';
 import type { ItemLookup, SolveParams } from '../../src/solver/types';
 import type { RuntimeGuard } from '../../src/solver/runtimeGuard';
 import { yieldMacrotask } from '../../src/solver/runtimeGuard';
@@ -112,13 +112,15 @@ test('a deadline already past stops a guarded solve before any native work, and 
   assert.equal(notExtended.reason, 'Time limit reached');
 });
 
-test('the payoff endpoints are guarded and separated by macrotask yields; a cancel between endpoints stops before the next one', async () => {
+test('sequential payoff endpoints (configurePayoff concurrent: false) are guarded and separated by macrotask yields; a cancel between endpoints stops before the next one', async () => {
   const lookup = lookupOf(
     gun(WEAPON, { weight: 1, ergo: 0, slots: [slot('choice', ['p1', 'p2', 'p3'], true)] }),
     ['p1', mod('p1', { ergo: 50, recoil: 0, offers: [trader('prapor', 1, 100)] })],
     ['p2', mod('p2', { ergo: 10, recoil: -0.3, offers: [trader('prapor', 1, 100)] })],
     ['p3', mod('p3', { ergo: 0, recoil: 0, offers: [trader('prapor', 1, 10)] })],
   );
+  configurePayoff({ concurrent: false });
+  try {
   const full = drivenGuard();
   const done = await solve(paramsOf(lookup, { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true, guard: full }));
   assert.equal(done.status, 'optimal', done.reason);
@@ -133,6 +135,32 @@ test('the payoff endpoints are guarded and separated by macrotask yields; a canc
   assert.equal(response.ideal_point, undefined, 'no table was used');
   assert.deepEqual(response.selected_items, []);
   assert.equal(cut.yields, 2, 'endpoint 2 never ran');
+  } finally {
+    configurePayoff({});
+  }
+});
+
+test('concurrent payoff endpoints (production): one guard check before them, their own search yields, one yield after the table; a cancel during them stops the request', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { weight: 1, ergo: 0, slots: [slot('choice', ['p1', 'p2', 'p3'], true)] }),
+    ['p1', mod('p1', { ergo: 50, recoil: 0, offers: [trader('prapor', 1, 100)] })],
+    ['p2', mod('p2', { ergo: 10, recoil: -0.3, offers: [trader('prapor', 1, 100)] })],
+    ['p3', mod('p3', { ergo: 0, recoil: 0, offers: [trader('prapor', 1, 10)] })],
+  );
+  const full = drivenGuard();
+  const done = await solve(paramsOf(lookup, { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true, guard: full }));
+  assert.equal(done.status, 'optimal', done.reason);
+  // The three endpoint searches yield once each, the table once; then the search yield of the objective itself.
+  assert.equal(full.yields, 3 + 1 + 1);
+
+  // The cancel is seen inside the endpoints: every endpoint stops, the first one's cancel is reported and the objective never runs.
+  const cut = drivenGuard({ cancelAfterYields: 2 });
+  const response = await solve(paramsOf(lookup, { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true, guard: cut }));
+  assert.equal(response.status, 'incomplete');
+  assert.equal(response.reason, 'Cancelled by user');
+  assert.equal(response.ideal_point, undefined, 'no table was used');
+  assert.deepEqual(response.selected_items, []);
+  assert.ok(cut.yields <= 3, `the objective's search never yielded (${cut.yields} yields)`);
 });
 
 test('only a qualified Precise MOA-independent table has certified endpoints: Fast, provisional-MOA and weighted requests are not admitted', async () => {

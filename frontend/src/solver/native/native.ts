@@ -267,13 +267,19 @@ export class NativeHighs {
 
   async solveStructured(lpText: string, options?: HighsOptions, extras: SolveExtras = {}): Promise<NativeResult> {
     if (typeof lpText !== 'string') throw new NativeUsageError('solveStructured expects the LP text as a string');
-    const runtime = await this.acquire();
+    let runtime = await this.acquire();
+    // Concurrent callers (Sweet Spot's payoff endpoints run at the same time) interleave at that await: another call may have discarded the instance
+    // (a trap, a heap recycle) since. Never run on a discarded instance; the check and the native call below are one synchronous step.
+    while (this.runtime !== runtime) runtime = await this.acquire();
     return this.guarded(runtime, 'solve', () => this.solveOn(runtime, lpText, options, extras));
   }
 
   async readbackModel(lpText: string, options?: HighsOptions): Promise<ModelReadbackResult> {
     if (typeof lpText !== 'string') throw new NativeUsageError('readbackModel expects the LP text as a string');
-    const runtime = await this.acquire();
+    let runtime = await this.acquire();
+    // Concurrent callers (Sweet Spot's payoff endpoints run at the same time) interleave at that await: another call may have discarded the instance
+    // (a trap, a heap recycle) since. Never run on a discarded instance; the check and the native call below are one synchronous step.
+    while (this.runtime !== runtime) runtime = await this.acquire();
     return this.guarded(runtime, 'readback', () => {
       const m = runtime.module;
       const heap = new HeapScope(m);

@@ -2,7 +2,15 @@
 //
 //   npx tsx benchmarks/phase210m2/bench.ts --out <dir> --label <before|after> --shard <k> --of <n> [--limit-ms 60000] [--profiles plain,trueErgo,trueErgoPO]
 //     [--edges integer|relaxed-first] [--split-shortcut on|off] [--guns MP5,M4A1] [--snapshot <path>] [--tolerance <abs>] [--timing on] [--warmup <gun>]
-//     [--pool <n>] [--speculation always|unsplittable|off] [--prefetch <k>] [--preempt on|off]
+//     [--pool <n>] [--speculation always|unsplittable|off] [--prefetch <k>] [--preempt on|off] [--warm on]
+//     [--payoff-concurrent on|off]
+//
+// Sweet Spot profiles (docs/stage3/sweet-spot.md): `sweetPlain` (use_tchebycheff, default weights) and `sweetTrueErgo` (use_tchebycheff + TrueErgo) run
+// through the public `solveRequest` (Precise), so the real `computePayoff` computes the payoff table on every request: no endpoint cache, a cold
+// table each time. Their lines carry the endpoint and table times (`PayoffReport.timing`), the final solve's time (total minus table), the endpoint
+// records, the ideal point and a hash of the returned build (`buildSha`, of the preset and the placements). --warm on also runs each Sweet Spot request
+// a second time through an `EndpointCache` holding the first table (what the worker does on a hit) and records `warm`. --payoff-concurrent sets
+// `configurePayoff` (default: production's, on; off is the sequential behaviour before docs/stage3/sweet-spot.md).
 //
 // --pool <n> runs Precise on a native solve pool of n worker_threads lanes (docs/stage3/parallel-pool.md; 1 = no pool, the in-thread instance);
 // --speculation and --prefetch set `PreciseContext.speculation` / `prefetchNodes` (default: production's), --preempt the pool's preemption. Lines then
@@ -26,6 +34,8 @@ import { preparePhysicalWeapon, prepareSubproblemDomain, specializeFast } from '
 import { emptyPreciseTiming, solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { ItemLookup, SolveParams } from '../../src/solver/types';
 import { configureNativePool, nativePoolStats, shutdownNativePool } from '../../src/solver/native/pool';
+import { configurePayoff, solveRequest } from '../../src/solver/solver';
+import { EndpointCache } from '../../src/solver/endpointCache';
 
 const SNAPSHOT_SHA256 = '219443b449f732f3702cd9a706e82646dfe0c2d0741900700d0d10cbd33b235c';
 
@@ -60,6 +70,15 @@ const speculation = arg('speculation', '');
 if (speculation !== '' && !['always', 'unsplittable', 'off'].includes(speculation)) throw new Error('--speculation must be always, unsplittable or off');
 const prefetchArg = arg('prefetch', '');
 const preempt = arg('preempt', 'on') === 'on';
+const warmOn = arg('warm', 'off') === 'on';
+const onOff = (name: string): boolean | undefined => {
+  const v = arg(name, '');
+  if (v === '') return undefined;
+  if (v !== 'on' && v !== 'off') throw new Error(`--${name} must be on or off`);
+  return v === 'on';
+};
+const payoffConcurrent = onOff('payoff-concurrent');
+configurePayoff(payoffConcurrent === undefined ? {} : { concurrent: payoffConcurrent });
 configureNativePool({ size: poolSize, preempt });
 
 mkdirSync(outDir, { recursive: true });
@@ -80,7 +99,50 @@ const request = (id: string, profile: string): SolveParams => ({
   // s3fix2 supplement: TrueErgo with Prevent Overswing at gear -30% (the overswing split points that decision F1 changes are only produced here).
   ...(profile === 'trueErgoPO' ? { useTrueErgo: true, preventOverswing: true, equipErgoModifier: -0.3 } : {}),
   ...(tolerance === undefined ? {} : { objectiveTolerance: tolerance }),
+  ...(profile === 'sweetPlain' ? { useTchebycheff: true } : {}),
+  ...(profile === 'sweetTrueErgo' ? { useTchebycheff: true, useTrueErgo: true } : {}),
 });
+
+const isSweet = (profile: string): boolean => profile === 'sweetPlain' || profile === 'sweetTrueErgo';
+
+/** The returned build of a public response (preset and every placement), hashed like `buildSha` of a Precise result. */
+const responseSha = (response: { selected_preset?: unknown; slot_pairs: unknown[]; objective_value: number | null }): string | null =>
+  response.objective_value === null ? null
+    : createHash('sha256').update(JSON.stringify({ preset: response.selected_preset ?? null, placements: response.slot_pairs })).digest('hex').slice(0, 16);
+
+/** One Sweet Spot request through `solveRequest` (cold: no cache), and optionally the warm repeat through an endpoint cache. */
+async function sweetLine(gun: { id: string; shortName: string }, profile: string): Promise<Record<string, unknown>> {
+  const params: SolveParams = { ...request(gun.id, profile), preciseMode: true, timeLimitMs: limitMs };
+  const started = performance.now();
+  const report = await solveRequest(params);
+  const ms = performance.now() - started;
+  const r = report.response;
+  const timing = report.payoff?.timing ?? null;
+  const line: Record<string, unknown> = {
+    gun: gun.shortName, id: gun.id, profile, label, ms, kind: r.objective_value === null ? 'none' : 'build',
+    status: r.status, certificate: r.physical_certificate, reason: r.reason ?? null, score: r.objective_value,
+    bounds: { lower: r.optimization.lower_bound, upper: r.optimization.upper_bound, gap: r.optimization.absolute_gap }, nodes: r.optimization.nodes,
+    idealPoint: r.ideal_point ?? null,
+    endpoints: report.payoff?.endpoints.map(e => ({ status: e.status, certificate: e.physical_certificate })) ?? null,
+    endpointMs: timing?.endpointMs ?? null, tableMs: timing?.tableMs ?? null, finalMs: timing === null ? null : ms - timing.tableMs,
+    buildSha: responseSha(r),
+    stats: r.final_stats === undefined ? null : { ted: r.final_stats.true_ergo_delta, ergonomics: r.final_stats.ergonomics, spend: r.final_stats.total_price, weight: r.final_stats.total_weight },
+    payoffConcurrent: payoffConcurrent ?? null,
+    pool: poolSize, poolHeapBytes: (await nativePoolStats())?.maxHeapBytes ?? null, rssBytes: process.memoryUsage().rss,
+  };
+  if (warmOn && report.payoff !== null) {
+    const cache = new EndpointCache();
+    const admitted = cache.admit(gun.id, report.payoff, 1e-5);
+    const cached = cache.lookup(gun.id, 1e-5);
+    const warmStarted = performance.now();
+    const warm = await solveRequest({ ...params, ...(cached === undefined ? {} : { idealPoint: cached }) });
+    line.warm = {
+      admitted, ms: performance.now() - warmStarted, status: warm.response.status, certificate: warm.response.physical_certificate,
+      score: warm.response.objective_value, buildSha: responseSha(warm.response),
+    };
+  }
+  return line;
+}
 
 /** The build's statistics the tolerance comparison reads (TED, ergonomics, recoil modifier sum, spend, weight). */
 const pickStats = (stats: Record<string, unknown>): Record<string, unknown> => ({
@@ -132,6 +194,18 @@ for (const { gun, profile } of plan) {
       size.countEdges = model.edges.length;
       size.countIntegers = model.stats.integers + model.stats.binaries;
     }
+  }
+  if (isSweet(profile)) {
+    const started = performance.now();
+    let line: Record<string, unknown>;
+    try {
+      line = await sweetLine(gun, profile);
+    } catch (error) {
+      line = { gun: gun.shortName, id: gun.id, profile, label, ms: performance.now() - started, kind: 'error', error: String(error).slice(0, 400) };
+    }
+    appendFileSync(outFile, `${JSON.stringify(line)}
+`);
+    continue;
   }
   {
     const params = request(gun.id, profile);

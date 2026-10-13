@@ -155,6 +155,11 @@ export interface EndpointRecord {
 export interface PayoffReport {
   idealPoint: IdealPoint;
   endpoints: readonly EndpointRecord[];
+  /**
+   * Telemetry only (read by benchmarks, never by the cache or the response): the wall time of each endpoint solve in weight order and of the
+   * whole table, milliseconds on the request clock.
+   */
+  timing?: { endpointMs: number[]; tableMs: number };
 }
 
 /** A solve response and, when this call computed the Tchebycheff payoff table, the table with its endpoint records. */
@@ -178,21 +183,117 @@ class PayoffTableError extends Error {
 
 const PAYOFF_WEIGHTS: readonly (readonly [number, number, number])[] = [[100, 0, 0], [0, 100, 0], [0, 0, 100]];
 
-/** The payoff table and the proof state of its three endpoint solves, under one guard (guard before each endpoint, a macrotask yield after it). */
+/**
+ * How the payoff table is computed (docs/stage3/sweet-spot.md). Production: concurrent endpoints. Tests and benchmarks switch with
+ * {@link configurePayoff} (`concurrent: false` is the behaviour before 2026-10-13: three endpoints one after the other).
+ */
+export interface PayoffOptions {
+  /** Run the three endpoint solves at the same time (they are independent; the result is the sequential one, see `computePayoff`). */
+  concurrent: boolean;
+  /**
+   * Test seam, never set in production: runs around each endpoint (its index in weight order) and must call `run` once, or throw instead (to delay
+   * an endpoint, fail it, or observe the order they finish in).
+   */
+  endpointWrapper?: (index: number, run: () => Promise<void>) => Promise<void>;
+}
+
+const PAYOFF_DEFAULTS: PayoffOptions = { concurrent: true };
+let payoffOptions: PayoffOptions = { ...PAYOFF_DEFAULTS };
+
+/** Override the payoff options (tests, benchmarks); `configurePayoff({})` restores production's. */
+export function configurePayoff(next: Partial<PayoffOptions>): void {
+  payoffOptions = { ...PAYOFF_DEFAULTS, ...next };
+}
+
+/** One payoff endpoint: the request with the endpoint's weights (through the test seam when one is set). */
+async function solveEndpoint(base: SolveParams, weights: readonly [number, number, number], index: number): Promise<Detailed> {
+  const wrapper = payoffOptions.endpointWrapper;
+  if (wrapper !== undefined) {
+    let out: Detailed | undefined;
+    await wrapper(index, async () => { out = await solveEndpointOnce(base, weights); });
+    if (out === undefined) throw new Error('endpointWrapper returned without running the endpoint');
+    return out;
+  }
+  return solveEndpointOnce(base, weights);
+}
+
+function solveEndpointOnce(base: SolveParams, weights: readonly [number, number, number]): Promise<Detailed> {
+  return solveDetailed({ ...base, ergoWeight: weights[0], recoilWeight: weights[1], priceWeight: weights[2] });
+}
+
+/** A guard that also stops when `abort()` says so: a later endpoint is stopped once an earlier one has failed (its answer is never read). */
+function abortableGuard(guard: RuntimeGuard, abort: () => boolean): RuntimeGuard {
+  return {
+    deadline: guard.deadline,
+    now: () => guard.now(),
+    cancelled: () => guard.cancelled() || abort(),
+    yieldMacrotask: () => guard.yieldMacrotask(),
+  };
+}
+
+/**
+ * The payoff table and the proof state of its three endpoint solves, under one guard.
+ *
+ * Concurrent (production): the guard is checked once, then the three endpoints start together and share the request's guard and deadline (one
+ * `timeLimitMs` covers the endpoints and the final search). The answer is the sequential one: each endpoint solve is independent of the others (its
+ * native solves depend only on their text and options, `docs/stage3/parallel-pool.md`), and the outcomes are read in weight order, so the error
+ * reported is the one of the first endpoint (in weight order) that failed, as the sequential loop reports it. Once an endpoint fails, the later
+ * ones are stopped (their answers could not be reported). After the table, one macrotask yield lets an out-of-band cancel be dispatched.
+ *
+ * Sequential (`concurrent: false`): the guard before each endpoint, a macrotask yield after it (the 2026-10-13 behaviour).
+ */
 async function computePayoff(params: SolveParams, guard: RuntimeGuard): Promise<PayoffReport> {
   const base: SolveParams = { ...params, useTchebycheff: false, idealPoint: undefined, guard, timeLimitMs: undefined };
   const pay: ObjectiveAxes[] = [];
   const endpoints: EndpointRecord[] = [];
-  for (const weights of PAYOFF_WEIGHTS) {
-    const stop = guardStop(guard);
-    if (stop !== null) throw new PayoffTableError(stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached, null);
-    const r = await solveDetailed({ ...base, ergoWeight: weights[0], recoilWeight: weights[1], priceWeight: weights[2] });
-    if (r.response.status !== 'optimal' || !r.axes) throw new PayoffTableError(r.response.reason ?? r.response.status, r.response);
-    pay.push(r.axes);
+  const tableStart = guard.now();
+  const endpointMs: number[] = [];
+  const stopError = (stop: 'cancelled' | 'deadline'): PayoffTableError =>
+    new PayoffTableError(stop === 'cancelled' ? PUBLIC_REASONS.cancelledByUser : PUBLIC_REASONS.timeLimitReached, null);
+  const failed = (r: Detailed): boolean => r.response.status !== 'optimal' || !r.axes;
+  const accept = (weights: readonly [number, number, number], r: Detailed): void => {
+    if (failed(r)) throw new PayoffTableError(r.response.reason ?? r.response.status, r.response);
+    pay.push(r.axes as ObjectiveAxes);
     const { status, physical_certificate, precision_resolved, model_qualification, moa_qualification } = r.response;
     endpoints.push({ weights, status, physical_certificate, precision_resolved, model_qualification, moa_qualification });
-    // The payoff solves are sub-solves of one request: yield a macrotask between them so an out-of-band cancel message is dispatched.
+  };
+  if (payoffOptions.concurrent) {
+    const stop = guardStop(guard);
+    if (stop !== null) throw stopError(stop);
+    /** The first endpoint (in weight order) known to have failed; every later one is stopped. */
+    let firstFailed = PAYOFF_WEIGHTS.length;
+    const settled = await Promise.all(PAYOFF_WEIGHTS.map(async (weights, i) => {
+      const started = guard.now();
+      const own = abortableGuard(guard, () => firstFailed < i);
+      try {
+        const r = await solveEndpoint({ ...base, guard: own }, weights, i);
+        endpointMs[i] = guard.now() - started;
+        if (failed(r)) firstFailed = Math.min(firstFailed, i);
+        return { ok: true as const, r };
+      } catch (error) {
+        endpointMs[i] = guard.now() - started;
+        firstFailed = Math.min(firstFailed, i);
+        return { ok: false as const, error };
+      }
+    }));
+    // In weight order: the first failure is the one reported (a thrown error as it was thrown, a failed endpoint as a PayoffTableError).
+    settled.forEach((outcome, i) => {
+      if (!outcome.ok) throw outcome.error;
+      accept(PAYOFF_WEIGHTS[i], outcome.r);
+    });
+    // The payoff solves are sub-solves of one request: yield a macrotask so an out-of-band cancel message is dispatched before the final solve.
     await guard.yieldMacrotask();
+  } else {
+    for (const [i, weights] of PAYOFF_WEIGHTS.entries()) {
+      const stop = guardStop(guard);
+      if (stop !== null) throw stopError(stop);
+      const started = guard.now();
+      const r = await solveEndpoint(base, weights, i);
+      endpointMs.push(guard.now() - started);
+      accept(weights, r);
+      // The payoff solves are sub-solves of one request: yield a macrotask between them so an out-of-band cancel message is dispatched.
+      await guard.yieldMacrotask();
+    }
   }
   return {
     idealPoint: {
@@ -201,6 +302,7 @@ async function computePayoff(params: SolveParams, guard: RuntimeGuard): Promise<
       zP: Math.min(...pay.map(p => p.fP)), nadP: Math.max(...pay.map(p => p.fP)),
     },
     endpoints,
+    timing: { endpointMs, tableMs: guard.now() - tableStart },
   };
 }
 
