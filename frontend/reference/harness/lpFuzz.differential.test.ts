@@ -1,6 +1,7 @@
 // Randomized model-level gates A, B and C of the physical LP against the oracle (Stage 2, phase 2.4b-2).
-// Deterministic: case k of base seed S is `generateCase(S + k)`. LP_FUZZ_CASES (default 60; the 1500 and 600 case runs of the report used LP_FUZZ_SEED=7000000) and LP_FUZZ_SEED (default 20261004) tune a run;
-// a failure prints the seed, the request and the fixture so it reproduces with `generateCase(seed)`.
+// Deterministic: draw k of base seed S is `generateCase(S + k)`. LP_FUZZ_CASES (default 60; the 1500 and 600 case runs of the report used LP_FUZZ_SEED=7000000) is the number of
+// GATED cases: draws continue past worlds that are not gated (cyclic part data is out of scope, an oracle cap) up to MAX_DRAWS. LP_FUZZ_SEED (default 20261004)
+// sets the base seed; a failure prints the seed, the request and the fixture so it reproduces with `generateCase(seed)`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { asLedgerCase, generateCase } from './lpFuzz.differential';
@@ -8,16 +9,20 @@ import { runGates, solverStats, type CaseGates } from './lpGates.differential';
 
 const CASES = Number(process.env.LP_FUZZ_CASES ?? 60);
 const BASE_SEED = Number(process.env.LP_FUZZ_SEED ?? 20261004);
+/** About half the generator's worlds are cyclic and out of scope, so four draws per gated case leave a wide margin. */
+const MAX_DRAWS = 4 * CASES;
 
 const GATES = ['gateC', 'gateBObjective', 'gateBBuild', 'gateBMaximizers', 'gateAComplete', 'gateASound', 'gateText'] as const;
 
-test(`randomized cases pass gates A, B and C (${CASES} cases from seed ${BASE_SEED})`, { timeout: 30 * 60 * 1000 }, async t => {
+test(`randomized cases pass gates A, B and C (${CASES} gated cases from seed ${BASE_SEED})`, { timeout: 30 * 60 * 1000 }, async t => {
   const failures: string[] = [];
   const results: CaseGates[] = [];
   let skippedOracle = 0;
   let empty = 0;
   const features = { ted: 0, tchebycheff: 0, moa: 0, owned: 0, presets: 0, caps: 0 };
-  for (let k = 0; k < CASES; k++) {
+  let draws = 0;
+  for (let k = 0; k < MAX_DRAWS && results.filter(r => r.notApplicable === null).length < CASES; k++) {
+    draws++;
     const seed = BASE_SEED + k;
     const fuzz = generateCase(seed);
     const c = asLedgerCase(fuzz);
@@ -40,7 +45,8 @@ test(`randomized cases pass gates A, B and C (${CASES} cases from seed ${BASE_SE
     }
   }
   const gated = results.filter(r => r.notApplicable === null);
-  t.diagnostic(`cases: ${results.length} gated of ${CASES} (${skippedOracle} skipped for an incomplete oracle, ${results.length - gated.length} not gated); empty ${empty}`);
+  t.diagnostic(`cases: ${gated.length} gated of ${draws} drawn (${skippedOracle} skipped for an incomplete oracle, ${results.length - gated.length} not gated); empty ${empty}`);
+  assert.equal(gated.length, CASES, `only ${gated.length} gated cases in ${draws} draws`);
   t.diagnostic(`features: ${JSON.stringify(features)}`);
   t.diagnostic(`passing gates: ${GATES.map(g => `${g} ${gated.filter(r => r[g].status === 'pass').length}`).join(', ')}`);
   t.diagnostic(`HiGHS solves: ${results.reduce((a, r) => a + r.solves, 0)}; solver: ${JSON.stringify(solverStats)} (a fallback follows an explicit HiGHS failure status)`);
