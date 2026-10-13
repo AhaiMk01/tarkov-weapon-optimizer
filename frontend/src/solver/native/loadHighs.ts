@@ -59,6 +59,11 @@ export function setHighsBaseUrl(baseUrl: string): void {
   defaultBaseUrl = baseUrl;
 }
 
+/** The browser default location set by {@link setHighsBaseUrl} (the native pool hands it to its workers, which load the same pinned files). */
+export function getHighsBaseUrl(): string {
+  return defaultBaseUrl;
+}
+
 type NodeGlobals = {
   process?: { versions?: { node?: string } };
   window?: unknown;

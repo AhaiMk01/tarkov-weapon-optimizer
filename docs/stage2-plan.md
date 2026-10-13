@@ -194,6 +194,16 @@ is approximate. Decisions:
    that one withheld bound); each still returns the exact optimum.
 6. Precise solves use presolve off (`PRECISE_PRESOLVE`); template conflicts are the dominant structural cost and
    the first target for exact Stage 4 reformulations (a clique-cover strengthening was measured and did not help).
+7. **Performance note: parallel native solves (owner-approved, 2026-10-13).** Precise runs its solves on a pool of pinned
+   HiGHS instances, each in its own worker (`native/pool.ts`; default `min(max(1, hardwareConcurrency - 1), 3)` lanes in a
+   browser, 1 = the in-thread path, unchanged; fallback to 1 without nested workers or when a pool worker fails to load). The
+   pipeline and decision 5a's settlement are unchanged: a node's second seed starts together with its first and the next live
+   node's first solve starts early, and an early answer is read only when the sequential pipeline asks for exactly that text and
+   those options (`physical/speculativeSolves.ts`), so status, certificate, score, bounds and the returned build are those of
+   the sequential run. Measured (`docs/stage3/parallel-pool.md`): 55 slow and control requests 551.5 s -> 358.9 s at 3 lanes;
+   172 pinned guns TrueErgo 685.5 s -> 414.0 s summed, 172 of 172 answers identical (build hash included); about 0.2 to 0.6 GiB
+   of wasm memory at 3 lanes; about a quarter of the early solves are abandoned unread (CPU, not latency). A cancel now
+   terminates the in-flight solves at once.
 
 ## Known baseline failures (before Stage 2): resolved in Phase 2.9
 

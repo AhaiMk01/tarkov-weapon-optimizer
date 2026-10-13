@@ -219,6 +219,12 @@ export interface SearchOptions<P> {
    * timeout) and is NOT finished or certified. A search with no live node left has completed and is never downgraded by this flag.
    */
   stopAtFirstWitness?: boolean;
+  /**
+   * A hint, called just before a node is evaluated, with that node and the live nodes that remain in the order the search would take them now (best
+   * first). Precise uses it to start the native solves of upcoming nodes early on a solve pool (`speculativeSolves.ts`). It must not change any
+   * result: the search reads nothing back from it, and the order nodes are evaluated and committed in is the one below, whatever it does.
+   */
+  lookahead?(current: SearchNode, upcoming: readonly SearchNode[]): void;
 }
 
 export interface SearchResult<P> {
@@ -323,9 +329,11 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     if (options.now() >= options.deadline) { stopReason = PUBLIC_REASONS.timeLimitReached; break; }
     if (nodes >= options.maxNodes) { stopReason = PUBLIC_REASONS.nodeLimitReached; break; }
     const node = live.shift() as LiveNode;
+    const handed: SearchNode = { id: node.id, interval: node.interval, bound: node.up, incumbentExact };
+    options.lookahead?.(handed, live.map(n => ({ id: n.id, interval: n.interval, bound: n.up, incumbentExact })));
     let evaluation: NodeEvaluation<P>;
     try {
-      evaluation = await options.evaluate({ id: node.id, interval: node.interval, bound: node.up, incumbentExact });
+      evaluation = await options.evaluate(handed);
     } catch (error) {
       // A native failure ends the search: it travels as a typed error, with what the search had established BEFORE it (the failing node is
       // still live, so it counts toward the upper bound; it is not counted among the completed nodes).
