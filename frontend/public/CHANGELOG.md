@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.1.1] — 2026-10-14
+
+### Fixed
+- **Guns you can't buy**: A gun that no trader sells, that has no barter or flea offer, and whose presets can't be bought either (with your current settings) used to come back as "impossible", for example the PKP for Gunsmith Part 25, the flare guns and the MSGL. The build now assumes you already own the gun: it costs nothing, and the result says "Uses your own PKP (it can't be bought)". If any version of the gun can be bought, nothing changes.
+
 ## [v3.1.0] — 2026-10-13
 
 ### Changed
