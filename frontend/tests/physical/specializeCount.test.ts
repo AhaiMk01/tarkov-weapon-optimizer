@@ -211,9 +211,9 @@ test('the preconditions are asserted on the data: path-independent candidates pa
   assert.ok(ok.slotsChecked >= 2);
   assert.equal(assertCountModelApplies(bp, domain), ok, 'memoized per domain');
 
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
-  const ebp = preparePhysicalWeapon(noBase, WEAPON);
-  const edomain = prepareSubproblemDomain(ebp, noBase, {});
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
+  const ebp = preparePhysicalWeapon(emptyRoot, WEAPON);
+  const edomain = prepareSubproblemDomain(ebp, emptyRoot, {});
   assert.throws(() => assertCountModelApplies(ebp, edomain), isCode('DOMAIN_INCONSISTENT'), 'an empty domain has no count model to check');
   const empty = specializeCount(ebp, edomain, {});
   assert.equal(empty.provedEmpty?.source, 'domain');

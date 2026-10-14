@@ -1,6 +1,6 @@
 // Stage 3 evidence, item 4 (ADR 0013 sections 4B and 4C, docs/stage3/native-evidence.md): every auxiliary column of the certified count model has a finite,
 // proved domain ("give every auxiliary with nonzero error a finite proved range"; no free column). Scanned on the emitted text with the strict independent
-// parser: every column of every certified model of all 153 nonempty pinned guns (default request), of MP5 / SR-25 / AK-74N / M4A1 under requests that
+// parser: every column of every certified model of all 170 nonempty pinned guns (default request), of MP5 / SR-25 / AK-74N / M4A1 under requests that
 // add every auxiliary family (Tchebycheff deviations, caps, MOA, TED node with gear and penalty line), and of 120 seeded worlds. Each bound is also below
 // HiGHS's `infinite_bound` (1e20), so the parser cannot turn it into infinity on read.
 import { test } from 'node:test';
@@ -43,7 +43,7 @@ const nodeOf = (lookup: ItemLookup, blueprint: ReturnType<typeof preparePhysical
   return { weightMin: weight.lo, weightMax: weight.hi };
 };
 
-test('item 4, all 153 nonempty pinned guns: every column of the certified count model (and its relaxed-first text) has a finite domain', { skip: pinnedSkip, timeout: 1_800_000 }, t => {
+test('item 4, all 170 nonempty pinned guns: every column of the certified count model (and its relaxed-first text) has a finite domain', { skip: pinnedSkip, timeout: 1_800_000 }, t => {
   const pinned = loadPinned();
   const scan: Scan = { columns: 0, auxiliary: 0, families: new Set() };
   let eligible = 0;
@@ -58,7 +58,7 @@ test('item 4, all 153 nonempty pinned guns: every column of the certified count 
     if (model.provedEmpty !== null) continue;
     scanModel(gun.shortName, model, scan);
   }
-  assert.equal(eligible, 153);
+  assert.equal(eligible, 170); // 153 before the owned receiver (2026-10-14); KS-23M and AK-50 still have an empty root required slot
   assert.ok(scan.auxiliary > 0);
   t.diagnostic(`${eligible} guns, ${scan.columns} columns (${scan.auxiliary} auxiliary; families ${[...scan.families].sort().join(', ')}), all finite; ${((performance.now() - started) / 1000).toFixed(1)} s`);
 });

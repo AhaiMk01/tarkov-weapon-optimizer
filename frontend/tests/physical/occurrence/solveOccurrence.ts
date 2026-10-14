@@ -168,7 +168,7 @@ export async function solveOccurrence(context: OccurrenceContext): Promise<Occur
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
   if (domain.empty) {
-    const detail = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`)).join('; ');
+    const detail = domain.contradictions.map(c => `root required slot ${c.rawSlotId} has no active candidate`).join('; ');
     const outcome = classifyOptimize({ mode: 'precise', moaDependent, end: 'empty', witness: false, searchFinished: true });
     return { kind: 'empty', source: 'domain', detail, outcome, summary: summary({ nodes: 0, upperBound: -Infinity, completed: true }) };
   }

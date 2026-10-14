@@ -130,7 +130,7 @@ test('hitting the node cap reports complete: false and returns only a prefix', (
   assert.equal(limited.trees.length, 5);
 });
 
-test('builds pair every tree with every accessible base; inaccessible bases yield nothing and the result is still complete', () => {
+test('builds pair every tree with every accessible base; with nothing to buy only the owned receiver is paired', () => {
   const f = fixtureOf({
     items: [{ id: 'a', offers: trader() }],
     weapons: [{ id: 'gun', offers: trader(5000), slots: [{ id: 's', allowedItemIds: ['a'] }] }],
@@ -140,9 +140,12 @@ test('builds pair every tree with every accessible base; inaccessible bases yiel
   assert.equal(both.builds.length, 4);
   assert.deepEqual([...new Set(both.builds.map(b => b.base.kind))], ['naked', 'preset']);
   assert.equal(both.complete, true);
-  const none = enumerateBuilds(f, { weapon_id: 'gun', trader_levels: { prapor: 0 }, owned_items: ['gun', 'a', 'pre'] });
-  assert.deepEqual(none.builds, []);
-  assert.equal(none.complete, true);
+  // prapor 0: neither the receiver nor the preset can be bought, so the owned naked receiver is the only base (interpretation 18)
+  const owned = enumerateBuilds(f, { weapon_id: 'gun', trader_levels: { prapor: 0 }, owned_items: ['gun', 'a', 'pre'] });
+  assert.deepEqual(owned.bases, [{ kind: 'naked' }]);
+  assert.equal(owned.builds.length, 2);
+  assert.deepEqual([...new Set(owned.builds.map(b => b.base.kind))], ['naked']);
+  assert.equal(owned.complete, true);
 });
 
 test('the build cap marks the enumeration incomplete', () => {

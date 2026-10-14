@@ -12,7 +12,7 @@ import { solve } from '../../src/solver/solver';
 import type { ItemLookup, SolveParams } from '../../src/solver/types';
 import { barter, gun, lookupOf, mod, slot, trader, WEAPON } from '../physical/lpFixtures';
 
-const LABELS: ShoppingLabels = { base: 'base', preset: 'from preset', owned: 'owned', barter: 'barter', unknownSource: 'unknown' };
+const LABELS: ShoppingLabels = { base: 'base', ownedBase: 'your own', preset: 'from preset', owned: 'owned', barter: 'barter', unknownSource: 'unknown' };
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
   weaponId: WEAPON, itemLookup: lookup, compatibilityMap: buildCompatibilityMap(WEAPON, lookup),
@@ -79,7 +79,7 @@ test('a naked receiver has no preset occurrences: every occurrence is listed', a
 test('a record without provenance is listed, never hidden as preset stock', () => {
   const bare = { id: 'x', instanceId: 'weapon_0/s:x', name: 'x', price: 10, ergonomics: 0, recoil_modifier: 0 } as ItemDetail;
   assert.equal(supplyOf(bare), null);
-  const split = partitionManifest({ selected_items: [bare], selected_preset: { id: 'p', name: 'p', price: 0, receiver_id: 'g', items: [{ itemId: 'x', count: 1 }] } });
+  const split = partitionManifest({ selected_items: [bare], selected_preset: { id: 'p', name: 'p', price: 0, receiver_id: 'g', items: [{ itemId: 'x', count: 1 }], acquisition: { source: 'offer' } } });
   assert.deepEqual([split.preset.length, split.listed.length], [0, 1]);
 });
 
@@ -124,6 +124,26 @@ test('a barter lot is charged once, on its first unit: the rider unit is listed 
   const lines = shoppingListLines(response, LABELS);
   assert.equal(lines.length, 2);
   assert.equal(lines[1], `a ×3 — Mechanic (barter) — ₽${(1200).toLocaleString()}`);
+});
+
+test('a gun nobody sells is the player’s own: the base line has no price, it is never a purchase, and the spend is the parts only', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { slots: [slot('s1', ['a'])], offers: [], presets: [{ id: 'pre', items: [], offers: [] }] }),
+    ['a', mod('a', { ergo: 5, offers: [trader('prapor', 1, 100)] })],
+  );
+  const response = await solve(paramsOf(lookup));
+  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.selected_preset?.id, WEAPON, 'the naked receiver, never the preset');
+  assert.deepEqual(response.selected_preset?.acquisition, { source: 'owned' });
+  assert.equal(response.selected_preset?.price, 0);
+  assert.equal(response.selected_preset?.source, undefined, 'no seller');
+  assert.equal(response.selected_preset?.purchase_label, undefined);
+  assert.deepEqual(shoppingListLines(response, LABELS), ['gun — your own', `a — Prapor — ₽${(100).toLocaleString()}`]);
+  assert.equal(manifestSpend(response), 100);
+  assert.equal(manifestSpend(response), response.final_stats?.total_price);
+  // a bought base is still a priced base line
+  const bought = await solve(paramsOf(lookupOf(gun(WEAPON, { slots: [slot('s1', ['a'])], offers: [trader('prapor', 1, 5000)] }), ['a', mod('a', { ergo: 5 })])));
+  assert.deepEqual(bought.selected_preset?.acquisition, { source: 'offer' });
 });
 
 test('seller labels: the flea market, a trader and a barter name their source; an unknown source says so', () => {

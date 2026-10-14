@@ -61,13 +61,30 @@ test('a plain request is one native solve and its second opinion (decision 5a), 
   assert.equal(summary.lowerBound, 25);
 });
 
-test('an empty domain is proved with no native call: no accessible base', async () => {
-  const lookup = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
+test('an empty domain is proved with no native call: a root required slot nobody can fill', async () => {
+  const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
   const result = await solvePrecise({ params: paramsOf(lookup), deadline: FAR(), solve: async () => assert.fail('no native call for an empty domain') });
   assert.equal(result.kind, 'empty');
   assert.equal(result.kind === 'empty' && result.source, 'domain');
-  assert.match(result.kind === 'empty' ? result.detail : '', /no accessible base/);
+  assert.match(result.kind === 'empty' ? result.detail : '', /root required slot s has no active candidate/);
   assert.equal(result.summary.telemetry.nativeSolves, 0);
+});
+
+test('a gun nobody sells (no offer, no preset) is built on the owned receiver at price 0 and certified', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { offers: [], slots: [slot('s', ['a', 'b'])] }),
+    ['a', mod('a', { ergo: 5, offers: [trader('prapor', 1, 700)] })],
+    ['b', mod('b', { ergo: 3, offers: [trader('prapor', 1, 100)] })],
+  );
+  const result = await solvePrecise({ params: paramsOf(lookup, { ergoWeight: 1, recoilWeight: 0, priceWeight: 0 }), deadline: FAR() });
+  const { best } = build(result);
+  assert.equal(result.outcome.status, 'optimal');
+  assert.equal(result.outcome.physical_certificate, 'certified_optimal');
+  assert.deepEqual(best.build.base, { kind: 'naked' });
+  assert.deepEqual(best.build.placements.map(p => p.itemId), ['a']);
+  assert.equal(best.stats.baseSource, 'owned');
+  assert.equal(best.stats.basePrice, 0);
+  assert.equal(best.stats.spend, 700, 'only the part is paid');
 });
 
 test('a request the model text proves false is empty with no native call: an included item that is nowhere', async () => {
@@ -238,7 +255,15 @@ test('a stash is honoured: owned copies supply the installed parts at no cost, a
   const owned = await solvePrecise({ params: paramsOf(lookup, { ownedItems: ['a', 'a'] }), deadline: FAR() });
   assert.equal(build(owned).best.stats.modSpend, 0);
   assert.equal(build(owned).best.stats.spend, 5000, 'only the receiver is paid');
-  const noReceiver = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s1', ['a'])] }), ['a', mod('a')]);
-  const none = await solvePrecise({ params: paramsOf(noReceiver, { ownedItems: [WEAPON, 'a'] }), deadline: FAR(), solve: async () => assert.fail('no native call') });
-  assert.equal(none.kind, 'empty');
+  // a receiver nobody sells is the player's own whether or not the stash lists it; the stash copy of a is still used for a
+  const noReceiver = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s1', ['a'])] }), ['a', mod('a', { ergo: 5, offers: [trader('prapor', 1, 700)] })]);
+  for (const ownedItems of [['a'], [WEAPON, 'a']]) {
+    const result = await solvePrecise({ params: paramsOf(noReceiver, { ergoWeight: 1, ownedItems }), deadline: FAR() });
+    assert.equal(build(result).best.stats.baseSource, 'owned');
+    assert.equal(build(result).best.stats.spend, 0, `${ownedItems.join(',')}: owned receiver and owned part`);
+  }
+  // a receiver with a legal offer is still bought even when the stash lists its id
+  const listed = await solvePrecise({ params: paramsOf(lookup, { ownedItems: [WEAPON] }), deadline: FAR() });
+  assert.equal(build(listed).best.stats.baseSource, 'offer');
+  assert.equal(build(listed).best.stats.basePrice, 5000);
 });

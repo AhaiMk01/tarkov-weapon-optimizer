@@ -101,7 +101,7 @@ test('Part 22 (M4A1): the required REAP-IR is barter-only, so the task is certif
   assert.ok(withBarters.selected_item_ids?.includes(REAP_IR));
 });
 
-test('Part 25 (PKP): no offer, barter or preset makes the receiver accessible, so the task is certified empty with barters on or off', { skip }, async () => {
+test('Part 25 (PKP): no offer, barter or preset can be bought, so the build uses an owned PKP at price 0 (owner decision 2026-10-14), certified, barters on or off', { skip, timeout: 300_000 }, async () => {
   const task = tasks.find(t => t.task_name === NO_BASE)!;
   const pkp = lookup[task.weapon_id] as GunLookupEntry;
   assert.equal(pkp.type, 'gun');
@@ -110,9 +110,15 @@ test('Part 25 (PKP): no offer, barter or preset makes the receiver accessible, s
   assert.ok(pkp.all_presets.every(p => p.offers.length === 0 && !p.purchasable), 'none of them has an offer');
   assert.deepEqual(pkp.presets, []);
   for (const barters of [false, true]) {
-    const r = await solve(paramsOf(task, barters));
-    assert.equal(r.status, 'infeasible', `barters ${barters}`);
-    assert.equal(r.physical_certificate, 'certified_infeasible', `barters ${barters}`);
-    assert.equal(r.selected_preset ?? null, null, 'no free receiver is invented');
+    const params = paramsOf(task, barters);
+    const r = await solve(params);
+    assertCertifiedBuild(task, params, r);
+    const base = r.selected_preset!;
+    assert.equal(base.id, task.weapon_id, `barters ${barters}: the naked receiver, never a preset`);
+    assert.deepEqual(base.acquisition, { source: 'owned' }, `barters ${barters}`);
+    assert.equal(base.price, 0, `barters ${barters}`);
+    assert.equal(base.source, undefined, `barters ${barters}: no seller`);
+    const spend = r.selected_items.reduce((sum, item) => sum + item.price, 0);
+    assert.equal(r.final_stats!.total_price, spend, `barters ${barters}: the spend is the parts only`);
   }
 });

@@ -131,7 +131,7 @@ export interface RowFamilyRecord {
 }
 
 const FAMILIES: readonly Omit<RowFamilyRecord, 'count' | 'vacuous' | 'constructionError' | 'allowance'>[] = [
-  { id: 'base_choice', prefix: 'base_sum', keyedBy: '-', adr: 'ADR 0002 principle 2; ADR 0013 4A emit 1', description: 'exactly one accessible base; an empty base set is a domain contradiction, never a free fallback' },
+  { id: 'base_choice', prefix: 'base_sum', keyedBy: '-', adr: 'ADR 0002 principle 2; ADR 0013 4A emit 1', description: 'exactly one accessible base; with no base to buy, the owned receiver at price 0 is the only one' },
   { id: 'slot', prefix: 'slot_<s>', keyedBy: 'physical slot', adr: 'ADR 0003 principle 3', description: 'slot mutex and parent activation: occupancy(s) <= x_owner (root: <= 1); the mutex is implied by activation for mod-owned slots' },
   { id: 'required_occupancy', prefix: 'req_<s>', keyedBy: 'physical slot', adr: 'ADR 0003 principle 3; ADR 0013 4A emit 2', description: 'required occupancy: root slot = 1, mod-owned slot = x_owner' },
   { id: 'required_empty', prefix: 'reqempty_<s>', keyedBy: 'physical slot', adr: 'ADR 0003 principle 3', description: 'a required slot no active candidate can fill forces its owner off (x_owner = 0)' },
@@ -517,7 +517,7 @@ class Specializer {
 
   private emitBase(): void {
     const terms: [string, number][] = this.domain.bases.map((_, b) => [baseName(b), 1]);
-    this.emit('base_choice', 'base_sum', terms, '=', 1, 'no accessible base');
+    this.emit('base_choice', 'base_sum', terms, '=', 1, 'exactly one base');
   }
 
   private emitSlots(): void {
@@ -996,7 +996,7 @@ function emptyObjective(): ObjectiveMeta {
 }
 
 function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain): SpecializedModel {
-  const reasons = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`));
+  const reasons = domain.contradictions.map(c => `root required slot ${c.rawSlotId} has no active candidate`);
   const lp = ['Maximize', '  obj: total_obj', 'Subject To', '  empty_domain: zero_col >= 1', 'Bounds', '  total_obj = 0', '  zero_col = 0', 'End'].join('\n');
   const none = (): null => null;
   const families = FAMILIES.map(f => ({ ...f, count: f.id === 'contradiction' ? 1 : 0, vacuous: 0, constructionError: 0, allowance: 0 }));

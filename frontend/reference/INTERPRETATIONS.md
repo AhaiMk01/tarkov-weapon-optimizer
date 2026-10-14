@@ -31,6 +31,7 @@ unless stated.
 | 15 | **Decided.** Naked receiver trader-only matches production; preset ammunition stays supply-only; camora ammunition is excluded from the build domain | 2026-10-04 | Decision map #28 (loaded ammunition is out of scope); 5 guns, 28 slot records, 39 templates (`bridge/toFixture.ammo.test.ts`) |
 | 16 | Accepted. Matches production | 2026-10-04 | `capped_ergo` (the first clamp) unless `use_true_ergo` selects `ted_axis`; F11, F12 cases |
 | 17 | **New.** Payoff-table admissibility rule | 2026-10-04 | `oracle/payoff.test.ts`; F11-payoff-table-admissibility-tied-endpoints |
+| 18 | **Decided.** Owned receiver when no base can be bought | 2026-10-14 | 19 of 172 pinned guns have no accessible base under the benchmark request (PKP: Gunsmith Part 25); `docs/adr/amendments/2026-10-14-owned-base-fallback.md` |
 
 How this file is used:
 
@@ -61,6 +62,7 @@ How this file is used:
 | 15 | Bridge: naked receiver offers, preset ammunition, camora ammunition (excluded) | bridge tests |
 | 16 | The objective's ergonomics axis is the first-clamp ergonomics, or TED when `use_true_ergo` | F11, F12 |
 | 17 | The Tchebycheff payoff table is an input, checked for exact admissibility | `F11-payoff-table-admissibility-tied-endpoints` |
+| 18 | With no base to buy, the naked receiver is the player's own at price 0 | F05 |
 
 ## 1. Barter lots: offers are bought in whole lots
 
@@ -359,3 +361,23 @@ These are mapping choices of `bridge/toFixture.ts` (see `bridge/README.md`), not
   price, so there are exactly two admissible tables, a table from a non-optimal build is rejected, and the Tchebycheff optimum differs
   under the two tables: build m under the first, build a under the second); `oracle/payoff.test.ts` (axis payoffs, joint choice, request
   constraints, TED frame, single build, empty domain, incomplete enumeration, input errors, exact decoding).
+
+## 18. With no base to buy, the naked receiver is the player's own at price 0
+
+* **Status.** Decided (owner, 2026-10-14). Recorded in `docs/adr/amendments/2026-10-14-owned-base-fallback.md`. It replaces the
+  "no accessible base means infeasible" reading of ADR 0002 principle 5 and ADR 0013 section 4A for this one situation.
+* **Rule.** The purchasable bases are the naked receiver when it has a legal offer and every preset of this receiver with a legal offer
+  (legal: interpretation 10, the request's trader levels, flea, barters and player level). When that set is empty, the accessible bases
+  are exactly one: the naked receiver, owned by the player, price 0. When it is not empty nothing changes. A preset is never assumed owned.
+  The stash (`owned_items`) plays no part: it never grants a base, and the owned receiver does not use up a stash copy of the receiver id.
+* **Where it lives.** `receiverOwned`, `accessibleBases`, `basePriceOf` and `acquire` (`base.owned`) in `oracle/acquisition.ts`; the base
+  check in `oracle/validate.ts` accepts the naked receiver with no legal offer only when `receiverOwned` holds.
+* **ADR silence.** None: ADR 0002 and ADR 0013 said the opposite (no free fallback). The owner changed the rule because a gun that cannot be
+  bought (PKP, Gunsmith Part 25) could never be built, though a player who has one can build it.
+* **Production.** Same rule, implemented separately in `prepareSubproblemDomain` (`domain.ts`, a base `{ kind: 'naked', owned: true }`)
+  and `validate.ts` (`baseSource: 'owned'`).
+* **Exercised by.** `F05-owned-receiver-no-offer-no-preset`, `F05-owned-receiver-not-used-when-preset-buyable`,
+  `F05-owned-receiver-not-used-when-naked-buyable`, `F05-owned-receiver-required-slot-conflict-budget`,
+  `F05-owned-receiver-stash-of-receiver-id` and the three earlier F05 cases whose expectation changed
+  (`F05-no-legal-base-owned-receiver-grants-nothing`, `F05-no-legal-base-preset-of-another-weapon`,
+  `F05-stored-zero-price-receiver-is-not-an-offer`).

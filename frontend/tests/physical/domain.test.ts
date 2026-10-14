@@ -210,21 +210,48 @@ test('a preset that supplies an item never forces the preset: a legal standalone
 // Accessible bases
 // ---------------------------------------------------------------------------------------------
 
-test('the naked receiver is a base only with a legal trader offer; owned stock never grants one; there is no free fallback', () => {
+const OWNED_BASE = { kind: 'naked', owned: true, offerIndexes: [], cheapestPrice: 0 };
+
+test('with no legal offer and no preset the receiver is owned: one base at price 0, whatever the stash holds', () => {
   const noOffer = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['m'])] }), ['m', mod('m')]);
-  const { domain } = prepare(noOffer, { ownedItems: [WEAPON, 'm'] });
-  assert.equal(domain.empty, true);
-  assert.deepEqual(domain.bases, []);
-  assert.deepEqual(domain.contradictions.map(c => c.code), ['NO_ACCESSIBLE_BASE']);
+  for (const ownedItems of [undefined, [WEAPON], [WEAPON, WEAPON, 'm']]) {
+    const { bp, domain } = prepare(noOffer, ownedItems === undefined ? {} : { ownedItems });
+    assert.equal(domain.empty, false);
+    assert.deepEqual(domain.bases, [OWNED_BASE]);
+    assert.deepEqual(domain.contradictions, []);
+    assert.equal(domain.occActive[idOf(bp, 'weapon_0/s:m')], 1);
+  }
 });
 
-test('a disabled or too-low trader leaves the receiver without a base', () => {
+test('a disabled or too-low trader makes the receiver owned only while no base can be bought', () => {
   const lookup = lookupOf(gun(WEAPON, { offers: [trader('mechanic', 3, 5000)], slots: [slot('s', ['m'])] }), ['m', mod('m')]);
-  assert.equal(prepare(lookup, { traderLevels: { mechanic: 2 } }).domain.empty, true);
-  assert.equal(prepare(lookup, { traderLevels: { mechanic: 0 } }).domain.empty, true);
+  assert.deepEqual(prepare(lookup, { traderLevels: { mechanic: 2 } }).domain.bases, [OWNED_BASE]);
+  assert.deepEqual(prepare(lookup, { traderLevels: { mechanic: 0 } }).domain.bases, [OWNED_BASE]);
   const ok = prepare(lookup, { traderLevels: { mechanic: 3 } });
   assert.equal(ok.domain.empty, false);
-  assert.deepEqual(ok.domain.bases.map(b => [b.kind, b.cheapestPrice]), [['naked', 5000]]);
+  assert.deepEqual(ok.domain.bases.map(b => [b.kind, b.cheapestPrice, b.kind === 'naked' && b.owned]), [['naked', 5000, false]]);
+});
+
+test('a buyable preset stops the owned receiver, and a preset is never owned', () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { offers: [], slots: [slot('s', ['m'])], presets: [{ id: 'p1', items: [{ itemId: 'm', count: 1 }], offers: [trader('skier', 3, 9000)] }] }),
+    ['m', mod('m')],
+  );
+  // skier 3 sells the preset: it is the only base, the naked receiver is neither bought nor owned
+  const sold = prepare(lookup, { traderLevels: { skier: 3 } }).domain;
+  assert.deepEqual(sold.bases.map(b => b.kind), ['preset']);
+  // skier 2 cannot buy it: nothing can be bought, so the naked receiver is owned and the preset is not a base
+  const locked = prepare(lookup, { traderLevels: { skier: 2 }, ownedItems: [WEAPON, 'p1'] }).domain;
+  assert.deepEqual(locked.bases, [OWNED_BASE]);
+  assert.deepEqual(locked.templates[locked.blueprint.templateIndexOf('m')].presetSupply, []);
+});
+
+test('an owned receiver does not hide a root required slot nobody can fill', () => {
+  const lookup = lookupOf(gun(WEAPON, { offers: [], slots: [slot('r', ['m'], true)] }), ['m', mod('m', { offers: [] })]);
+  const { domain } = prepare(lookup);
+  assert.equal(domain.empty, true);
+  assert.deepEqual(domain.bases, [OWNED_BASE]);
+  assert.deepEqual(domain.contradictions.map(c => c.code), ['ROOT_REQUIRED_SLOT_EMPTY']);
 });
 
 test('a preset alone can be the accessible base; the naked receiver is then not a base', () => {

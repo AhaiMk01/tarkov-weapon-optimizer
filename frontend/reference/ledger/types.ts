@@ -65,6 +65,8 @@ export interface StatCheck {
   values: Partial<Record<StatName, string>>;
   /** Overswing strength is nonzero exactly when TED < 0 (the only normative overswing statement). */
   overswingNonzero?: boolean;
+  /** How the base is supplied: bought (`offer`) or the player's own receiver (`owned`, interpretation 18). */
+  base?: 'offer' | 'owned';
 }
 
 /**

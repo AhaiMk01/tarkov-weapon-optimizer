@@ -7,7 +7,7 @@
 // conflicts, includes and excludes, availability and quantity caps, base accessibility and every
 // request hard cap. Violation codes are stable strings.
 
-import { acquire, baseOffer } from './acquisition';
+import { acquire, baseOffer, receiverOwned } from './acquisition';
 import type { Placement, ReferenceBuild } from './build';
 import { ROOT_INSTANCE_ID } from './constants';
 import type { ReferenceFixture, ReferenceRequest } from './domain';
@@ -81,7 +81,8 @@ export function inspectBuild(fixture: ResolvedFixture, request: ResolvedRequest,
     if (!preset) push('BASE_UNKNOWN_PRESET', build.base.presetId);
     else if (preset.weaponId !== weapon.id) push('BASE_WRONG_WEAPON', `${preset.id} is built on ${preset.weaponId}`);
     else if (!baseOffer(fixture, request, build.base)) push('BASE_INACCESSIBLE', `preset ${preset.id} has no legal offer`);
-  } else if (!baseOffer(fixture, request, build.base)) {
+  } else if (!baseOffer(fixture, request, build.base) && !receiverOwned(fixture, request)) {
+    // The naked receiver with no legal offer is accepted only as the owned receiver: nothing at all can be bought (interpretation 18).
     push('BASE_INACCESSIBLE', `receiver ${weapon.id} has no legal offer`);
   }
 

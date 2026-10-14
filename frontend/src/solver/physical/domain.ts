@@ -12,8 +12,11 @@
  *    preset, and the owned stock N_owned(i). A template with no legal standalone offer is capped by preset plus owned
  *    supply (`supply: 'capped'`), not dropped, and is never priced by a stand-in; only a template whose supply is zero
  *    everywhere (`supply: 'none'`) can never be installed and is masked.
- *  - Accessible bases: the naked receiver when it has a legal offer, and every preset with a legal offer. Owned stock
- *    never grants a base and there is no free fallback: an empty base set is a recorded contradiction.
+ *  - Accessible bases: the naked receiver when it has a legal offer, and every preset with a legal offer. When neither exists
+ *    (the gun cannot be bought at all under the request's market settings), the naked receiver is the player's own: one base
+ *    `{ kind: 'naked', owned: true }` at price 0 (owner decision 2026-10-14, docs/adr/amendments/2026-10-14-owned-base-fallback.md).
+ *    Presets are never assumed owned, and when any base can be bought there is no fallback. The stash (`owned_items`) plays no
+ *    part in this: it never grants a base, and the fallback base does not draw on a stash copy of the receiver id.
  *  - Fixed point over the path-qualified tree (two linear passes, children are always numbered after their owner):
  *    bottom-up, an occurrence is *viable* when it survives the filters and every required slot it owns still has a
  *    viable candidate (an empty required slot, or one whose candidates are all gone, forces its owner off); top-down,
@@ -44,7 +47,7 @@ export const InactiveReason = {
   IMPOSSIBLE_OWNER: 4,
   /** Itself viable, but an ancestor is not. */
   UNREACHABLE: 5,
-  /** Would be active, but the domain is empty (no accessible base, or a root required slot cannot be filled). */
+  /** Would be active, but the domain is empty (a root required slot cannot be filled). */
   DOMAIN_EMPTY: 6,
 } as const;
 
@@ -62,15 +65,21 @@ export interface SubproblemRequest extends MarketInput {
   ownedItems?: readonly string[] | null;
 }
 
-/** A root required slot that cannot be filled, or no way to buy the receiver. Never an input failure. */
-export type DomainContradiction =
-  | { code: 'NO_ACCESSIBLE_BASE' }
-  | { code: 'ROOT_REQUIRED_SLOT_EMPTY'; slot: number; rawSlotId: string };
+/**
+ * A root required slot that cannot be filled. Never an input failure. (There is always a base: with nothing to buy, the receiver is the
+ * player's own, so "no accessible base" is not a contradiction.)
+ */
+export type DomainContradiction = { code: 'ROOT_REQUIRED_SLOT_EMPTY'; slot: number; rawSlotId: string };
 
 export type AccessibleBase =
   | {
       kind: 'naked';
-      /** Legal offers of the receiver, as indexes into `GunStats.offers`. */
+      /**
+       * True for the owned-receiver fallback: no legal offer of the receiver and no preset with a legal offer, so the player is taken to own
+       * the receiver. It is then the only base, with no offers and price 0.
+       */
+      owned: boolean;
+      /** Legal offers of the receiver, as indexes into `GunStats.offers` (empty when owned). */
       offerIndexes: readonly number[];
       cheapestPrice: number;
     }
@@ -135,7 +144,10 @@ export interface SubproblemDomain {
   /** Occurrence counts per {@link InactiveReason} code (index 0 counts the active item occurrences). */
   readonly reasonCounts: readonly number[];
 
-  /** Accessible bases in order: the naked receiver (if legal) first, then presets in `all_presets` order. */
+  /**
+   * Accessible bases in order: the naked receiver (if legal) first, then presets in `all_presets` order; or, when none of them can be bought,
+   * exactly one owned naked receiver at price 0.
+   */
   readonly bases: readonly AccessibleBase[];
   /** Per template index (aligned with the blueprint's template arrays). */
   readonly templates: readonly TemplateAcquisition[];
@@ -167,12 +179,12 @@ export function prepareSubproblemDomain(
   const excludeCategories = new Set(request.excludeCategories ?? []);
   const weapon = lookup[blueprint.weaponId] as GunLookupEntry;
 
-  // --- accessible bases: legal offers only, no owned receiver, no free fallback ---
+  // --- accessible bases: legal offers; the owned receiver only when nothing can be bought ---
   const bases: AccessibleBase[] = [];
   {
     const offers = weapon.stats.offers;
     const legal = legalOfferIndexes(offers, fleaGateOf(weapon.stats), market);
-    if (legal.length > 0) bases.push({ kind: 'naked', offerIndexes: legal, cheapestPrice: cheapestPrice(offers, legal)! });
+    if (legal.length > 0) bases.push({ kind: 'naked', owned: false, offerIndexes: legal, cheapestPrice: cheapestPrice(offers, legal)! });
   }
   for (const preset of blueprint.presets) {
     const info = weapon.all_presets[preset.lookupIndex];
@@ -187,6 +199,7 @@ export function prepareSubproblemDomain(
       supply: preset.supply,
     });
   }
+  if (bases.length === 0) bases.push({ kind: 'naked', owned: true, offerIndexes: [], cheapestPrice: 0 });
 
   // --- per-template acquisition and template-level masks ---
   const T = blueprint.templateCount;
@@ -254,9 +267,8 @@ export function prepareSubproblemDomain(
     else reason[v] = InactiveReason.IMPOSSIBLE_OWNER;
   }
 
-  // --- contradictions: no base, or a root required slot nobody can fill ---
+  // --- contradictions: a root required slot nobody can fill ---
   const contradictions: DomainContradiction[] = [];
-  if (bases.length === 0) contradictions.push({ code: 'NO_ACCESSIBLE_BASE' });
   for (let s = occSlotStart[0]; s < occSlotStart[1]; s++) {
     if (!blueprint.slotRequired(s)) continue;
     let any = false;

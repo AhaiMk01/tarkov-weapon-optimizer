@@ -172,9 +172,9 @@ test('refusals and degenerate inputs: a foreign domain, an empty domain, a non-f
   assert.throws(() => specializeFast(blueprint, domain, { useTchebycheff: true }), /ideal point/);
   const other = preparePhysicalWeapon(lookup, WEAPON);
   assert.throws(() => specializeFast(other, domain, {}), /was not prepared from the blueprint/);
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
-  const bp = preparePhysicalWeapon(noBase, WEAPON);
-  const empty = specializeFast(bp, prepareSubproblemDomain(bp, noBase, {}), {});
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
+  const bp = preparePhysicalWeapon(emptyRoot, WEAPON);
+  const empty = specializeFast(bp, prepareSubproblemDomain(bp, emptyRoot, {}), {});
   assert.equal(empty.provedEmpty?.source, 'domain');
   assert.equal(empty.edges.length, 0);
   assert.equal(empty.lp(), empty.lpBase);

@@ -68,7 +68,7 @@ test('copy bounds: the exact maximum over trees on an acyclic graph, far below t
 });
 
 test('an empty domain has no template graph', () => {
-  const lookup = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
+  const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
   const blueprint = preparePhysicalWeapon(lookup, WEAPON);
   const domain = prepareSubproblemDomain(blueprint, lookup, {});
   assert.equal(domain.empty, true);

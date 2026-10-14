@@ -108,12 +108,11 @@ test('an empty required root slot proves the model empty, and the one-row text i
   assert.equal(solution.status, 'Infeasible');
 });
 
-test('no accessible base proves the model empty (no free fallback)', async () => {
+test('with no base to buy the owned receiver is the one base: the model is not empty', async () => {
   const lookup = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a', { ergo: 5 })]);
   const { model, solution } = await solve(lookup, WEAPON, ergoOnly);
-  assert.equal(model.provedEmpty?.source, 'domain');
-  assert.deepEqual(model.provedEmpty?.reasons, ['no accessible base']);
-  assert.equal(solution.status, 'Infeasible');
+  assert.equal(model.provedEmpty, null);
+  assert.equal(solution.status, 'Optimal');
 });
 
 test('a required root slot whose only candidate is unavailable is empty because no candidate survives the masks', async () => {

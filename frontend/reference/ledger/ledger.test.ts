@@ -113,6 +113,10 @@ for (const c of LEDGER) {
         if (check.overswingNonzero !== undefined) {
           assert.equal(stats.overswingPercent.n !== 0n, check.overswingNonzero, `${check.label}: overswing nonzero`);
         }
+        if (check.base !== undefined) {
+          const base = stats.acquisition.base;
+          assert.equal(base.owned ? 'owned' : base.offer !== null ? 'offer' : null, check.base, `${check.label}: base source`);
+        }
       }
     }
   });

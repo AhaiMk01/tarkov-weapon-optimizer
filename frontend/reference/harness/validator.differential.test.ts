@@ -175,6 +175,7 @@ test('(d) the hand-derived builds of the ledger: rejections with exactly their c
         if (actual !== value) problems.push(`${c.id} stats "${sc.label}" ${name}: expected ${value}, production ${actual}`);
       }
       if (sc.overswingNonzero !== undefined && (stats.exact.overswingPercent !== '0') !== sc.overswingNonzero) problems.push(`${c.id} stats "${sc.label}": overswing nonzero should be ${sc.overswingNonzero}`);
+      if (sc.base !== undefined && stats.baseSource !== sc.base) problems.push(`${c.id} stats "${sc.label}": base source ${String(stats.baseSource)}, expected ${sc.base}`);
     }
     for (const pc of expected.provenance ?? []) {
       provenance++;

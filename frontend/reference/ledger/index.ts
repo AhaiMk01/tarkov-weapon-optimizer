@@ -31,7 +31,7 @@ export const REQUIRED_SUBCASES: Readonly<Record<Family, readonly string[]>> = {
   2: ['empty_root_required_slot', 'empty_conditional_slot_owner_off', 'unavailable_candidates', 'conditional_slot_surviving_candidate', 'independent_required_checks', 'market_gating', 'barter_gating'],
   3: ['descendant_removal', 'fixed_point_removal', 'alternative_parents', 'self_loop', 'ancestor_loop', 'indexed_orphan_removal', 'memoization_context'],
   4: ['include_item', 'include_category', 'category_group_structure', 'exclude_item', 'exclude_category', 'impossible_include', 'include_exceeds_capacity', 'magazine_boundary', 'sighting_boundary', 'recoil_final_cap_conversion', 'recoil_cap_nonpositive_denominator', 'other_hard_caps'],
-  5: ['inaccessible_naked_accessible_preset', 'no_legal_base', 'no_invented_zero_receiver', 'expensive_legal_offer', 'cheapest_legal_offer', 'preset_only_item_real_spend'],
+  5: ['inaccessible_naked_accessible_preset', 'no_legal_base', 'no_invented_zero_receiver', 'expensive_legal_offer', 'cheapest_legal_offer', 'preset_only_item_real_spend', 'owned_receiver_fallback'],
   6: ['preset_count_gt_one', 'multiple_copies', 'stripping', 'retention', 'base_cost_once', 'no_preset_monopoly'],
   7: ['monotonicity_baseline', 'spend_nonincrease', 'feasible_set_expansion', 'max_score_nondecrease', 'optimum_spend_may_rise'],
   8: ['positive_replacement_barrel', 'optional_fallback', 'required_fallback', 'missing_coi', 'nonpositive_coi', 'zero_intrinsic_coi', 'signed_accuracy', 'negative_suppressor', 'constant_moa_exceeds_cap', 'high_divergence'],

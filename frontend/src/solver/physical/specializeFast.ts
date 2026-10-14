@@ -2,9 +2,9 @@
  * The Fast (approximate) model on the physical domain (Phase 2.4c, ADR 0013 sections 6 and 7, ADR 0010 sections 1 and 3).
  *
  * `specializeFast(blueprint, domain, request)` emits ONE mixed-integer program of template-level counts as CPLEX-LP text. It reads exactly the
- * domain Precise reads (`SubproblemDomain`: the same active occurrences, accessible bases with no free base, count-bearing preset supply, owned
- * stock, supply caps, exact whole-lot offers) and the same request (every cap, the MOA rows, the weighted or augmented Tchebycheff objective in
- * the oracle frame); only PLACEMENT is approximated. The model has a few thousand columns on every pinned gun (M4A1: 588 templates, 5,569
+ * domain Precise reads (`SubproblemDomain`: the same active occurrences, accessible bases (the owned receiver at price 0 only when no base can
+ * be bought), count-bearing preset supply, owned stock, supply caps, exact whole-lot offers) and the same request (every cap, the MOA rows,
+ * the weighted or augmented Tchebycheff objective in the oracle frame); only PLACEMENT is approximated. The model has a few thousand columns on every pinned gun (M4A1: 588 templates, 5,569
  * candidate edges), not one per occurrence (151,479).
  *
  * SINGLE COPY (owner decision 2c, `SpecializeRequest.singleCopy`). With the option on, every template's copy bound is capped at one
@@ -287,7 +287,7 @@ export interface CountRowFamilyRecord {
 
 /** The row families of the count model, matched by row name (the first match wins). */
 const COUNT_FAMILIES: readonly { id: CountRowFamilyId; test: RegExp; prefix: string; adr: string; description: string }[] = [
-  { id: 'base_choice', test: /^base_sum$/, prefix: 'base_sum', adr: 'ADR 0002 principle 2', description: 'exactly one accessible base; an empty base set is a contradiction, never a free fallback' },
+  { id: 'base_choice', test: /^base_sum$/, prefix: 'base_sum', adr: 'ADR 0002 principle 2', description: 'exactly one accessible base; with no base to buy, the owned receiver at price 0 is the only one' },
   { id: 'parentage', test: /^in_\d+$/, prefix: 'in_<t>', adr: 'research 5.1', description: 'n_t = the edges that install t: every installed copy has exactly one parent slot' },
   { id: 'required_occupancy', test: /^req_\d+$/, prefix: 'req_<s>', adr: 'ADR 0003 principle 3; research 5.1', description: 'required occupancy: root slot = 1, mod-owned slot = n_owner' },
   { id: 'slot', test: /^slot_\d+$/, prefix: 'slot_<s>', adr: 'ADR 0003 principle 3; research 5.1', description: 'slot capacity: occupancy(raw slot id) <= n_owner (root: <= 1), one child per physical slot' },
@@ -692,7 +692,7 @@ class FastSpecializer {
   // --- structure ------------------------------------------------------------------------------
 
   private emitBase(): void {
-    this.emit('base_sum', this.domain.bases.map((_, b) => [baseName(b), 1] as [string, number]), '=', 1, 'no accessible base');
+    this.emit('base_sum', this.domain.bases.map((_, b) => [baseName(b), 1] as [string, number]), '=', 1, 'exactly one base');
   }
 
   private emitStructure(): void {
@@ -1212,7 +1212,7 @@ class FastSpecializer {
 // ---------------------------------------------------------------------------------------------
 
 function emptyModel(blueprint: PhysicalBlueprint, domain: SubproblemDomain, singleCopy: boolean, certified: boolean): FastModel {
-  const reasons = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`));
+  const reasons = domain.contradictions.map(c => `root required slot ${c.rawSlotId} has no active candidate`);
   const lp = ['Maximize', '  obj: total_obj', 'Subject To', '  empty_domain: zero_col >= 1', 'Bounds', '  total_obj = 0', '  zero_col = 0', 'End'].join('\n');
   const graph: TemplateGraph = {
     templateCount: blueprint.templateCount,

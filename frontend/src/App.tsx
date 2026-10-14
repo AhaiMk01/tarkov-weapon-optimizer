@@ -855,6 +855,7 @@ function AppContent({
   /** The words of the copied list. The list keeps the per-occurrence provenance (preset / owned / bought) and the true spend. */
   const shoppingLabels = {
     base: t('ui.shopping_base'),
+    ownedBase: t('ui.owned_receiver_short'),
     preset: t('ui.acq_preset'),
     owned: t('ui.acq_owned'),
     barter: t('ui.barter_badge_long'),

@@ -9,8 +9,9 @@
  * (`presetSupply.ts`), `owned_items` validation (`ownedItems.ts`) and the receiver instance id (`blueprint.ts`).
  *
  * What is checked (violation codes are the reference's, so a differential comparison is direct):
- *  - base: a known preset of this receiver (`BASE_UNKNOWN_PRESET`, `BASE_WRONG_WEAPON`) with a legal offer (`BASE_INACCESSIBLE`); there is no
- *    free base and owned stock never grants a receiver or a preset;
+ *  - base: a known preset of this receiver (`BASE_UNKNOWN_PRESET`, `BASE_WRONG_WEAPON`) with a legal offer (`BASE_INACCESSIBLE`), or the naked
+ *    receiver with a legal offer; when neither the receiver nor any of its presets has a legal offer, the naked receiver is the player's own
+ *    at price 0 (owner decision 2026-10-14) and a preset is still inaccessible. Owned stock never grants a receiver or a preset;
  *  - instances: a 1-to-1 `childInstanceId` bijection (`DUPLICATE_INSTANCE_ID`), known parents (`UNKNOWN_PARENT_INSTANCE`), rootedness at the
  *    receiver (`UNROOTED_PLACEMENT`: orphans and floating cycles), known items (`UNKNOWN_ITEM`);
  *  - slots: the parent declares the slot (`UNKNOWN_SLOT`), the slot allows the item (`ITEM_NOT_ALLOWED_IN_SLOT`), at most one child per
@@ -130,6 +131,8 @@ export interface ClaimedAcquisition {
 export interface PhysicalBuildClaims {
   spend?: number;
   basePrice?: number;
+  /** How the base is supplied: bought (`offer`) or the player's own receiver (`owned`, only when no base can be bought). */
+  baseSource?: 'offer' | 'owned';
   modSpend?: number;
   acquisition?: readonly ClaimedAcquisition[];
 }
@@ -245,8 +248,13 @@ export interface PhysicalBuildStats {
   moa: number;
   magazineCapacity: number;
   sightingRange: number;
-  /** The cheapest legal base lot, or null when the base is inaccessible (the spend then counts 0 for it). */
+  /** The cheapest legal base lot, 0 for the owned receiver, or null when the base is inaccessible (the spend then counts 0 for it). */
   basePrice: number | null;
+  /**
+   * How the base is supplied: `offer` (bought at `basePrice`), `owned` (no legal offer of the receiver and none of any of its presets, so the
+   * naked receiver is the player's own at price 0), or null when the base is inaccessible.
+   */
+  baseSource: 'offer' | 'owned' | null;
   modSpend: number;
   spend: number;
   /** The same statistics as exact canonical rational strings (`n` or `n/d`). */
@@ -606,6 +614,19 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
     return offers;
   };
 
+  /**
+   * The owned-receiver fallback (owner decision 2026-10-14): the receiver has no legal offer and no preset built on it has one, so nothing can
+   * be bought and the player is taken to own the naked receiver. Computed once from the lookup and the market, never from the stash.
+   */
+  let receiverOwned: boolean | null = null;
+  const nakedIsOwned = (): boolean => {
+    if (receiverOwned === null) {
+      receiverOwned = receiver.baseOffers.length === 0
+        && !(gunEntry.all_presets ?? []).some(p => p.receiver_id === weaponId && baseOffersOfPreset(p).length > 0);
+    }
+    return receiverOwned;
+  };
+
   const closeTo = (claimed: number | undefined, exact: Rat): boolean =>
     typeof claimed === 'number' && Number.isFinite(claimed)
     && ratLe(ratSub(ratFromDouble(claimed), exact), CLAIM_TOLERANCE_RAT) && ratLe(ratSub(exact, ratFromDouble(claimed)), CLAIM_TOLERANCE_RAT);
@@ -618,6 +639,7 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
 
     // --- base -------------------------------------------------------------------------------------
     let basePrice: Rat | null = null;
+    let baseSource: 'offer' | 'owned' | null = null;
     let supply: ReadonlyMap<string, number> = new Map();
     let basePresetId: string | null = null;
     if (build.base.kind === 'preset') {
@@ -630,11 +652,16 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
         else {
           basePrice = cheapestOf(baseOffersOfPreset(found.preset));
           if (basePrice === null) push('BASE_INACCESSIBLE', `preset ${found.preset.id} has no legal offer`);
+          else baseSource = 'offer';
         }
       }
     } else {
       basePrice = cheapestOf(receiver.baseOffers);
-      if (basePrice === null) push('BASE_INACCESSIBLE', `receiver ${weaponId} has no legal offer`);
+      if (basePrice !== null) baseSource = 'offer';
+      else if (nakedIsOwned()) {
+        basePrice = RAT_ZERO;
+        baseSource = 'owned';
+      } else push('BASE_INACCESSIBLE', `receiver ${weaponId} has no legal offer`);
     }
 
     // --- instances (the childInstanceId bijection) ---------------------------------------------------
@@ -845,6 +872,9 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
       if (claims.basePrice !== undefined && !closeTo(claims.basePrice, basePrice ?? RAT_ZERO)) {
         push('CLAIMED_SPEND_MISMATCH', `claimed base price ${String(claims.basePrice)}, exact ${ratString(basePrice ?? RAT_ZERO)}`);
       }
+      if (claims.baseSource !== undefined && claims.baseSource !== baseSource) {
+        push('CLAIMED_ACQUISITION_MISMATCH', `claimed base source ${claims.baseSource}, exact ${String(baseSource)}`);
+      }
       if (claims.modSpend !== undefined && !closeTo(claims.modSpend, modSpend)) push('CLAIMED_SPEND_MISMATCH', `claimed mod spend ${String(claims.modSpend)}, exact ${ratString(modSpend)}`);
       if (claims.acquisition !== undefined) {
         const claimed = [...claims.acquisition].sort((a, b) => codeUnitCompare(a.instanceId, b.instanceId));
@@ -927,6 +957,7 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
         magazineCapacity: num('magazineCapacity'),
         sightingRange: num('sightingRange'),
         basePrice: basePrice === null ? null : ratToNumber(basePrice),
+        baseSource,
         modSpend: num('modSpend'),
         spend: num('spend'),
         exact,
