@@ -199,7 +199,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const blueprint = getPhysicalBlueprint(lookup, params.weaponId, params.physicalOptions);
   const domain = prepareSubproblemDomain(blueprint, lookup, params);
   if (domain.empty) {
-    const detail = domain.contradictions.map(c => (c.code === 'NO_ACCESSIBLE_BASE' ? 'no accessible base' : `root required slot ${c.rawSlotId} has no active candidate`)).join('; ');
+    const detail = domain.contradictions.map(c => `root required slot ${c.rawSlotId} has no active candidate`).join('; ');
     return empty('domain', detail);
   }
 

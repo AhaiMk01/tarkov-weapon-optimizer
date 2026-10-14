@@ -74,8 +74,19 @@ test('a column that is missing or not an integer is a solver fault (a typed erro
 });
 
 test('an empty domain has nothing to decode', () => {
-  const lookup = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
+  // the root required slot's only candidate is sold by nobody: ROOT_REQUIRED_SLOT_EMPTY
+  const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
   assert.throws(() => decodeFast(fast(lookup), {}), /domain is empty/);
+});
+
+test('the owned receiver (no base can be bought) decodes as the naked base', () => {
+  const lookup = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
+  const model = fast(lookup);
+  assert.equal(model.domain.bases.length, 1);
+  const decoded = decodeFast(model, point(model, { 's>a': 1 }));
+  assert.equal(decoded.ok, true);
+  assert.deepEqual(decoded.ok && decoded.build.base, { kind: 'naked' });
+  assert.deepEqual(decoded.ok && decoded.build.placements.map(p => p.childInstanceId), ['weapon_0/s:a']);
 });
 
 test('a count point the slot rows forbid is rejected, not repaired: two children in a slot of one copy, and a child whose owner is not installed', () => {

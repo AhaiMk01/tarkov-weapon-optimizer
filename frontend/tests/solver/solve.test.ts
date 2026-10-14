@@ -124,10 +124,10 @@ test('Precise emptiness without a MOA cap is infeasible with no reason; with a M
   const moa = await solve(paramsOf(small(), { maxPrice: 10, maxMOA: 100 }));
   assert.equal(moa.status, 'incomplete');
   assert.equal(moa.reason, 'Provisional MOA model infeasible');
-  // An emptiness the domain proves (no legal base) is reported the same way, with no native call needed.
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
-  assert.equal((await solve(paramsOf(noBase))).status, 'infeasible');
-  assert.equal((await solve(paramsOf(noBase, { maxMOA: 5 }))).reason, 'Provisional MOA model infeasible');
+  // An emptiness the domain proves (a root required slot nobody can fill) is reported the same way, with no native call needed.
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
+  assert.equal((await solve(paramsOf(emptyRoot))).status, 'infeasible');
+  assert.equal((await solve(paramsOf(emptyRoot, { maxMOA: 5 }))).reason, 'Provisional MOA model infeasible');
 });
 
 test('Fast emptiness is incomplete: approximate model infeasible, or the Fast provisional MOA reason under a MOA cap', async () => {
@@ -269,7 +269,7 @@ test('Fast publishes the same shape, decoded into a rooted placement tree and va
   assert.equal(response.final_stats?.total_price, 5300);
 });
 
-test('Fast no longer installs a part nobody sells and no preset supplies (no found-in-raid stand-in), and has no free base', async () => {
+test('Fast no longer installs a part nobody sells and no preset supplies (no found-in-raid stand-in), and an empty domain stays empty', async () => {
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('s', ['bought', 'raid'])] }),
     ['bought', mod('bought', { ergo: 1 })],
@@ -279,8 +279,8 @@ test('Fast no longer installs a part nobody sells and no preset supplies (no fou
   assert.deepEqual(fast.selected_item_ids, ['bought']);
   const precise = await solve(paramsOf(lookup));
   assert.deepEqual(precise.selected_item_ids, ['bought'], 'the exact model caps it at zero copies too');
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
-  const none = await solve(paramsOf(noBase, { preciseMode: false }));
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
+  const none = await solve(paramsOf(emptyRoot, { preciseMode: false }));
   assert.equal(none.status, 'incomplete');
   assert.equal(none.reason, 'Approximate model infeasible');
 });

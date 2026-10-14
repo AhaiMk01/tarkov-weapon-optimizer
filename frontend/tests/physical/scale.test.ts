@@ -146,15 +146,15 @@ test('M4A1 domain: masks cover every occurrence, the blueprint is untouched, rea
   assert.deepEqual(Buffer.from(again.occActive), Buffer.from(domain.occActive));
   assert.deepEqual(Buffer.from(again.occInactiveReason), Buffer.from(domain.occInactiveReason));
 
-  // Every trader disabled and no flea: no base can be bought.
+  // Every trader disabled and no flea: no base can be bought, so the receiver is the player's own (owner decision 2026-10-14).
   const none = prepareSubproblemDomain(bp, lookup, {
     traderLevels: { prapor: 0, skier: 0, peacekeeper: 0, mechanic: 0, jaeger: 0, ref: 0 },
     fleaAvailable: false,
   });
+  assert.deepEqual(none.bases, [{ kind: 'naked', owned: true, offerIndexes: [], cheapestPrice: 0 }]);
+  // With nothing buyable the required root slots (pistol grip, barrel, ...) lose every candidate, so the domain is still empty.
   assert.equal(none.empty, true);
-  assert.equal(none.contradictions[0].code, 'NO_ACCESSIBLE_BASE');
-  // With nothing buyable the required root slots (pistol grip, barrel, ...) lose every candidate as well.
-  assert.ok(none.contradictions.slice(1).every(c => c.code === 'ROOT_REQUIRED_SLOT_EMPTY'));
+  assert.ok(none.contradictions.length > 0 && none.contradictions.every(c => c.code === 'ROOT_REQUIRED_SLOT_EMPTY'));
   assert.equal(none.reasonCounts[InactiveReason.ACTIVE], 0);
   assert.equal(checksum(bp), before);
   t.diagnostic(`M4A1 default domain: ${ms.toFixed(1)} ms, ${domain.bases.length} bases, ${active} of ${bp.occurrenceCount - 1} occurrences active, reasons ${JSON.stringify(domain.reasonCounts)}`);

@@ -23,7 +23,8 @@
 // Differential helper: may import production code (reference/independenceScan.ts); no non-differential file may import this one.
 
 import {
-  accessibleBases, baseOffer, enumerateTrees, isExcludedByRequest, presetSupplyOf, resolveFixture, resolveRequest, standaloneOffers, toNumber,
+  accessibleBases, basePriceOf, enumerateTrees, isExcludedByRequest, presetSupplyOf, receiverOwned, resolveFixture, resolveRequest, standaloneOffers,
+  toNumber,
   type BaseChoice, type ReferenceFixture, type ReferenceRequest,
 } from '../oracle/index';
 import {
@@ -167,6 +168,8 @@ export interface OracleSide {
   /** Accessible bases, `naked` or `preset:<id>`, sorted. */
   bases: string[];
   baseCheapest: Map<string, number>;
+  /** The owned-receiver rule holds (interpretation 18): the only base is the naked receiver at price 0. */
+  ownedReceiver: boolean;
   /** Per template id: acquisition facts of the oracle (`lotSizes`: units per purchase of each legal standalone offer, ascending). */
   templates: Map<string, { standalone: number; cheapest: number | null; lotSizes: number[]; owned: number; presets: string[] }>;
 }
@@ -178,7 +181,7 @@ export function oracleSide(fixture: ReferenceFixture, request: ReferenceRequest)
   const bases: BaseChoice[] = accessibleBases(rf, rr);
   const keyOf = (b: BaseChoice) => (b.kind === 'naked' ? 'naked' : `preset:${b.presetId}`);
   const baseCheapest = new Map<string, number>();
-  for (const base of bases) baseCheapest.set(keyOf(base), toNumber(baseOffer(rf, rr, base)!.lotPrice));
+  for (const base of bases) baseCheapest.set(keyOf(base), toNumber(basePriceOf(rf, rr, base)!));
 
   const templates = new Map<string, { standalone: number; cheapest: number | null; lotSizes: number[]; owned: number; presets: string[] }>();
   for (const item of rf.items.values()) {
@@ -205,13 +208,14 @@ export function oracleSide(fixture: ReferenceFixture, request: ReferenceRequest)
     return t.standalone > 0 || t.owned > 0 || t.presets.length > 0;
   };
   const excluded = (itemId: string): boolean => isExcludedByRequest(rr, rf.items.get(itemId)!);
-  // With no accessible base no build exists at all, whatever the trees are (the domain is empty).
+  // With no accessible base no build exists at all, whatever the trees are. Since interpretation 18 there is always a base for a known weapon.
   const noTrees: TreeSet = { trees: new Set(), occurrences: new Set(), complete: true };
   return {
     masked: bases.length === 0 ? noTrees : oracleTreesWhere(fixture, request.weapon_id, id => !excluded(id) && !receiverBanned(id) && supplied(id)),
     structural: oracleTreesWhere(fixture, request.weapon_id, id => !receiverBanned(id)),
     bases: bases.map(keyOf).sort(),
     baseCheapest,
+    ownedReceiver: receiverOwned(rf, rr),
     templates,
   };
 }

@@ -100,7 +100,9 @@ export function presetDetail(params: SolveParams, build: PhysicalBuild, stats: P
   const basePrice = stats.basePrice ?? 0;
   if (build.base.kind === 'naked') {
     const data = weapon.data as Record<string, unknown>;
-    const seller = cheapestLegalOffer(wStats.offers, fleaGateOf(wStats), market);
+    // The owned receiver (no base can be bought) has no seller: it is the player's own and costs 0.
+    const owned = stats.baseSource === 'owned';
+    const seller = owned ? undefined : cheapestLegalOffer(wStats.offers, fleaGateOf(wStats), market);
     return {
       id: params.weaponId,
       name: (data.name as string | undefined) ?? 'Naked Gun',
@@ -112,6 +114,7 @@ export function presetDetail(params: SolveParams, build: PhysicalBuild, stats: P
       source: seller?.source,
       purchase_label: seller?.label,
       barter_requirements: seller?.barterRequirements,
+      acquisition: { source: owned ? 'owned' : 'offer' },
       ...tooltip,
     };
   }
@@ -131,6 +134,7 @@ export function presetDetail(params: SolveParams, build: PhysicalBuild, stats: P
     purchase_label: seller?.label ?? (preset.price_source === 'fleaMarket' ? 'Flea Market' : undefined),
     barter_requirements: seller?.barterRequirements,
     parts_count: presetSupply(preset.items).size || undefined,
+    acquisition: { source: 'offer' },
     ...tooltip,
   };
 }

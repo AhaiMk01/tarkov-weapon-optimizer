@@ -80,7 +80,7 @@ test('all 172 pinned guns: closure acyclic (D1), active graph acyclic (D2), cand
     // D1: preparing succeeded, so the closure has no cycle (the blueprint throws CYCLIC_PART_GRAPH on one).
     for (const profile of PROFILES) {
       const domain = prepareSubproblemDomain(bp, lookup, profile.request);
-      if (domain.empty) continue; // no accessible base or an unfillable root slot: no graph, nothing cyclic, and the empty answer is exact
+      if (domain.empty) continue; // an unfillable root slot: no graph, nothing cyclic, and the empty answer is exact
       nonempty.set(profile.name, (nonempty.get(profile.name) ?? 0) + 1);
       everNonempty.add(gun.id);
       // D2: the active template graph is acyclic: its topological order covers every active template.
@@ -101,7 +101,7 @@ test('all 172 pinned guns: closure acyclic (D1), active graph acyclic (D2), cand
     }
     if (!everNonempty.has(gun.id)) closureEmpty++;
   }
-  t.diagnostic(`nonempty domains per profile: ${[...nonempty].map(([k, n]) => `${k} ${n}`).join(', ')} of ${guns.length} guns; ${closureEmpty} guns are empty under all profiles (no accessible base)`);
+  t.diagnostic(`nonempty domains per profile: ${[...nonempty].map(([k, n]) => `${k} ${n}`).join(', ')} of ${guns.length} guns; ${closureEmpty} guns are empty under all profiles (a root required slot nobody can fill)`);
   t.diagnostic(`D1 holds for all ${guns.length} guns; D2, L and M hold for every nonempty (gun, profile): ${pairs} (template, slot) pairs compared, in ${((performance.now() - started) / 1000).toFixed(1)} s`);
   t.diagnostic(`largest: active templates ${templates}, candidate edges ${edges}, copies of one template ${maxCopies}, barrel templates ${barrels}, accuracy-sum upper bound ${accuracyHi.toFixed(2)}; default-profile guns with two or more barrel templates: ${twoBarrels}`);
 });

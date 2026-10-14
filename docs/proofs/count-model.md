@@ -93,7 +93,7 @@ following hold (oracle code in brackets; all arithmetic exact in `Q`):
 
 | Rule | Statement | Oracle |
 | --- | --- | --- |
-| R-base | the base is the naked receiver or a preset of `w`, and has a legal offer | `validate.ts:78-86`, `acquisition.ts:158-180` |
+| R-base | the base is the naked receiver or a preset of `w`, and has a legal offer; or, when no base of `w` has a legal offer, it is the naked receiver, owned, at price 0 (section 15) | `validate.ts:78-86`, `acquisition.ts:158-180` |
 | R-id | child instance ids are unique and are not the root id | `validate.ts:88-105` |
 | R-root | every placement's parent is the root or a placed instance, and every placement is reachable from the root | `validate.ts:107-128` |
 | R-slot | the parent declares the slot id; the item is in that slot's allowlist | `validate.ts:139-149` |
@@ -143,10 +143,12 @@ Per template `t >= 1` (`domain.ts:198-231`):
 Template-level reason: active iff not excluded, not receiver-banned and `supply != none` (`domain.ts:224-230`).
 
 Accessible bases `Bases`: the naked receiver if it has a legal offer, then each preset with a legal offer (`domain.ts:171-189`), each with
-`price_b` = its cheapest legal stored price.
+`price_b` = its cheapest legal stored price. When that list is empty, `Bases` is the owned naked receiver alone, with `price_b = 0` and no
+preset supply (section 15).
 
 Occurrence masks (`domain.ts:238-289`): **viable** bottom-up (template-level active, and every required slot it owns has a viable candidate),
-**contradictions** (no base; a root required slot with no viable candidate), **active** top-down (viable, owner active, domain not empty).
+**contradictions** (a root required slot with no viable candidate; "no base" cannot happen since section 15), **active** top-down (viable,
+owner active, domain not empty).
 
 ### 1.4 The count model as emitted
 
@@ -714,7 +716,8 @@ emptiness, `moaFloor.ts:272-279`).
 
 *Proof.* `kind: 'empty'` arises in two ways.
 
-(a) `domain.empty` (`solvePrecise.ts:614-619`): no accessible base, or a root required slot with no viable candidate (`domain.ts:258-268`).
+(a) `domain.empty` (`solvePrecise.ts:614-619`): a root required slot with no viable candidate (`domain.ts:258-268`); before section 15
+also "no accessible base".
 By Lemma 2 a physical build would make the domain nonempty. Exact, no native call.
 
 (b) The spatial search completed with no incumbent and nothing fathomed (`search.ts:403`): every leaf node was closed `infeasible`. By the
@@ -1042,3 +1045,38 @@ Sweet Spot computes its payoff table from three endpoint solves with weights `(1
 each endpoint is an independent `solvePrecise` call, each native solve depends only on its text and options (`docs/stage3/parallel-pool.md`,
 determinism argument), and the outcomes are read in weight order, so the error reported is the one of the first failing endpoint, as before.
 Nothing in this document depends on the order of the endpoint solves. Theorem S, the node cover and Propositions F1 / F1' are unaffected.
+
+
+## 15. Amendment of 2026-10-14: the owned receiver when no base can be bought
+
+Owner decision (2026-10-14, `docs/adr/amendments/2026-10-14-owned-base-fallback.md`; reference interpretation 18). If the receiver has no
+legal offer and no preset of it has one, the naked receiver is owned: it is the only base and costs 0. Otherwise nothing changes.
+
+**What changes in the definitions.** R-base (section 1.2) and `Bases` (section 1.3) gain the same clause: when the purchasable base set
+`P` is empty, the accessible base set is `{ o }`, the naked receiver with `price_o = 0` and `q_{o,t} = 0` for every `t`. When `P` is not
+empty, the accessible base set is `P` as before. The oracle (`reference/oracle/acquisition.ts`, `receiverOwned`, `accessibleBases`,
+`basePriceOf`, `acquire`) and production (`domain.ts`, the base `{ kind: 'naked', owned: true }`; `validate.ts`, `baseSource`) implement the
+clause separately, and the blueprint differential compares them (`reference/harness/blueprint.differential.test.ts`, tests 4 and 5).
+
+**Why every lemma still holds.** The fallback base is one more base option with zero price; nothing in the proof reads a base price except
+the wallet, and nothing reads the reason a base is accessible.
+
+- Lemma 1 and Corollary 1 are about templates, slots and masks; they never read a base. Unchanged.
+- Lemma 2 (the masks lose no physical build): a physical build has a base in the oracle's accessible set, which is now the same set the
+  domain lists (both sides decide `P` from the same legal offers, interpretation 10, and add `o` exactly when `P` is empty). The template
+  masks read `presetSupply` only over preset bases, and `o` supplies nothing, so `supply(t)` and every mask are as before. Unchanged.
+- Lemma 3 (copy bounds): independent of bases. Unchanged.
+- Theorem L (lifting): set `base_o = 1`. The base row `sum_b base_b = 1` holds. Supply caps and lot covers see `q_{o,t} = 0`, the same terms
+  as the naked receiver had before. The wallet gets `-price_o base_o = 0`, which the writer drops (`lpText.ts`, `mergeTerms`), and the oracle's
+  spend adds 0 for the base (`acquire`, `base.price = 0`). So the lifted point has the oracle's spend and score. The price enclosure of 3.2
+  starts at `max(0, price_b) = 0` and still counts `bases.length >= 1` terms, so its argument is unchanged.
+- Theorem P (projection): the decoder returns `{ kind: 'naked' }` for `o` (`decodeFast.ts`), and the validator accepts it with
+  `basePrice = 0`, `baseSource = 'owned'` exactly when `P` is empty, as the oracle does (`validatorLedgerBuilds.differential.test.ts`).
+- Section 4 (objective, numerics, TED search): no coefficient is added; a coefficient of 0 is not emitted, so the matrix-filtering check and the
+  frame error are unchanged (all 170 nonempty pinned default domains carry a proof with nothing withheld, `countModel.pinned.test.ts`).
+- Theorem I, case (a): the domain can no longer be empty for want of a base; an empty domain now means a root required slot nobody can fill,
+  and the argument for that case is unchanged.
+
+**Effect.** On the pinned snapshot with the benchmark request, the 19 guns that were certified infeasible all had no accessible base; 17 now
+have builds on the owned receiver and 2 (KS-23M, AK-50) stay infeasible because a root required slot cannot be filled. Ledger family 5 records
+the rule (three changed expectations, six new cases; `reference/ledger/family05_bases.ts`).

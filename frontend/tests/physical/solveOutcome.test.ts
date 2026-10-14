@@ -68,8 +68,8 @@ test('Precise: emptiness is a certified infeasibility only without a MOA cap; wi
   assert.equal(moa.outcome.physical_certificate, 'none');
   assert.equal(moa.outcome.reason, PUBLIC_REASONS.provisionalMoaModelInfeasible);
   assert.equal(moa.outcome.termination, 'optimal', 'the internal proof is retained');
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
-  const domain = await solvePrecise({ params: paramsOf(noBase), deadline: FAR(), solve: async () => assert.fail('no native call') });
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
+  const domain = await solvePrecise({ params: paramsOf(emptyRoot), deadline: FAR(), solve: async () => assert.fail('no native call') });
   assert.equal(domain.kind === 'empty' && domain.source, 'domain');
   assert.equal(domain.outcome.status, 'infeasible');
   assert.equal(domain.outcome.termination, 'optimal');
@@ -212,8 +212,8 @@ test('Fast: emptiness is incomplete with the approximate-model reason (the Fast 
   const moa = await solveFast({ params: fastParams(small(), { maxPrice: 10, maxMOA: 100 }), deadline: FAR() });
   assert.equal(moa.outcome.reason, PUBLIC_REASONS.fastProvisionalMoaModelInfeasible);
   assert.equal(moa.outcome.moa_qualification, 'provisional_model');
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
-  const domain = await solveFast({ params: fastParams(noBase), deadline: FAR() });
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
+  const domain = await solveFast({ params: fastParams(emptyRoot), deadline: FAR() });
   assert.equal(domain.kind === 'empty' && domain.source, 'domain');
   assert.equal(domain.outcome.status, 'incomplete');
   const ghost = await solveFast({ params: fastParams(small(), { includeItems: ['ghost'] }), deadline: FAR() });

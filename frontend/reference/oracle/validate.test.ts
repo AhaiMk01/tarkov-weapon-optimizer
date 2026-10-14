@@ -272,8 +272,22 @@ test('base accessibility: unknown preset, preset of another weapon, and no legal
   );
   rejects(f, {}, makeBuild({ kind: 'preset', presetId: 'nope' }), 'BASE_UNKNOWN_PRESET');
   rejects(f, {}, makeBuild({ kind: 'preset', presetId: 'foreign' }), 'BASE_WRONG_WEAPON');
-  rejects(f, { trader_levels: { prapor: 0 } }, naked(), 'BASE_INACCESSIBLE');
-  rejects(f, { owned_items: ['gun'], trader_levels: { prapor: 0 } }, naked(), 'BASE_INACCESSIBLE');
+  // prapor 0 and no preset of gun: nothing can be bought, so the naked receiver is the player's own (interpretation 18)
+  accepts(f, { trader_levels: { prapor: 0 } }, naked());
+  // a preset of gun sold by Skier: the locked naked receiver is inaccessible, stash or no stash
+  const g = fixtureOf(
+    [{ id: 'a' }],
+    { slots: [slot('s', ['a'])] },
+    {
+      weapons: [{ id: 'gun', offers: trader(1000) }],
+      presets: [{ id: 'own', weaponId: 'gun', components: [], offers: [{ kind: 'trader', trader: 'skier', level: 1, price: 2000 }] }],
+    },
+  );
+  rejects(g, { trader_levels: { prapor: 0 } }, naked(), 'BASE_INACCESSIBLE');
+  rejects(g, { owned_items: ['gun'], trader_levels: { prapor: 0 } }, naked(), 'BASE_INACCESSIBLE');
+  // a preset is never owned: with nothing to buy, the preset base is still inaccessible and the naked receiver is accepted
+  rejects(g, { trader_levels: { prapor: 0, skier: 0 } }, makeBuild({ kind: 'preset', presetId: 'own' }), 'BASE_INACCESSIBLE');
+  accepts(g, { trader_levels: { prapor: 0, skier: 0 } }, naked());
 });
 
 // --- hard caps (exact boundaries) ------------------------------------------------------------------

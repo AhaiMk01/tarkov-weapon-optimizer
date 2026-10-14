@@ -74,7 +74,7 @@ test('all 172 guns: every blueprint prepares (no cyclic part graph), every nonem
   }
   t.diagnostic(`${eligible} eligible, ${empty} empty default domains; largest model ${columns} columns, ${rows} rows; coefficients in [${narrowest}, ${widest}]; ${((performance.now() - started) / 1000).toFixed(1)} s`);
   assert.equal(eligible + empty, 172);
-  assert.equal(eligible, 153);
+  assert.equal(eligible, 170); // 153 before the owned receiver (2026-10-14); KS-23M and AK-50 still have an empty root required slot
 });
 
 test('real guns: HiGHS reads the certified model of M4A1, AK-74N and MP5 back exactly as written, and the solve is QUALIFIED (padded right-hand sides dominate their needs, declared tolerances, presolve off)', { skip, timeout: 900_000 }, async t => {

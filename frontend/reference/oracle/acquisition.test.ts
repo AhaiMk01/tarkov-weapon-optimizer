@@ -4,7 +4,8 @@ import type { ReferenceFixture, ReferenceOffer, ReferenceRequest } from './domai
 import type { ReferenceBuild } from './build';
 import { resolveFixture, resolveRequest } from './resolve';
 import {
-  acquire, accessibleBases, barterRequirementTotal, cheapestCover, cheapestLegalOffer, legalOffers, standaloneOffers,
+  acquire, accessibleBases, barterRequirementTotal, basePriceOf, cheapestCover, cheapestLegalOffer, legalOffers, receiverOwned,
+  standaloneOffers,
 } from './acquisition';
 import { add, fromBinary64, q, sub, toString, ZERO } from './q';
 
@@ -53,11 +54,24 @@ function barterFixture(requirements: { count: number; avg24hPrice?: number | nul
 test('accessible bases: naked needs a legal offer; presets need their own legal offer; order is deterministic', () => {
   assert.deepEqual(accessibleBases(rf, req()), [{ kind: 'naked' }, { kind: 'preset', presetId: 'p1' }]);
   assert.deepEqual(accessibleBases(rf, req({ trader_levels: { prapor: 1 } })), [{ kind: 'preset', presetId: 'p1' }]);
-  assert.deepEqual(accessibleBases(rf, req({ trader_levels: { prapor: 0, skier: 0 } })), []);
+  // nothing can be bought: the owned naked receiver is the only base, at price 0 (interpretation 18)
+  const none = req({ trader_levels: { prapor: 0, skier: 0 } });
+  assert.deepEqual(accessibleBases(rf, none), [{ kind: 'naked' }]);
+  assert.equal(receiverOwned(rf, none), true);
+  assert.deepEqual(basePriceOf(rf, none, { kind: 'naked' }), ZERO);
+  assert.equal(basePriceOf(rf, none, { kind: 'preset', presetId: 'p1' }), null);
+  // a buyable preset or receiver means no owned receiver
+  assert.equal(receiverOwned(rf, req({ trader_levels: { prapor: 1 } })), false);
+  assert.equal(basePriceOf(rf, req({ trader_levels: { prapor: 1 } }), { kind: 'naked' }), null);
+  assert.equal(receiverOwned(rf, req()), false);
+  assert.equal(toString(basePriceOf(rf, req(), { kind: 'naked' })!), '10000');
 });
 
-test('owning the receiver id never grants a base', () => {
-  assert.deepEqual(accessibleBases(rf, req({ trader_levels: { prapor: 0, skier: 0 }, owned_items: ['gun', 'p1'] })), []);
+test('the stash never grants a base and plays no part in the owned receiver', () => {
+  // with a buyable preset, owning the receiver id (and the preset id) does not open the naked base
+  assert.deepEqual(accessibleBases(rf, req({ trader_levels: { prapor: 1 }, owned_items: ['gun', 'p1'] })), [{ kind: 'preset', presetId: 'p1' }]);
+  // with nothing to buy the owned receiver is the only base, stash or no stash
+  assert.deepEqual(accessibleBases(rf, req({ trader_levels: { prapor: 0, skier: 0 }, owned_items: ['gun', 'p1'] })), [{ kind: 'naked' }]);
 });
 
 test('trader loyalty gating: level below the offer fails, level at the offer passes, 0 disables', () => {
@@ -244,9 +258,25 @@ test('legal zero-cost barter keeps vendor provenance and is never marked owned',
 });
 
 test('inaccessible base is reported with null price and does not invent a free receiver', () => {
+  // prapor 0 locks the receiver, but the preset is still sold by Skier: no owned receiver
   const res = acquire(rf, req({ trader_levels: { prapor: 0 } }), items({ kind: 'naked' }));
   assert.equal(res.base.offer, null);
+  assert.equal(res.base.owned, false);
   assert.equal(res.base.price, null);
+});
+
+test('the owned receiver costs 0 and is marked owned; parts are still acquired as usual', () => {
+  // nothing can be bought as a base; grip comes from the flea (400), and a stash copy of the receiver id is not drawn on
+  const res = acquire(rf, req({ trader_levels: { prapor: 0, skier: 0 }, owned_items: ['gun'] }), items({ kind: 'naked' }, ['grip', 'a']));
+  assert.equal(res.base.offer, null);
+  assert.equal(res.base.owned, true);
+  assert.deepEqual(res.base.price, ZERO);
+  assert.equal(toString(res.modSpend), '400');
+  assert.equal(toString(res.spend), '400');
+  // a preset base is never owned
+  const preset = acquire(rf, req({ trader_levels: { prapor: 0, skier: 0 } }), items({ kind: 'preset', presetId: 'p1' }));
+  assert.equal(preset.base.owned, false);
+  assert.equal(preset.base.price, null);
 });
 
 test('a lot of 3 at 100 covers three occurrences for 100 and a fourth needs a second lot: 200 (not 400/3)', () => {

@@ -52,6 +52,8 @@ export function UsingPresetCard({ preset, retainedItems, usage, compactMode, vie
   const tooltipContent = <PresetTooltipContent preset={preset} />
   // The naked receiver is the base that is not a factory preset; its id is the receiver's own.
   const isFactoryPreset = preset.id !== preset.receiver_id
+  // The player's own receiver: nothing could be bought as a base, so it costs nothing and has no seller.
+  const ownedReceiver = preset.acquisition.source === 'owned'
   return (
     <Card size="small" style={{ overflow: 'hidden' }}>
       {contextHolder}
@@ -75,11 +77,25 @@ export function UsingPresetCard({ preset, retainedItems, usage, compactMode, vie
               {preset.name}
             </Text>
           </Tooltip>
-          <Text type="secondary" style={{ fontSize: 11 }}>{isFactoryPreset ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
+          {ownedReceiver ? (
+            <Tooltip title={t('ui.owned_receiver_tooltip')}>
+              <Text type="secondary" style={{ fontSize: 11, cursor: 'help' }}>{t('ui.owned_receiver', { name: preset.name })}</Text>
+            </Tooltip>
+          ) : (
+            <Text type="secondary" style={{ fontSize: 11 }}>{isFactoryPreset ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <TraderIcon source={preset.source} unknownLabel={unknown} barterRequirements={preset.barter_requirements} />
-          <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>₽{preset.price.toLocaleString()}</Tag>
+          {ownedReceiver ? (
+            <Tooltip title={t('ui.owned_receiver_tooltip')}>
+              <Tag style={{ margin: 0 }}>{t('ui.acq_owned')}</Tag>
+            </Tooltip>
+          ) : (
+            <>
+              <TraderIcon source={preset.source} unknownLabel={unknown} barterRequirements={preset.barter_requirements} />
+              <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>₽{preset.price.toLocaleString()}</Tag>
+            </>
+          )}
         </div>
       </div>
       {retainedItems && retainedItems.length > 0 && (

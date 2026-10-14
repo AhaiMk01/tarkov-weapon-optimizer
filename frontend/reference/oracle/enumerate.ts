@@ -128,7 +128,7 @@ export function enumerateBuilds(
   const rr = resolveRequest(fixture, request);
   const bases = accessibleBases(rf, rr);
   if (bases.length === 0) {
-    // No accessible base: emptiness is proved without looking at any tree.
+    // No accessible base (only for an unknown weapon since interpretation 18): emptiness is proved without looking at any tree.
     return { builds: [], bases, treeCount: 0, complete: true, nodes: 0 };
   }
   const installable = (itemId: string) => {

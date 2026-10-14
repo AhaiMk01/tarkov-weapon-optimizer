@@ -5,6 +5,8 @@ import { supplyOf } from './manifest';
 export interface ShoppingLabels {
   /** Marks the base line ("base"). */
   base: string;
+  /** Marks the base line of the player's own receiver, which is not bought ("your own (can't be bought)"). */
+  ownedBase: string;
   /** Occurrences supplied by the base preset ("from preset"). */
   preset: string;
   /** Occurrences taken from the stash ("owned"). */
@@ -40,12 +42,15 @@ export function manifestSpend(result: Pick<OptimizeResponse, 'selected_items' | 
 /**
  * One line per group of occurrences that share a template and a provenance, in order of first appearance. Copies are counted ("x2"), never
  * merged across provenance: an occurrence the preset supplies, one taken from the stash and one bought are different lines even for one template.
- * The first line is the base. A paid line carries the summed charge of its occurrences, so the lines add up to the true spend.
+ * The first line is the base: bought at its price, or the player's own receiver with no price (it is never a purchase). A paid line carries the
+ * summed charge of its occurrences, so the lines add up to the true spend.
  */
 export function shoppingListLines(result: Pick<OptimizeResponse, 'selected_items' | 'selected_preset'>, labels: ShoppingLabels): string[] {
   const lines: string[] = [];
   const base = result.selected_preset;
-  if (base !== undefined) lines.push(`${base.name} — ${labels.base} — ₽${base.price.toLocaleString()}`);
+  if (base !== undefined) {
+    lines.push(base.acquisition.source === 'owned' ? `${base.name} — ${labels.ownedBase}` : `${base.name} — ${labels.base} — ₽${base.price.toLocaleString()}`);
+  }
 
   interface Group { name: string; count: number; spend: number; label: string }
   const groups = new Map<string, Group>();

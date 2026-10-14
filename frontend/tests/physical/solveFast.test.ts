@@ -267,10 +267,10 @@ test('TrueErgo and Prevent Overswing run on the Fast model (the weight search of
 // ---------------------------------------------------------------------------------------------------------------------------
 
 test('an empty domain and a false constant row are empty with no native call; native infeasibility is empty with source native', async () => {
-  const noBase = lookupOf(gun(WEAPON, { offers: [], slots: [slot('s', ['a'])] }), ['a', mod('a')]);
+  const emptyRoot = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'], true)] }), ['a', mod('a', { offers: [] })]);
   const calls: string[] = [];
   const spy: SolveFn = async (lp, options) => { calls.push('call'); return nativeSolve(lp, options); };
-  const domain = await solveFast({ params: paramsOf(noBase), deadline: FAR(), solve: spy });
+  const domain = await solveFast({ params: paramsOf(emptyRoot), deadline: FAR(), solve: spy });
   assert.equal(domain.kind === 'empty' && domain.source, 'domain');
   const ghost = lookupOf(gun(WEAPON, { slots: [slot('s', ['a'])] }), ['a', mod('a')]);
   const request = await solveFast({ params: paramsOf(ghost, { includeItems: ['ghost'] }), deadline: FAR(), solve: spy });
@@ -278,6 +278,25 @@ test('an empty domain and a false constant row are empty with no native call; na
   assert.deepEqual(calls, [], 'neither needed the solver');
   const native = await solveFast({ params: paramsOf(ghost, { maxPrice: 10 }), deadline: FAR() });
   assert.equal(native.kind === 'empty' && native.source, 'native');
+});
+
+test('a gun nobody sells is built on the owned receiver at price 0; a buyable preset turns that off', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { offers: [], slots: [slot('s', ['a', 'b'])], presets: [{ id: 'p', items: [{ itemId: 'b', count: 1 }], offers: [trader('skier', 3, 2000)] }] }),
+    ['a', mod('a', { ergo: 5, offers: [trader('prapor', 1, 700)] })],
+    ['b', mod('b', { ergo: 3, offers: [trader('prapor', 1, 100)] })],
+  );
+  // skier 2: the preset is locked, nothing can be bought, so the receiver is owned
+  const params = paramsOf(lookup, { traderLevels: { ...DEFAULT_TRADER_LEVELS, skier: 2 } });
+  const owned = await solveFast({ params, deadline: FAR() });
+  assertValid(params, owned);
+  assert.deepEqual(built(owned).best.build.base, { kind: 'naked' });
+  assert.equal(built(owned).best.stats.baseSource, 'owned');
+  assert.equal(built(owned).best.stats.spend, 700);
+  // skier 3: the preset can be bought and is the only base
+  const sold = await solveFast({ params: paramsOf(lookup, { traderLevels: { ...DEFAULT_TRADER_LEVELS, skier: 3 } }), deadline: FAR() });
+  assert.deepEqual(built(sold).best.build.base, { kind: 'preset', presetId: 'p' });
+  assert.equal(built(sold).best.stats.baseSource, 'offer');
 });
 
 test('a deadline that has passed is incomplete with the time-limit reason', async () => {

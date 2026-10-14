@@ -8,13 +8,16 @@
 // one unit out of a lot of n costs the whole lot, and units beyond the deficit are simply unused. The cost
 // of a paid deficit d_i is the exact minimum, over nonnegative integer lot counts across ALL legal offers of
 // the item, of sum(lots x lotPrice) subject to sum(lots x units) >= d_i (`cheapestCover`, a DP over units).
-// The base is exactly one unit, so it costs the cheapest lot.
+// The base is exactly one unit, so it costs the cheapest lot. When nothing at all can be bought as a base (the receiver has
+// no legal offer and no preset built on it has one), the player is taken to own the naked receiver: it is then the only
+// base and costs 0 (owner decision 2026-10-14, interpretation 18). A preset is never assumed owned.
 //
 // Allocation per occurrence runs in code-unit instanceId order: selected-preset supply q_{b,i}
 // first, owned stock second, paid remainder last. The paid occurrences of an item, still in instanceId
 // order, take the units of its chosen lots in offer-list order (see `acquire`). Items with no legal
 // standalone offer are capped by preset supply plus owned stock; an excess is reported as a shortfall,
-// never priced. A stored price <= 0 is not an offer (interpretation 2). Owned stock never grants a receiver or a base.
+// never priced. A stored price <= 0 is not an offer (interpretation 2). Owned stock (`owned_items`) never grants a receiver
+// or a base, and the owned-receiver rule above does not read it.
 
 import type { BaseChoice, ReferenceBuild } from './build';
 import { TRADER_DISABLED } from './constants';
@@ -165,18 +168,47 @@ export function baseOffer(fixture: ResolvedFixture, request: ResolvedRequest, ba
   return cheapestLegalOffer(preset.offers, request);
 }
 
-/** Every accessible base: the naked receiver first (if legally offered), then presets by id. */
-export function accessibleBases(fixture: ResolvedFixture, request: ResolvedRequest): BaseChoice[] {
-  const bases: BaseChoice[] = [];
-  if (baseOffer(fixture, request, { kind: 'naked' })) bases.push({ kind: 'naked' });
-  const presetIds = [...fixture.presets.values()]
+/** The presets built on the requested receiver, by id. */
+function ownPresetIds(fixture: ResolvedFixture, request: ResolvedRequest): string[] {
+  return [...fixture.presets.values()]
     .filter(p => p.weaponId === request.weaponId)
     .map(p => p.id)
     .sort(codeUnitCompare);
-  for (const presetId of presetIds) {
+}
+
+/** The bases that can be bought: the naked receiver first (if legally offered), then presets by id. */
+function purchasableBases(fixture: ResolvedFixture, request: ResolvedRequest): BaseChoice[] {
+  const bases: BaseChoice[] = [];
+  if (baseOffer(fixture, request, { kind: 'naked' })) bases.push({ kind: 'naked' });
+  for (const presetId of ownPresetIds(fixture, request)) {
     if (baseOffer(fixture, request, { kind: 'preset', presetId })) bases.push({ kind: 'preset', presetId });
   }
   return bases;
+}
+
+/**
+ * Interpretation 18 (owner decision 2026-10-14): true when the known receiver has no legal offer and no preset built on it has one. The
+ * player is then taken to own the naked receiver, which is the only base and costs 0. The stash plays no part.
+ */
+export function receiverOwned(fixture: ResolvedFixture, request: ResolvedRequest): boolean {
+  return fixture.weapons.has(request.weaponId) && purchasableBases(fixture, request).length === 0;
+}
+
+/**
+ * Every accessible base: the naked receiver first (if legally offered), then presets by id; or the owned naked receiver alone when nothing
+ * can be bought (`receiverOwned`).
+ */
+export function accessibleBases(fixture: ResolvedFixture, request: ResolvedRequest): BaseChoice[] {
+  const bases = purchasableBases(fixture, request);
+  if (bases.length === 0 && fixture.weapons.has(request.weaponId)) bases.push({ kind: 'naked' });
+  return bases;
+}
+
+/** The price of an accessible base: its cheapest legal lot, 0 for the owned receiver, null when the base is inaccessible. */
+export function basePriceOf(fixture: ResolvedFixture, request: ResolvedRequest, base: BaseChoice): Q | null {
+  const offer = baseOffer(fixture, request, base);
+  if (offer) return offer.lotPrice;
+  return base.kind === 'naked' && receiverOwned(fixture, request) ? ZERO : null;
 }
 
 /** q_{b,i}: units of an item supplied by the selected base (0 for the naked receiver). */
@@ -222,8 +254,11 @@ export interface ItemPurchase {
 }
 
 export interface AcquisitionResult {
-  /** The base is one unit: its price is the cheapest legal lot price. */
-  base: { choice: BaseChoice; offer: LegalOffer | null; price: Q | null };
+  /**
+   * The base is one unit: its price is the cheapest legal lot price. `owned` marks the owned receiver (interpretation 18): no offer, price 0.
+   * An inaccessible base has no offer, `owned` false and price null.
+   */
+  base: { choice: BaseChoice; offer: LegalOffer | null; owned: boolean; price: Q | null };
   /** One record per installed occurrence, in instanceId code-unit order. */
   occurrences: OccurrenceAcquisition[];
   /** Authoritative d_i for items with d_i > 0, whether or not an offer exists. */
@@ -240,7 +275,8 @@ export interface AcquisitionResult {
 
 export function acquire(fixture: ResolvedFixture, request: ResolvedRequest, build: ReferenceBuild): AcquisitionResult {
   const offer = baseOffer(fixture, request, build.base);
-  const basePrice = offer ? offer.lotPrice : null;
+  const owned = offer === null && build.base.kind === 'naked' && receiverOwned(fixture, request);
+  const basePrice = offer ? offer.lotPrice : owned ? ZERO : null;
   const ordered = [...build.placements].sort((a, b) => codeUnitCompare(a.childInstanceId, b.childInstanceId));
   const remainingPreset = new Map<string, number>();
   const remainingOwned = new Map<string, number>();
@@ -304,7 +340,7 @@ export function acquire(fixture: ResolvedFixture, request: ResolvedRequest, buil
     .sort((a, b) => codeUnitCompare(a[0], b[0]))
     .map(([itemId, count]) => ({ itemId, count }));
   return {
-    base: { choice: build.base, offer, price: basePrice },
+    base: { choice: build.base, offer, owned, price: basePrice },
     occurrences,
     deficits,
     purchases,

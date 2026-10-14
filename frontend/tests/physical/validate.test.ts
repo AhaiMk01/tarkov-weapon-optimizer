@@ -415,16 +415,31 @@ test('the base is one unit: the cheapest legal lot price of the receiver or the 
   assert.equal(accepts(lookup, { barterAvailable: true }, presetOf('P')).stats?.spend, 900, 'a lot of 5 still costs its whole price for the one base');
 });
 
-test('base accessibility: no free base, owned stock never grants a receiver or a preset', () => {
+test('base accessibility: owned stock never grants a receiver or a preset; the receiver is owned only when no base can be bought', () => {
   const lookup = lookupOf(
     gunWith(W, { presets: [{ id: 'P', items: [], offers: [trader('prapor', 1, 1000)] }, { id: 'none', items: [], offers: [] }] }),
   );
+  // prapor 0 and no flea: neither the receiver nor any preset can be bought, so the naked receiver is the player's own at price 0
   const closed = { traderLevels: { prapor: 0 }, fleaAvailable: false };
-  rejects(lookup, closed, nakedOf(), 'BASE_INACCESSIBLE');
+  const owned = accepts(lookup, closed, nakedOf());
+  assert.equal(owned.stats?.baseSource, 'owned');
+  assert.equal(owned.stats?.basePrice, 0);
+  assert.equal(owned.stats?.spend, 0);
+  assert.equal(accepts(lookup, { ...closed, ownedItems: [W, 'P', 'none'] }, nakedOf()).stats?.baseSource, 'owned', 'the stash plays no part');
+  // a preset is never owned
   rejects(lookup, closed, presetOf('P'), 'BASE_INACCESSIBLE');
-  rejects(lookup, { ...closed, ownedItems: [W, 'P', 'none'] }, nakedOf(), 'BASE_INACCESSIBLE');
   rejects(lookup, {}, presetOf('none'), 'BASE_INACCESSIBLE');
-  assert.equal(run(lookup, closed, nakedOf()).stats?.spend, 0, 'an inaccessible base is rejected, never priced');
+  // the receiver locked but preset P buyable from Skier: the naked receiver is inaccessible, stash or no stash, and never priced
+  const viaSkier = lookupOf(
+    gunWith(W, { presets: [{ id: 'P', items: [], offers: [trader('skier', 1, 1000)] }] }),
+  );
+  rejects(viaSkier, closed, nakedOf(), 'BASE_INACCESSIBLE');
+  rejects(viaSkier, { ...closed, ownedItems: [W] }, nakedOf(), 'BASE_INACCESSIBLE');
+  assert.equal(run(viaSkier, closed, nakedOf()).stats?.spend, 0, 'an inaccessible base is rejected, never priced');
+  assert.equal(run(viaSkier, closed, nakedOf()).stats?.baseSource, null);
+  assert.equal(accepts(viaSkier, closed, presetOf('P')).stats?.baseSource, 'offer');
+  // a bought receiver
+  assert.equal(accepts(lookup, {}, nakedOf()).stats?.baseSource, 'offer');
   rejects(lookup, {}, presetOf('nope'), 'BASE_UNKNOWN_PRESET');
   const twoGuns: ItemLookup = { ...lookup, ...lookupOf(gunWith('other', { presets: [{ id: 'po', items: [] }] })) };
   rejects(twoGuns, {}, presetOf('po'), 'BASE_WRONG_WEAPON');
@@ -680,6 +695,17 @@ test('a claimed spend or acquisition is cross-checked against the exact recomput
   assert.deepEqual(codesOf(run(lookup, { ownedItems: ['a'] }, { ...presetOf('P', ...placements), claimed: { ...claimed, acquisition: badIndex } })), ['CLAIMED_ACQUISITION_MISMATCH']);
   // A claim that is not a finite number never matches.
   assert.deepEqual(codesOf(run(lookup, { ownedItems: ['a'] }, { ...presetOf('P', ...placements), claimed: { ...claimed, spend: Number.NaN } })), ['CLAIMED_SPEND_MISMATCH']);
+});
+
+test('a claimed base source is cross-checked: offer for a bought base, owned only when no base can be bought', () => {
+  const lookup = claimLookup();
+  accepts(lookup, {}, { ...presetOf('P'), claimed: { baseSource: 'offer', basePrice: 1000 } });
+  assert.deepEqual(codesOf(run(lookup, {}, { ...presetOf('P'), claimed: { baseSource: 'owned' } })), ['CLAIMED_ACQUISITION_MISMATCH']);
+  // prapor 0 and no flea: neither the receiver nor P can be bought, so the naked receiver is owned at price 0
+  const closed = { traderLevels: { prapor: 0 }, fleaAvailable: false };
+  accepts(lookup, closed, { ...nakedOf(), claimed: { baseSource: 'owned', basePrice: 0, spend: 0 } });
+  assert.deepEqual(codesOf(run(lookup, closed, { ...nakedOf(), claimed: { baseSource: 'offer' } })), ['CLAIMED_ACQUISITION_MISMATCH']);
+  assert.deepEqual(codesOf(run(lookup, closed, { ...nakedOf(), claimed: { basePrice: 5000 } })), ['CLAIMED_SPEND_MISMATCH']);
 });
 
 test('instance ids are not checked against the path scheme unless asked', () => {

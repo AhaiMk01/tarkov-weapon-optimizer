@@ -124,11 +124,19 @@ test('empty is proved only by a complete enumeration', () => {
   assert.equal(capped.empty, false);
 });
 
-test('an inaccessible base proves emptiness without a tree, and stock never grants a receiver', () => {
-  const f = fixtureOf([{ id: 'a' }], { slots: [slot('s', ['a'])] });
-  const r = run(f, { trader_levels: { prapor: 0 }, owned_items: ['gun', 'a'] });
-  assert.equal(r.empty, true);
+test('with nothing to buy the owned receiver is the base at price 0, and stock never grants a receiver', () => {
+  // prapor 0 locks the receiver and a; a is owned once. The receiver is the player's own (interpretation 18).
+  const f = fixtureOf([{ id: 'a', ergonomics: 3 }], { slots: [slot('s', ['a'])] });
+  const r = run(f, { recoil_weight: 0, trader_levels: { prapor: 0 }, owned_items: ['gun', 'a'] });
+  assert.equal(r.empty, false);
   assert.equal(r.complete, true);
+  assert.deepEqual(labels(r.maximizers), ['naked|a']);
+  // a buyable preset (Skier) means the locked receiver is not owned: only the preset is a base
+  const g = fixtureOf([{ id: 'a', ergonomics: 3 }], { slots: [slot('s', ['a'])] }, {
+    presets: [{ id: 'pre', weaponId: 'gun', components: [], offers: [{ kind: 'trader', trader: 'skier', level: 1, price: 2000 }] }],
+  });
+  const p = run(g, { recoil_weight: 0, trader_levels: { prapor: 0 }, owned_items: ['gun', 'a'] });
+  assert.deepEqual(labels(p.maximizers), ['preset:pre|a']);
 });
 
 test('base choice: preset parts are free supply, stripping is free, the base is paid once', () => {

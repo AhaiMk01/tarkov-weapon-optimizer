@@ -6,7 +6,7 @@
 //   1. the set of rooted occurrence trees the masks admit equals the oracle's trees filtered by the per-item bans a mask can express;
 //   2. the same for the blueprint alone (structural viability) against the oracle's unfiltered trees minus receiver-banned items;
 //   3. an occurrence is active exactly when it appears in some admissible oracle tree (identity by path-derived instance id);
-//   4. the domain is empty exactly when the oracle has no accessible base or no admissible tree;
+//   4. the domain is empty exactly when the oracle has no admissible tree, and its base is the owned receiver exactly when the oracle's is;
 //   5. accessible bases, legal standalone offers (count, cheapest price and lot sizes), owned stock and preset supply agree;
 //   6. instance ids follow the reference's `parent/slot:item` scheme.
 //
@@ -116,7 +116,7 @@ test('3. an occurrence is active exactly when some admissible oracle tree contai
   assert.deepEqual(mismatches, []);
 });
 
-test('4. the domain is empty exactly when the oracle has no accessible base or no admissible tree', () => {
+test('4. the domain is empty exactly when the oracle has no admissible tree; the owned receiver agrees with the oracle', () => {
   const mismatches: string[] = [];
   for (const r of compared) {
     const oracleEmpty = r.oracle.masked.trees.size === 0; // includes the no-accessible-base case, see oracleSide
@@ -124,8 +124,10 @@ test('4. the domain is empty exactly when the oracle has no accessible base or n
       mismatches.push(`${r.id}: domain.empty ${r.production.domain.empty}, oracle ${oracleEmpty} (bases ${r.oracle.bases.length}, trees ${r.oracle.masked.trees.size})`);
     }
     const codes = r.production.domain.contradictions.map(c => c.code);
-    if (r.oracle.bases.length === 0 && !codes.includes('NO_ACCESSIBLE_BASE')) mismatches.push(`${r.id}: no NO_ACCESSIBLE_BASE contradiction`);
-    if (r.oracle.bases.length > 0 && codes.includes('NO_ACCESSIBLE_BASE')) mismatches.push(`${r.id}: spurious NO_ACCESSIBLE_BASE`);
+    if (codes.some(code => code !== 'ROOT_REQUIRED_SLOT_EMPTY')) mismatches.push(`${r.id}: unexpected contradiction ${codes.join(',')}`);
+    // There is always a base (interpretation 18): the owned receiver exactly when the oracle finds nothing to buy.
+    const owned = r.production.domain.bases.some(b => b.kind === 'naked' && b.owned);
+    if (owned !== r.oracle.ownedReceiver) mismatches.push(`${r.id}: owned receiver ${owned}, oracle ${r.oracle.ownedReceiver}`);
   }
   assert.deepEqual(mismatches, []);
 });

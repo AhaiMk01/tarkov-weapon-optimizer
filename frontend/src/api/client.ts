@@ -160,6 +160,16 @@ export interface PresetDetail {
   weight?: number;
   /** Number of distinct component items the preset supplies (not the sum of their counts). */
   parts_count?: number;
+  /**
+   * How the base is supplied (ADR 0013 section 4A, amendment 2026-10-14): `offer` when it is bought at `price`, `owned` when it is the
+   * player's own naked receiver. A base is owned only when the gun has no legal offer and none of its presets has one; it then costs 0, has
+   * no seller and is never a purchase line.
+   */
+  acquisition: BaseAcquisition;
+}
+
+export interface BaseAcquisition {
+  source: 'offer' | 'owned';
 }
 
 export interface FinalStats {
