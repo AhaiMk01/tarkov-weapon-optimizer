@@ -219,6 +219,8 @@
     "chart_recoil_v": "Recuo V",
     "chart_price": "Preço",
     "pvp": "PvP",
+    "pvp_season": "Temporada PvP",
+    "pvp_season_tooltip": "Servidor PvP de temporada: usa os preços, comerciantes e mercado de pulgas do servidor de temporada",
     "pve": "PvE",
     "copy_btn": "Copiar",
     "reoptimize_btn": "Re-otimizar",

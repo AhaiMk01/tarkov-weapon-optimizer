@@ -219,6 +219,8 @@
     "chart_recoil_v": "Odrzut V",
     "chart_price": "Cena",
     "pvp": "PvP",
+    "pvp_season": "PvP Sezon",
+    "pvp_season_tooltip": "Sezonowy serwer PvP: używa cen, handlarzy i pchlego targu serwera sezonowego",
     "pve": "PvE",
     "copy_btn": "Kopiuj",
     "reoptimize_btn": "Ponowna Optymalizacja",

@@ -219,6 +219,8 @@
     "chart_recoil_v": "Visszarúgás V",
     "chart_price": "Ár",
     "pvp": "PvP",
+    "pvp_season": "PvP Szezon",
+    "pvp_season_tooltip": "Szezonális PvP szerver: a szezonszerver árait, kereskedőit és bolhapiacát használja",
     "pve": "PvE",
     "copy_btn": "Másolás",
     "reoptimize_btn": "Újraoptimalizálás",

@@ -219,6 +219,8 @@
     "chart_recoil_v": "Recul V",
     "chart_price": "Prix",
     "pvp": "PvP",
+    "pvp_season": "PvP Saison",
+    "pvp_season_tooltip": "Serveur PvP saisonnier : utilise les prix, marchands et marché aux puces du serveur saisonnier",
     "pve": "PvE",
     "copy_btn": "Copier",
     "reoptimize_btn": "Ré-optimiser",

@@ -219,6 +219,8 @@
     "chart_recoil_v": "Rinculo V",
     "chart_price": "Prezzo",
     "pvp": "PvP",
+    "pvp_season": "Stagione PvP",
+    "pvp_season_tooltip": "Server PvP stagionale: usa prezzi, commercianti e mercato delle pulci del server stagionale",
     "pve": "PvE",
     "copy_btn": "Copia",
     "reoptimize_btn": "Ri-ottimizza",

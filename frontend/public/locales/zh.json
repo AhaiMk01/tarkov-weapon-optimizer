@@ -219,6 +219,8 @@
     "chart_recoil_v": "垂直后坐",
     "chart_price": "价格",
     "pvp": "PvP",
+    "pvp_season": "PvP 赛季",
+    "pvp_season_tooltip": "PvP 赛季服务器：使用赛季服的价格、商人和跳蚤市场数据",
     "pve": "PvE",
     "copy_btn": "复制",
     "reoptimize_btn": "重新优化",

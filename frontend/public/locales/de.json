@@ -219,6 +219,8 @@
     "chart_recoil_v": "Rückstoß V",
     "chart_price": "Preis",
     "pvp": "PvP",
+    "pvp_season": "PvP-Saison",
+    "pvp_season_tooltip": "Saisonaler PvP-Server: nutzt Preise, Händler und Flohmarkt des Saisonservers",
     "pve": "PvE",
     "copy_btn": "Kopieren",
     "reoptimize_btn": "Neu optimieren",

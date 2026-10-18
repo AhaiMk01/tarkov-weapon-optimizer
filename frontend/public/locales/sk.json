@@ -219,6 +219,8 @@
     "chart_recoil_v": "Spätný ráz V",
     "chart_price": "Cena",
     "pvp": "PvP",
+    "pvp_season": "PvP sezóna",
+    "pvp_season_tooltip": "Sezónny PvP server: používa ceny, obchodníkov a blší trh sezónneho servera",
     "pve": "PvE",
     "copy_btn": "Kopírovať",
     "reoptimize_btn": "Znovu optimalizovať",

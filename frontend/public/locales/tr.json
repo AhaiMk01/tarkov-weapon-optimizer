@@ -219,6 +219,8 @@
     "chart_recoil_v": "Geri Tepme V",
     "chart_price": "Fiyat",
     "pvp": "PvP",
+    "pvp_season": "PvP Sezon",
+    "pvp_season_tooltip": "Sezonluk PvP sunucusu: sezon sunucusunun fiyatlarını, tüccarlarını ve bit pazarını kullanır",
     "pve": "PvE",
     "copy_btn": "Kopyala",
     "reoptimize_btn": "Yeniden Optimize Et",

@@ -219,6 +219,8 @@
     "chart_recoil_v": "반동V",
     "chart_price": "가격",
     "pvp": "PvP",
+    "pvp_season": "PvP 시즌",
+    "pvp_season_tooltip": "PvP 시즌 서버: 시즌 서버의 가격, 상인, 벼룩시장 데이터를 사용",
     "pve": "PvE",
     "copy_btn": "복사",
     "reoptimize_btn": "재최적화",
