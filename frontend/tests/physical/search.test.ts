@@ -9,7 +9,8 @@ import {
 } from '../../src/solver/physical';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
 import { gapUpward, nextUp } from '../../src/solver/physical/numeric';
-import { rat, ratAdd, ratToNumber, type Rat } from '../../src/solver/physical/exact';
+import { rat, ratAdd, ratFromDouble, ratInt, ratSub, ratToNumber, type Rat } from '../../src/solver/physical/exact';
+import { exactWeightPenalty } from '../../src/solver/physical/spatial';
 
 interface FakeBuild { name: string; value: number; weight: number }
 
@@ -389,4 +390,48 @@ test('a split verdict splits without pruning and without a bound: its evidence i
   assert.match(narrow.stopReason ?? '', /Numerical interval resolution/);
   assert.equal(narrow.upperBound, Infinity, 'the split evidence is no bound');
   assert.equal(narrow.empty, false);
+});
+
+test('an a-priori bound fathoms a hopeless interval without evaluating it, and the answer, the certificate and a valid upper bound are kept', async () => {
+  // Effective ergonomics is clamped at 100, so a build of weight W scores at most 100 - q(W) <= 100 - q(lo) on [lo, hi].
+  const capped: FakeBuild[] = [
+    { name: 'light', value: 100, weight: 3.4 },
+    { name: 'mid', value: 100, weight: 3.9 },
+    { name: 'heavy', value: 100, weight: 9 },
+    { name: 'heavier', value: 100, weight: 14 },
+  ];
+  const best = Math.max(...capped.map(exactScore));
+  const cap = (iv: SearchInterval): Rat => ratSub(ratInt(100), exactWeightPenalty(ratFromDouble(iv.lo)));
+  const evaluated: SearchInterval[] = [];
+  const handedAhead: SearchNode[] = [];
+  const evaluate = async (node: SearchNode) => { evaluated.push(node.interval!); return relaxedNode(capped, node); };
+  const run = (aprioriBound?: (iv: SearchInterval) => Rat) => runSpatialSearch({
+    roots: [{ lo: 3, hi: 14 }], evaluate, tolerance: 1e-9, maxNodes: 512, now: () => 0, deadline: 1e9,
+    lookahead: (_current, upcoming) => { handedAhead.push(...upcoming); }, ...(aprioriBound ? { aprioriBound } : {}),
+  });
+  const plain = await run();
+  const plainNodes = evaluated.splice(0).length;
+  handedAhead.splice(0);
+  const withCap = await run(cap);
+  assert.equal(plain.incumbent?.score, best);
+  assert.equal(plain.aprioriFathomed, 0);
+  assert.equal(withCap.incumbent?.payload.name, plain.incumbent?.payload.name);
+  assert.equal(withCap.certified, true);
+  assert.ok(withCap.upperBound >= best, 'the a-priori bound of a fathomed node is a valid bound of it');
+  assert.ok(evaluated.every(iv => ratToNumber(cap(iv)) > best + 1e-9), 'no interval whose cap is within the tolerance of the optimum was evaluated');
+  assert.ok(withCap.aprioriFathomed > 0 && withCap.nodes === evaluated.length && withCap.nodes < plainNodes, `${withCap.nodes} < ${plainNodes} evaluations, ${withCap.aprioriFathomed} fathomed a priori`);
+  assert.ok(handedAhead.every(n => n.incumbentExact === null || n.bound > ratToNumber(n.incumbentExact) + 1e-9), 'lookahead never sees a node already hopeless against the incumbent');
+});
+
+test('a stopped search publishes the a-priori bound of an unevaluated node: finite and valid, not unknown', async () => {
+  // Two roots; the heavy one is never evaluated (node limit 1), but its cap bound is a proof: the upper bound is the cap, not unknown.
+  const builds: FakeBuild[] = [{ name: 'light', value: 30, weight: 2 }, { name: 'heavy', value: 100, weight: 10 }];
+  const cap = (iv: SearchInterval): Rat => ratSub(ratInt(100), exactWeightPenalty(ratFromDouble(iv.lo)));
+  const stopped = await runSpatialSearch({
+    roots: [{ lo: 2, hi: 3 }, { lo: 6, hi: 10 }], evaluate: async node => relaxedNode(builds, node), tolerance: 1e-9, maxNodes: 1, now: () => 0, deadline: 1e9,
+    aprioriBound: cap,
+  });
+  assert.equal(stopped.stopReason, PUBLIC_REASONS.nodeLimitReached);
+  assert.equal(stopped.upperBound, ratToNumber(cap({ lo: 6, hi: 10 })), 'the unevaluated heavy root contributes its cap, 100 - q(6) = 50');
+  assert.ok(stopped.upperBound >= exactScore(builds[1]), 'and the cap bounds the heavy build');
 });
