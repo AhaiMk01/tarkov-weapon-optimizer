@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.2.1] — 2026-10-18
+
+### Fixed
+- **Translations**: About 2,600 texts that still showed in English in the other languages are now translated, including the methodology page, the gallery, Explore, result explanations and error messages. Czech, Hungarian, Polish, Romanian, Slovak and Turkish gain the most. A few terms that were worded two different ways within one language now match.
+
 ## [v3.2.0] — 2026-10-18
 
 ### Added
