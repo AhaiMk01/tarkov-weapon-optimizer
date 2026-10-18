@@ -59,7 +59,7 @@ import type { PolicyOutcome, PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
 import type { OptimizeOutcome } from './outcome';
-import { exactAxes, exactObjectiveScore, scoreEnclosure } from './proof';
+import { aprioriScoreBound, exactAxes, exactObjectiveScore, scoreEnclosure } from './proof';
 import type { BoundEvidence } from './proof';
 import { PUBLIC_REASONS, reasonOfNativeLimit } from './reasons';
 import { runSpatialSearch } from './search';
@@ -107,6 +107,8 @@ export interface FastSummary {
   tolerance: number;
   /** Outer spatial calls (weight nodes evaluated); 0 for a request that reads no TED (there is no spatial dimension). */
   nodes: number;
+  /** Weight nodes fathomed by the a-priori cap bound without a native call (`aprioriScoreBound`). */
+  aprioriFathomedNodes: number;
   /** The request reads TED, so the weight search ran. */
   spatial: boolean;
   /**
@@ -180,7 +182,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const singleCopy = params.allowRepeatedParts !== true;
   const request: SpecializeRequest = { ...params, singleCopy };
   const summary: FastSummary = {
-    nativeSolves: 0, inconclusiveSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, presolve, modelObjective: null, tolerance, nodes: 0, spatial: tedRequest, modelBound: null,
+    nativeSolves: 0, inconclusiveSolves: 0, rejectedPoints: 0, columns: 0, rows: 0, edges: 0, presolve, modelObjective: null, tolerance, nodes: 0, aprioriFathomedNodes: 0, spatial: tedRequest, modelBound: null,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, singleCopy,
   };
   const moaDependent = isMoaDependent(params);
@@ -205,9 +207,14 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
 
   /** The model of one node; a request with no TED has one model, built once (a constant contradiction of the request is read from it before the search). */
   let rootModel: FastModel | null = null;
+  /** The objective every node's model shares (the one its builds are scored with), from the first model built: what the a-priori bound reads. */
+  let objective: FastModel['objective'] | null = null;
   const modelOf = (interval: SearchInterval | null): FastModel => {
-    if (interval === null) return (rootModel ??= specializeFast(blueprint, domain, request));
-    return specializeFast(blueprint, domain, request, { weightMin: interval.lo, weightMax: interval.hi });
+    const model = interval === null
+      ? (rootModel ??= specializeFast(blueprint, domain, request))
+      : specializeFast(blueprint, domain, request, { weightMin: interval.lo, weightMax: interval.hi });
+    objective ??= model.objective;
+    return model;
   };
   const measure = (model: FastModel): void => {
     summary.columns = Math.max(summary.columns, model.stats.columns);
@@ -401,8 +408,12 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     roots = rootIntervals(weight.lo, weight.hi, params.maxWeight);
   }
   const maxNodes = tedRequest ? Math.max(0, Math.floor(params.maxSpatialNodes ?? DEFAULT_MAX_SPATIAL_NODES)) : Number.POSITIVE_INFINITY;
-  const search = await runSpatialSearch<FastVerifiedBuild>({ roots, evaluate, tolerance, maxNodes, now, deadline, guard });
+  const search = await runSpatialSearch<FastVerifiedBuild>({
+    roots, evaluate, tolerance, maxNodes, now, deadline, guard,
+    aprioriBound: interval => (objective === null ? null : aprioriScoreBound(objective.weights, objective.tchebycheff?.ideal ?? null, useTrueErgo, interval)),
+  });
   summary.nodes = tedRequest ? search.nodes : 0;
+  summary.aprioriFathomedNodes = search.aprioriFathomed;
   summary.modelBound = Number.isFinite(search.upperBound) ? search.upperBound : null;
 
   const facts = { mode: 'fast', moaDependent, witness: search.incumbent !== null, searchFinished: search.finished, observed: observationsOfReason(search.stopReason) } as const;
