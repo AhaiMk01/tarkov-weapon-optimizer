@@ -11,6 +11,7 @@ import type { SolveFn } from '../../src/solver/physical/nativeSolve';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { PreciseResult } from '../../src/solver/physical/solvePrecise';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
+import { validatePhysicalBuild } from '../../src/solver/physical/validate';
 import { gun, lookupOf, mod, slot, trader, WEAPON } from './lpFixtures';
 import { gunWith, modWith } from './lpFixtures';
 
@@ -49,19 +50,21 @@ test('a filtered coefficient: the verified build is published, the bound and the
     ['a', modWith('a', { ergo: 0, recoil: -1e-10 })],
     ['b', modWith('b', { ergo: 0.5 })],
   );
-  const result = await solvePrecise({ params: paramsOf(lookup, { recoilWeight: 1e7 }), deadline: FAR() });
+  const params = paramsOf(lookup, { recoilWeight: 1e7 });
+  const result = await solvePrecise({ params, deadline: FAR() });
   const { certified, reason, summary, best } = built(result);
-  // HiGHS solved a different model: without the coefficient `a` buys nothing and the count model's `rec_mod` is free within its domain, so what it calls
-  // optimal (about 1.0) installs nothing: the verified empty build (score 0) is published, but NOT as a proved optimum
-  assert.deepEqual(installed(result), []);
-  assert.ok(Math.abs(best.score) < 1e-12);
+  // Filtering changes the native model, so its choice of witness is not an exact-optimality claim.
+  const verified = validatePhysicalBuild(lookup, params, best.build, { requirePathInstanceIds: true });
+  assert.equal(verified.ok, true, JSON.stringify(verified.violations));
+  assert.deepEqual(best.stats, verified.stats);
   assert.equal(certified, false, 'a naive pipeline would certify it as optimal; the exact optimum is a, 1.0');
   assert.equal(reason, PUBLIC_REASONS.requiredProofPrerequisiteUnavailable);
   assert.ok(summary.telemetry.unqualifiedSolves >= 1, 'the relaxed-edge try and the integer fallback read the same filtered coefficient');
   assert.ok(summary.telemetry.unqualifiedReasons.some(r => /different model/.test(r)), summary.telemetry.unqualifiedReasons.join(' | '));
   assert.equal(summary.bounds.upper, null, 'an unknown upper bound is null on the wire, never zero or infinite');
   assert.equal(summary.bounds.gap, null);
-  assert.ok(summary.bounds.lower !== null && Math.abs(summary.bounds.lower) < 1e-12, 'the lower bound is the downward enclosure of the verified build');
+  assert.equal(summary.bounds.lower, best.scoreLower, 'the lower bound is the downward enclosure of the verified build');
+  assert.ok(summary.bounds.lower !== null && summary.bounds.lower <= best.score);
   assert.equal(summary.upperBound, Infinity);
   // The native search of the one exact node ran to Optimal and only its PROOF was withheld: the executed search finished (ADR 0013 section 6, "a completed
   // search followed by failed validation/proof qualification remains optimal"), whatever the certificate says.

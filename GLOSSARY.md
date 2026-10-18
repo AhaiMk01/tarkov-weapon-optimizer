@@ -103,16 +103,10 @@ The outward-safe floor function `outwardSafeCeil(hi, decimals)` evaluated on the
 The exact Big-M row $\frac{c_b}{100} A(x) - M_b x_b \ge c_b - L - M_b$ (where $c_b = \text{coi}_b \cdot K, L = \text{maxMOA}$) with $M_b = \max(0, \text{MOA}_b^{\max} - L)$ and $\text{MOA}_b^{\max} = c_b (1 - A_{\min} / 100)$, paired with nonconstant fallback row $\frac{c_{\text{base}}}{100} A(x) + M_{\text{fb}} \sum_{b} x_b \ge c_{\text{base}} - L$ (and unconditional $\frac{c_{\text{base}}}{100} A(x) \ge c_{\text{base}} - L$ when no positive replacement barrels exist). $A_{\min} = \sum_{s \in \text{Slots}} \min(0, \min_{i \in \text{Allowed}(s)} \text{acc}_i)$ is derived by summing worst-case negative accuracy modifiers across reachable physical slot instances as a conservative lower bound.
 
 ### Ergonomics Clamp Specialization
-The dynamic specialization of raw ergonomics clamping based on unclipped structural bounds $[rawLo, rawHi]$:
-- $rawHi \le 0$: $t = 0$ (0 binary vars, 0 Big-M rows).
-- $rawLo \ge 1000$: $t = 1000$ (0 binary vars, 0 Big-M rows).
-- $rawLo \ge 0 \land rawHi \le 1000$: $t - r = 0$ (0 binary vars, 0 Big-M rows).
-- $0 \le rawLo \le 1000 < rawHi$: Upper saturation clamp with $t \le r$, $t \ge r - (rawHi - 1000)z$, $t \ge 1000 - (1000 - rawLo)(1 - z)$ (1 binary var, 3 rows).
-- $rawLo < 0 \le rawHi \le 1000$: Lower floor clamp with $t \ge r$, $t \le r + (-rawLo)z$, $t \le rawHi(1 - z)$ (1 binary var, 3 rows).
-- $rawLo < 0 \land rawHi > 1000$: Full 3-regime piecewise clamp with $M = \max(|rawLo|, |rawHi|, 1000) + 1000$ (3 binary vars, 8 Big-M rows).
+The same two-stage rule, `min(100, max(0, source))`, restricted to the source's proved range in unscaled ergonomics points. Raw ergonomics is clamped first, then the nonnegative equipment factor is applied and the result is clamped again before TED is calculated.
 
-### Second-Clamp Elimination
-An optional proved Stage 4 reduction, not part of the unreduced correctness baseline. When equipment factor $\max(0, 1 + \text{equipErgoModifier}) \le 1$ and the first capped ergonomics value is proved in $[0,1000]$ scaled units, its product remains in that interval. The second clamp can then be replaced by direct equality (`effective_ergo - gear_ergo = 0`) under the numerical and exact-invariance gates. Preserve both clamp semantics in the baseline and whenever the elimination's prerequisites fail.
+### Enclosing Clamp Segments
+Segments of the same clamp graph that can extend beyond the source's proved range without changing its permitted values or outputs. Their continuous convex hull can be wider than the hull of the original segments, but their integer selection preserves every feasible build and optimizing tie.
 
 ### 3 kg Root Split Invariant
 The search tree invariant requiring any initial weight interval spanning $W = 3\text{ kg}$ to be split at the root node into $[W_{\min}, 3]$ (where weight penalty $q(W) \equiv 0$) and $[3, W_{\max}]$ (where $q(W)$ is strictly concave), with node weight intervals $[W_1, W_2]$ enforced as hard LP bounds on `total_weight`. Guarantees that interval secants are valid under-estimators of $q(W)$ and valid upper bounds on TED.

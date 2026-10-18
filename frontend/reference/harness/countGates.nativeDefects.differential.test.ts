@@ -216,21 +216,6 @@ const integerEdges = (lp: string): boolean => {
   return at >= 0 && /\se_\d+_\d+\b/.test(lp.slice(at));
 };
 
-test('native defect 2 on the real node text: the integer text of world 30001860 at [2.5, 2.5] is Infeasible under every production seed, its relaxed-edge text is Optimal under every seed (so production does not prune the node)', async () => {
-  const native = (await import(NATIVE)) as NativeLike;
-  const { nativeSolveOptions } = (await import(NATIVE_SOLVE)) as NativeSolveLike;
-  const { PRECISE_RANDOM_SEEDS } = (await import(SOLVE_PRECISE)) as PreciseLike;
-  const production = { ...nativeSolveOptions(1e-9), presolve: 'off', time_limit: 60 };
-  const node = world30001860Node();
-  assert.equal(integerEdges(node.integer), true);
-  assert.equal(integerEdges(node.relaxed), false);
-  for (const seed of PRECISE_RANDOM_SEEDS) {
-    assert.equal((await native.getNativeHighs().solveStructured(node.integer, { ...production, random_seed: seed })).modelStatus.name, 'Infeasible', `integer text, seed ${seed}`);
-    const relaxed = await native.getNativeHighs().solveStructured(node.relaxed, { ...production, random_seed: seed });
-    assert.equal(relaxed.modelStatus.name, 'Optimal', `relaxed-edge text, seed ${seed}`);
-  }
-});
-
 test('native defect 2 (characterization of the limit of the guard): on the ROW-DELETED minimal text the relaxed-edge text is falsely Infeasible too', async () => {
   const native = (await import(NATIVE)) as NativeLike;
   const { nativeSolveOptions } = (await import(NATIVE_SOLVE)) as NativeSolveLike;

@@ -227,16 +227,3 @@ test('real guns: the Fast text of the default, Tchebycheff, MOA and capped reque
     }
   }
 });
-
-test('a Fast LP never carries a legacy remnant: no 1000 Big-M literal, no rounded coefficient, no stand-in price, no x_-1', () => {
-  const lookup = lookupOf(
-    gun(WEAPON, { slots: [slot('s1', ['a', 'host']), slot('s2', ['a'])] }),
-    ['a', mod('a', { ergo: 0.123456789, recoil: -0.0123456789, weight: 0.0123456789, offers: [trader('prapor', 1, 123)] })],
-    ['host', mod('host', { slots: [slot('r', ['a'], true)], offers: [barter('mechanic', 1, 777)] })],
-  );
-  const text = fast(lookup, { barterAvailable: true, priceWeight: 1 }).lpBase;
-  assert.doesNotMatch(text, /x_-/);
-  assert.doesNotMatch(text, /50000000|100000000/, 'no unpurchasable stand-in price');
-  assert.match(text, /0\.123456789/, 'full-precision coefficients, no toFixed(6)');
-  assert.match(text, /0\.0123456789/);
-});

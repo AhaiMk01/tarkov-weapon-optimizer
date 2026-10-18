@@ -87,3 +87,39 @@ The following numerical contracts are mandatory proof prerequisites; clamp/preso
 - **Issue #36 ([accepted independent oracle/equivalence contract](https://github.com/AhaiMk01/tarkov-weapon-optimizer/issues/36#issuecomment-5974832944))**: Require the full numerical/source/quantity fixture ledger, parsed-model verification and lifting/projection theorem; finite fixtures and feasibility validation are not universal equivalence or native proof.
 - **Historical acceptance evidence**: The canonical #34 acceptance reports twelve complete-operation/upstream-uncertainty smoke fixtures and twelve singleton/narrow/regular secant checks against exact rational comparison values. Those are contract smoke checks, not production/native-parser tests, real-game calibration or measured speedup. No old failures were rerun and no such checks were performed in this reconciliation.
 - **Remaining prerequisites, not new owner decisions**: Implementation must establish the pinned native ABI/build, full-precision extraction, parsed-model equivalence, finite auxiliary domains, complete error/proof provenance and independent equivalence evidence. Floor bracket discovery under the further #40 correction requires no analytic lower-bound algorithm; zero/negative finite threshold rows retain these same complete numerical gates. `model_witnessed` is the incomplete-search fallback, not the immediate no-lo behavior. No record promises universal game authority.
+
+## Production clamp amendment, 2026-10-18
+
+This amendment supersedes principle 5's scaled-unit formulas and optional-specialization description for the current shared count emitter.
+The historical planning text above remains evidence of that earlier contract. Production clamps unscaled ergonomics points to `[0,100]`,
+not `[0,1000]`. Both Fast and Precise call the same private, bounds-specialized `emitClamp`.
+
+The source's original enclosed bounds select zero, constant 100, identity, lower hinge, upper hinge, or full crossing.
+The first three cases use one equality and no selector. The lower hinge uses one binary, two finite segment-source columns, and four rows.
+The upper hinge uses one binary, one continuous complement in `[0,1]`, and four rows.
+The full crossing uses three one-hot binaries, three finite segment-source columns, and seven rows.
+The same classification handles the second clamp using the entire `gearEnclosure`, not a nominal equipment-factor product.
+The formulas, finite domains, lifting, and integer projection are proved in [count-model Lemma H](../proofs/count-model.md#32-arithmetic-and-clamp-lemmas).
+
+Unscaled clamp coefficients are selected binary64 leaves or exact negations on distinct columns.
+Before widening auxiliary endpoints, a row may be multiplied by a positive power of two.
+Every coefficient and RHS must multiply and divide back exactly without overflow or underflow, and every nonzero product
+must lie strictly between the native thresholds `1e-9` and `1e15`. The source and target column bounds are never scaled.
+No rounded `U-C`, `C-L`, or merged-column subtraction is introduced, so clamp construction error is zero and no padded-row record is needed.
+Only when exact row normalization cannot retain a tiny endpoint does a negative endpoint with magnitude at most `1e-9` widen to `-1e-6`.
+A tiny positive lower-hinge upper endpoint then widens to `1e-6`, and a tiny positive upper-hinge lower endpoint lowers to zero.
+Only auxiliary segment envelopes change. The original source and target domains and the breakpoints remain unchanged.
+These extensions remain on the same clamp graph, preserving every integer build and optimizing tie.
+The relaxation is the hull of the enclosing segments intersected with the original domains, not necessarily the ideal hull of the original interval.
+
+The raw-ergonomics source definition uses the same exact power-of-two checks, with a preferred factor of `2^10`.
+This normalization reduces native MIP propagation residuals in the equation that feeds the first clamp.
+It applies only when every original statistic coefficient already survives the matrix filter, so filtered-input proof withholding is unchanged.
+Both sides scale together. The original equation, source and target domains, objective frame, and proof allowances remain unchanged.
+The factor is a numerical representation choice, not a new native-error theorem or a relaxed certificate rule.
+
+
+Native readback equivalence, finite-domain checks, matrix thresholds, proof withholding, presolve off, independent seed opinions,
+and exact physical validation remain required. Gear-factor uncertainty retains its existing proof record.
+Tiny original statistic coefficients and very large endpoints can still prevent qualification.
+This amendment asserts no universal speedup and records no newly exercised verification or benchmark evidence.

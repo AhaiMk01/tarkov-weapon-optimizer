@@ -48,7 +48,6 @@ test('the rows of a TrueErgo node: the weight node, the gear factor and second c
   const model = fast(secantWorld(), ted, node);
   const rows = rowsOf(model);
   assert.deepEqual([...rows.keys()].filter(name => /^(node_|gear_def|ted_def|lim_overswing)/.test(name)), ['node_lo', 'node_hi', 'gear_def', 'ted_def']);
-  assert.ok(rows.has('c2_regime') && rows.has('c2_eqlo') && rows.has('c2_eqhi'), 'the second clamp is the general three-regime disjunction, as the first');
   const penalty = secantOfPenalty(4.2, 4.8);
   assert.equal(penalty.kind, 'secant');
   const row = rows.get('ted_def');
@@ -79,7 +78,7 @@ test('every auxiliary column of a TED node has a finite domain that encloses its
   assert.ok(tedColumn && eff);
   assert.ok(tedColumn.lower <= eff.lower - at(4.8) && tedColumn.upper >= eff.upper - at(4.2), `ted [${tedColumn.lower}, ${tedColumn.upper}] encloses eff [${eff.lower}, ${eff.upper}] minus the line`);
   assert.ok(eff.lower >= 0 && eff.upper <= 100, 'the second clamp keeps eff in [0, 100]');
-  assert.ok(column('gear_ergo') && column('eff_ergo') && column('c2_low') && column('c2_mid') && column('c2_high'));
+  assert.ok(column('gear_ergo') && column('eff_ergo'));
 });
 
 test('Prevent Overswing alone: TED >= 0 as a row, the objective keeps reading the first clamp, no TED in the frame', () => {

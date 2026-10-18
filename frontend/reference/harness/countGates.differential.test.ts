@@ -19,21 +19,9 @@ const LONG = process.env.COUNT_GATES_LONG === '1';
 const SEED = Number(process.env.COUNT_GATES_SEED ?? 0);
 const size = (small: number, long: number): number => (LONG ? long : small);
 
-/**
- * Cells whose solver objective differs from the exact value by more than the case tolerance (1e-9) and less than the precision limit: the native
- * integrality tolerance of 1e-7 (owner decision 5b) lets a point sit 1e-7 off integral. Listed explicitly so a new one is noticed, never absorbed.
- * The six gateBObjective cells are six of the seven OWNER_APPROVED_CERTIFICATE_LOSSES of scoreboard.ts (the seventh, F12-near-cap-weight-one-ulp-over-cap,
- * is a near-cap case below the solver tolerance and is n/a here). F11-payoff-table-admissibility-tied-endpoints is NOT among them: its production answer
- * passes; only one gate-side pinned maximizer solve reads 1e-7 high.
- */
-const EXPECTED_PRECISION_CELLS: readonly string[] = [
-  'F01-self-copy-cap gateBObjective',
-  'F04-recoil-final-cap-sum gateBObjective',
-  'F04-max-price-cap-boundary gateBObjective',
-  'F04-max-weight-cap-boundary gateBObjective',
+// Keep the sub-tolerance near-cap exception. Recovered precision cells must not regress.
+const ALLOWED_PRECISION_CELLS: readonly string[] = [
   'F04-near-cap-min-ergonomics-gap-2e-20 gateBObjective',
-  'F08-optional-barrel-fallback gateBObjective',
-  'F11-payoff-table-admissibility-tied-endpoints gateBPinned',
 ];
 
 /**
@@ -75,7 +63,8 @@ test('ledger: Gates A, B and C on production Precise (certified count model) for
   assert.deepEqual(skipped.map(r => r.id).sort(), Object.keys(OUT_OF_SCOPE_CASES).sort(), 'exactly the out-of-scope (cyclic) cases are skipped');
   assert.ok(skipped.every(r => r.scopeDetail === CYCLIC_OUT_OF_SCOPE), 'they are skipped as out of scope, nothing else');
   assert.equal(tally.gated, LEDGER.length - skipped.length);
-  assert.deepEqual(tally.precision.map(p => `${p.id} ${p.gate}`).sort(), [...EXPECTED_PRECISION_CELLS].sort(), 'precision cells (decision 5b) are exactly the listed ones');
+  const newPrecisionCells = tally.precision.map(p => `${p.id} ${p.gate}`).filter(cell => !ALLOWED_PRECISION_CELLS.includes(cell));
+  assert.deepEqual(newPrecisionCells, [], 'precision cells (decision 5b) must stay within the existing allowlist');
 });
 
 test('seeded worlds (lpFuzz, TED and Tchebycheff included): Gates A, B and C on production Precise; cyclic worlds are out of scope', { timeout: 240 * 60_000 }, async t => {

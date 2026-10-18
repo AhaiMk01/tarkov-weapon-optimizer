@@ -11,6 +11,7 @@ import type { ItemLookup, SolveParams } from '../../src/solver/types';
 import { preparePhysicalWeapon, prepareSubproblemDomain, specializeCount } from '../../src/solver/physical';
 import { solvePrecise } from '../../src/solver/physical/solvePrecise';
 import type { PreciseContext, PreciseResult } from '../../src/solver/physical/solvePrecise';
+import { validatePhysicalBuild } from '../../src/solver/physical/validate';
 import { gun, gunWith, lookupOf, mod, modWith, slot, trader, WEAPON } from './lpFixtures';
 
 const paramsOf = (lookup: ItemLookup, extra: Partial<SolveParams> = {}): SolveParams => ({
@@ -48,18 +49,20 @@ test('a filtered coefficient: the verified build is published, the bound and the
     ['a', modWith('a', { ergo: 0, recoil: -1e-10 })],
     ['b', modWith('b', { ergo: 0.5 })],
   );
-  const run = await solveCount(paramsOf(lookup, { recoilWeight: 1e7 }));
+  const params = paramsOf(lookup, { recoilWeight: 1e7 });
+  const run = await solveCount(params);
   const { certified, telemetry, bounds, best } = built(run);
-  // HiGHS solved a different model: without the coefficient `a` buys nothing and `rec_mod` is free within its domain, so its "optimum" (about 1.0) installs
-  // nothing; the published build is the verified empty one (score 0), and it is not called optimal (the exact optimum is `a`, 1.0)
-  assert.deepEqual(installed(run), []);
-  assert.ok(Math.abs(best.score) < 1e-12);
+  // Filtering changes the native model, so its choice of witness is not an exact-optimality claim.
+  const verified = validatePhysicalBuild(lookup, params, best.build, { requirePathInstanceIds: true });
+  assert.equal(verified.ok, true, JSON.stringify(verified.violations));
+  assert.deepEqual(best.stats, verified.stats);
   assert.equal(certified, false, 'a naive pipeline would certify it; the exact optimum is a, 1.0');
   assert.ok(telemetry.unqualifiedSolves >= 1, 'the relaxed-edge try and the integer fallback read the same filtered coefficient');
   assert.ok(telemetry.unqualifiedReasons.some(r => /different model/.test(r)), telemetry.unqualifiedReasons.join(' | '));
   assert.equal(bounds.upper, null);
   assert.equal(bounds.gap, null);
-  assert.ok(bounds.lower !== null && Math.abs(bounds.lower) < 1e-12);
+  assert.equal(bounds.lower, best.scoreLower, 'the lower bound is the downward enclosure of the verified build');
+  assert.ok(bounds.lower !== null && bounds.lower <= best.score);
 });
 
 test('an infeasibility verdict from a solve whose parsed model differs from the text is not emptiness; with an honest solver the request is proved empty', async () => {
@@ -140,4 +143,62 @@ test('a presolved Optimal is a feasible witness only: the verified build is publ
   assert.equal(bounds.upper, null);
   assert.ok(telemetry.unqualifiedReasons.some(r => /presolve choose/.test(r)), telemetry.unqualifiedReasons.join(' | '));
   assert.equal(built(await solveCount(paramsOf(lookup))).certified, true);
+});
+
+test('bound-specialized first clamps certify every regime and keep min-ergonomics feasibility with zero objective weights', async () => {
+  for (const [receiver, addition, expected] of [[-10, 1, 0], [110, 1, 100], [37, 1, 38], [-5, 10, 5], [99, 2, 100], [-5, 110, 100]]) {
+    const lookup = lookupOf(gun(WEAPON, { ergo: receiver, slots: [slot('s', ['a'])] }), ['a', mod('a', { ergo: addition })]);
+    const run = await solveCount(paramsOf(lookup, { objectiveTolerance: 1e-6 }));
+    assert.equal(built(run).certified, true);
+    assert.equal(run.telemetry.unqualifiedSolves, 0);
+    assert.ok(Math.abs(built(run).best.score - expected) <= 1e-9);
+  }
+  const lookup = lookupOf(gun(WEAPON, { ergo: -5, slots: [slot('s', ['a'])] }), ['a', mod('a', { ergo: 110 })]);
+  const weights = { ergoWeight: 0, recoilWeight: 0, priceWeight: 0, objectiveTolerance: 1e-6 };
+  for (const minErgonomics of [0, 99.99, 100]) {
+    const run = await solveCount(paramsOf(lookup, { ...weights, minErgonomics }));
+    assert.equal(built(run).certified, true);
+    assert.equal(built(run).best.score, 0);
+    if (minErgonomics > 0) assert.deepEqual(installed(run), ['a']);
+  }
+  const empty = await solveCount(paramsOf(lookup, { ...weights, minErgonomics: 100.01 }));
+  assert.equal(empty.kind, 'empty');
+});
+
+test('repeated parts remain available to zero weighted or Tchebycheff objectives when the capped minimum requires both copies', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { ergo: -10, slots: [slot('s1', ['a']), slot('s2', ['a'])] }),
+    ['a', mod('a', { ergo: 60 })],
+  );
+  for (const useTchebycheff of [false, true]) {
+    const run = await solveCount(paramsOf(lookup, {
+      ergoWeight: 0, recoilWeight: 0, priceWeight: 0, minErgonomics: 100, useTchebycheff,
+      idealPoint: { zE: 1000, nadE: 0, zR: 0, nadR: 0, zP: 5000, nadP: 10000 }, objectiveTolerance: 1e-6,
+    }));
+    assert.equal(built(run).certified, true);
+    assert.equal(run.telemetry.unqualifiedSolves, 0);
+    assert.equal(built(run).best.score, 0);
+    assert.deepEqual(installed(run), ['a', 'a']);
+  }
+});
+
+test('second-clamp zero, identity, neighboring-factor and saturation requests retain qualified nonlinear search', async () => {
+  const lookup = lookupOf(
+    gun(WEAPON, { ergo: 60, weight: 4, slots: [slot('s', ['a'])] }),
+    ['a', mod('a', { ergo: 30, weight: 1 })],
+  );
+  for (const equipErgoModifier of [-1, -0.2, 0, 1, 3]) {
+    const run = await solveCount(paramsOf(lookup, { useTrueErgo: true, equipErgoModifier, objectiveTolerance: 1e-6 }));
+    assert.equal(built(run).certified, true);
+    assert.equal(run.telemetry.unqualifiedSolves, 0);
+  }
+  for (const useTrueErgo of [false, true]) {
+    const run = await solveCount(paramsOf(lookup, {
+      useTrueErgo, preventOverswing: true, equipErgoModifier: 1,
+      ergoWeight: 0, recoilWeight: 0, priceWeight: 0, objectiveTolerance: 1e-6,
+    }));
+    assert.equal(built(run).certified, true);
+    assert.equal(run.telemetry.unqualifiedSolves, 0);
+    assert.equal(built(run).best.score, 0);
+  }
 });

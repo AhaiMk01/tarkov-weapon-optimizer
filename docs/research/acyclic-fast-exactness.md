@@ -170,8 +170,11 @@ the owner would then have an empty required slot). **Exact.** Tested: 140 advers
 `n_t >= 1`; a category group is `sum of n_t over active templates whose category chain meets the group >= 1`; an unknown or inactive id, or an empty group, is a constant contradiction row (oracle: infeasible). **Exact.**
 
 ### 5.7 Caps on additive statistics, magazine and sighting maximum, clamps, MOA
-Additive statistics (ergonomics, recoil modifier, weight, accuracy): `sum_t value_t n_t` equals the sum over installed occurrences. Clamp: the three-regime big-M clamp is exact for any sign of the source, with
-`M` from the active bounds (valid enclosures of every physical build). Recoil caps are stated without division. Magazine/sighting: "receiver meets it, or some installed template reaches it": `sum n_t >= 1` over templates reaching the limit (maximum over receiver and installed items). **Exact.**
+Additive statistics (ergonomics, recoil modifier, weight, accuracy): `sum_t value_t n_t` equals the sum over installed occurrences. Both production clamps use unscaled cap 100 and the same bound-specialized emitter. A source interval wholly in one regime needs only its graph equality. A single threshold crossing uses one binary; a crossing of both thresholds uses the three-segment disaggregated hull.
+
+Each physical source value lifts by selecting its segment. Conversely, an integral selector fixes the output to zero, the source, or 100 on that segment. Every coefficient is an existing binary64 endpoint, a safe enclosing endpoint, cap, a unit, or an exact negation. Tiny auxiliary segment endpoints widen only along the same graph, with the original source and target domains unchanged. Integer semantics remain exact, although the relaxation need not be the ideal hull of the original interval. The finite-domain derivations and formulas are in [the count-model clamp lemma](../proofs/count-model.md#32-arithmetic-and-clamp-lemmas). Native readback and exact witness validation remain required.
+
+Recoil caps are stated without division. Magazine/sighting means "the receiver meets it, or some installed template reaches it": `sum n_t >= 1` over templates reaching the limit. **Exact.**
 
 **MOA with barrel COI replacement: the one deviation.** Oracle: effective COI is the LARGEST positive COI among installed items (the intrinsic one only if none), `MOA = COI * (1 - A/100) * K`. Fast: one row per barrel template `b`,
 `z_b = 1 => c_b * K * (1 - A/100) <= L`, i.e. the cap of EVERY installed barrel, plus a fallback row for "no barrel". For `A <= 100` the factor `1 - A/100 >= 0`, MOA grows with COI and "the largest barrel meets the cap" is

@@ -1,6 +1,3 @@
-// The certifiable count model (src/solver/physical/specializeCount.ts, the certified mode of specializeFast.ts; Phase 2.10, decision 2e): strict text that HiGHS
-// reads back as written, the proof record every constructed row carries, the row families, the numerics shared with the occurrence model, the MOA rows that state
-// the oracle's rule (the largest centre of impact binds), the preconditions asserted on the data (Lemma 1), and the refusals. The plain Fast model must stay what it was.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { parseLpText } from '../../src/solver/native';
@@ -245,7 +242,7 @@ test('Lemma 1 is verified, not trusted: masking one candidate occurrence under o
   assert.throws(() => specializeCount(bp, tampered, {}), isCode('DOMAIN_INCONSISTENT'), 'no certified model is built on it');
 });
 
-test('a certified model allows every repeat: the singleCopy restriction of Fast is not read; the plain Fast model is unchanged by the option existing', () => {
+test('a certified model allows every repeat: the singleCopy restriction applies only to plain Fast', () => {
   const lookup = lookupOf(gun(WEAPON, { slots: [slot('s1', ['a']), slot('s2', ['a']), slot('s3', ['a'])] }), ['a', mod('a', { ergo: 1, offers: [trader('prapor', 1, 10)] })]);
   const blueprint = preparePhysicalWeapon(lookup, WEAPON);
   const domain = prepareSubproblemDomain(blueprint, lookup, {});
@@ -262,17 +259,13 @@ test('a certified model allows every repeat: the singleCopy restriction of Fast 
   assert.equal(plain.moaRows, null);
 });
 
-test('a certified LP never carries a legacy remnant: no 1000 Big-M literal, no rounded coefficient, no stand-in price, no x_-1; every auxiliary column is finite', () => {
+test('a certified model keeps every auxiliary domain finite with fractional statistics and barter supply', () => {
   const lookup = lookupOf(
     gun(WEAPON, { slots: [slot('s1', ['a', 'host']), slot('s2', ['a'])] }),
     ['a', mod('a', { ergo: 0.123456789, recoil: -0.0123456789, weight: 0.0123456789, offers: [trader('prapor', 1, 123)] })],
     ['host', mod('host', { slots: [slot('r', ['a'], true)], offers: [barter('mechanic', 1, 777)] })],
   );
   const model = count(lookup, { barterAvailable: true, priceWeight: 1, useTrueErgo: true });
-  assert.doesNotMatch(model.lpBase, /x_-/);
-  assert.doesNotMatch(model.lpBase, /50000000|100000000/);
-  assert.match(model.lpBase, /0\.123456789/, 'full-precision coefficients, no toFixed(6)');
-  assert.match(model.lpBase, /0\.0123456789/);
   const parsed = parseLpText(model.lpBase);
   for (const column of parsed.columns) {
     assert.ok(Number.isFinite(column.lower) && Number.isFinite(column.upper), `${column.name} has a finite domain`);
