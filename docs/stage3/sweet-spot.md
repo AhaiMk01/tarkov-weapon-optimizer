@@ -51,8 +51,10 @@ failed counts only in the total.
   "Required proof prerequisite unavailable" (Mk 16 x2, Mk 17 x2, AKMSN, X-17).
 
 Warm cache (`basewarm`, 6 guns, the second request reuses the table through an `EndpointCache`): the warm request costs about the final solve; the
-answer was the same in all 14 requests. Worker replacement after the cold request makes some warm requests slower than the cold one (MP5 TrueErgo
-1.16 s cold, 2.22 s warm): replaced pool workers start with cold WebAssembly code.
+answer was the same in all 14 requests. Some warm requests were slower than the cold one here (MP5 TrueErgo 1.16 s cold, 2.22 s warm), which
+this note first blamed on replaced pool workers starting with cold WebAssembly code. Corrected 2026-10-18: it did not reproduce. In 36 cold/warm
+pairs the median warm/cold ratio was 0.61 to 0.66, and V8 shares the compiled WebAssembly module across live workers, so a replaced worker does
+not recompile it.
 
 | gun | profile | cold s | table s | warm s |
 | --- | --- | ---: | ---: | ---: |
@@ -118,9 +120,10 @@ All 172 guns, same settings:
 With concurrent endpoints each endpoint takes longer (they share the lanes), and the table takes as long as the slowest endpoint.
 
 - Plain: table 47.5 s -> 28.5 / 31.5 s (-37%), total 111.4 -> 90.0 / 99.5 s (-15%).
-- TrueErgo: table 342.8 -> 303.3 / 335.6 s, total 1403.1 -> 1345.3 / 1421.1 s: within the noise. The ergonomics endpoint is most of the table, and
-  on a pool it already uses all three lanes (speculative second opinions and prefetched nodes), so the other two endpoints have no idle lane to
-  run on.
+- TrueErgo: table 342.8 -> 303.3 / 335.6 s, total 1403.1 -> 1345.3 / 1421.1 s: within the noise. The ergonomics endpoint is most of the table, so
+  the table takes as long as that one endpoint. (This note first said the endpoint already keeps all three lanes busy. Corrected 2026-10-18:
+  measured, it keeps about 1.4 lanes busy out of 3 to 6. Its time is one serial chain of solves, each node waiting for the one before it, so
+  idle lanes do not shorten it. See `heavy-leaf.md`.)
 
 Single-request latency (one process, one request at a time, which is what a browser tab does), the 10 TrueErgo and 8 plain requests with the
 largest table in `base2`, sequential vs concurrent, median of two repeats each (`results/sweetspot/lat*`):
@@ -188,8 +191,7 @@ AKMN and AK-105 TrueErgo went from `feasible` (time limit) to `certified_optimal
   ergonomics endpoint is the same request as a TrueErgo Optimize with weights (100, 0, 0); the Precise TrueErgo speedups apply to it unchanged.
 - Six plain and up to four TrueErgo requests stop on "Required proof prerequisite unavailable" in an endpoint (a withheld objective coefficient).
   Not investigated here.
-- The warm request is sometimes slower than the cold one because pool workers replaced at the end of the cold request start with cold
-  WebAssembly code.
+- The warm request was slower than the cold one in a few requests of `basewarm`. Not reproduced on 2026-10-18 (see the warm cache paragraph).
 
 ## Code
 
