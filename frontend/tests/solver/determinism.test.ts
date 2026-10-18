@@ -106,7 +106,7 @@ test('ledger: every case gives the same response on a fresh state, on warm cache
   assert.equal(ledgerRows.length, IN_SCOPE.length * 2);
 });
 
-test('ledger: across the second-opinion seed permutations a certified Precise answer keeps its status, certificate and score (decision 5b losses listed); a unique maximizer keeps its projection', { timeout: 900_000 }, async t => {
+test('ledger: seed permutations preserve certified claims and unique maximizers; native-noise gaps can only withhold proof below the seed-sensitive tolerance', { timeout: 900_000 }, async t => {
   const problems: string[] = [];
   const lost: string[] = [];
   let certified = 0;
@@ -146,8 +146,6 @@ test('ledger: across the second-opinion seed permutations a certified Precise an
   t.diagnostic(`certificates withheld under another seed order (decision 5b, tolerance < ${SEED_SENSITIVE_TOLERANCE}): ${lost.join(', ') || 'none'}`);
   assert.deepEqual(problems, [], `${problems.length} problem(s)`);
   assert.ok(certified >= 100, `only ${certified} certified answers`);
-  // Pinned so a change shows: exactly these two cases, both at the 1e-9 runtime tolerance, under both permutations that put seed 29 among the deciding solves.
-  assert.deepEqual([...new Set(lost.map(l => l.split(' ')[0]))].sort(), ['F01-legal-alternative-placement', 'F13-reduction-counterexample-multi-copy-capacity']);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------

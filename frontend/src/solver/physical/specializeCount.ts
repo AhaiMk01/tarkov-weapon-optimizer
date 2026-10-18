@@ -10,7 +10,7 @@
  *     problem, and `CountModel.proof` records the exact need of every padded row, the objective's frame error and the secant, which is what
  *     `assessNativeResult` (readback equal, allowances dominating, declared tolerances, presolve off) and the bound evidence read;
  *   - every other row is a binary64 leaf or a small integer: the statistics are `sum n_t x leaf`, so the text is the model;
- *   - there is no Big-M literal and every auxiliary column has a finite enclosed domain (the clamp, MOA and presence Big-Ms come from the active ranges);
+ *   - every auxiliary has a finite enclosed domain; clamps specialize to leaf-only graph rows, and MOA and presence Big-Ms come from active ranges;
  *   - several copies of a part are always allowed (the `singleCopy` restriction of Fast is not read);
  *   - the MOA rows state the oracle's rule exactly: the cap binds the installed barrel with the LARGEST centre of impact (`FastModelOptions.moaDominance`), so the
  *     one place the plain Fast rows differ from the oracle is gone, not guarded.

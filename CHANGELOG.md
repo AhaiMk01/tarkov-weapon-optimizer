@@ -2,6 +2,14 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [Unreleased]
+
+### Changed
+- Both solver modes now specialize ergonomics clamps from proved bounds, using direct equalities where possible, one binary for a single threshold crossing, and a convex-hull formulation when both thresholds are crossed. Builds, scores, and optimizing ties retain the same clamp rules.
+
+### Fixed
+- Precise retains tight-tolerance certificates through lower clamp crossings and direct ergonomics bindings by using separated segment sources and exact row normalization. Native tolerances and proof requirements are unchanged.
+
 ## [v3.1.1] — 2026-10-14
 
 ### Fixed

@@ -109,8 +109,11 @@ test('the COUNT model node [1.5, 3] of TED world 2105 (count_presolve_off_wrong_
   // the default random seed: an Optimal verdict AND a dual bound below 100, which is the number a certificate would be built on (likely a derived integer bound such as
   // 1.9999999982 rounded down). At 1e-7, the tolerance production always uses, the same solve is right; the second opinion (decision 5a) is the other safeguard.
   const lp = model('count_presolve_off_wrong_optimal.lp');
-  const at = lp.indexOf('\nBounds\n');
-  const pinned = `${lp.slice(0, at)}\n  pin_t1: n_1 = 2\n  pin_t3: n_2 = 2\n  pin_t2: n_3 = 0\n  pin_base: base_0 = 1${lp.slice(at)}`;
+  const at = lp.search(/^Bounds\r?$/m);
+  assert.ok(at >= 0, 'the preserved fixture must have a Bounds section');
+  const newline = lp.includes('\r\n') ? '\r\n' : '\n';
+  const pins = ['  pin_t1: n_1 = 2', '  pin_t3: n_2 = 2', '  pin_t2: n_3 = 0', '  pin_base: base_0 = 1'];
+  const pinned = `${lp.slice(0, at)}${pins.join(newline)}${newline}${lp.slice(at)}`;
   const truth = await native(pinned, { presolve: 'off' });
   assert.equal(truth.status, 'Optimal');
   assert.ok(Math.abs((truth.objective as number) - 100) < 1e-6, `the pinned build scores ${truth.objective}`);

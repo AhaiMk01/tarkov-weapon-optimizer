@@ -3,6 +3,8 @@
 Status: **Revision 1 (2026-10-12)**, after the adversarial review (`docs/proofs/count-model.review.md`) and the owner decisions of
 2026-10-12 (F1, G1, G2, GAP 8a; section 12 maps every review finding to its change). Stage 3, workstream 3.2; ADR 0013 section 7; refs #40.
 **Amendment 2026-10-13** (owner, F1 extended to first opinions with a verified build): Proposition F1' in section 4.2, section 13.
+**Amendment 2026-10-18.** The shared Fast and Precise clamp emitter now specializes on the original enclosed bounds.
+Section 3.2 proves the leaf-only formulations, finite auxiliary domains, and tiny-endpoint protection. Its symbol references supersede the historical clamp line citations below. Historical run counts in section 11 are unchanged and are not evidence for this amendment.
 Written against branch `impl/stage2-correctness-cutover` at commit `a19041c`; Revision 1 re-cites every `file:line` at the working tree of
 the Revision 1 change (base `dae163a` plus the code changes of section 12; no file under `reference/oracle/` changed, so oracle citations
 are unchanged). On 2026-10-13 the citations were re-cited at `a5ab8e4` (branch `perf/ted-seed-incumbent`), except those marked as
@@ -173,7 +175,8 @@ max over d in C(rho) of K_c(d)`.
 | `z_t` (only for `U_t > 1` and `t` in a conflict clique, a slot-conflict row or the MOA rows) | [0,1] | binary | `:620-632` |
 | `lot_t_k` (`lots` mode) | [0, ceil(surrogateMax_t / size_k)] | integer | `:676-682` |
 | `raw_ergo, capped_ergo, rec_mod, rec_axis, price_axis, weight, acc_total` | active-range enclosures | continuous | `:808-834` |
-| clamp binaries `c1_*`, `c2_*` | [0,1] | binary | `:780-796` |
+| clamp selectors `c1_*`, `c2_*` | [0,1], none in a single regime, one in a hinge, three across both thresholds | binary | `specializeFast.ts`, `emitClamp` |
+| upper-hinge complement; full-hull segment sources | [0,1]; [A,0], [0,100], [0,U], respectively | continuous | `specializeFast.ts`, `emitClamp`; section 3.2 |
 | `gear_ergo, eff_ergo, ted` (TED requests) | exact enclosures | continuous | `:850-891` |
 | `ergo_axis`, `*_n` (power-of-two read-throughs), `tch_t`, `total_obj` | exact or outward enclosures | continuous | `:893-895`, `:1040-1049`, `:1096-1104` |
 
@@ -195,8 +198,8 @@ left after merging is dropped when true and becomes a `contra_k` row `zero_col >
 | lot cover | `lots` `t`: `sum_k size_k lot_t_k - n_t + sum_b q_{b,t} base_b >= -own_t` | `:676-687` |
 | wallet | `price_axis - sum_b price_b base_b - sum_{linear t} unit_t n_t - sum lot prices x lot = 0` | `:898-902` |
 | statistics | `raw_ergo = erg_0 + sum n_t erg_t`; `rec_mod = sum n_t rec_t`; `rec_axis = 1000 rec_mod`; `weight = w_0 + sum n_t w_t` (TED or a weight cap); `acc_total = sum n_t acc_t` (MOA cap) | `:836-842` |
-| first clamp | general three-regime clamp `capped_ergo = clamp(raw_ergo, 0, 100)` | `:843`, `:780-796` |
-| gear and second clamp | `gear_ergo = f capped_ergo` (one row if `f` is a double, else `f_lo capped <= gear <= f_hi capped`); `eff_ergo = clamp(gear_ergo, 0, 100)` | `:847-864` |
+| first clamp | bound-specialized `capped_ergo = clamp(raw_ergo, 0, 100)`; 1, 3, 4, or 7 rows as in section 3.2 | `specializeFast.ts`, `emitClamp`, `emitStatistics` |
+| gear and second clamp | `gear_ergo = f capped_ergo` (one row if `f` is a double, else `f_lo capped <= gear <= f_hi capped`); the same specialized clamp gives `eff_ergo = clamp(gear_ergo, 0, 100)` | `specializeFast.ts`, `emitStatistics` |
 | TED | node rows on `weight`; `ted - eff_ergo + slope weight = -intercept`; `ted >= 0` under Prevent Overswing | `:813-833`, `:865-891` |
 | caps | `price_axis <= max_price`; `capped_ergo >= min_ergonomics`; recoil caps padded (below); magazine/sighting `sum_{t: value_t >= L} n_t >= 1` unless the receiver reaches `L`; `weight <= max_weight` | `:906-940` |
 | MOA | per active positive-COI template `t`: `(c_t/100) acc - M_t pres_t [+ M_t sum_{coi_b > coi_t} pres_b] >= c_t - L - M_t` padded; fallback `(c_0/100) acc + M_fb sum_b pres_b >= c_0 - L` padded | `:960-983`, `proof.ts:129-176` |
@@ -211,7 +214,8 @@ positive (`proof.ts:129-140`). The dominance terms are written iff barrels of di
 `c/100` coefficients, the Tchebycheff `c_a`) is emitted with right-hand side `paddedRhs` (`proof.ts:92-103`): for target row
 `sum a_i y_i (>= | <=) r` with emitted coefficients `a'_i` and column magnitude bounds `B_i`, the need is `r -/+ sum |a'_i - a_i| B_i`
 (exact) and the emitted value is the largest double `<=` the need (`>=`) or the smallest `>=` it (`<=`). Every other coefficient is a
-binary64 leaf of the data, a small integer, or a power of two, so the text *is* the model there. One constructed right-hand side is padded the
+binary64 leaf of the data, a small integer, a power of two, or an exactly checked power-of-two row scaling of those values
+(Lemma H), so the text *is* the model there. One constructed right-hand side is padded the
 same way: the vertical recoil cap `cap - nakedV` (`specializeFast.ts:915-918`, `paddedRhs` with a zero deficit), which Theorem L treats as a
 padded row.
 
@@ -309,15 +313,15 @@ assertion `topological.length === |T_act|` would make the dependency explicit.
 For a node `N = [lo, hi]` (or no node) and `B in F_phys` with `W(B) in N`, define `Lambda(B)`:
 
 - `base_b = 1` for `b = b(B)`; `n_t = n_t(B)`; `e_rho_c = e_{rho,c}(B)`; `z_t = [n_t >= 1]`;
-- statistics columns at their exact values (`raw_ergo`, `rec_mod`, `rec_axis`, `weight`, `acc_total`); clamp binaries at a regime of the
-  exact value (either regime at a boundary value 0 or 100); `capped_ergo`, `gear_ergo = f capped_ergo` (exact `f`), `eff_ergo`;
-  `ted = eff_ergo - (slope W + intercept)`;
+- statistics columns at their exact values (`raw_ergo`, `rec_mod`, `rec_axis`, `weight`, `acc_total`); clamp selectors and auxiliaries
+  at the lift of Lemma H below, with either adjoining segment permitted at 0 or 100; `capped_ergo`, `gear_ergo = f capped_ergo`
+  (exact `f`), `eff_ergo`; `ted = eff_ergo - (slope W + intercept)`;
 - lots: a minimum-cost whole-lot cover of `d_t(B)` over `L_t = nonDominatedLots(Lots_t)` with `lot_t_k <= ceil(surrogateMax_t / size_k)`
   (exists by Lemma A below); `price_axis` the wallet value;
 - `ergo_axis = 10 x (ted or capped_ergo)`; read-through columns `axis / 2^k`; `tch_t` = the exact maximum signed deviation over active axes;
   `total_obj` the objective expression; for every cut binary, the value that satisfies its row (Lemma C).
 
-### 3.2 Two arithmetic lemmas
+### 3.2 Arithmetic and clamp lemmas
 
 **Lemma N (active ranges are enclosures).** `computeActiveBounds` (`src/solver/physical/bounds.ts:33-83`) returns, for weight, raw
 ergonomics, recoil sum and accuracy sum, intervals that contain the exact value of every `B in F_phys`.
@@ -364,6 +368,119 @@ from the solver: the validator recomputes it from the placements (`src/solver/ph
 proof those reductions require. **GAP G6 (documentation):** ADR 0009's baseline text and the emitted form differ; the ADR (or this proof's
 reference from it) should record that the count model's acquisition rows are the substituted form.
 
+**Lemma H (bound-specialized clamp).** Let `x` retain its finite enclosed domain `[L,U]`, let `C = 100`,
+and let `y` retain `[clip(L),clip(U)]`, where `clip(v) = min(C,max(0,v))`.
+The rows of `emitClamp` have exactly the integer projection `y = clip(x)`. Every such graph point has a finite lift.
+The conclusion is independent of objective weights and holds in both integer-edge and relaxed-edge texts.
+
+Classification uses the original closed interval, in this order.
+
+| Condition after preceding cases are excluded | Graph rows | Added binaries | Added continuous columns | Rows |
+| --- | --- | --- | --- | --- |
+| `U <= 0` | `y = 0` | 0 | 0 | 1 |
+| `L >= C` | `y = C` | 0 | 0 | 1 |
+| `L >= 0` and `U <= C` | `y - x = 0` | 0 | 0 | 1 |
+| `U <= C` | lower hinge below | 1 | 2 | 4 |
+| `L >= 0` | upper hinge below | 1 | 1 | 4 |
+| otherwise | full hull below | 3 | 3 | 7 |
+
+For endpoint safety let `tau = HIGHS_SMALL_MATRIX_VALUE = 1e-9` and `delta = MIN_BIG_M = 1e-6`.
+Start with `A = L`, `B = U` in a lower hinge, and `D = L` in an upper hinge.
+Before enlarging a tiny endpoint, attempt to multiply its entire row, including its RHS, by a positive power of two.
+Accept the factor only if every product is finite, divides back to the original binary64 value exactly,
+and every nonzero product lies strictly between `1e-9` and `1e15`. The factor must retain every row entry, not only the endpoint.
+If this is impossible, select `A = -delta` when `-tau <= L < 0`, `B = delta` when `0 < U <= tau`,
+or `D = 0` when `0 < L <= tau`, respectively. Normalize the resulting rows by the same checked rule when possible.
+Thus `A <= L < 0`, `0 < U <= B <= C` in a lower hinge, and `0 <= D <= L < C` in an upper hinge.
+These are enclosing endpoint selections, not rounded endpoint differences. The formulas below are the unscaled rows.
+
+The lower hinge declares binary `z` and continuous segment sources `a in [A,0]`, `b in [0,B]`. It writes:
+
+```text
+a + A z >= A
+b - B z <= 0
+x - a - b = 0
+y - b     = 0
+```
+
+At `z = 0`, the second row and `b >= 0` force `b = y = 0`, and `x = a <= 0`.
+Every original negative source lifts with `a = x`, `b = 0` because `A <= L`.
+At `z = 1`, the first row and `a <= 0` force `a = 0`, so `y = b = x >= 0`.
+Every original positive source lifts with `a = 0`, `b = x` because `B >= U`.
+Both segment sources have finite domains. The separated sources avoid subtracting the almost-equal source and target in a scaled hinge inequality.
+
+The upper hinge declares binary `z` and continuous `q in [0,1]` and writes:
+
+```text
+q + z             = 1
+y - x            <= 0
+y - D q - C z    >= 0
+y - x + U z + C q >= C
+```
+
+At `z = 0`, `q = 1` and the second and fourth rows force `y = x <= C`.
+The third row permits every original `x >= L >= D`.
+At `z = 1`, `q = 0` and the third row with `y <= C` forces `y = C`.
+The second and fourth rows require `C <= x <= U`. Both branches have the required lift.
+The separate complement column avoids constructing `U-C` or `C-L` as a rounded matrix coefficient.
+
+The full hull declares one-hot binary selectors `z0, zm, zh` and continuous sources
+`a in [A,0]`, `b in [0,C]`, `d in [0,U]`. It writes:
+
+```text
+z0 + zm + zh  = 1
+a - A z0     >= 0
+b - C zm     <= 0
+d - C zh     >= 0
+d - U zh     <= 0
+x - a - b - d = 0
+y - b - C zh  = 0
+```
+
+Inactive segment sources are zero. The selected source equals `x`, in its low, middle, or high segment.
+The target is respectively zero, `x`, or `C`. Conversely, select a segment containing an original source,
+put that source in its segment column, and set the other source columns to zero. All rows and finite domains hold.
+At a threshold, both adjoining segments give the same output and hence the same physical projection and score.
+
+When selectors are relaxed, dividing a nonzero segment source by its selector gives a point of that segment.
+The linking equalities express a convex combination of these points, and every such combination has the reverse lift.
+The lower hinge is the corresponding two-segment hull. The compact upper hinge is its two-segment hull's projection.
+For the upper hinge use `sMid = y - C z` and `sHigh = x - y + C z`. Its rows and domains give
+`D q <= sMid <= C q` and `C z <= sHigh <= U z`.
+Thus without endpoint enlargement the relaxations are the hulls of the clipped original segments.
+
+Endpoint enlargement only extends an existing branch along the same graph. Intersecting with the unchanged
+`[L,U]` source domain removes added source values. Integer projection and lifting remain exact, even for subnormal endpoints,
+but the relaxation can be weaker than the ideal hull of the original interval. No physical statistic, original source or target
+domain, objective, tie, or validation tolerance is enlarged.
+
+Every unscaled number is an endpoint leaf, a safe enclosing endpoint leaf, `C`, zero, one, or an exact unary negation.
+Distinct terms refer to distinct columns, so term merging constructs no hidden subtraction.
+Checked power-of-two products introduce no rounding error. Multiplying both sides by the same strictly positive factor
+preserves the inequality or equality, its feasible set, and its integer and continuous projections.
+The clamp therefore has zero coefficient construction error and needs no padded-row proof record or nominal allowance.
+The gear-factor neighboring inequalities retain their own existing construction error even when the second clamp is identity.
+The cap is fixed at 100 in both production callers. No arbitrary-small-cap or universal large-coefficient theorem is asserted.
+Large endpoints and tiny original statistic coefficients remain subject to unchanged matrix-risk and native readback qualification.
+Row normalization prevents avoidable auxiliary-envelope expansion. In seeded world 147 the original lower bound
+`-4.111155860186957e-13` survives after multiplying the lower-segment row by 4096. Enlarging it first to `-1e-6`
+had admitted a near-integral root point with `capped_ergo` about `1e-6`, raising the native bound by about `2e-6`
+above the exactly rescored witness. Normalization retains the original range without changing the native tolerances,
+the requested objective tolerance, the validator, or the certificate policy.
+
+The source definition `raw_ergo = receiver_ergo + sum_t ergo_t n_t` also permits exact row normalization.
+Its preferred factor is `2^10`, reduced when required by the native large-entry threshold and increased when required by a nonzero RHS.
+Every coefficient and the RHS must satisfy the same exact round-trip and matrix-window checks.
+Normalization applies only when every original statistic coefficient already survives the matrix filter.
+An originally filtered statistic coefficient therefore still withholds qualification rather than gaining a new accepted input path.
+For any positive factor `s`, the emitted equation `s raw_ergo - sum_t (s ergo_t) n_t = s receiver_ergo`
+divides exactly back to the original equation. Column domains, clamp thresholds, objective units, and proof allowances do not change.
+This source-row normalization reduces native MIP propagation residuals. It does not assert a new native error bound or relax certificate prerequisites.
+
+Native feasibility tolerances do not turn this exact-real theorem into an exact solver-equality claim. Exact witness validation,
+cuts, independent seeds, and every certificate prerequisite remain in force. QED
+
+
 ### 3.3 Lifting (Theorem L)
 
 *Theorem L. On the declared domain, for every accepted request, every node `N` and every `B in F_phys` with `W(B) in N` (all `B` without a
@@ -401,11 +518,9 @@ generated (Lemma C).*
 - **Supply cap, lot cover, wallet.** Lemma A.
 - **Statistics.** The rows are equalities over binary64 leaves with integer counts: their real values are the oracle's exact sums
   (fromBinary64 of the same leaves; INTERPRETATIONS.md choice 3).
-- **Clamps.** The three-regime clamp with `m = ceil(nextUp(max(|lo|, |hi|, cap) + cap))` (`specializeFast.ts:780-796`): for the regime of the
-  exact value every row holds (low: source `<= 0`, target `= 0`; mid: `0 <= source <= cap`, target `=` source; high: source `>= cap`, target
-  `= cap`), and the rows of the other regimes are slack because `m >= max(|lo|, |hi|, cap) + cap` (the floating sum is within half an ulp of
-  the real one, so `nextUp` of it is at least the real sum). The target bounds `[clamp(lo), clamp(hi)] subset [0, 100]` force `target = 0`
-  or `= cap` in the outer regimes, as the rows require.
+- **Clamps.** Lemma H gives the finite lift and exact integer projection for both calls of the shared `emitClamp`.
+  No constructed clamp coefficient or endpoint subtraction requires padding. The enclosing auxiliary segments leave the original
+  source and target domains unchanged, and every clamp row passes through the existing `c1_*` or `c2_*` family accounting.
 - **Gear.** `f = max(0, 1 + modifier)` exactly (`proof.ts:190-193`, oracle `resolve.ts:267`); the equality row when `f` is a double, else
   the two neighbour rows enclose `f capped`.
 - **TED node.** `W(B) in [lo, hi]` satisfies the node rows exactly (they are rows on the exact weight). Lemma T (section 4.2): the line is
@@ -526,9 +641,9 @@ use the same `tch_t`. Hence `obj^E(Lambda(B)) >= score(B) - frameError` for ever
 *Proof.* Both are linear in the axes with the same `-tch_t`; the difference is `sum_j (c'_j - c_j) axis_j`. The deviation rows of `M^E` are
 padded (Theorem L), so `Lambda(B)` with `tch_t` at the exact maximum deviation is feasible in `M^E`. QED
 
-The constants: `K = 1000000/29089` is an exact rational in the proof layer (`proof.ts:54-56`) and in the oracle (`constants.ts`); both clamps
-are over `[0, 100]` in the code (`specialize.ts:24`) and the oracle (`constants.ts`, `ERGO_CLAMP_MAX = 100`). **GAP G6 (documentation):**
-ADR 0007 principle 5 still writes the clamp domain as `[0, 1000]`; the oracle and the code agree on 100.
+The constants: `K = 1000000/29089` is an exact rational in the proof layer (`proof.ts:54-56`) and in the oracle (`constants.ts`);
+both clamps are over `[0, 100]` in the code (`specialize.ts`, `ERGO_CLAMP_MAX`) and the oracle (`constants.ts`).
+The 2026-10-18 amendment to ADR 0007 records these current units while preserving its historical scaled planning formulas.
 
 The incumbent is scored from the validator's exact rational statistics (`exactObjectiveScore`, `proof.ts:418-431`, the same formula as
 `score.ts:63-81` with the same resolved weights, `solvePrecise.ts:779`), never from solver values; its enclosure
@@ -952,7 +1067,7 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 | G3 | Affects completeness only | Certified infeasibility (and optimality) is not complete: padding and tolerance boundary points, cuts that break total unimodularity of the relaxed text, 16 rejections per node (including overswing rejections on `model.exact` nodes with a non-double gear factor, review GAP 7), six seeds | Accepted as is; an exact boundary proof would close it |
 | G4 | Assumption (affects the scope of every certificate if wrong) | A-DATA: the bridge transport of the oracle's domain to the production data model is corroborated, not proved | A written mapping proof of `reference/bridge/toFixture.ts`, or accept as tested |
 | G5 | Assumption (affects witnesses and, through Lemma C, certificates if wrong) | A-VAL: production validator equals oracle validator in both directions; corroborated by the agreement tests | A side-by-side rule proof of `validate.ts` against `reference/oracle/validate.ts`, or accept as tested |
-| G6 | Documentation | ADR 0009 principle 1 describes an explicit `u_i` surrogate; the count model substitutes it into the lot cover with dominance, lot-bound and linear reductions (proved exact in Lemma A). ADR 0007 principle 5 writes clamps over `[0, 1000]`; the code and oracle use 100. ADR 0003 states pairwise or per-instance conflict rows; the count model uses a clique cover of presence rows (proved exact in Theorems L and P) | An amendment note citing this proof |
+| G6 | Documentation, clamp units reconciled 2026-10-18 | ADR 0009 principle 1 describes an explicit `u_i` surrogate; the count model substitutes it into lot cover with dominance, lot-bound and linear reductions (Lemma A). ADR 0007's 2026-10-18 amendment reconciles its historical scaled clamp formulas with current cap 100 and Lemma H. ADR 0003 states pairwise or per-instance conflict rows; the count model uses a clique cover of presence rows (Theorems L and P) | Remaining acquisition and conflict documentation needs an amendment note citing this proof |
 | G7 | Documentation (robustness) | `copyBounds` relies on Kahn's order covering every active template, without an assertion; true on the declared domain (Lemma 3) | `assert(topological.length === activeTemplateCount)` |
 | G8 | Documentation | The bound sanity guard scales with the request tolerance and detects only shortfalls a same-node build exposes; the proof does not rely on it | None needed; keep the comment honest |
 | G9 | **Closed (Revision 1)** | Review GAP 8a: the power-of-two read-through was assumed exact; an underflow could exclude a build's value from a scaled column's domain | Done: asserted (`readThroughRange`, `exactPowerOfTwoProduct`), internal error otherwise |

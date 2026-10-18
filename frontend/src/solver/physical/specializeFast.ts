@@ -14,10 +14,10 @@
  * of the count model (a physical build that repeats a part is not a point of it), so it can lose a build, never invent one. Default off here.
  *
  * CERTIFIED MODE (Phase 2.10, owner decision 2e, `FastModelOptions.certified`, entry `specializeCount.ts`). The same count model, built through the proof layer, is
- * the model Precise solves (every gun has an acyclic part graph): the rows below are unchanged (they are integers and binary64 leaves), and the constructed ones are exactly
- * those of the occurrence model `specializeLP` (test-only since decision 2d was amended: tests/physical/occurrence; recoil caps, MOA rows, objective, gear factor, weight-penalty secant: exact rationals, outward padding, `FastModel.proof`), plus the MOA
- * larger-centre-of-impact terms that make the model state the oracle's rule. It is never single-copy, and it leaves the text of
- * the plain Fast model (this file's default) byte for byte as it was. See `specializeCount.ts` for what makes it exact and what a certificate rests on.
+ * the model Precise solves (every gun has an acyclic part graph). Both modes share the bound-specialized clamp rows below. Certified constructed rows
+ * follow the occurrence model `specializeLP` (test-only since decision 2d was amended: tests/physical/occurrence; recoil caps, MOA rows, objective, gear
+ * factor, weight-penalty secant: exact rationals, outward padding, `FastModel.proof`), plus the MOA larger-centre-of-impact terms that state the oracle's
+ * rule. It is never single-copy. See `specializeCount.ts` for what makes it exact and what a certificate rests on.
  *
  * Decision columns (all integer, finite):
  *   n_t         copies of item template t installed (binary when at most one copy can exist)
@@ -61,7 +61,7 @@
  * does for the Precise model, and the same spatial search over total weight (`search.ts`) runs on top of it (`solveFast.ts`). The rows are the
  * Precise ones, on the count model's columns:
  *   gear_ergo, eff_ergo   gear_ergo = f x capped_ergo with f = max(0, 1 + modifier) built exactly (`gearFactor`, two neighbouring inequalities when f is
- *                         not representable), then the second clamp eff_ergo = clamp(gear_ergo, 0, 100) (the general three-regime clamp, prefix c2)
+ *                         not representable), then the shared bound-specialized second clamp eff_ergo = clamp(gear_ergo, 0, 100), prefix c2
  *   node rows             the closed weight interval [lo, hi] of the node as rows on the `weight` column (the column keeps the active domain)
  *   ted, ted_def          ted = eff_ergo - (slope x weight + intercept), the line being the node's verified lower envelope of the weight penalty
  *                         q(W) = max(0, 100 - 300 / W) (`secantOfPenalty`: exact up to 3 kg or at a single weight, the chord on a concave piece, the zero line
@@ -70,7 +70,7 @@
  *   ergo_frame            fE = 10 x ted under TrueErgo (else 10 x capped_ergo, as before)
  * `weight` is the exact aggregate of the template counts (weight_def: the receiver plus the sum of n_t x weight_t), which is what makes the node
  * restriction a row on counts and the spatial search transfer node by node. Every auxiliary of these rows has a finite enclosed domain (the gear and
- * clamp ranges, the ted enclosure of eff minus the line's range on the node); there is no Big-M literal beyond the clamp's, computed from those ranges.
+ * clamp ranges, the ted enclosure of eff minus the line's range on the node). Clamp coefficients are leaves or exact power-of-two products, not rounded Big-M differences.
  * A node whose line is a secant or the knee relaxation is an UPPER bound of the best exactly scored build of the node (the line lies below q), and a
  * build the model returns there may overswing exactly: the validator decides, and the search refines the node (`solveFast.ts`). Like every Fast bound,
  * the bound is the bound of the APPROXIMATE model (the rows are plain doubles, no proof frame): it orders and fathoms the search, it never certifies.
@@ -104,7 +104,7 @@ import type { IdealPoint } from '../types';
 
 /** K / 100 = 10000 / 29089, the coefficient scale of the accuracy sum in a MOA row (K = `MOA_K`, the nearest double of 1000000 / 29089). */
 const MOA_K_OVER_100 = 10000 / 29089;
-/** Floor of a positive Big-M: well above HiGHS's `small_matrix_value`, so the coefficient survives the read. Any larger M is just as valid. */
+/** Survival floor for positive MOA Big-Ms and clamp endpoints that cannot survive exact row scaling. */
 const MIN_BIG_M = 1e-6;
 /**
  * HiGHS drops a matrix entry of magnitude at most the first and rejects one at least the second: its defaults, which `native/options.ts` writes
@@ -112,6 +112,49 @@ const MIN_BIG_M = 1e-6;
  */
 const HIGHS_SMALL_MATRIX_VALUE = 1e-9;
 const HIGHS_LARGE_MATRIX_VALUE = 1e15;
+
+type ClampCase =
+  | { readonly kind: 'zero' }
+  | { readonly kind: 'constant' }
+  | { readonly kind: 'identity' }
+  | { readonly kind: 'lower'; readonly lo: number; readonly hi: number }
+  | { readonly kind: 'upper'; readonly lo: number; readonly hi: number }
+  | { readonly kind: 'hull'; readonly lo: number; readonly hi: number };
+
+function classifyClamp(src: Interval, cap: number): ClampCase {
+  if (src.hi <= 0) return { kind: 'zero' };
+  if (src.lo >= cap) return { kind: 'constant' };
+  if (src.lo >= 0 && src.hi <= cap) return { kind: 'identity' };
+  if (src.hi <= cap) return { kind: 'lower', lo: src.lo, hi: src.hi };
+  if (src.lo >= 0) return { kind: 'upper', lo: src.lo, hi: src.hi };
+  return { kind: 'hull', lo: src.lo, hi: src.hi };
+}
+
+/** Exact positive power-of-two row scaling, or null when the native matrix window cannot retain every nonzero entry. */
+function exactRowScale(terms: readonly (readonly [string, number])[], rhs: number, preferredScale = 1): number | null {
+  let smallest = rhs === 0 ? Infinity : Math.abs(rhs);
+  let largest = Math.abs(rhs);
+  for (const [, coefficient] of terms) {
+    if (coefficient === 0) continue;
+    const magnitude = Math.abs(coefficient);
+    smallest = Math.min(smallest, magnitude);
+    largest = Math.max(largest, magnitude);
+  }
+  if (largest === 0) return 1;
+  let scale = preferredScale;
+  while (largest * scale >= HIGHS_LARGE_MATRIX_VALUE) scale /= 2;
+  while (smallest * scale <= HIGHS_SMALL_MATRIX_VALUE) {
+    const next = scale * 2;
+    if (!Number.isFinite(next) || largest * next >= HIGHS_LARGE_MATRIX_VALUE) return null;
+    scale = next;
+  }
+  const exact = (value: number): boolean => {
+    const product = value * scale;
+    return Number.isFinite(product) && product / scale === value
+      && (value === 0 || (Math.abs(product) > HIGHS_SMALL_MATRIX_VALUE && Math.abs(product) < HIGHS_LARGE_MATRIX_VALUE));
+  };
+  return exact(rhs) && terms.every(([, coefficient]) => exact(coefficient)) ? scale : null;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Result types
@@ -233,7 +276,7 @@ export interface FastModelOptions {
    * Build the model through the proof layer, for a certificate (decision 2e, Phase 2.10): every constructed coefficient is built in exact rationals with
    * directed outward rounding (`proof.ts`), the recoil caps, the MOA rows (with the larger-centre-of-impact terms) and the objective are the rows of
    * `specializeLP`, every auxiliary column has a finite enclosed domain, and the model carries its `proof`. Multiple copies of a part are always allowed
-   * (`singleCopy` is ignored, as in the Precise model). Default false: the plain Fast model, whose text this option leaves untouched.
+   * (`singleCopy` is ignored, as in the Precise model). Default false for the plain Fast model. Both modes share the clamp emitter.
    */
   certified?: boolean;
   /**
@@ -300,8 +343,8 @@ const COUNT_FAMILIES: readonly { id: CountRowFamilyId; test: RegExp; prefix: str
   { id: 'lot_cover', test: /^cover_\d+$/, prefix: 'cover_<t>', adr: 'ADR 0009 principle 1; INTERPRETATIONS 1; research 5.8', description: 'whole lots cover the paid deficit n_t - preset supply - owned' },
   { id: 'wallet', test: /^price_def$/, prefix: 'price_def', adr: 'ADR 0009 principle 3', description: 'the exact wallet: price_axis = base price + whole-lot purchase cost' },
   { id: 'stat_definition', test: /^(raw_ergo_def|rec_mod_def|rec_axis_def|weight_def|acc_def|ergo_frame)$/, prefix: 'raw_ergo_def, weight_def, rec_mod_def, rec_axis_def, acc_def, ergo_frame', adr: 'ADR 0003 principle 5; ADR 0010 section 2', description: 'statistics summed over the template counts and the objective frames' },
-  { id: 'first_clamp', test: /^c1_/, prefix: 'c1_*', adr: 'ADR 0007 principle 5', description: 'the displayed ergonomics: clamp(raw ergonomics, 0, 100), the general three-regime disjunction' },
-  { id: 'gear_clamp', test: /^(gear_def|c2_)/, prefix: 'gear_def*, c2_*', adr: 'ADR 0007 principle 5', description: 'the gear factor and the second clamp, the general three-regime disjunction' },
+  { id: 'first_clamp', test: /^c1_/, prefix: 'c1_*', adr: 'ADR 0007 principle 5', description: 'displayed ergonomics: bound-specialized clamp(raw ergonomics, 0, 100), with a segment hull across both thresholds' },
+  { id: 'gear_clamp', test: /^(gear_def|c2_)/, prefix: 'gear_def*, c2_*', adr: 'ADR 0007 principle 5', description: 'gear-factor enclosure and the shared bound-specialized second clamp' },
   { id: 'ted', test: /^(node_|ted_def$|lim_overswing$)/, prefix: 'node_*, ted_def, lim_overswing', adr: 'ADR 0007 principle 6', description: 'the weight node as rows, TED = eff - weight penalty on it (a lower envelope of q), and TED >= 0 when overswing is prevented' },
   { id: 'cap_price', test: /^lim_price$/, prefix: 'lim_price', adr: 'ADR 0009 principle 3', description: 'max_price on the real spend' },
   { id: 'cap_ergonomics', test: /^lim_min_ergo$/, prefix: 'lim_min_ergo', adr: 'INTERPRETATIONS 8', description: 'min_ergonomics on the first clamp' },
@@ -776,23 +819,89 @@ class FastSpecializer {
     return terms;
   }
 
-  /** The general three-regime clamp of `source` into `target` over [0, cap]: exact for any sign of the source. */
+  /**
+   * Exact integer graph over the unchanged source and target domains. Row scaling is a verified exact power-of-two product.
+   * Only auxiliary segment envelopes widen when a filtered endpoint cannot be retained by that scaling.
+   */
   private emitClamp(prefix: string, source: string, target: string, src: Interval, cap: number): void {
-    const m = Math.ceil(nextUp(Math.max(Math.abs(src.lo), Math.abs(src.hi), cap) + cap));
-    const low = `${prefix}_low`;
-    const mid = `${prefix}_mid`;
-    const high = `${prefix}_high`;
-    for (const name of [low, mid, high]) this.w.addColumn(name, 'binary', 0, 1);
-    const row = (suffix: string, terms: [string, number][], sense: RowSense, rhs: number): void => this.emit(`${prefix}_${suffix}`, terms, sense, rhs, `clamp ${prefix}`);
-    row('regime', [[low, 1], [mid, 1], [high, 1]], '=', 1);
-    row('lo', [[source, 1], [low, m]], '<=', m);
-    row('hi', [[source, 1], [high, -m]], '>=', cap - m);
-    row('midlo', [[source, 1], [mid, -m]], '>=', -m);
-    row('midhi', [[source, 1], [mid, m]], '<=', cap + m);
-    row('zero', [[target, 1], [low, cap]], '<=', cap);
-    row('full', [[target, 1], [high, -cap]], '>=', 0);
-    row('eqlo', [[target, 1], [source, -1], [mid, -m]], '>=', -m);
-    row('eqhi', [[target, 1], [source, -1], [mid, m]], '<=', m);
+    const shape = classifyClamp(src, cap);
+    const row = (suffix: string, terms: [string, number][], sense: RowSense, rhs: number): void => {
+      const scale = exactRowScale(terms, rhs) ?? 1;
+      this.emit(`${prefix}_${suffix}`, scale === 1 ? terms : terms.map(([name, coefficient]): [string, number] => [name, coefficient * scale]), sense, rhs * scale, `clamp ${prefix}`);
+    };
+    switch (shape.kind) {
+      case 'zero':
+        row('zero', [[target, 1]], '=', 0);
+        return;
+      case 'constant':
+        row('constant', [[target, 1]], '=', cap);
+        return;
+      case 'identity':
+        row('identity', [[target, 1], [source, -1]], '=', 0);
+        return;
+      case 'lower': {
+        const mid = `${prefix}_mid`;
+        const slow = `${prefix}_slow`;
+        const smid = `${prefix}_smid`;
+        let a = shape.lo;
+        const lower: [string, number][] = [[slow, 1], [mid, a]];
+        const upper: [string, number][] = [[smid, 1], [mid, -shape.hi]];
+        if (shape.lo >= -HIGHS_SMALL_MATRIX_VALUE && exactRowScale(lower, a) === null) {
+          a = -MIN_BIG_M;
+          lower[1][1] = a;
+        }
+        if (shape.hi <= HIGHS_SMALL_MATRIX_VALUE && exactRowScale(upper, 0) === null) upper[1][1] = -MIN_BIG_M;
+        this.w.addColumn(mid, 'binary', 0, 1);
+        this.declareAux(slow, a, 0);
+        this.declareAux(smid, 0, Math.max(shape.hi, -upper[1][1]));
+        row('low_lower', lower, '>=', a);
+        row('mid_upper', upper, '<=', 0);
+        row('source', [[source, 1], [slow, -1], [smid, -1]], '=', 0);
+        row('target', [[target, 1], [smid, -1]], '=', 0);
+        return;
+      }
+      case 'upper': {
+        const high = `${prefix}_high`;
+        const qmid = `${prefix}_qmid`;
+        const lower: [string, number][] = [[target, 1], [qmid, -shape.lo], [high, -cap]];
+        if (shape.lo <= HIGHS_SMALL_MATRIX_VALUE && exactRowScale(lower, 0) === null) lower[1][1] = 0;
+        this.w.addColumn(high, 'binary', 0, 1);
+        this.declareAux(qmid, 0, 1);
+        row('complement', [[qmid, 1], [high, 1]], '=', 1);
+        row('ceiling', [[target, 1], [source, -1]], '<=', 0);
+        row('high_lower', lower, '>=', 0);
+        row('high_link', [[target, 1], [source, -1], [high, shape.hi], [qmid, cap]], '>=', cap);
+        return;
+      }
+      case 'hull': {
+        const low = `${prefix}_low`;
+        const mid = `${prefix}_mid`;
+        const high = `${prefix}_high`;
+        const slow = `${prefix}_slow`;
+        const smid = `${prefix}_smid`;
+        const shigh = `${prefix}_shigh`;
+        const lower: [string, number][] = [[slow, 1], [low, -shape.lo]];
+        let a = shape.lo;
+        if (shape.lo >= -HIGHS_SMALL_MATRIX_VALUE && exactRowScale(lower, 0) === null) {
+          a = -MIN_BIG_M;
+          lower[1][1] = -a;
+        }
+        this.w.addColumn(low, 'binary', 0, 1);
+        this.w.addColumn(mid, 'binary', 0, 1);
+        this.w.addColumn(high, 'binary', 0, 1);
+        this.declareAux(slow, a, 0);
+        this.declareAux(smid, 0, cap);
+        this.declareAux(shigh, 0, shape.hi);
+        row('regime', [[low, 1], [mid, 1], [high, 1]], '=', 1);
+        row('low_lower', lower, '>=', 0);
+        row('mid_upper', [[smid, 1], [mid, -cap]], '<=', 0);
+        row('high_lower', [[shigh, 1], [high, -cap]], '>=', 0);
+        row('high_upper', [[shigh, 1], [high, -shape.hi]], '<=', 0);
+        row('source', [[source, 1], [slow, -1], [smid, -1], [shigh, -1]], '=', 0);
+        row('target', [[target, 1], [smid, -1], [high, -cap]], '=', 0);
+        return;
+      }
+    }
   }
 
   private emitStatistics(priceUpper: number): { ergoAxis: Interval; recAxis: Interval; priceAxis: Interval } {
@@ -834,7 +943,12 @@ class FastSpecializer {
     if (req.maxMoa !== null) this.declareAux('acc_total', bounds.accuracy.lo, bounds.accuracy.hi);
 
     // The receiver's constant on the right-hand side, installed copies on the left.
-    const stat = (name: string, terms: [string, number][], rhs: number): void => this.emit(name, terms, '=', rhs, name);
+    const stat = (name: string, terms: [string, number][], rhs: number): void => {
+      // Exact source-row normalization reduces MIP propagation residuals without rescuing filtered input coefficients.
+      const survives = name === 'raw_ergo_def' && terms.every(([, coefficient]) => coefficient === 0 || (Math.abs(coefficient) > HIGHS_SMALL_MATRIX_VALUE && Math.abs(coefficient) < HIGHS_LARGE_MATRIX_VALUE));
+      const scale = survives ? exactRowScale(terms, rhs, 1024) ?? 1 : 1;
+      this.emit(name, scale === 1 ? terms : terms.map(([column, coefficient]): [string, number] => [column, coefficient * scale]), '=', rhs * scale, name);
+    };
     stat('raw_ergo_def', [['raw_ergo', 1], ...this.statTerms(bp.templateErgonomics, -1)], bp.templateErgonomics[0]);
     stat('rec_mod_def', [['rec_mod', 1], ...this.statTerms(bp.templateRecoilModifier, -1)], 0);
     stat('rec_axis_def', [['rec_axis', 1], ['rec_mod', -RECOIL_SCALE]], 0);
