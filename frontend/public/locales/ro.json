@@ -219,6 +219,8 @@
     "chart_recoil_v": "Recul V",
     "chart_price": "Preț",
     "pvp": "PvP",
+    "pvp_season": "PvP Sezon",
+    "pvp_season_tooltip": "Server PvP de sezon: folosește prețurile, comercianții și târgul de vechituri ale serverului de sezon",
     "pve": "PvE",
     "copy_btn": "Copiază",
     "reoptimize_btn": "Re-optimizare",

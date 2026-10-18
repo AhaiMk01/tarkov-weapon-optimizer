@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.2.0] — 2026-10-18
+
+### Added
+- **PvP Season server**: The game mode switch now has a third option, PvP Season, next to PvP and PvE. It uses the season server's prices, traders and flea market, so builds match what you can buy there.
+
 ## [v3.1.2] — 2026-10-18
 
 ### Changed

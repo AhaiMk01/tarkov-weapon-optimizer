@@ -219,6 +219,8 @@
     "chart_recoil_v": "Retroceso V",
     "chart_price": "Precio",
     "pvp": "PvP",
+    "pvp_season": "PvP Temporada",
+    "pvp_season_tooltip": "Servidor PvP de temporada: usa los precios, comerciantes y mercadillo del servidor de temporada",
     "pve": "PvE",
     "copy_btn": "Copiar",
     "reoptimize_btn": "Re-optimizar",

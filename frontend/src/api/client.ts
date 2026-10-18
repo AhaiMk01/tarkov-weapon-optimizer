@@ -240,7 +240,8 @@ export interface OptimizeResponse {
   single_copy?: true;
 }
 
-export type GameMode = 'regular' | 'pve';
+/** tarkov.dev game modes: PvP = `regular`, PvP season server = `pvp-season`, PvE = `pve`. */
+export type GameMode = 'regular' | 'pvp-season' | 'pve';
 
 export interface ModInfo {
   id: string;

@@ -71,7 +71,7 @@ const AUTO_DARK_PALETTE_KEY = 'autoDarkPalette'
 const AUTO_LIGHT_PALETTE_KEY = 'autoLightPalette'
 const LEVEL_CONFIG_STORAGE_KEY = 'levelConfig'
 
-/** PvP = `regular`, PvE = `pve` (matches API / Tarkov.dev). */
+/** PvP = `regular`, PvP season = `pvp-season`, PvE = `pve` (matches API / Tarkov.dev). */
 const GAME_MODE_STORAGE_KEY = 'mode'
 const GAME_MODE_LEGACY_KEY = 'gameMode'
 
@@ -81,7 +81,7 @@ function readStoredGameMode(): GameMode {
   const fromMode = localStorage.getItem(GAME_MODE_STORAGE_KEY)
   const fromLegacy = localStorage.getItem(GAME_MODE_LEGACY_KEY)
   const raw = fromMode ?? fromLegacy
-  const result: GameMode = raw === 'pve' ? 'pve' : 'regular'
+  const result: GameMode = raw === 'pve' || raw === 'pvp-season' ? raw : 'regular'
   if (!fromMode && fromLegacy) {
     try {
       localStorage.setItem(GAME_MODE_STORAGE_KEY, result)
@@ -384,6 +384,11 @@ function AppContent({
     ],
     [t],
   )
+  const gameModeOptions = [
+    { label: t('ui.pvp'), value: 'regular' },
+    { label: <Tooltip title={t('ui.pvp_season_tooltip')}>{t('ui.pvp_season')}</Tooltip>, value: 'pvp-season' },
+    { label: t('ui.pve'), value: 'pve' },
+  ]
   const themeSelectOptions = useMemo(
     () => themeOptions.map(o => ({ value: o.value, label: <Space size={6}>{o.icon}{o.label}</Space> })),
     [themeOptions],
@@ -1163,7 +1168,7 @@ function AppContent({
                 popupRender={() => (
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <Button block icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing}>{t('ui.refresh_data')}</Button>
-                    <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />
+                    <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
                     <Select
                       style={{ width: '100%' }}
                       popupMatchSelectWidth={false}
@@ -1182,7 +1187,7 @@ function AppContent({
                 <Tooltip title={t('ui.refresh_data_tooltip')}>
                   <Button icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing} aria-label={t('ui.refresh_data')} />
                 </Tooltip>
-                <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={[{ label: t('ui.pvp'), value: 'regular' }, { label: t('ui.pve'), value: 'pve' }]} />
+                <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
                 {/* Theme and language collapse to icon triggers: the two full
                     Selects cost ~430px of header width and wrapped the row on
                     narrow desktops. The current choice stays readable as the

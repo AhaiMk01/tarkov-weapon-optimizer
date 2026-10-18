@@ -219,6 +219,8 @@
     "chart_recoil_v": "Отдача V",
     "chart_price": "Цена",
     "pvp": "PvP",
+    "pvp_season": "PvP Сезон",
+    "pvp_season_tooltip": "Сезонный PvP-сервер: цены, торговцы и барахолка сезонного сервера",
     "pve": "PvE",
     "copy_btn": "Копировать",
     "reoptimize_btn": "Переоптимизировать",

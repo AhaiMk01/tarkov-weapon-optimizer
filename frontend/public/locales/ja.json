@@ -219,6 +219,8 @@
     "chart_recoil_v": "反動V",
     "chart_price": "価格",
     "pvp": "PvP",
+    "pvp_season": "PvP シーズン",
+    "pvp_season_tooltip": "PvP シーズンサーバー：シーズンサーバーの価格・トレーダー・フリーマーケットを使用",
     "pve": "PvE",
     "copy_btn": "コピー",
     "reoptimize_btn": "再最適化",

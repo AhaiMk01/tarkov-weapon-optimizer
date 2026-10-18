@@ -219,6 +219,8 @@
     "chart_recoil_v": "Recoil V",
     "chart_price": "Price",
     "pvp": "PvP",
+    "pvp_season": "PvP Season",
+    "pvp_season_tooltip": "Seasonal PvP server: uses the season server's prices, traders and flea market",
     "pve": "PvE",
     "copy_btn": "Copy",
     "reoptimize_btn": "Re-optimize",
