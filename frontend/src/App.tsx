@@ -386,7 +386,7 @@ function AppContent({
   )
   const gameModeOptions = [
     { label: t('ui.pvp'), value: 'regular' },
-    { label: <Tooltip title={t('ui.pvp_season_tooltip')}>{t('ui.pvp_season')}</Tooltip>, value: 'pvp-season' },
+    { label: t('ui.pvp_season'), value: 'pvp-season', tooltip: t('ui.pvp_season_tooltip') },
     { label: t('ui.pve'), value: 'pve' },
   ]
   const themeSelectOptions = useMemo(
