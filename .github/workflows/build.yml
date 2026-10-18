@@ -86,7 +86,7 @@ jobs:
         shell: pwsh
 
       - name: Upload Windows Executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tarkov-optimizer-windows
           path: dist/tarkov-optimizer.exe
@@ -161,7 +161,7 @@ jobs:
         run: mv dist/tarkov-optimizer dist/tarkov-optimizer-linux
 
       - name: Upload Linux Executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tarkov-optimizer-linux
           path: dist/tarkov-optimizer-linux
@@ -236,7 +236,7 @@ jobs:
         run: mv dist/tarkov-optimizer dist/tarkov-optimizer-macos
 
       - name: Upload macOS Executable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: tarkov-optimizer-macos
           path: dist/tarkov-optimizer-macos
