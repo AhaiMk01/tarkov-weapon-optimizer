@@ -3,6 +3,7 @@
 Status: **Revision 1 (2026-10-12)**, after the adversarial review (`docs/proofs/count-model.review.md`) and the owner decisions of
 2026-10-12 (F1, G1, G2, GAP 8a; section 12 maps every review finding to its change). Stage 3, workstream 3.2; ADR 0013 section 7; refs #40.
 **Amendment 2026-10-13** (owner, F1 extended to first opinions with a verified build): Proposition F1' in section 4.2, section 13.
+**Amendment 2026-10-18** (owner, G1 amended: the a-priori cap bound): Proposition A, section 16.
 **Amendment 2026-10-18.** The shared Fast and Precise clamp emitter now specializes on the original enclosed bounds.
 Section 3.2 proves the leaf-only formulations, finite auxiliary domains, and tiny-endpoint protection. Its symbol references supersede the historical clamp line citations below. Historical run counts in section 11 are unchanged and are not evidence for this amendment.
 Written against branch `impl/stage2-correctness-cutover` at commit `a19041c`; Revision 1 re-cites every `file:line` at the working tree of
@@ -965,7 +966,8 @@ a decoded build.
 3. *If the result is `empty`, `F_phys = empty`* (Theorem I).
 4. *Every published lower bound is `<= score(B*) <= OPT`; every published finite upper bound is `>= OPT`*, under A1 and A3: every node bound it
    joins comes from a settled verdict (two agreeing qualified solves) or is inherited from one, and any node without one makes the published
-   upper bound unknown (`null`), never finite (G1, closed).
+   upper bound unknown (`null`), never finite (G1, closed). Since 2026-10-18 a node bound may also be the a-priori cap bound of Proposition A
+   (section 16), which needs no native assumption.
 5. *For a request without TED, and on a TED node with `hi <= 3` and a double gear factor, the model solved is the target model up to the
    padding, and the target model is an exact reformulation of the physical domain* (Theorem E). This is narrower than `model.exact`
    (`specializeFast.ts:1331`), which is also true on singleton `constant_exact` nodes, whose penalty line sits up to one ulp below `q`, and on
@@ -1062,7 +1064,7 @@ are inconclusive, never infeasibility (`nativeSolve.ts:53-69`).
 
 | Id | Severity | Statement | To close |
 | --- | --- | --- | --- |
-| G1 | **Closed (Revision 1)** | Was: the upper bound of an unresolved or failed node could come from a single qualified solve (five sources, section 5) and was published for `feasible` / `incomplete` results. Now only settled verdicts carry a bound (enforced once in `evaluate`); a node without one makes the published upper bound and gap `null` | Done: owner decision "Only checked bounds" (2026-10-12) |
+| G1 | **Closed (Revision 1)** | Was: the upper bound of an unresolved or failed node could come from a single qualified solve (five sources, section 5) and was published for `feasible` / `incomplete` results. Now only settled verdicts carry a bound (enforced once in `evaluate`); a node without one makes the published upper bound and gap `null` | Done: owner decision "Only checked bounds" (2026-10-12); amended 2026-10-18 to admit the solve-free cap bound (section 16) |
 | G2 | **Closed (Revision 1)** | Was: two qualified Infeasible opinions settled a node against a third qualified opinion with a primal point, on relaxed and integer texts. Now any found point or verified build blocks the Infeasible settlement | Done: owner decision "A found point blocks impossible" (2026-10-12) |
 | G3 | Affects completeness only | Certified infeasibility (and optimality) is not complete: padding and tolerance boundary points, cuts that break total unimodularity of the relaxed text, 16 rejections per node (including overswing rejections on `model.exact` nodes with a non-double gear factor, review GAP 7), six seeds | Accepted as is; an exact boundary proof would close it |
 | G4 | Assumption (affects the scope of every certificate if wrong) | A-DATA: the bridge transport of the oracle's domain to the production data model is corroborated, not proved | A written mapping proof of `reference/bridge/toFixture.ts`, or accept as tested |
@@ -1195,3 +1197,72 @@ the wallet, and nothing reads the reason a base is accessible.
 **Effect.** On the pinned snapshot with the benchmark request, the 19 guns that were certified infeasible all had no accessible base; 17 now
 have builds on the owned receiver and 2 (KS-23M, AK-50) stay infeasible because a root required slot cannot be filled. Ledger family 5 records
 the rule (three changed expectations, six new cases; `reference/ledger/family05_bases.ts`).
+
+
+## 16. Amendment of 2026-10-18: the a-priori cap bound (G1 amended)
+
+Owner decision (2026-10-18), amending G1 ("Only checked bounds", section 5). G1 admits one bound source besides settled verdicts: an upper bound
+computed without any solve, in exact rationals, from the objective's structure. A node whose a-priori bound is within `tau` of the incumbent, or
+below it, is fathomed with no native solve and no second opinion. Every other part of G1 stands: no single-solve bound enters any node.
+Measurement: `docs/stage3/heavy-leaf.md`. Line citations in this section are at this amendment's working tree.
+
+**Proposition A (the cap bound).** *Let the request's objective be the weighted sum (no ideal point) under TrueErgo, with resolved weights `e`
+finite and `>= 0`, `r = 0` and `p = 0`. For every real `lo` and every `B in F_phys` with `W(B) >= lo`, `score(B) <= A(lo) := e (100 - q(lo))`, with
+`q(W) = max(0, 100 - 300 / W)` as the oracle defines it.*
+
+*Proof.* The oracle's weighted score is `(e / 10) fE - r fR - (p / 1000) fP` (`reference/oracle/score.ts:63-67`), and under `use_true_ergo`
+`fE = 10 TED` (`:26-33`). With `r = p = 0` the last two terms are 0 whatever `fR` and `fP` are, so `score(B) = e TED(B)`. `TED = eff - q(W)`
+(`reference/oracle/stats.ts:33-35`) with `eff` the second clamp of the gear-scaled first clamp, so `eff <= 100` (`:17-25`, `ERGO_CLAMP_MAX`).
+`q` is nondecreasing on the reals: 0 up to 3 kg, `100 - 300 / W` increasing above, and continuous at 3 kg. So `W(B) >= lo` gives
+`q(W(B)) >= q(lo)` and `TED(B) <= 100 - q(lo)`, and `e >= 0` gives the claim. QED
+
+Production evaluates `A(lo)` as `aprioriScoreBound` (`src/solver/physical/proof.ts:441-445`). It returns `null` unless TrueErgo is on, there is no
+ideal point, `r` and `p` are 0 and `e` is finite and `>= 0`. Otherwise it returns `exactObjectiveScore(weights, null, { fE: 10 (100 - q(lo)), fR: 0,
+fP: 0 })`. That is the function that scores every verified build (`solvePrecise.ts:789`, `solveFast.ts:291`), called with the same weights and
+ideal point (the node model's `objective`, captured from the first model built: `solvePrecise.ts:718`, `solveFast.ts:216`) and the same
+`useTrueErgo` flag. `q(lo)` is `exactWeightPenalty` of the binary64 `lo` (`spatial.ts:30-32`), the same formula as the validator's
+`weightPenaltyOf` (`validate.ts:294`) and the oracle's `weightPenalty`. Every quantity is a BigInt rational of two binary64 leaves (`e`, `lo`)
+and three integer constants. No LP text, no native solve and no floating-point operation is involved (A-ARITH). By Theorem S.1 the exact score
+of a production build is its oracle score, so `A(lo)` bounds production's scores too.
+
+**How it enters the search** (`search.ts:293-297`, `:311-319`). A node created on an interval takes `min(inherited, A(lo))` (`tighterBound`,
+`:154`, the helper `nodeBound` also uses).
+
+1. The node cover is unchanged: the bound moves no interval and no split point.
+2. Every node bound is still at least the best exact score in its node: the inherited bound by Theorem B and the settled-origin argument, `A(lo)`
+   by Proposition A, and the smaller of two upper bounds is an upper bound.
+3. A node within `tau` of the incumbent is fathomed before any limit check and before `lookahead` sees the live list (`:339-351`). Its bound
+   joins `fathomed` and so stays in the composed upper bound `join(incumbent, fathomed, live)`. Hence `UB >= OPT` as in section 4.2.
+4. Fathoming needs an incumbent (`withinTolerance`), so `empty` (completed, no incumbent, nothing fathomed) is unchanged. Emptiness still comes
+   only from proofs of emptiness (Theorem I).
+5. `certified` still needs `completed` and an exact gap within `tau`. A node fathomed a priori has a bound at most `score(I) + tau`, so it
+   adds at most that to the gap.
+
+**Theorem S under the amendment.** S.1, S.3 and S.5 do not read node bounds and are unchanged. In S.2 and S.4, every node bound joined into a
+certificate or a published finite upper bound comes from a settled verdict (two agreeing qualified solves), is inherited from one, or is the
+cap bound `A(lo)` of Proposition A, which rests on no native assumption.
+
+**Why no second opinion.** Decision 5a's second solve exists because a native answer can be wrong (A1 and A3 can fail,
+`tests/physical/solverDefects/`). `A(lo)` has no native answer to doubt. It is a closed-form rational of the request's weight and the node's lower
+end, evaluated in exact arithmetic, and its validity is the oracle's own TED definition (Proposition A). A second seed has nothing to disagree
+about.
+
+**Scope.** Active on every TrueErgo request scored `e x TED`. In practice that is the ergonomics payoff endpoint `(100, 0, 0)` of a TrueErgo Sweet
+Spot or Explore payoff table, and an Optimize with recoil and price weights 0. Inactive under Tchebycheff (the Sweet Spot final solve), any
+`r > 0` or `p > 0` (the default Optimize weights are 1, 1, 0.1), and with TrueErgo off (Prevent Overswing alone scores capped ergonomics, which has
+no weight term). Prevent Overswing with TrueErgo only adds `ted >= 0` (`specializeFast.ts:993`, the validator's `OVERSWING_PREVENTED`). It
+shrinks `F_phys` and leaves the score alone, so Proposition A holds there unchanged. Fast passes the same bound to the same search
+(`solveFast.ts:413`). A Fast result is never a certificate, and its `approximate_optimal` keeps its meaning by points 1 to 5, with Fast's model
+bounds in place of Theorem B. The roots of a search are created before any model exists, so they carry no a-priori bound, and every child does.
+A root would gain nothing: it is the first node evaluated, or it starts at or below 3 kg, where `A = 100 e`.
+
+**Lookahead.** The prefetch of upcoming nodes (`solvePrecise.ts`, `lookahead`; `speculativeSolves.ts`) only sees nodes still live after point
+3, so a node whose a-priori bound is within `tau` of the current incumbent is never prefetched. A node prefetched while it was still promising
+and fathomed after a later incumbent is abandoned, as any node fathomed by a later incumbent was before. No result depends on the lookahead
+(the `SearchOptions.lookahead` contract).
+
+Tests: `tests/physical/aprioriBound.test.ts` checks Proposition A against the oracle on every accepted build of the 150 in-scope ledger fixtures
+made heavy, with three ergonomics weights, with and without Prevent Overswing. On the same fixtures Precise returns the oracle optimum with a
+published upper bound at least the optimum, and the bound is off with a recoil weight. `tests/physical/search.test.ts` checks that an interval
+proved hopeless is never evaluated while the answer and certificate are kept, and that a stopped search publishes the a-priori bound of an
+unevaluated node. No oracle, ledger or baseline file changed.
