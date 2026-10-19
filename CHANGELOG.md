@@ -2,6 +2,14 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.2.2] — 2026-10-18
+
+### Changed
+- **Faster Sweet Spot with TrueErgo**: Sweet Spot with TrueErgo takes about a quarter less time across all guns, and much less on the slowest ones, such as the AK family, the AUG A3 and the Saiga-12K. The optimizer now skips weight ranges that can't beat the best build already found, without solving them. The builds you get and their scores are unchanged.
+
+### Fixed
+- **Sweet Spot timeouts**: Sweet Spot with TrueErgo on the AK-74M and AK-103 used to stop at the time limit and now finishes with a confirmed best build. The AK-74M, AK-101, AK-103 and AKS-74N in Fast mode now finish in about a second instead of timing out.
+
 ## [v3.2.1] — 2026-10-18
 
 ### Fixed

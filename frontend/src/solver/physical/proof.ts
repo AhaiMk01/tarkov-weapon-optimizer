@@ -32,6 +32,7 @@ import type { IdealPoint } from '../types';
 import { RAT_ZERO, rat, ratAdd, ratCmp, ratDiv, ratFromDouble, ratInt, ratMax, ratMul, ratSub, ratToNumber, type Rat } from './exact';
 import type { Interval } from './numeric';
 import { ratAbs, ratFromString, ratMagnitude, ratPositivePart, ratRoundDown, ratRoundUp } from './rational';
+import { exactWeightPenalty, type WeightInterval } from './spatial';
 
 // ---------------------------------------------------------------------------------------------
 // Constants
@@ -428,6 +429,19 @@ export function exactObjectiveScore(weights: ObjectiveWeights, ideal: IdealPoint
   if (weights.p > 0) deviations.push(ratMul(cp, ratSub(axes.fP, ratFromDouble(ideal.zP))));
   const maxDeviation = deviations.length === 0 ? RAT_ZERO : deviations.reduce((a, b) => (ratCmp(a, b) >= 0 ? a : b));
   return ratSub(augmented, maxDeviation);
+}
+
+/**
+ * The a-priori cap bound (owner decision 2026-10-18, amending G1; `docs/proofs/count-model.md` section 16): an upper bound of the exact score of every
+ * build whose weight lies in `interval`, from the objective's structure alone, with no solve. It applies when {@link exactObjectiveScore} is `e x TED`:
+ * a weighted sum (no ideal point) with TED as the ergonomics axis and recoil and price weights 0. TED = eff - q(W) with eff <= 100 (both ergonomics
+ * clamps) and q nondecreasing, so a build with W >= lo has fE <= 10 (100 - q(lo)), and the score is nondecreasing in fE (e >= 0) and blind to fR and fP.
+ * Same arguments as {@link exactObjectiveScore}; `null` for any other objective.
+ */
+export function aprioriScoreBound(weights: ObjectiveWeights, ideal: IdealPoint | null, useTrueErgo: boolean, interval: WeightInterval): Rat | null {
+  if (!useTrueErgo || ideal !== null || weights.r !== 0 || weights.p !== 0 || !(Number.isFinite(weights.e) && weights.e >= 0)) return null;
+  const tedCap = ratSub(HUNDRED, exactWeightPenalty(ratFromDouble(interval.lo)));
+  return exactObjectiveScore(weights, null, { fE: ratMul(ERGO_SCALE_RAT, tedCap), fR: RAT_ZERO, fP: RAT_ZERO });
 }
 
 export interface ScoreEnclosure {

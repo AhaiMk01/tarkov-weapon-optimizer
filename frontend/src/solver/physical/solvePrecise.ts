@@ -71,6 +71,8 @@
  * single solve it saw: a limit-stopped first opinion, a timed-out or unqualified second opinion, a disagreement, a relaxed try carried through the
  * fallback, a rejected solve's dual bound, or the first-witness short-circuit of a floor query. Such a node keeps the bound it inherited from a settled
  * parent, unknown at a root, and an unknown live bound makes the published upper bound and gap unknown (null on the wire).
+ * Amended (owner, 2026-10-18): one bound needs no solve at all, the a-priori cap bound of an objective that is exactly `e x TED` (`aprioriScoreBound`).
+ * Every node takes the tighter of it and its inherited bound, so a heavy interval it proves hopeless is fathomed without a native call.
  *
  * Inconclusive solves (owner, 2026-10-12: "retry seeds, never throw"). HiGHS 1.15.1 returns `SolveError` under the production options on some small,
  * valid count models for some seeds (reference/harness/countGates.nativeDefects.differential.test.ts). Such a solve (`SolveError`, `PresolveError`,
@@ -133,7 +135,7 @@ import type { SpeculationStats } from './speculativeSolves';
 import { assessNativeResult, boundEvidenceOf } from './nativeProof';
 import type { NativeAssessment } from './nativeProof';
 import { axesOfStats } from './objective';
-import { exactAxes, exactObjectiveScore, scoreEnclosure, upperBoundExact } from './proof';
+import { aprioriScoreBound, exactAxes, exactObjectiveScore, scoreEnclosure, upperBoundExact } from './proof';
 import type { BoundEvidence } from './proof';
 import { ratCmp, ratFromDouble, ratSub, ratToNumber, type Rat } from './exact';
 import { ratAbs, ratRoundUp } from './rational';
@@ -222,6 +224,8 @@ export interface SearchTelemetry {
   confirmedInfeasible: number;
   /** Nodes proved empty without a native call (a contradiction row of the model text). */
   provedEmptyNodes: number;
+  /** Weight nodes fathomed by the a-priori cap bound without a native call (`aprioriScoreBound`, owner decision 2026-10-18). */
+  aprioriFathomedNodes: number;
   /** Solver solutions the decoder or the validator rejected and an integer no-good cut removed (see `fastCut.ts`). */
   rejectedCandidates: number;
   /** Solves whose parsed model was verified against the emitted text (`nativeProof.ts`): one per native solve, the confirmation included. */
@@ -592,7 +596,7 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
   const tolerance = resolveTolerance(params.objectiveTolerance);
   const telemetry: SearchTelemetry = {
-    nativeSolves: 0, presolveRescues: 0, confirmedInfeasible: 0, provedEmptyNodes: 0, rejectedCandidates: 0,
+    nativeSolves: 0, presolveRescues: 0, confirmedInfeasible: 0, provedEmptyNodes: 0, aprioriFathomedNodes: 0, rejectedCandidates: 0,
     readbackChecks: 0, unqualifiedSolves: 0, readbackMs: 0, unqualifiedReasons: [], boundShortfall: 0,
     secondOpinions: 0, thirdOpinions: 0, disagreements: 0, unsettledDisagreements: 0, secondOpinionMs: 0,
     relaxedEdgeSolves: 0, relaxedEdgeFallbacks: 0, inconclusiveSolves: 0, extraSeedSolves: 0, relaxationChecks: 0, relaxationVetoes: 0, relaxationRescues: 0,
@@ -705,9 +709,15 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   let rootModel: CountModel | null = null;
   /** Models of upcoming nodes built early to prefetch their first solve (a pool only), by node tag; taken by `modelOf` (the same deterministic model). */
   const prefetchedModels = new Map<string, CountModel>();
-  const specializeNode = (interval: SearchInterval | null): CountModel => (interval === null
-    ? (rootModel ??= specializeCount(blueprint, domain, params))
-    : specializeCount(blueprint, domain, params, { weightMin: interval.lo, weightMax: interval.hi }));
+  /** The objective every node's model shares (the one its builds are scored with), from the first model built: what the a-priori bound reads. */
+  let objective: CountModel['objective'] | null = null;
+  const specializeNode = (interval: SearchInterval | null): CountModel => {
+    const model = interval === null
+      ? (rootModel ??= specializeCount(blueprint, domain, params))
+      : specializeCount(blueprint, domain, params, { weightMin: interval.lo, weightMax: interval.hi });
+    objective ??= model.objective;
+    return model;
+  };
   const modelOf = (interval: SearchInterval | null): CountModel => {
     const started = timing === undefined ? 0 : now();
     const calls = timing === undefined || (interval === null && rootModel !== null) ? 0 : 1;
@@ -1119,12 +1129,14 @@ export async function solvePrecise(context: PreciseContext): Promise<PreciseResu
   try {
     search = await runSpatialSearch<VerifiedBuild>({
       roots, evaluate, tolerance, maxNodes, now, deadline, guard, stopAtFirstWitness: context.stopAtFirstWitness, ...(lookahead === undefined ? {} : { lookahead }),
+      aprioriBound: interval => (objective === null ? null : aprioriScoreBound(objective.weights, objective.tchebycheff?.ideal ?? null, useTrueErgo, interval)),
     });
   } finally {
     // Nothing started early outlives the request: queued early solves are dropped and running ones' workers replaced.
     requests?.abandonAll();
     if (requests !== null) telemetry.pool = { lanes: requests.size, ...requests.stats };
   }
+  telemetry.aprioriFathomedNodes = search.aprioriFathomed;
   const finished = summary({
     nodes: search.nodes,
     lowerBound: search.lowerBound,

@@ -18,6 +18,9 @@
  *   - {@link joinBounds} is the ONE place bounds are composed into the global upper bound: the incumbent's exact score, every live node, and
  *     every node closed WITHOUT a proof of emptiness (exactness or tolerance), all in the same frame. Nodes proved empty contribute nothing.
  *     An unknown bound makes the composition unknown, so no finite sibling and no time-limit primal can hide it;
+ *   - a node is created with the tighter of its inherited bound and the caller's a-priori bound (`SearchOptions.aprioriBound`, owner decision
+ *     2026-10-18 amending G1): a bound proved by exact arithmetic on the objective's structure, with no solve. A node it puts within the
+ *     tolerance of the incumbent is fathomed before it is evaluated (or handed to `lookahead`), and that bound joins `fathomed`;
  *   - a `split` evaluation (owner decision F1, 2026-10-12, extended 2026-10-13) only splits its node: its evidence is ignored, its children inherit
  *     the node's own bound, and nothing is pruned, so a verdict the caller did not settle never enters a bound; a verified build it carries is a
  *     witness like any other (it updates the incumbent before the split);
@@ -144,10 +147,11 @@ export interface NodeEvaluation<P> {
  * missing evidence leaves the parent's bound (unknown at a root).
  */
 export function nodeBound(parent: Bound, evidence: BoundEvidence | null): Bound {
-  const proved = upperBoundExact(evidence);
-  if (proved === null) return parent;
-  return parent === null || ratCmp(proved, parent) < 0 ? proved : parent;
+  return tighterBound(parent, upperBoundExact(evidence));
 }
+
+/** The smaller of two bounds, an unknown bound (`null`) the identity. */
+const tighterBound = (a: Bound, b: Bound): Bound => (a === null ? b : b === null || ratCmp(a, b) <= 0 ? a : b);
 
 /** {@link nodeBound} in doubles: `Infinity` is an unknown parent bound, and the result is the smallest double at least the exact bound. */
 export function nodeUpperBound(parentBound: number, evidence: BoundEvidence | null): number {
@@ -225,12 +229,19 @@ export interface SearchOptions<P> {
    * result: the search reads nothing back from it, and the order nodes are evaluated and committed in is the one below, whatever it does.
    */
   lookahead?(current: SearchNode, upcoming: readonly SearchNode[]): void;
+  /**
+   * An a-priori upper bound of the exact score of every build whose weight lies in the interval, proved without a solve (`aprioriScoreBound`), or `null`
+   * when none is known. Every node created on an interval takes the tighter of its inherited bound and this one.
+   */
+  aprioriBound?(interval: SearchInterval): Bound;
 }
 
 export interface SearchResult<P> {
   incumbent: Candidate<P> | null;
   /** `evaluate` calls made. */
   nodes: number;
+  /** Nodes fathomed by their a-priori bound without an evaluation: their inherited bound alone was not within the tolerance of the incumbent. */
+  aprioriFathomed: number;
   /** The downward enclosure of the incumbent's exact score, `null` without an incumbent. */
   lowerBound: number | null;
   /** Composed global upper bound: `Infinity` when some live node has no proved bound, `-Infinity` when nothing is left and nothing was found. */
@@ -264,6 +275,8 @@ interface LiveNode {
   id: number;
   interval: SearchInterval | null;
   bound: Bound;
+  /** The bound the node inherited (its parent's, unknown at a root), before the a-priori bound. */
+  inherited: Bound;
   /** `bound` as a double for ordering and for the node handed to `evaluate`. */
   up: number;
 }
@@ -278,13 +291,17 @@ const byBoundThenLight = (a: LiveNode, b: LiveNode): number => {
 export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<SearchResult<P>> {
   const tolerance = ratFromDouble(Math.max(0, options.tolerance));
   let nextId = 0;
-  const liveNode = (interval: SearchInterval | null, bound: Bound, id = nextId++): LiveNode => ({ id, interval, bound, up: boundToNumber(bound) });
+  const liveNode = (interval: SearchInterval | null, inherited: Bound, id = nextId++): LiveNode => {
+    const bound = interval === null || options.aprioriBound === undefined ? inherited : tighterBound(inherited, options.aprioriBound(interval));
+    return { id, interval, bound, inherited, up: boundToNumber(bound) };
+  };
   const live: LiveNode[] = options.roots.map(interval => liveNode(interval, null));
   let incumbent: Candidate<P> | null = null;
   let incumbentExact: Rat | null = null;
   /** The joined bound of every node closed without a proof of emptiness: `undefined` while there is none. */
   let fathomed: MaybeBound;
   let nodes = 0;
+  let aprioriFathomed = 0;
   let stopReason: string | null = null;
   let finishedAtStop = false;
 
@@ -295,6 +312,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
     if (incumbent === null) return;
     for (let k = live.length - 1; k >= 0; k--) {
       if (withinTolerance(live[k].bound)) {
+        if (!withinTolerance(live[k].inherited)) aprioriFathomed++;
         fathomed = joinBounds(fathomed, live[k].bound);
         live.splice(k, 1);
       }
@@ -393,6 +411,7 @@ export async function runSpatialSearch<P>(options: SearchOptions<P>): Promise<Se
   return {
     incumbent,
     nodes,
+    aprioriFathomed,
     lowerBound,
     upperBound: boundToNumber(upper),
     upperBoundExact: upper,
