@@ -108,6 +108,15 @@ export function nativeSolveOptions(tau: number): HighsOptions {
   };
 }
 
+/**
+ * Native options of a Fast TED solve: as {@link nativeSolveOptions}, but the native MIP gap is `tau / 4` with no 1e-9 cap. Fast proves nothing
+ * (every answer is `approximate`), so the cap bought proof work no Fast result can use; uncapped, the native gap is again the finer half of the
+ * search tolerance it serves. Owner decision 2026-10-27 with `resolveFastTolerance` (`solveFast.ts`), which carries the measurement.
+ */
+export function fastTedNativeSolveOptions(tau: number): HighsOptions {
+  return { ...nativeSolveOptions(tau), mip_abs_gap: Math.max(0, tau) / 4 };
+}
+
 export type PresolveSetting = 'off' | 'choose';
 
 /**

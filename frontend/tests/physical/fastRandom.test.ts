@@ -48,10 +48,12 @@ test('seeded worlds: Fast equals the exact optimum, or is empty exactly when Pre
 
 /**
  * TrueErgo and Prevent Overswing (Phase 2.6b): the Fast weight search against the Precise one on seeded worlds with weights near the 3 kg knee, an equipment
- * modifier and at least one TED flag. Both run at the default tolerance, which is the most either may sit below the exact optimum.
+ * modifier and at least one TED flag. Each runs at its default tolerance (Fast TED: `resolveFastTolerance`), which is the most it may sit below the exact
+ * optimum; Precise's adds its own share of the slack.
  */
-const TED_SLACK = 2e-5;
-const near = (a: number, b: number): boolean => Math.abs(a - b) <= TED_SLACK + 1e-9 * Math.abs(b);
+const PRECISE_SLACK = 2e-5;
+const near = (fast: number, exact: number, fastTolerance: number): boolean => exact - fast <= fastTolerance + PRECISE_SLACK + 1e-9 * Math.abs(exact)
+  && fast - exact <= PRECISE_SLACK + 1e-9 * Math.abs(exact);
 
 async function compareTed(seed: number): Promise<{ outcome: string }> {
   const { params } = randomTedWorld(seed);
@@ -75,7 +77,7 @@ async function compareTed(seed: number): Promise<{ outcome: string }> {
   const exact = precise.best.score;
   assert.equal(fast.kind, 'build', `${label}: the occurrence model found a build and Fast returned ${fast.kind}`);
   if (fast.kind !== 'build') return { outcome: 'fast without a build' };
-  assert.ok(near(fast.best.score, exact), `${label}: Fast ${fast.best.score} against the exact optimum ${exact}`);
+  assert.ok(near(fast.best.score, exact, fast.summary.tolerance), `${label}: Fast ${fast.best.score} against the exact optimum ${exact} (tolerance ${fast.summary.tolerance})`);
   assert.equal(fast.optimal, true, `${label}: the search completed`);
   return { outcome: 'equal' };
 }

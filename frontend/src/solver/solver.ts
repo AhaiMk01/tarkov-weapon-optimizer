@@ -40,7 +40,7 @@ import { inspectOwnedItems } from './physical/ownedItems';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './physical/outcome';
 import type { OptimizeOutcome, StopObservations } from './physical/outcome';
 import { PUBLIC_REASONS } from './physical/reasons';
-import { solveFast } from './physical/solveFast';
+import { resolveFastTolerance, solveFast } from './physical/solveFast';
 import type { FastSummary } from './physical/solveFast';
 import { resolveTolerance, solvePrecise } from './physical/solvePrecise';
 import type { PreciseSummary } from './physical/solvePrecise';
@@ -477,7 +477,7 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   const mode = params.preciseMode ? 'precise' : 'fast';
   // Owner decision 2c: Fast installs at most one copy of each part unless the request allows repeats; Precise ignores the option.
   const singleCopy = mode === 'fast' && params.allowRepeatedParts !== true;
-  const tolerance = resolveTolerance(params.objectiveTolerance);
+  const tolerance = mode === 'fast' ? resolveFastTolerance(params).tolerance : resolveTolerance(params.objectiveTolerance);
   /** A request that stopped before its search started: no build, no proof, the factual cause. */
   const unstarted = (observed: StopObservations, idealPoint?: IdealPoint): Detailed => noBuildResponse(
     { precisionRequest, start, now, idealPoint, singleCopy },

@@ -54,7 +54,7 @@ import { prepareSubproblemDomain } from './domain';
 import { PhysicalModelError } from './errors';
 import { integerNoGood } from './fastCut';
 import type { IntegerNoGood } from './fastCut';
-import { FAST_PRESOLVE, isLimitStatus, NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
+import { FAST_PRESOLVE, fastTedNativeSolveOptions, isLimitStatus, NATIVE_FEASIBILITY_TOLERANCE, nativeSolve, nativeSolveOptions, solveWithPresolvePolicy } from './nativeSolve';
 import type { PolicyOutcome, PresolveSetting, SolveFn } from './nativeSolve';
 import { axesOfStats } from './objective';
 import { classifyOptimize, isMoaDependent, observationsOfReason } from './outcome';
@@ -73,6 +73,30 @@ import type { PhysicalBuild, PhysicalBuildStats } from './validate';
 
 /** Most points the validator (or the decoder) may reject in one node before the node fails. Each is cut out and the node re-solved. */
 export const MAX_FAST_REJECTIONS = 64;
+
+/** Default tolerance of a Fast TED solve, per unit of summed objective weight: 0.1 points of the weighted axes (0.1 TED at an ergonomics-only weight). */
+export const FAST_TED_TOLERANCE_PER_WEIGHT = 0.1;
+/** Default tolerance of a Fast TED Tchebycheff solve (the final Sweet Spot solve), whose objective is normalized, not weight-scaled. */
+export const FAST_TED_TCHEBYCHEFF_TOLERANCE = 1e-4;
+
+/**
+ * The tolerance of a Fast solve and whether it is the Fast TED default (owner decision 2026-10-27). A request that sets `objectiveTolerance`, and every
+ * request that reads no TED, keeps the shared default and its capped native gap. A Fast TED request without one gets {@link FAST_TED_TCHEBYCHEFF_TOLERANCE}
+ * (Tchebycheff) or {@link FAST_TED_TOLERANCE_PER_WEIGHT} times its summed weights, with the native gap uncapped (`fastTedNativeSolveOptions`).
+ *
+ * Measured 2026-10-27, pinned snapshot, bench request (e 1, r 1, p 0.1; flea; trader level 4), Fast, 60 s, 172 guns against the shared default:
+ * Sweet Spot TrueErgo 1684 s -> 734 s, timeouts 19 -> 3 (each with a build), 8 builds below the shared default's score (at most 3.1e-5 of the
+ * normalized objective), none above, every payoff table equal; TrueErgo 223 s -> 154 s, one build 0.012 below. Plain requests gained nothing (30 s ->
+ * 32 s with 11 builds 0.047 below), which is why they keep the shared default. The Tchebycheff tolerance was chosen over 1e-3 (427 s, 15 builds below,
+ * up to 176k roubles dearer) and 1e-5 (1151 s, 12 timeouts).
+ */
+export function resolveFastTolerance(params: Pick<SolveParams, 'objectiveTolerance' | 'useTrueErgo' | 'preventOverswing' | 'useTchebycheff' | 'ergoWeight' | 'recoilWeight' | 'priceWeight'>): { tolerance: number; tedDefault: boolean } {
+  const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
+  if (!tedRequest || params.objectiveTolerance !== undefined) return { tolerance: resolveTolerance(params.objectiveTolerance), tedDefault: false };
+  const weights = Math.abs(params.ergoWeight ?? 0) + Math.abs(params.recoilWeight ?? 0) + Math.abs(params.priceWeight ?? 0);
+  const ted = params.useTchebycheff === true ? FAST_TED_TCHEBYCHEFF_TOLERANCE : FAST_TED_TOLERANCE_PER_WEIGHT * weights;
+  return { tolerance: Math.max(resolveTolerance(undefined), ted), tedDefault: true };
+}
 
 /** A build the independent validator accepted, with its exact statistics and score. */
 export interface FastVerifiedBuild {
@@ -174,7 +198,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
   const deadline = guard.deadline;
   const lookup = params.itemLookup;
   const presolve = context.presolve ?? FAST_PRESOLVE;
-  const tolerance = resolveTolerance(params.objectiveTolerance);
+  const { tolerance, tedDefault } = resolveFastTolerance(params);
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
   /** Owner decision 2c: one copy of each part unless the request allows repeats. The cap is a model restriction, so it never changes what a Fast result claims. */
   const singleCopy = params.allowRepeatedParts !== true;
@@ -227,7 +251,7 @@ export async function solveFast(context: FastContext): Promise<FastResult> {
     requirePathInstanceIds: true,
   });
   const useTrueErgo = params.useTrueErgo === true;
-  const options = nativeSolveOptions(tolerance);
+  const options = tedDefault ? fastTedNativeSolveOptions(tolerance) : nativeSolveOptions(tolerance);
   const maxRejections = context.maxRejections ?? MAX_FAST_REJECTIONS;
   const relaxEdges = context.edgeIntegrality !== 'integer';
   const solveFn = context.solve ?? nativeSolve;
