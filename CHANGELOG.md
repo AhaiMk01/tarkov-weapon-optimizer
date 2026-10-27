@@ -2,6 +2,11 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.2.3] — 2026-10-27
+
+### Changed
+- **Faster TrueErgo in Fast mode**: Sweet Spot with TrueErgo in Fast mode (also used automatically for the largest guns) takes less than half the time across all guns, and 16 fewer requests stop at the time limit. TrueErgo and Prevent Overswing in Fast mode are about 30% faster. Fast now stops once its build is within a tiny margin of the best one (0.1 ergonomics points) instead of proving the last fraction. Most builds are unchanged; a few are a different build with an almost equal score. Precise, Explore and builds without TrueErgo are unchanged.
+
 ## [v3.2.2] — 2026-10-18
 
 ### Changed
