@@ -441,9 +441,14 @@ export const PRECISE_SPLIT_SHORTCUT: SplitShortcut = 'witness';
 export type Speculation = 'always' | 'unsplittable' | 'off';
 export const PRECISE_SPECULATION: Speculation = 'always';
 
+/** Whether a requested tolerance is used as given: a finite, non-negative number. A missing (or null), non-finite or negative value is unset. */
+export function isRequestedTolerance(requested: number | null | undefined): requested is number {
+  return typeof requested === 'number' && Number.isFinite(requested) && requested >= 0;
+}
+
 /** The tolerance as requested; only a missing, non-finite or negative value falls back to the default. */
-export function resolveTolerance(requested: number | undefined): number {
-  return requested !== undefined && Number.isFinite(requested) && requested >= 0 ? requested : DEFAULT_OBJECTIVE_TOLERANCE;
+export function resolveTolerance(requested: number | null | undefined): number {
+  return isRequestedTolerance(requested) ? requested : DEFAULT_OBJECTIVE_TOLERANCE;
 }
 
 /**

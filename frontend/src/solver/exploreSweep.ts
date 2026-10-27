@@ -292,8 +292,14 @@ export function scheduleProblem(schedule: SweepSchedule | null | undefined): str
 // The sweep
 // ---------------------------------------------------------------------------------------------
 
-/** The Optimize parameters of one target: the shared request, the target's weights, then its overrides. */
-export const paramsOfTarget = (request: ExploreRunRequest, target: SweepTarget): SolveParams => ({ ...request.base, ...target.weights, ...target.overrides });
+/**
+ * The Optimize parameters of one target: the shared request with an explicit tolerance (the caller's, else the shared default), the target's weights,
+ * then its overrides. The explicit tolerance keeps a Fast TED target off the Fast TED default (`resolveFastTolerance`), whose 0.1 per unit of weight
+ * would swallow the sweep's 1e-4 tie-break and 0.01 step weights.
+ */
+export const paramsOfTarget = (request: ExploreRunRequest, target: SweepTarget): SolveParams => ({
+  ...request.base, objectiveTolerance: resolveTolerance(request.base.objectiveTolerance), ...target.weights, ...target.overrides,
+});
 
 /** Aggregate resolved mode: the uniform per-target mode, else the caller's resolved mode when nothing resolved one, else `null` (mixed). */
 function aggregateMode(rows: readonly ExploreStepOutcome[], request: ExploreRunRequest): PrecisionResolved {

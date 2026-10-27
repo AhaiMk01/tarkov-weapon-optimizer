@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { solveFast } from '../../src/solver/physical/solveFast';
 import { solveOccurrence } from './occurrence/solveOccurrence';
+import type { SolveParams } from '../../src/solver/types';
 import { randomTedWorld, randomWorld } from './randomWorlds';
 
 const close = (a: number, b: number): boolean => Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b));
@@ -48,35 +49,51 @@ test('seeded worlds: Fast equals the exact optimum, or is empty exactly when Pre
 
 /**
  * TrueErgo and Prevent Overswing (Phase 2.6b): the Fast weight search against the Precise one on seeded worlds with weights near the 3 kg knee, an equipment
- * modifier and at least one TED flag. Both run at the default tolerance, which is the most either may sit below the exact optimum.
+ * modifier and at least one TED flag. The strict comparison runs Fast at an explicit 1e-5 (the capped native gap, as before the Fast TED default): both
+ * then run at the shared default, which is the most either may sit below the exact optimum. A second Fast solve at the Fast TED default (owner decision
+ * 2026-10-27) may sit at most that default below, computed here from the decided constants and the weights the objective reads.
  */
 const TED_SLACK = 2e-5;
 const near = (a: number, b: number): boolean => Math.abs(a - b) <= TED_SLACK + 1e-9 * Math.abs(b);
+const fastTedDefault = (params: SolveParams): number => {
+  if (params.useTchebycheff === true) return 1e-4;
+  const weights = Math.max(0, params.ergoWeight ?? 1) + Math.max(0, params.recoilWeight ?? 1) + Math.max(0, params.priceWeight ?? 0);
+  return Math.max(1e-5, 0.1 * weights);
+};
+const withinDefault = (fast: number, exact: number, tolerance: number): boolean => exact - fast <= tolerance + TED_SLACK + 1e-9 * Math.abs(exact)
+  && fast - exact <= TED_SLACK + 1e-9 * Math.abs(exact);
 
 async function compareTed(seed: number): Promise<{ outcome: string }> {
   const { params } = randomTedWorld(seed);
   const label = `seed ${seed} (TrueErgo ${String(params.useTrueErgo)}, Prevent Overswing ${String(params.preventOverswing)})`;
   const precise = await solveOccurrence({ params, deadline: performance.now() + 60_000 });
-  const fast = await solveFast({ params: { ...params, allowRepeatedParts: true }, deadline: performance.now() + 60_000, presolve: 'off' });
+  const fast = await solveFast({ params: { ...params, allowRepeatedParts: true, objectiveTolerance: 1e-5 }, deadline: performance.now() + 60_000, presolve: 'off' });
+  const loose = await solveFast({ params: { ...params, allowRepeatedParts: true, objectiveTolerance: undefined }, deadline: performance.now() + 60_000, presolve: 'off' });
   assert.equal(fast.summary.spatial, true, label);
-  if (fast.kind === 'build') {
+  for (const result of [fast, loose]) {
+    if (result.kind !== 'build') continue;
     // Whatever Fast publishes is a valid physical build, and under Prevent Overswing its exact TED is not negative.
-    const verdict = validatePhysicalBuild(params.itemLookup, params, fast.best.build, { requirePathInstanceIds: true });
+    const verdict = validatePhysicalBuild(params.itemLookup, params, result.best.build, { requirePathInstanceIds: true });
     assert.equal(verdict.ok, true, `${label}: ${JSON.stringify(verdict.violations)}`);
-    if (params.preventOverswing) assert.ok(fast.best.stats.ted >= 0, `${label}: Fast published an overswinging build (TED ${fast.best.stats.ted})`);
-    assert.equal(fast.outcome.physical_certificate === 'approximate_optimal' || fast.outcome.physical_certificate === 'feasible', true, label);
-    assert.equal(fast.outcome.model_qualification, 'approximate', label);
+    if (params.preventOverswing) assert.ok(result.best.stats.ted >= 0, `${label}: Fast published an overswinging build (TED ${result.best.stats.ted})`);
+    assert.equal(result.outcome.physical_certificate === 'approximate_optimal' || result.outcome.physical_certificate === 'feasible', true, label);
+    assert.equal(result.outcome.model_qualification, 'approximate', label);
   }
   if (precise.kind === 'incomplete') return { outcome: 'precise incomplete' };
   if (precise.kind === 'empty') {
     assert.notEqual(fast.kind, 'build', `${label}: Fast published a build for a request the occurrence model proves empty`);
+    assert.notEqual(loose.kind, 'build', `${label}: Fast (Fast TED default) published a build for a request the occurrence model proves empty`);
     return { outcome: 'empty' };
   }
   const exact = precise.best.score;
   assert.equal(fast.kind, 'build', `${label}: the occurrence model found a build and Fast returned ${fast.kind}`);
-  if (fast.kind !== 'build') return { outcome: 'fast without a build' };
+  assert.equal(loose.kind, 'build', `${label}: the occurrence model found a build and Fast (Fast TED default) returned ${loose.kind}`);
+  if (fast.kind !== 'build' || loose.kind !== 'build') return { outcome: 'fast without a build' };
   assert.ok(near(fast.best.score, exact), `${label}: Fast ${fast.best.score} against the exact optimum ${exact}`);
   assert.equal(fast.optimal, true, `${label}: the search completed`);
+  const tolerance = fastTedDefault(params);
+  assert.ok(withinDefault(loose.best.score, exact, tolerance), `${label}: Fast (Fast TED default) ${loose.best.score} against the exact optimum ${exact} (tolerance ${tolerance})`);
+  assert.equal(loose.optimal, true, `${label}: the search at the Fast TED default completed`);
   return { outcome: 'equal' };
 }
 
