@@ -45,13 +45,20 @@ export interface ObjectiveModel {
   deviations: Array<{ axis: 'fE' | 'fR' | 'fP'; coefficient: number; ideal: number }>;
 }
 
+/** The weights the objective reads: a missing weight is its default (ergonomics 1, recoil 1, price 0), a negative one is 0. */
+export function objectiveWeights(params: Pick<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight'>): { e: number; r: number; p: number } {
+  return {
+    e: Math.max(0, params.ergoWeight ?? 1),
+    r: Math.max(0, params.recoilWeight ?? 1),
+    p: Math.max(0, params.priceWeight ?? 0),
+  };
+}
+
 /** fE is ergonomics/TED * 10, fR is the summed recoil modifier * 1000,
  * fP is purchase cost (including the existing unavailable-item penalty).
  * The returned score and LP coefficients use exactly the same convention. */
 export function objectiveModel(params: SolveParams): ObjectiveModel {
-  const e = Math.max(0, params.ergoWeight ?? 1);
-  const r = Math.max(0, params.recoilWeight ?? 1);
-  const p = Math.max(0, params.priceWeight ?? 0);
+  const { e, r, p } = objectiveWeights(params);
   if (!params.useTchebycheff || !params.idealPoint) {
     return { ergo: e / 10, recoil: -r, price: -p / 1000, deviations: [] };
   }

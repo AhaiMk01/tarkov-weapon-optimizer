@@ -26,11 +26,32 @@ test('a TED request scales its tolerance with the summed weights; Tchebycheff ge
   assert.equal(resolveFastTolerance({ ergoWeight: 100, recoilWeight: 0, priceWeight: 0, preventOverswing: true }).tolerance, 10);
   assert.deepEqual(resolveFastTolerance({ ...weights, useTrueErgo: true, useTchebycheff: true }), { tolerance: FAST_TED_TCHEBYCHEFF_TOLERANCE, tedDefault: true });
   // Never below the shared default (tiny weights).
-  assert.equal(resolveFastTolerance({ ergoWeight: 1e-6, useTrueErgo: true }).tolerance, DEFAULT_OBJECTIVE_TOLERANCE);
+  assert.equal(resolveFastTolerance({ ergoWeight: 1e-6, recoilWeight: 0, priceWeight: 0, useTrueErgo: true }).tolerance, DEFAULT_OBJECTIVE_TOLERANCE);
+});
+
+test('the summed weights are the ones the objective reads: a negative weight counts 0, an omitted one its default', () => {
+  // Ergonomics 1, recoil ignored (negative), price 0.1: 0.11, not 0.31.
+  const ignored = resolveFastTolerance({ ergoWeight: 1, recoilWeight: -2, priceWeight: 0.1, useTrueErgo: true });
+  assert.ok(Math.abs(ignored.tolerance - FAST_TED_TOLERANCE_PER_WEIGHT * 1.1) < 1e-12, String(ignored.tolerance));
+  // Omitted weights are the objective's defaults (1 / 1 / 0), exactly as if given.
+  const omitted = resolveFastTolerance({ useTrueErgo: true });
+  assert.deepEqual(omitted, resolveFastTolerance({ ergoWeight: 1, recoilWeight: 1, priceWeight: 0, useTrueErgo: true }));
+  assert.ok(Math.abs(omitted.tolerance - FAST_TED_TOLERANCE_PER_WEIGHT * 2) < 1e-12, String(omitted.tolerance));
+  // Every weight ignored: never below the shared default.
+  assert.equal(resolveFastTolerance({ ergoWeight: -1, recoilWeight: -1, priceWeight: -1, preventOverswing: true }).tolerance, DEFAULT_OBJECTIVE_TOLERANCE);
 });
 
 test('an explicit objectiveTolerance is used as given, with the capped native gap', () => {
   assert.deepEqual(resolveFastTolerance({ ...weights, useTrueErgo: true, objectiveTolerance: 1e-3 }), { tolerance: 1e-3, tedDefault: false });
+  assert.deepEqual(resolveFastTolerance({ ...weights, useTrueErgo: true, objectiveTolerance: 0 }), { tolerance: 0, tedDefault: false });
+});
+
+test('an invalid explicit objectiveTolerance is unset, as resolveTolerance reads it: a TED request gets the Fast TED default', () => {
+  const unset = resolveFastTolerance({ ...weights, useTrueErgo: true });
+  for (const invalid of [Number.NaN, -1, Number.POSITIVE_INFINITY, null as unknown as number]) {
+    assert.deepEqual(resolveFastTolerance({ ...weights, useTrueErgo: true, objectiveTolerance: invalid }), unset, String(invalid));
+    assert.deepEqual(resolveFastTolerance({ ...weights, objectiveTolerance: invalid }), { tolerance: DEFAULT_OBJECTIVE_TOLERANCE, tedDefault: false }, String(invalid));
+  }
 });
 
 test('the Fast TED native options differ from the shared ones only in the uncapped gap', () => {

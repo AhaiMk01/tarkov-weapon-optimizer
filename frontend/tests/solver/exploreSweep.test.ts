@@ -15,6 +15,7 @@ import { buildSweepSchedule, exploreRunRequest } from '../../src/solver/paretoEx
 import type { ParetoParams } from '../../src/solver/paretoExplorer';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
+import { DEFAULT_OBJECTIVE_TOLERANCE } from '../../src/solver/physical/solvePrecise';
 import type { RuntimeGuard } from '../../src/solver/runtimeGuard';
 import { fixedGuard } from '../../src/solver/runtimeGuard';
 import { solve } from '../../src/solver/solver';
@@ -266,7 +267,7 @@ test('an explicit macrotask yield separates steps (none before the first or afte
   assert.deepEqual(calls[1].ownedItems, ['x']);
   assert.deepEqual([calls[2].ergoWeight, calls[2].recoilWeight, calls[2].priceWeight], [1, 0, 0]);
   assert.equal(calls[2].maxMOA, 0, 'a zero MOA cap is a cap');
-  assert.deepEqual(paramsOfTarget(request, target(2, 33)), { ...request.base, ergoWeight: 1, recoilWeight: 0, priceWeight: 0, minErgonomics: 33 });
+  assert.deepEqual(paramsOfTarget(request, target(2, 33)), { ...request.base, objectiveTolerance: DEFAULT_OBJECTIVE_TOLERANCE, ergoWeight: 1, recoilWeight: 0, priceWeight: 0, minErgonomics: 33 });
   assert.equal(r.curve_status, 'complete');
 });
 

@@ -88,12 +88,15 @@ export const NATIVE_FEASIBILITY_TOLERANCE = 1e-9;
  */
 export const NATIVE_INTEGRALITY_TOLERANCE = 1e-7;
 
-/** The largest native MIP gap ever used: the pre-cutover value, so a loose request tolerance never loosens the native search. */
+/**
+ * The largest native MIP gap of {@link nativeSolveOptions}: the pre-cutover value, so a loose request tolerance never loosens the native search. The
+ * exception is a Fast TED solve at its default tolerance, which runs uncapped ({@link fastTedNativeSolveOptions}, owner decision 2026-10-27).
+ */
 const MAX_NATIVE_ABS_GAP = 1e-9;
 
 /**
- * Native options derived from the request's absolute objective tolerance `tau`. The native MIP gap is at most `tau / 4` (and at most 1e-9):
- * the final certificate adds the spatial fathoming tolerance and numeric noise on top of the native gap, so the native search has to be
+ * Native options derived from the request's absolute objective tolerance `tau`. The native MIP gap is at most `tau / 4` (and at most 1e-9; only
+ * a Fast TED solve at its default tolerance drops the cap, {@link fastTedNativeSolveOptions}): the final certificate adds the spatial fathoming tolerance and numeric noise on top of the native gap, so the native search has to be
  * finer than the claim it supports. The relative gap is 0, the primal and dual feasibility tolerances are the strict ones the model text was
  * written for, and the integrality tolerance is `NATIVE_INTEGRALITY_TOLERANCE` for every request (decision 5b).
  */

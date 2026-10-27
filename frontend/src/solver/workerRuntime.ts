@@ -41,6 +41,7 @@ import type { PreModelStop } from './operationEnvelopes.ts';
 import { buildSweepSchedule, exploreRunRequest } from './paretoExplorer.ts';
 import type { ParetoParams } from './paretoExplorer.ts';
 import { inspectOwnedItems } from './physical/ownedItems.ts';
+import { resolveFastTolerance } from './physical/solveFast.ts';
 import { DEFAULT_MAX_SPATIAL_NODES, DEFAULT_OBJECTIVE_TOLERANCE } from './physical/solvePrecise.ts';
 import { MOA_K } from './physical/specialize.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
@@ -257,7 +258,13 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     const guard = guardOf(message, entry, DEFAULT_OPTIMIZE_TIME_LIMIT_MS, req.time_limit_ms);
     const precisionRequest = normalizePrecisionRequest(req.precise_mode);
     const moaDependent = req.max_moa != null;
-    const envelope = (stop: PreModelStop): void => post('result', id, optimizeEnvelope(stop, { precisionRequest, moaDependent, elapsedMs: now() - entry.arrivedAt }));
+    // The tolerance a pre-model stop reports: the Fast one for a Fast request (a TED request gets its Fast TED default); Precise and Auto, still
+    // unresolved here, the shared default.
+    const tolerance = precisionRequest === 'fast' ? resolveFastTolerance({
+      useTrueErgo: req.use_true_ergo, preventOverswing: req.prevent_overswing, useTchebycheff: req.use_tchebycheff,
+      ergoWeight: req.ergo_weight, recoilWeight: req.recoil_weight, priceWeight: req.price_weight,
+    }).tolerance : DEFAULT_OBJECTIVE_TOLERANCE;
+    const envelope = (stop: PreModelStop): void => post('result', id, optimizeEnvelope(stop, { precisionRequest, moaDependent, tolerance, elapsedMs: now() - entry.arrivedAt }));
 
     // 1. The stash, before hashing, caching, loading or any model work.
     const owned = inspectOwnedItems(req.owned_items);

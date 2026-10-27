@@ -44,6 +44,7 @@ import type { NativeResult } from '../native';
 import { guardOfContext } from '../requestGuard';
 import { guardStop } from '../runtimeGuard';
 import type { RuntimeGuard } from '../runtimeGuard';
+import { objectiveWeights } from '../trueErgo';
 import type { ObjectiveAxes } from '../trueErgo';
 import type { SolveParams } from '../types';
 import { computeActiveBounds } from './bounds';
@@ -67,7 +68,7 @@ import type { NodeEvaluation, SearchInterval, SearchNode } from './search';
 import type { SpecializeRequest } from './specialize';
 import { specializeFast } from './specializeFast';
 import type { FastModel } from './specializeFast';
-import { DEFAULT_MAX_SPATIAL_NODES, getPhysicalBlueprint, PRECISE_RANDOM_SEEDS, resolveTolerance, rootIntervals } from './solvePrecise';
+import { DEFAULT_MAX_SPATIAL_NODES, getPhysicalBlueprint, isRequestedTolerance, PRECISE_RANDOM_SEEDS, resolveTolerance, rootIntervals } from './solvePrecise';
 import { preparePhysicalValidator } from './validate';
 import type { PhysicalBuild, PhysicalBuildStats } from './validate';
 
@@ -80,9 +81,10 @@ export const FAST_TED_TOLERANCE_PER_WEIGHT = 0.1;
 export const FAST_TED_TCHEBYCHEFF_TOLERANCE = 1e-4;
 
 /**
- * The tolerance of a Fast solve and whether it is the Fast TED default (owner decision 2026-10-27). A request that sets `objectiveTolerance`, and every
- * request that reads no TED, keeps the shared default and its capped native gap. A Fast TED request without one gets {@link FAST_TED_TCHEBYCHEFF_TOLERANCE}
- * (Tchebycheff) or {@link FAST_TED_TOLERANCE_PER_WEIGHT} times its summed weights, with the native gap uncapped (`fastTedNativeSolveOptions`).
+ * The tolerance of a Fast solve and whether it is the Fast TED default (owner decision 2026-10-27, `docs/stage3/fast-ted-tolerance.md`). A request
+ * that sets a valid `objectiveTolerance` (`isRequestedTolerance`), and every request that reads no TED, keeps `resolveTolerance` and its capped native
+ * gap; Explore sets one on every target (`paramsOfTarget`). A Fast TED request without one gets {@link FAST_TED_TCHEBYCHEFF_TOLERANCE} (Tchebycheff) or
+ * {@link FAST_TED_TOLERANCE_PER_WEIGHT} times its summed objective weights (`objectiveWeights`), with the native gap uncapped (`fastTedNativeSolveOptions`).
  *
  * Measured 2026-10-27, pinned snapshot, bench request (e 1, r 1, p 0.1; flea; trader level 4), Fast, 60 s, 172 guns against the shared default:
  * Sweet Spot TrueErgo 1684 s -> 734 s, timeouts 19 -> 3 (each with a build), 8 builds below the shared default's score (at most 3.1e-5 of the
@@ -92,10 +94,11 @@ export const FAST_TED_TCHEBYCHEFF_TOLERANCE = 1e-4;
  */
 export function resolveFastTolerance(params: Pick<SolveParams, 'objectiveTolerance' | 'useTrueErgo' | 'preventOverswing' | 'useTchebycheff' | 'ergoWeight' | 'recoilWeight' | 'priceWeight'>): { tolerance: number; tedDefault: boolean } {
   const tedRequest = params.useTrueErgo === true || params.preventOverswing === true;
-  if (!tedRequest || params.objectiveTolerance !== undefined) return { tolerance: resolveTolerance(params.objectiveTolerance), tedDefault: false };
-  const weights = Math.abs(params.ergoWeight ?? 0) + Math.abs(params.recoilWeight ?? 0) + Math.abs(params.priceWeight ?? 0);
-  const ted = params.useTchebycheff === true ? FAST_TED_TCHEBYCHEFF_TOLERANCE : FAST_TED_TOLERANCE_PER_WEIGHT * weights;
-  return { tolerance: Math.max(resolveTolerance(undefined), ted), tedDefault: true };
+  if (!tedRequest || isRequestedTolerance(params.objectiveTolerance)) return { tolerance: resolveTolerance(params.objectiveTolerance), tedDefault: false };
+  // The weights the objective reads (defaults, negatives at 0), so the tolerance scales with the score it bounds. A non-finite sum gets the shared default.
+  const { e, r, p } = objectiveWeights(params);
+  const ted = params.useTchebycheff === true ? FAST_TED_TCHEBYCHEFF_TOLERANCE : FAST_TED_TOLERANCE_PER_WEIGHT * (e + r + p);
+  return { tolerance: Math.max(resolveTolerance(undefined), resolveTolerance(ted)), tedDefault: true };
 }
 
 /** A build the independent validator accepted, with its exact statistics and score. */

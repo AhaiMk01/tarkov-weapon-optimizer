@@ -469,7 +469,7 @@ async function solveDetailed(input: SolveParams): Promise<Detailed> {
   const owned = inspectOwnedItems(input.ownedItems);
   if (!owned.ok) {
     // Before hashing, caching or any model work: nothing resolved, the search never started.
-    return { response: optimizeEnvelope('invalid_owned_items', { precisionRequest, moaDependent, tolerance: resolveTolerance(input.objectiveTolerance), elapsedMs: now() - start }) };
+    return { response: optimizeEnvelope('invalid_owned_items', { precisionRequest, moaDependent, tolerance: input.preciseMode ? resolveTolerance(input.objectiveTolerance) : resolveFastTolerance(input).tolerance, elapsedMs: now() - start }) };
   }
   // The normalized request: the stash is the validated frozen snapshot, the guard the one clock of every stage below.
   let params: SolveParams = { ...input, precisionRequest, ownedItems: owned.items, guard, timeLimitMs: undefined };

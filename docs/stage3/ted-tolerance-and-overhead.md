@@ -26,6 +26,10 @@ agreement of two opinions (`opinionsAgree`: bounds within `tau`), the split-only
 reference) and the bound-shortfall sanity guard (`max(tau, 1e-9 |bound|)`). It does **not** loosen the native search: `nativeSolveOptions` sets
 `mip_abs_gap = min(1e-9, tau / 4)`, so every tolerance measured here runs HiGHS at the same 1e-9 gap, `mip_rel_gap` 0.
 
+> Note (2026-10-27): this no longer holds for Fast TED. A Fast TrueErgo / Prevent Overswing solve without an explicit tolerance runs at
+> `0.1 x` its summed weights (`1e-4` for the Tchebycheff solve) with the native gap `tau / 4` uncapped (`fastTedNativeSolveOptions`);
+> see `fast-ted-tolerance.md`. Precise, plain Fast and explicit tolerances keep the capped gap described here.
+
 ## Method
 
 - 172 pinned guns (snapshot sha256 `219443b4…`), Precise (`solvePrecise`), profiles `trueErgo` and `trueErgoPO` (TrueErgo + Prevent Overswing,
