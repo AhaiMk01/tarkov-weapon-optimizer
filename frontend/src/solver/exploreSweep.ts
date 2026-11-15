@@ -68,6 +68,8 @@ export interface SweepSchedule {
 
 export interface ExploreRunRequest {
   ignore: ExploreAxis;
+  /** The grid size the caller asked for (default 10, never below 10); a value that is not a finite number yields no schedule. */
+  steps?: number;
   /** The request under every target: constraints, acquisition domain, precision, owned stock. Weights come from the target. */
   base: Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight'>;
   /** What the caller asked for. */

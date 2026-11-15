@@ -34,7 +34,7 @@
 
 import type { ItemDetail, MOAFloorResponse, PresetDetail, WitnessBuild, WitnessScope } from '../api/client';
 import { itemDetails, presetDetail } from './buildDetails';
-import { resolveMarket } from './physical/acquisition';
+import { scopeOf } from './domainFields';
 import { rat, ratFromDouble, ratGt, ratLe, ratSub } from './physical/exact';
 import { inspectOwnedItems } from './physical/ownedItems';
 import { outwardGridCeil, outwardSafeCeil, submissionIsSafe } from './physical/display';
@@ -216,8 +216,6 @@ export function floorQueryParams(request: MoaFloorRequest, cap: number | null): 
 
 /** The complete normalized scope a witness was found under (ADR 0013 section 5): the acquisition, feasibility, inventory and model of the query. */
 export function witnessScopeOf(request: MoaFloorRequest, cap: number | null): WitnessScope {
-  const market = resolveMarket(request);
-  const copyGroups = (groups: string[][] | null | undefined): string[][] | null => (groups == null ? null : groups.map(g => [...g]));
   const owned = inspectOwnedItems(request.ownedItems);
   return {
     weapon_id: request.weaponId,
@@ -225,28 +223,7 @@ export function witnessScopeOf(request: MoaFloorRequest, cap: number | null): Wi
     model_qualification: 'exact',
     moa_qualification: 'provisional_model',
     max_moa: cap,
-    acquisition: {
-      trader_levels: request.traderLevels == null ? null : { ...request.traderLevels },
-      flea_available: market.fleaAvailable,
-      barter_available: market.barterAvailable,
-      barter_exclude_dogtags: market.barterExcludeDogtags,
-      player_level: market.playerLevel,
-    },
-    feasibility: {
-      max_price: request.maxPrice ?? null,
-      min_ergonomics: request.minErgonomics ?? null,
-      max_recoil_v: request.maxRecoilV ?? null,
-      max_recoil_sum: request.maxRecoilSum ?? null,
-      min_mag_capacity: request.minMagCapacity ?? null,
-      min_sighting_range: request.minSightingRange ?? null,
-      max_weight: request.maxWeight ?? null,
-      include_items: request.includeItems == null ? null : [...request.includeItems],
-      exclude_items: request.excludeItems == null ? null : [...request.excludeItems],
-      include_categories: copyGroups(request.includeCategories),
-      exclude_categories: request.excludeCategories == null ? null : [...request.excludeCategories],
-      prevent_overswing: request.preventOverswing === true,
-      equip_ergo_modifier: request.equipErgoModifier ?? null,
-    },
+    ...scopeOf(request),
     inventory: { owned_items: owned.ok ? [...owned.items] : [] },
   };
 }

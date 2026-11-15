@@ -2,7 +2,8 @@
  * The request domain of the UI (ADR 0013 section 5, Phase 2.8): the one place that turns the current control state into the normalized hard
  * constraints and acquisition settings of a request.
  *
- * Optimize, Explore, the Gunsmith call and the MOA floor are all asked about the SAME domain. The floor in particular is not "just the weapon id":
+ * Optimize, Explore and the MOA floor are all asked about the SAME domain, and the Gunsmith call about the same acquisition settings of it. The floor in
+ * particular is not "just the weapon id":
  * it carries every field of the Optimize domain (market, trader and flea settings, levels, every hard constraint, TrueErgo / Prevent Overswing,
  * the budget, the filters) except the MOA cap it searches, plus no objective (its objective is a constant zero) and no precision (it is always
  * Precise). `owned_items` is deliberately absent: there is no stash input in this phase, and an omitted list means zero stock (ADR 0008).
@@ -13,7 +14,7 @@
  * Pure: type-only imports, no DOM, no worker.
  */
 
-import type { ExploreRequest, MOAFloorRequest, OptimizeRequest } from './client';
+import type { ExploreRequest, GunsmithTask, MOAFloorRequest, OptimizeRequest } from './client';
 import type { PrecisionRequest, TraderLevels } from '../solver/types';
 
 /** The control state that defines the domain of a request. */
@@ -40,6 +41,15 @@ export interface RequestDomainState {
   barterExcludeDogtags: boolean;
 }
 
+/** The acquisition settings, the part of the domain every operation asks under (the Gunsmith call included). */
+const acquisitionRequestOf = (s: RequestDomainState) => ({
+  trader_levels: s.traderLevels,
+  player_level: s.playerLevel,
+  flea_available: s.fleaAvailable,
+  barter_available: s.barterAvailable,
+  barter_exclude_dogtags: s.barterExcludeDogtags,
+});
+
 /**
  * The normalized domain: constraints, filters, acquisition settings. Unset constraints are `undefined` (never 0). This is exactly a
  * `MOAFloorRequest`: the Optimize domain minus the MOA cap, the weights, the Tchebycheff flag and the precision.
@@ -57,11 +67,7 @@ export function domainRequestOf(s: RequestDomainState): MOAFloorRequest {
     exclude_items: s.excludedModIds.length > 0 ? [...s.excludedModIds] : undefined,
     include_categories: s.includedCategories.length > 0 ? s.includedCategories.map(c => [c]) : undefined,
     exclude_categories: s.excludedCategories.length > 0 ? [...s.excludedCategories] : undefined,
-    trader_levels: s.traderLevels,
-    player_level: s.playerLevel,
-    flea_available: s.fleaAvailable,
-    barter_available: s.barterAvailable,
-    barter_exclude_dogtags: s.barterExcludeDogtags,
+    ...acquisitionRequestOf(s),
   };
 }
 
@@ -123,5 +129,29 @@ export function exploreRequestOf(s: RequestDomainState, x: ExploreExtras): Explo
     max_moa: x.maxMoa ?? undefined,
     precise_mode: x.precision,
     allow_repeated_parts: x.allowRepeatedParts || undefined,
+  };
+}
+
+/**
+ * The Gunsmith request for one task: the task's weapon, constraints and required parts, asked under the player's acquisition settings. It is always
+ * Precise and carries none of the other controls of the Optimize tab (budget, filters, TrueErgo), which are not the task's. `allowRepeatedParts` is
+ * carried so every request of the app reads the one setting; Precise ignores it.
+ */
+export function gunsmithRequestOf(s: RequestDomainState, task: GunsmithTask, allowRepeatedParts: boolean): OptimizeRequest {
+  return {
+    weapon_id: task.weapon_id,
+    ergo_weight: 1.0,
+    recoil_weight: 1.0,
+    price_weight: 0.5,
+    min_ergonomics: task.constraints.min_ergonomics,
+    max_recoil_sum: task.constraints.max_recoil_sum,
+    min_mag_capacity: task.constraints.min_mag_capacity,
+    min_sighting_range: task.constraints.min_sighting_range,
+    max_weight: task.constraints.max_weight,
+    include_items: task.required_item_ids.length > 0 ? task.required_item_ids : undefined,
+    include_categories: task.required_category_group_ids.length > 0 ? task.required_category_group_ids : undefined,
+    ...acquisitionRequestOf(s),
+    precise_mode: true,
+    allow_repeated_parts: allowRepeatedParts || undefined,
   };
 }

@@ -6,7 +6,7 @@ import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
 import { getInfo, optimize, explore, getWeaponMods, getGunsmithTasks, computeMOAFloor, clearDataCache } from './api/client'
 import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOption, GunsmithTask, GameMode, PrecisionRequest } from './api/client'
-import { exploreRequestOf, floorRequestKey, floorRequestOf, optimizeRequestOf } from './api/requestDomain'
+import { exploreRequestOf, floorRequestKey, floorRequestOf, gunsmithRequestOf, optimizeRequestOf } from './api/requestDomain'
 import type { RequestDomainState } from './api/requestDomain'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
 import { ChangelogModal } from './components/common/ChangelogModal'
@@ -781,27 +781,7 @@ function AppContent({
     await settleFloor()
     const controller = gunsmithCtl.begin()
     try {
-      const res = await optimize({
-        weapon_id: selectedTask.weapon_id,
-        ergo_weight: 1.0,
-        recoil_weight: 1.0,
-        price_weight: 0.5,
-        min_ergonomics: selectedTask.constraints.min_ergonomics,
-        max_recoil_sum: selectedTask.constraints.max_recoil_sum,
-        min_mag_capacity: selectedTask.constraints.min_mag_capacity,
-        min_sighting_range: selectedTask.constraints.min_sighting_range,
-        max_weight: selectedTask.constraints.max_weight,
-        include_items: selectedTask.required_item_ids.length > 0 ? selectedTask.required_item_ids : undefined,
-        include_categories: selectedTask.required_category_group_ids.length > 0 ? selectedTask.required_category_group_ids : undefined,
-        trader_levels: traderLevels,
-        player_level: playerLevel,
-        flea_available: fleaAvailable,
-        barter_available: barterAvailable,
-        barter_exclude_dogtags: barterExcludeDogtags,
-        precise_mode: true,
-        // The Gunsmith call is always Precise, which ignores the option; it is carried so every request of the app reads the one setting.
-        allow_repeated_parts: allowRepeatedParts || undefined,
-      }, gameMode, i18n.language || 'en', { signal: controller.signal })
+      const res = await optimize(gunsmithRequestOf(domainState, selectedTask, allowRepeatedParts), gameMode, i18n.language || 'en', { signal: controller.signal })
       setGunsmithResult(res)
       announce(toastOf(resultViewOf(res), 'gunsmith'))
     } catch (err) {

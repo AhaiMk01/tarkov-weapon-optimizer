@@ -32,6 +32,7 @@ import type { ExploreRequest, ExploreResponse, MOAFloorRequest, MOAFloorResponse
 import { buildCompatibilityMap } from './compatibilityMap.ts';
 import { clearLoadedState, ensureDataLoaded } from './dataService.ts';
 import type { LoadedState } from './dataService.ts';
+import { domainOf } from './domainFields.ts';
 import { EndpointCache } from './endpointCache.ts';
 import { runExplore as sweepExplore } from './exploreSweep.ts';
 import { runMoaFloor as searchMoaFloor } from './moaFloor.ts';
@@ -39,7 +40,6 @@ import type { MoaFloorDeps } from './moaFloor.ts';
 import { exploreEnvelope, floorEnvelope, optimizeEnvelope } from './operationEnvelopes.ts';
 import type { PreModelStop } from './operationEnvelopes.ts';
 import { buildSweepSchedule, exploreRunRequest } from './paretoExplorer.ts';
-import type { ParetoParams } from './paretoExplorer.ts';
 import { inspectOwnedItems } from './physical/ownedItems.ts';
 import { resolveFastTolerance } from './physical/solveFast.ts';
 import { DEFAULT_MAX_SPATIAL_NODES, DEFAULT_OBJECTIVE_TOLERANCE } from './physical/solvePrecise.ts';
@@ -47,13 +47,13 @@ import { MOA_K } from './physical/specialize.ts';
 import { normalizePrecisionRequest, resolvePreciseFlag } from './precisionMode.ts';
 import { expandIncludeItemsWithDeps } from './requiredItemDeps.ts';
 import { epochNow } from './requestGuard.ts';
-import { canonicalizeTraderLevels, computeIdealPointCacheKey } from './reuseKey.ts';
+import { computeIdealPointCacheKey } from './reuseKey.ts';
 import { serializeWorkerError } from './runtimeErrors.ts';
 import { guardStop, yieldMacrotask as realYieldMacrotask } from './runtimeGuard.ts';
 import type { RuntimeGuard } from './runtimeGuard.ts';
 import { SOLVER_CAPABILITIES, solveRequest } from './solver.ts';
 import type { SolveReport } from './solver.ts';
-import type { CompatibilityMap, ItemLookup, ModStats, PrecisionRequest, SolveParams, TraderLevels } from './types.ts';
+import type { CompatibilityMap, ItemLookup, ModStats, PrecisionRequest, SolveParams } from './types.ts';
 import {
   DEFAULT_EXPLORE_TIME_LIMIT_MS, DEFAULT_FLOOR_TIME_LIMIT_MS, DEFAULT_OPTIMIZE_TIME_LIMIT_MS, resolveTimeLimit,
 } from './workerProtocol.ts';
@@ -205,35 +205,15 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     deps.post({ type, id, payload });
   }
 
-  /** The common domain of a request, without weights or objective. The stash is the validated snapshot. */
+  /** The common domain of a request (`domainFields.ts`), without weights or objective. The stash is the validated snapshot. */
   function domainParams(
     req: OptimizeRequest | MOAFloorRequest, data: LoadedData, owned: readonly string[], guard: RuntimeGuard,
     precisionRequest: PrecisionRequest, usePrecise: boolean,
   ): SolveParams {
-    const compatMap = getCompatMap(data, req.weapon_id);
     return {
-      weaponId: req.weapon_id,
+      ...domainOf(req),
       itemLookup: data.itemLookup,
-      compatibilityMap: compatMap,
-      maxPrice: req.max_price,
-      minErgonomics: req.min_ergonomics,
-      maxRecoilV: req.max_recoil_v,
-      maxRecoilSum: req.max_recoil_sum,
-      minMagCapacity: req.min_mag_capacity,
-      minSightingRange: req.min_sighting_range,
-      maxWeight: req.max_weight,
-      includeItems: req.include_items,
-      excludeItems: req.exclude_items,
-      includeCategories: req.include_categories,
-      excludeCategories: req.exclude_categories,
-      useTrueErgo: req.use_true_ergo ?? false,
-      preventOverswing: req.prevent_overswing ?? false,
-      equipErgoModifier: req.equip_ergo_modifier,
-      traderLevels: canonicalizeTraderLevels(req.trader_levels as TraderLevels | undefined) as TraderLevels | undefined,
-      fleaAvailable: req.flea_available ?? true,
-      barterAvailable: req.barter_available ?? false,
-      barterExcludeDogtags: req.barter_exclude_dogtags ?? false,
-      playerLevel: req.player_level,
+      compatibilityMap: getCompatMap(data, req.weapon_id),
       ownedItems: owned,
       precisionRequest,
       preciseMode: usePrecise,
@@ -278,7 +258,6 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
     const usePrecise = resolvePreciseFlag(precisionRequest, compatMap, req.use_true_ergo === true || req.prevent_overswing === true);
     const params: SolveParams = {
       ...domainParams(req, data, owned.items, guard, precisionRequest, usePrecise),
-      maxMOA: req.max_moa,
       allowRepeatedParts: req.allow_repeated_parts === true,
       ergoWeight: req.ergo_weight ?? 1,
       recoilWeight: req.recoil_weight ?? 1,
@@ -338,7 +317,7 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
       guard,
       precisionRequest,
       usePrecise,
-      baseParams: { ...domainParams(req, data, owned.items, guard, precisionRequest, usePrecise), maxMOA: req.max_moa, allowRepeatedParts: req.allow_repeated_parts === true },
+      baseParams: { ...domainParams(req, data, owned.items, guard, precisionRequest, usePrecise), allowRepeatedParts: req.allow_repeated_parts === true },
       optimize: stepOptimizer(owned.items),
       publishSnapshot: snapshot => post('snapshot', id, snapshot),
     });
@@ -570,50 +549,14 @@ export function createWorkerRuntime(deps: WorkerDeps): WorkerRuntime {
 // The Explore and floor drivers
 // ---------------------------------------------------------------------------------------------
 
-/** The sweep parameters of a validated Explore request: the shared domain, the axis, the grid and the validated stash. */
-function paretoParamsOf(input: ExploreRunInput): ParetoParams {
-  const p = input.baseParams;
-  return {
-    weaponId: p.weaponId,
-    itemLookup: p.itemLookup,
-    compatibilityMap: p.compatibilityMap,
-    ignore: input.request.ignore,
-    steps: input.request.steps ?? 10,
-    maxPrice: p.maxPrice,
-    minErgonomics: p.minErgonomics,
-    maxRecoilV: p.maxRecoilV,
-    maxRecoilSum: p.maxRecoilSum,
-    minMagCapacity: p.minMagCapacity,
-    minSightingRange: p.minSightingRange,
-    maxWeight: p.maxWeight,
-    maxMOA: p.maxMOA,
-    includeItems: p.includeItems,
-    excludeItems: p.excludeItems,
-    includeCategories: p.includeCategories,
-    excludeCategories: p.excludeCategories,
-    useTrueErgo: p.useTrueErgo,
-    preventOverswing: p.preventOverswing,
-    equipErgoModifier: p.equipErgoModifier,
-    traderLevels: p.traderLevels,
-    fleaAvailable: p.fleaAvailable,
-    barterAvailable: p.barterAvailable,
-    barterExcludeDogtags: p.barterExcludeDogtags,
-    playerLevel: p.playerLevel,
-    ownedItems: input.ownedItems,
-    preciseMode: input.usePrecise,
-    allowRepeatedParts: p.allowRepeatedParts === true,
-    precisionRequest: input.precisionRequest,
-  };
-}
-
 /**
  * Explore: the request, a fresh single-use schedule and the total V/I/U/E classification of `runExplore` (ADR 0013 section 6). After every launched
  * target the verified partial result (an `ExploreSnapshot`) is published, so a hard termination keeps the points found so far (section 4D) and the
  * client can show live progress.
  */
 function driveExplore(input: ExploreRunInput): Promise<ExploreResponse> {
-  const params = paretoParamsOf(input);
-  return sweepExplore(exploreRunRequest(params), buildSweepSchedule(params), input.guard, input.optimize, snapshot => input.publishSnapshot(snapshot));
+  const request = exploreRunRequest(input.baseParams, input.request.ignore, input.request.steps);
+  return sweepExplore(request, buildSweepSchedule(request), input.guard, input.optimize, snapshot => input.publishSnapshot(snapshot));
 }
 
 /**

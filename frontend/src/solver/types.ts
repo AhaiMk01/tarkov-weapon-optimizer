@@ -1,3 +1,4 @@
+import type { DomainParams } from './domainFields.ts';
 import type { RuntimeGuard } from './runtimeGuard.ts';
 /**
  * Core types for the weapon optimizer solver.
@@ -260,35 +261,20 @@ export interface PhysicalClassifiers {
   categoryChainOf?: (itemId: string, entry: ItemLookupEntry) => readonly string[];
 }
 
-export interface SolveParams {
-  weaponId: string;
+/**
+ * One solve. The request domain (the weapon, the hard constraints, the filters, the model flags and the acquisition settings) is `DomainParams`,
+ * listed once in `domainFields.ts`; what is below is the rest of a solve: the loaded data, the objective, the model options and the clock.
+ */
+export interface SolveParams extends Pick<DomainParams, 'weaponId'>, Partial<Omit<DomainParams, 'weaponId'>> {
   itemLookup: ItemLookup;
   compatibilityMap: CompatibilityMap;
-  maxPrice?: number | null;
-  minErgonomics?: number | null;
-  maxRecoilV?: number | null;
-  maxRecoilSum?: number | null;
-  minMagCapacity?: number | null;
-  minSightingRange?: number | null;
-  maxWeight?: number | null;
-  maxMOA?: number | null;
-  includeItems?: string[] | null;
-  excludeItems?: string[] | null;
-  includeCategories?: string[][] | null;
-  excludeCategories?: string[] | null;
   ergoWeight?: number;
   recoilWeight?: number;
   priceWeight?: number;
-  /** Optimize the exact gear-adjusted TrueErgo Delta instead of raw ergonomics. */
-  useTrueErgo?: boolean;
   /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
   useTchebycheff?: boolean;
   /** Precomputed ideal/nadir reference point for Tchebycheff scalarization. */
   idealPoint?: IdealPoint;
-  /** Require W * (1 - effectiveErgo / 100) <= 3. */
-  preventOverswing?: boolean;
-  /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
-  equipErgoModifier?: number | null;
   /**
    * Absolute scalarized-objective certification tolerance (default 1e-5), honoured as requested: it is neither floored nor padded by a
    * fixed margin. The native MIP gap is at most a quarter of it.
@@ -307,11 +293,6 @@ export interface SolveParams {
    * request's time given to a sub-solve), never extend it.
    */
   timeLimitMs?: number;
-  traderLevels?: TraderLevels | null;
-  fleaAvailable?: boolean;
-  barterAvailable?: boolean;
-  barterExcludeDogtags?: boolean;
-  playerLevel?: number | null;
   /**
    * Stash multiset (ADR 0008): one entry per owned copy, duplicates kept, unknown ids retained. Omitted or [] means no stock.
    * At most 10,000 nonempty strings with no sparse holes; anything else is the typed input error `INVALID_OWNED_ITEMS`
@@ -335,3 +316,108 @@ export interface SolveParams {
    */
   precisionRequest?: PrecisionRequest;
 }
+
+// ---------------------------------------------------------------------------------------------
+// The request wire contract (ADR 0013 section 5). Defined here, DOM-free, so `domainFields.ts` (the request domain) and the reference harness can read
+// it; `api/client.ts` re-exports it with the other transport records.
+// ---------------------------------------------------------------------------------------------
+
+export interface OptimizeRequest {
+  weapon_id: string;
+  max_price?: number;
+  min_ergonomics?: number;
+  max_recoil_v?: number;
+  max_recoil_sum?: number;
+  min_mag_capacity?: number;
+  min_sighting_range?: number;
+  max_weight?: number;
+  prevent_overswing?: boolean;
+  /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
+  equip_ergo_modifier?: number;
+  max_moa?: number;
+  include_items?: string[];
+  exclude_items?: string[];
+  include_categories?: string[][];
+  exclude_categories?: string[];
+  ergo_weight?: number;
+  recoil_weight?: number;
+  price_weight?: number;
+  /** Optimize gear-adjusted TrueErgo Delta rather than raw ergonomics. */
+  use_true_ergo?: boolean;
+  /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
+  use_tchebycheff?: boolean;
+  /** Unlocked loyalty level per trader `normalizedName`; 0 disables the trader. */
+  trader_levels?: {
+    prapor: number;
+    skier: number;
+    peacekeeper: number;
+    mechanic: number;
+    jaeger: number;
+    ref: number;
+    [key: string]: number;
+  };
+  flea_available?: boolean;
+  barter_available?: boolean;
+  barter_exclude_dogtags?: boolean;
+  player_level?: number;
+  /**
+   * Stash multiset (ADR 0008): one entry per owned copy, so `['m', 'm']` is two copies. Omitted or [] means no stock. At most
+   * 10,000 nonempty strings; an invalid list is rejected as `Invalid owned_items format`, never reported as infeasible.
+   * Inherited by `ExploreRequest`. The worker validates it first (before hashing, caching or any model work) and forwards the validated
+   * multiset to every solve of the request: Optimize, the Gunsmith optimize call, every Explore step and every floor trial.
+   */
+  owned_items?: string[];
+  /** Boolean values are normalized: true → precise, false → fast. */
+  precise_mode?: boolean | PrecisionRequest;
+  /**
+   * Fast only (owner decision 2c, default false): when the request runs in Fast mode, `true` lets the model install several copies of one part. Without
+   * it Fast uses at most one copy of each part. Precise ignores it and always allows repeats. Reaches every Fast solve of the request: Optimize,
+   * the Tchebycheff payoff endpoints, every Explore step and the Gunsmith call. The MOA floor (always Precise) does not carry it.
+   */
+  allow_repeated_parts?: boolean;
+  /**
+   * Request budget in milliseconds. ONE epoch deadline is stamped when the call enters, so time spent queued counts. Omitted means the
+   * default of the operation: 60 s for Optimize and Explore, 30 s for a MOA floor.
+   */
+  time_limit_ms?: number;
+}
+
+/** The complete normalized scope a MOA-floor witness was found under (ADR 0013 section 5): a cap trial is its own prepared domain. */
+export interface WitnessScope {
+  weapon_id: string;
+  precision_resolved: 'fast' | 'precise';
+  model_qualification: 'exact' | 'approximate';
+  moa_qualification: 'provisional_model';
+  /** The MOA cap this witness was found under; `null` for the unconstrained seed. */
+  max_moa: number | null;
+  acquisition: {
+    trader_levels: Record<string, number> | null;
+    flea_available: boolean;
+    barter_available: boolean;
+    barter_exclude_dogtags: boolean;
+    player_level: number | null;
+  };
+  feasibility: {
+    max_price: number | null;
+    min_ergonomics: number | null;
+    max_recoil_v: number | null;
+    max_recoil_sum: number | null;
+    min_mag_capacity: number | null;
+    min_sighting_range: number | null;
+    max_weight: number | null;
+    include_items: string[] | null;
+    exclude_items: string[] | null;
+    include_categories: string[][] | null;
+    exclude_categories: string[] | null;
+    prevent_overswing: boolean;
+    equip_ergo_modifier: number | null;
+  };
+  inventory: { owned_items: string[] };
+}
+
+/**
+ * A MOA floor request (ADR 0013 section 5): the normalized Optimize domain except the MOA cap being searched. The objective is a constant
+ * zero, the placement model is always Precise and the weights are irrelevant, so those fields are not part of it. `time_limit_ms` defaults
+ * to 30 s.
+ */
+export type MOAFloorRequest = Omit<OptimizeRequest, 'max_moa' | 'ergo_weight' | 'recoil_weight' | 'price_weight' | 'use_tchebycheff' | 'precise_mode' | 'allow_repeated_parts'>;

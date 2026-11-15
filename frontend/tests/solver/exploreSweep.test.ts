@@ -12,7 +12,6 @@ import {
 } from '../../src/solver/exploreSweep';
 import type { ExploreRunRequest, OptimizeFn, SettledTarget, SweepSchedule, SweepTarget } from '../../src/solver/exploreSweep';
 import { buildSweepSchedule, exploreRunRequest } from '../../src/solver/paretoExplorer';
-import type { ParetoParams } from '../../src/solver/paretoExplorer';
 import { validatePhysicalBuild } from '../../src/solver/physical';
 import { PUBLIC_REASONS } from '../../src/solver/physical/reasons';
 import { DEFAULT_OBJECTIVE_TOLERANCE } from '../../src/solver/physical/solvePrecise';
@@ -429,9 +428,13 @@ const sweepLookup = (): ItemLookup => lookupOf(
   ['s2', modWith('s2', { ergo: 12, recoil: 0, weight: 0.3, offers: [trader('prapor', 1, 1500)] })],
 );
 
-const paretoParams = (ignore: ParetoParams['ignore'], extra: Partial<ParetoParams> = {}): ParetoParams => {
+/** What a sweep test varies: the solve parameters of the base request and the grid. */
+type SweepExtra = Partial<SolveParams> & { steps?: number };
+
+const sweepRequest = (ignore: ExploreRunRequest['ignore'], extra: SweepExtra = {}): ExploreRunRequest => {
+  const { steps, ...base } = extra;
   const itemLookup = sweepLookup();
-  return { weaponId: WEAPON, itemLookup, compatibilityMap: buildCompatibilityMap(WEAPON, itemLookup), ignore, preciseMode: true, ...extra };
+  return exploreRunRequest({ weaponId: WEAPON, itemLookup, compatibilityMap: buildCompatibilityMap(WEAPON, itemLookup), preciseMode: true, ...base }, ignore, steps);
 };
 
 /** The sweep-target generation of the pre-cutover `explorePareto`, written out: the constraint values it solved, in order. */
@@ -477,16 +480,16 @@ function legacyTargets(
 
 /** Run the generated schedule with a response function by constraint value; returns the step constraint values the sweep solved. */
 async function generated(
-  params: ParetoParams, low: Stats, high: Stats | null, at: (value: number) => Stats | null,
+  request: ExploreRunRequest, low: Stats, high: Stats | null, at: (value: number) => Stats | null,
 ): Promise<{ values: number[]; response: ExploreResponse; schedule: SweepSchedule }> {
-  const schedule = buildSweepSchedule(params);
+  const schedule = buildSweepSchedule(request);
   const values: number[] = [];
   let call = 0;
-  const response = await runExplore(exploreRunRequest(params), schedule, harness().guard, async (p) => {
+  const response = await runExplore(request, schedule, harness().guard, async (p) => {
     const i = call++;
     if (i === 0) return witness(low);
     if (i === 1) return high === null ? timeout() : witness(high);
-    const value = params.ignore === 'ergo' ? (p.maxRecoilV as number) : (p.minErgonomics as number);
+    const value = request.ignore === 'ergo' ? (p.maxRecoilV as number) : (p.minErgonomics as number);
     values.push(value);
     const s = at(value);
     return s === null ? infeasible() : witness(s);
@@ -502,9 +505,9 @@ test('the generated sweep reproduces the pre-cutover target sequence for all thr
     { name: 'some constraints infeasible', at: v => (Math.floor(v) % 2 === 0 ? null : { ergo: v, recoilV: v }) },
   ];
   for (const ignore of ['price', 'recoil', 'ergo'] as const) {
-    for (const extra of [{}, { steps: 25 }, { minErgonomics: 30 }, { maxRecoilV: 95, steps: 4 }] as Partial<ParetoParams>[]) {
+    for (const extra of [{}, { steps: 25 }, { minErgonomics: 30 }, { maxRecoilV: 95, steps: 4 }] as SweepExtra[]) {
       for (const fn of fns) {
-        const params = paretoParams(ignore, extra);
+        const params = sweepRequest(ignore, extra);
         const low = { ergo: 33.4, recoilV: 62.5 };
         const high = { ergo: 71.2, recoilV: 100 };
         const { values, response } = await generated(params, low, high, fn.at);
@@ -522,28 +525,28 @@ test('the generated sweep reproduces the pre-cutover target sequence for all thr
 test('the endpoints are the first two scheduled targets with the pre-cutover weights; steps use the augmentation weights', () => {
   const TB = 0.0001;
   const w = (t: SweepTarget) => [t.weights.ergoWeight, t.weights.recoilWeight, t.weights.priceWeight];
-  const price = buildSweepSchedule(paretoParams('price', { minErgonomics: 25 }));
+  const price = buildSweepSchedule(sweepRequest('price', { minErgonomics: 25 }));
   assert.deepEqual(price.targets.map(w), [[TB, 1, TB], [1, TB, TB]]);
   assert.deepEqual(price.targets.map(t => t.target_value), [25, 100], 'ends of the ergonomics axis the endpoints solve for');
-  const recoil = buildSweepSchedule(paretoParams('recoil'));
+  const recoil = buildSweepSchedule(sweepRequest('recoil'));
   assert.deepEqual(recoil.targets.map(w), [[TB, TB, 1], [1, TB, TB]]);
-  const ergo = buildSweepSchedule(paretoParams('ergo', { maxRecoilV: 90 }));
+  const ergo = buildSweepSchedule(sweepRequest('ergo', { maxRecoilV: 90 }));
   assert.deepEqual(ergo.targets.map(w), [[TB, 1, TB], [TB, TB, 1]]);
   assert.deepEqual(ergo.targets.map(t => t.target_value), [0, 90], 'the recoil axis: from 0 to the user maximum');
-  assert.deepEqual(buildSweepSchedule(paretoParams('ergo')).targets.map(t => t.target_value), [0, 100], 'or to the naked recoil');
+  assert.deepEqual(buildSweepSchedule(sweepRequest('ergo')).targets.map(t => t.target_value), [0, 100], 'or to the naked recoil');
 });
 
 test('a request that cannot be swept builds an empty schedule, which runExplore reports as invalid without a solve', async () => {
-  const bad: ParetoParams[] = [
-    paretoParams('price', { weaponId: 'not-a-gun' }),
-    paretoParams('price', { steps: NaN }),
-    paretoParams('price', { steps: Infinity }),
-    { ...paretoParams('price'), ignore: 'bogus' as never },
+  const bad: ExploreRunRequest[] = [
+    sweepRequest('price', { weaponId: 'not-a-gun' }),
+    sweepRequest('price', { steps: NaN }),
+    sweepRequest('price', { steps: Infinity }),
+    { ...sweepRequest('price'), ignore: 'bogus' as never },
   ];
   for (const params of bad) {
     const schedule = buildSweepSchedule(params);
     assert.deepEqual(schedule.targets, []);
-    const r = await runExplore(exploreRunRequest(params), schedule, harness().guard, async () => assert.fail('no solve for an invalid schedule'));
+    const r = await runExplore(params, schedule, harness().guard, async () => assert.fail('no solve for an invalid schedule'));
     assert.equal(r.curve_status, 'invalid');
     assert.equal(r.reason, PUBLIC_REASONS.invalidExploreSchedule);
     assert.deepEqual(r.step_outcomes, []);
@@ -551,22 +554,22 @@ test('a request that cannot be swept builds an empty schedule, which runExplore 
 });
 
 test('with no usable low endpoint the sweep ends at the endpoints; a failed high endpoint falls back to the top of the axis', async () => {
-  const params = paretoParams('price');
+  const params = sweepRequest('price');
   // Low endpoint certified infeasible: no range, no step; both endpoints I (second also infeasible) -> infeasible.
   let call = 0;
-  const r = await runExplore(exploreRunRequest(params), buildSweepSchedule(params), harness().guard, async () => { call++; return infeasible(); });
+  const r = await runExplore(params, buildSweepSchedule(params), harness().guard, async () => { call++; return infeasible(); });
   assert.equal(call, 2);
   assert.equal(outcomesOf(r), 'II');
   assert.equal(r.curve_status, 'infeasible');
   assert.deepEqual(r.points, []);
   // Low endpoint times out, so the high endpoint runs and the sweep is invalid (V = 0 with U).
   call = 0;
-  const t = await runExplore(exploreRunRequest(params), buildSweepSchedule(params), harness().guard, async () => (call++ === 0 ? timeout() : witness()));
+  const t = await runExplore(params, buildSweepSchedule(params), harness().guard, async () => (call++ === 0 ? timeout() : witness()));
   assert.equal(outcomesOf(t), 'UV');
   assert.equal(t.curve_status, 'partial');
   // High endpoint not a witness: rangeMax is 100, as before.
   const low = { ergo: 40.5, recoilV: 90 };
-  const noHigh = await generated(paretoParams('price'), low, null, v => ({ ergo: v, recoilV: 80 }));
+  const noHigh = await generated(sweepRequest('price'), low, null, v => ({ ergo: v, recoilV: 80 }));
   const expected = legacyTargets('price', { steps: 10, nakedRecoilV: 100 }, low, null, v => ({ ergo: v, recoilV: 80 }));
   assert.deepEqual(noHigh.values, expected);
   assert.ok(expected.length > 0 && expected[expected.length - 1] < 100);
@@ -574,11 +577,11 @@ test('with no usable low endpoint the sweep ends at the endpoints; a failed high
 
 test('a stop between the endpoints and the steps leaves the generated next step as an unlaunched U: a sweep that stopped early is never complete', async () => {
   const h = harness();
-  const params = paretoParams('price');
+  const params = sweepRequest('price');
   // Cancel dispatched across the yield after the second endpoint: the first step target was generated at that moment, and stays U.
   h.state.onYield = n => { if (n === 2) h.state.cancelled = true; };
   let call = 0;
-  const r = await runExplore(exploreRunRequest(params), buildSweepSchedule(params), h.guard, async () => (call++ === 0 ? witness({ ergo: 33.4 }) : witness({ ergo: 71.2 })));
+  const r = await runExplore(params, buildSweepSchedule(params), h.guard, async () => (call++ === 0 ? witness({ ergo: 33.4 }) : witness({ ergo: 71.2 })));
   assert.equal(call, 2);
   assert.equal(r.step_outcomes.length, 3, 'two endpoints and the first generated step');
   assert.equal(outcomesOf(r), 'VVU');
@@ -589,8 +592,7 @@ test('a stop between the endpoints and the steps leaves the generated next step 
 
 test('exploreRunRequest carries the shared request: constraints, stash, precision flags and the naked recoil', () => {
   const owned = ['g1', 'g1'];
-  const params = paretoParams('price', { ownedItems: owned, maxPrice: 9000, maxMOA: 0, precisionRequest: 'auto', fleaAvailable: false });
-  const request = exploreRunRequest(params);
+  const request = sweepRequest('price', { ownedItems: owned, maxPrice: 9000, maxMOA: 0, precisionRequest: 'auto', fleaAvailable: false });
   assert.deepEqual(request.base.ownedItems, owned);
   assert.equal(request.base.maxPrice, 9000);
   assert.equal(request.base.maxMOA, 0);
@@ -598,9 +600,9 @@ test('exploreRunRequest carries the shared request: constraints, stash, precisio
   assert.equal(request.precisionRequest, 'auto');
   assert.equal(request.preciseMode, true);
   assert.equal(request.nakedRecoilV, 100);
-  assert.equal(exploreRunRequest(paretoParams('price')).precisionRequest, 'precise', 'derived from the resolved mode when the caller gave none');
-  assert.equal(exploreRunRequest(paretoParams('price', { preciseMode: false })).precisionRequest, 'fast');
-  assert.equal('ownedItems' in exploreRunRequest(paretoParams('price')).base, false, 'omitted stash stays omitted');
+  assert.equal(sweepRequest('price').precisionRequest, 'precise', 'derived from the resolved mode when the caller gave none');
+  assert.equal(sweepRequest('price', { preciseMode: false }).precisionRequest, 'fast');
+  assert.equal('ownedItems' in sweepRequest('price').base, false, 'omitted stash stays omitted');
 });
 
 // ---------------------------------------------------------------------------------------------
@@ -612,8 +614,8 @@ const real = (guard: RuntimeGuard = fixedGuard(performance.now() + 120_000)) => 
 
 test('end to end on the real Precise solver: every target a certified optimum, a complete curve, points that the independent validator accepts', async () => {
   for (const ignore of ['price', 'recoil', 'ergo'] as const) {
-    const params = paretoParams(ignore);
-    const r = await runExplore(exploreRunRequest(params), buildSweepSchedule(params), real(), realOptimize);
+    const params = sweepRequest(ignore);
+    const r = await runExplore(params, buildSweepSchedule(params), real(), realOptimize);
     assert.equal(r.curve_status, 'complete', `${ignore}: ${JSON.stringify(r.step_outcomes.map(s => [s.outcome, s.reason]))}`);
     assert.ok(r.step_outcomes.every(s => s.outcome === 'V' && s.status === 'optimal' && s.physical_certificate === 'certified_optimal'));
     assert.equal(r.step_outcomes.length, r.sweep_schedule.length);
@@ -622,7 +624,7 @@ test('end to end on the real Precise solver: every target a certified optimum, a
     assert.equal(r.moa_qualification, null);
     assert.ok(r.points.length >= 2);
     for (const p of r.points) {
-      const v = validatePhysicalBuild(params.itemLookup, params as SolveParams, {
+      const v = validatePhysicalBuild(params.base.itemLookup, params.base, {
         base: p.selected_preset?.id === WEAPON ? { kind: 'naked' } : { kind: 'preset', presetId: p.selected_preset?.id as string }, placements: p.slot_pairs,
       }, { requirePathInstanceIds: true });
       assert.equal(v.ok, true, JSON.stringify(v.violations));
@@ -631,15 +633,15 @@ test('end to end on the real Precise solver: every target a certified optimum, a
 });
 
 test('end to end: a budget no build meets is certified infeasible at every target (I = N), Fast and MOA-dependent emptiness are only unresolved', async () => {
-  const precise = paretoParams('price', { maxPrice: 10 });
-  const r = await runExplore(exploreRunRequest(precise), buildSweepSchedule(precise), real(), realOptimize);
+  const precise = sweepRequest('price', { maxPrice: 10 });
+  const r = await runExplore(precise, buildSweepSchedule(precise), real(), realOptimize);
   assert.equal(r.curve_status, 'infeasible');
   assert.equal(outcomesOf(r), 'II');
   assert.ok(r.step_outcomes.every(s => s.status === 'infeasible' && s.physical_certificate === 'certified_infeasible'));
   assert.deepEqual(r.points, []);
 
-  const fast = paretoParams('price', { maxPrice: 10, preciseMode: false });
-  const f = await runExplore(exploreRunRequest(fast), buildSweepSchedule(fast), real(), realOptimize);
+  const fast = sweepRequest('price', { maxPrice: 10, preciseMode: false });
+  const f = await runExplore(fast, buildSweepSchedule(fast), real(), realOptimize);
   assert.equal(outcomesOf(f), 'UU', 'Fast model infeasibility is approximate: not a certificate');
   assert.equal(f.curve_status, 'invalid');
   assert.equal(f.reason, PUBLIC_REASONS.approximateModelInfeasible);
@@ -648,8 +650,8 @@ test('end to end: a budget no build meets is certified infeasible at every targe
 
   const withCoi = sweepLookup();
   (withCoi[WEAPON] as GunLookupEntry).stats.center_of_impact = 0.0625; // 2.149 MOA: a cap of 0.001 has no build
-  const moa = { ...paretoParams('price', { maxMOA: 0.001 }), itemLookup: withCoi, compatibilityMap: buildCompatibilityMap(WEAPON, withCoi) };
-  const m = await runExplore(exploreRunRequest(moa), buildSweepSchedule(moa), real(), realOptimize);
+  const moa = sweepRequest('price', { maxMOA: 0.001, itemLookup: withCoi, compatibilityMap: buildCompatibilityMap(WEAPON, withCoi) });
+  const m = await runExplore(moa, buildSweepSchedule(moa), real(), realOptimize);
   assert.equal(outcomesOf(m), 'UU', 'provisional-MOA emptiness is a model result, not a physical proof');
   assert.equal(m.curve_status, 'invalid');
   assert.equal(m.moa_qualification, 'provisional_model');
@@ -659,11 +661,11 @@ test('end to end: a budget no build meets is certified infeasible at every targe
 test('end to end with a cancel dispatched mid-sweep: the completed targets stay, the generated rest is U, the curve is partial', async () => {
   const h = harness();
   const guard: RuntimeGuard = { ...h.guard, now: () => performance.now(), deadline: performance.now() + 120_000 };
-  const params = paretoParams('price');
+  const params = sweepRequest('price');
   let finished = 0;
   // The cancel is dispatched right after the second target's solve returns (the second endpoint); it is observed at the guard check before the first step.
   const optimize: OptimizeFn = async (p, g) => { const response = await realOptimize(p, g); if (++finished === 2) h.state.cancelled = true; return response; };
-  const r = await runExplore(exploreRunRequest(params), buildSweepSchedule(params), guard, optimize);
+  const r = await runExplore(params, buildSweepSchedule(params), guard, optimize);
   assert.equal(r.curve_status, 'partial');
   assert.equal(r.step_outcomes.filter(s => s.outcome === 'V').length, 2);
   assert.ok(r.step_outcomes.length >= 3, 'the first generated step is recorded');
