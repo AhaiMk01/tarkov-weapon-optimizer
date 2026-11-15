@@ -64,8 +64,11 @@ export interface ExplorePlan {
 export interface RunLifecycle {
   getState(): RunsState;
   subscribe(listener: () => void): () => void;
-  /** Optimize and Gunsmith: the same request, shown in their own panels. */
-  run(kind: SingleKind, request: () => OptimizeRequest, gameMode: GameMode, lang: string): Promise<void>;
+  /**
+   * Optimize and Gunsmith: the same request, shown in their own panels. The game mode is the one the run was started with. The request and the
+   * language are read when the request is sent, after the floor has settled, so a language changed while the floor was cancelling is the one used.
+   */
+  run(kind: SingleKind, request: () => OptimizeRequest, gameMode: GameMode, lang: () => string): Promise<void>;
   explore(plan: ExplorePlan): Promise<void>;
   /**
    * Asks the MOA floor about `request` after a short pause, and returns what stops that: the pause, or the request already in flight (it is
@@ -106,7 +109,7 @@ export function createRunLifecycle(deps: RunLifecycleDeps): RunLifecycle {
     await settleFloor();
     const controller = deps.controllers[kind].begin();
     try {
-      const res = await deps.api.optimize(request(), gameMode, lang, { signal: controller.signal });
+      const res = await deps.api.optimize(request(), gameMode, lang(), { signal: controller.signal });
       runEvent(kind, { type: 'done', result: res });
       deps.announce(toastOf(resultViewOf(res), spec.toast));
     } catch (err) {

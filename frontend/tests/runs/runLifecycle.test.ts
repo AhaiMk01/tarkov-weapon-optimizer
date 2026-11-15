@@ -85,9 +85,11 @@ function harness() {
   const clock = manualClock();
   const toasts: Toast[] = [];
   const logs: { message: string; error: unknown }[] = [];
+  /** The game mode and language each Optimize call was sent with. */
+  const optimizeSent: { mode: string; lang: string }[] = [];
   const runs = createRunLifecycle({
     api: {
-      optimize: async (request, _mode, _lang, options = {}) => optimizeApi.send(request, options),
+      optimize: async (request, mode, lang, options = {}) => { optimizeSent.push({ mode: mode ?? '', lang: lang ?? '' }); return optimizeApi.send(request, options); },
       explore: async (request, _mode, _lang, options = {}) => exploreApi.send(request, options),
       computeMOAFloor: async (request, _mode, _lang, options = {}) => floorApi.send(request, options),
     },
@@ -96,7 +98,7 @@ function harness() {
     logError: (message, error) => { logs.push({ message, error }); },
     setTimer: clock.setTimer,
   });
-  return { runs, optimizeApi, exploreApi, floorApi, controllers, clock, toasts, logs };
+  return { runs, optimizeApi, optimizeSent, exploreApi, floorApi, controllers, clock, toasts, logs };
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -148,7 +150,7 @@ test('a successful Optimize runs, shows its result and says "complete" only for 
   const h = harness();
   const seen: string[] = [];
   h.runs.subscribe(() => seen.push(h.runs.getState().optimize.phase));
-  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   assert.equal(h.runs.getState().optimize.phase, 'running', 'busy from the first moment');
   await flush();
 
@@ -169,7 +171,7 @@ test('a successful Optimize runs, shows its result and says "complete" only for 
 
 test('an approximate Optimize result is announced as what its headline says, never as complete', async () => {
   const h = harness();
-  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   h.optimizeApi.calls[0].resolve(optimum({ physical_certificate: 'approximate_optimal', model_qualification: 'approximate', precision_resolved: 'fast' }));
   await done;
@@ -179,14 +181,14 @@ test('an approximate Optimize result is announced as what its headline says, nev
 
 test('a failed Optimize is classified, kept next to the previous result, logged and announced as an error', async () => {
   const h = harness();
-  const first = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const first = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   const previous = optimum();
   h.optimizeApi.calls[0].resolve(previous);
   await first;
   h.toasts.length = 0;
 
-  const second = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const second = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   assert.deepEqual(h.runs.getState().optimize, { phase: 'running', result: previous, failure: null }, 'the previous result stays while the next one runs');
   await flush();
   const nativeFailure = new SolverError('solve', new Error('wasm trap'), true, { nodes: 3, termination: 'limit', witness: false, lower_bound: null, upper_bound: null, absolute_gap: null });
@@ -202,7 +204,7 @@ test('a failed Optimize is classified, kept next to the previous result, logged 
   assert.deepEqual(h.logs, [{ message: 'Optimization failed', error: nativeFailure }]);
   assert.equal(h.controllers.optimize.ended.length, 2, 'the controller is released after a failure too');
 
-  const third = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const third = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   assert.equal(h.runs.getState().optimize.failure, null, 'a new request clears the failure');
   await flush();
   h.optimizeApi.calls[2].reject(new Error('boom'));
@@ -213,14 +215,14 @@ test('a failed Optimize is classified, kept next to the previous result, logged 
 
 test('a cancelled Optimize is an info toast, not a failure, and keeps the previous result', async () => {
   const h = harness();
-  const first = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const first = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   const previous = optimum();
   h.optimizeApi.calls[0].resolve(previous);
   await first;
   h.toasts.length = 0;
 
-  const second = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const second = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   h.controllers.optimize.cancel();
   assert.equal(h.optimizeApi.calls[1].options.signal?.aborted, true);
@@ -239,7 +241,7 @@ test('a request waits for the MOA floor in flight: the floor is cancelled first 
   await flush();
   assert.equal(h.floorApi.calls.length, 1);
 
-  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   assert.equal(h.controllers.floor.cancels, 1, 'the floor is cancelled');
   assert.equal(h.floorApi.calls[0].options.signal?.aborted, true);
@@ -253,9 +255,27 @@ test('a request waits for the MOA floor in flight: the floor is cancelled first 
   await done;
 });
 
+test('the language is read when the request is sent, after the floor has settled; the game mode is the one the run was started with', async () => {
+  const h = harness();
+  h.runs.watchFloor(floorRequest('ak'), 'regular', 'en');
+  h.clock.fire();
+  await flush();
+
+  let language = 'en';
+  const done = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => language);
+  await flush();
+  assert.equal(h.optimizeApi.calls.length, 0, 'still waiting for the floor');
+  language = 'de';
+  h.floorApi.calls[0].resolve(floorAnswer({ status: 'unresolved', floor: null, display_floor: null, proved_lower_bound: null, reason: PUBLIC_REASONS.cancelledByUser }));
+  await flush();
+  assert.deepEqual(h.optimizeSent, [{ mode: 'regular', lang: 'de' }]);
+  h.optimizeApi.calls[0].resolve(optimum());
+  await done;
+});
+
 test('the request is built where the sequence needs it: a request that cannot be built is a failure of the run, not an unhandled error', async () => {
   const h = harness();
-  await h.runs.run('optimize', () => { throw new Error('no request'); }, 'regular', 'en');
+  await h.runs.run('optimize', () => { throw new Error('no request'); }, 'regular', () => 'en');
   assert.deepEqual(h.runs.getState().optimize.failure, { kind: 'unknown', message: 'no request' });
   assert.equal(h.optimizeApi.calls.length, 0);
 });
@@ -266,7 +286,7 @@ test('the request is built where the sequence needs it: a request that cannot be
 
 test('Gunsmith is the same request with its own state, controller and wording', async () => {
   const h = harness();
-  const done = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'pve', 'ru');
+  const done = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'pve', () => 'ru');
   assert.deepEqual(phases(h.runs), ['idle', 'running', 'idle']);
   await flush();
   assert.equal(h.controllers.gunsmith.begun.length, 1);
@@ -279,7 +299,7 @@ test('Gunsmith is the same request with its own state, controller and wording', 
   assert.equal(h.runs.getState().optimize.result, null);
   assert.deepEqual(h.toasts, [{ type: 'success', key: 'toast.gunsmith_success' }]);
 
-  const failing = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'pve', 'ru');
+  const failing = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'pve', () => 'ru');
   await flush();
   const error = new Error('lost worker');
   h.optimizeApi.calls[1].reject(error);
@@ -294,7 +314,7 @@ test('Gunsmith is the same request with its own state, controller and wording', 
 
 test('a cancelled Gunsmith request is an info toast', async () => {
   const h = harness();
-  const done = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'regular', 'en');
+  const done = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'regular', () => 'en');
   await flush();
   h.controllers.gunsmith.cancel();
   h.optimizeApi.calls[0].reject(new CancellationError());
@@ -598,17 +618,17 @@ test('a floor that is not wanted is cleared and never asked', async () => {
 
 test('reloading the data clears both single results and failures; a request in flight keeps running', async () => {
   const h = harness();
-  const shown = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const shown = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   h.optimizeApi.calls[0].resolve(optimum());
   await shown;
-  const failing = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'regular', 'en');
+  const failing = h.runs.run('gunsmith', () => optimizeRequest('task-gun'), 'regular', () => 'en');
   await flush();
   h.optimizeApi.calls[1].reject(new Error('boom'));
   await failing;
   assert.equal(h.runs.getState().gunsmith.phase, 'failed');
 
-  const running = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const running = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   h.runs.clearResults();
   assert.deepEqual(h.runs.getState().optimize, { phase: 'running', result: null, failure: null });
   assert.deepEqual(h.runs.getState().gunsmith, { phase: 'idle', result: null, failure: null });
@@ -620,14 +640,14 @@ test('reloading the data clears both single results and failures; a request in f
 
 test('changing the Optimize weapon drops its result but leaves a failure on screen', async () => {
   const h = harness();
-  const shown = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const shown = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   h.optimizeApi.calls[0].resolve(optimum());
   await shown;
   h.runs.clearOptimizeResult();
   assert.deepEqual(h.runs.getState().optimize, { phase: 'idle', result: null, failure: null });
 
-  const failing = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', 'en');
+  const failing = h.runs.run('optimize', () => optimizeRequest('ak'), 'regular', () => 'en');
   await flush();
   h.optimizeApi.calls[1].reject(new Error('boom'));
   await failing;

@@ -592,7 +592,7 @@ function AppContent({
       maxMoa: useMOA ? effectiveMaxMOA : null,
       precision: solverPrecision,
       allowRepeatedParts,
-    }), gameMode, i18n.language || 'en')
+    }), gameMode, () => i18n.language || 'en')
   }
 
   const clearOptimizeGunExtras = () => {
@@ -640,7 +640,7 @@ function AppContent({
 
   const handleGunsmithOptimize = () => {
     if (!selectedTask) return
-    void runs.run('gunsmith', () => gunsmithRequestOf(domainState, selectedTask, allowRepeatedParts), gameMode, i18n.language || 'en')
+    void runs.run('gunsmith', () => gunsmithRequestOf(domainState, selectedTask, allowRepeatedParts), gameMode, () => i18n.language || 'en')
   }
 
   // Required and banned are one tri-state per part, so each toggle also clears
