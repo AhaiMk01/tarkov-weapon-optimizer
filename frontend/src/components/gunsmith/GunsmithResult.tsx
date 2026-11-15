@@ -5,18 +5,15 @@ import { StatsCards } from '../common/StatsCards'
 import { BuildManifest } from '../common/BuildManifest'
 import { UsingPresetCard } from '../common/UsingPresetCard'
 import { CancelButton, FailureAlert, ResultStatusAlert } from '../common/ResultStatus'
-import type { Failure } from '../common/failureView'
+import type { OptimizeRun } from '../../runs/runState'
 import { authorityOf } from '../common/resultView'
 import { partitionManifest, presetUsage } from '../common/manifest'
-import type { OptimizeResponse } from '../../api/client'
 
 interface GunsmithResultProps {
-  result: OptimizeResponse | null
-  /** A request that was rejected (a native solver failure or an unexpected error); a plain cancel is not one. */
-  failure?: Failure | null
+  /** The request's phase, its last accepted result, and its failure (a native solver failure or an unexpected error; a plain cancel is not one). */
+  run: OptimizeRun
   viewMode: 'detailed' | 'compact' | 'table'
   onViewModeChange: (v: 'detailed' | 'compact' | 'table') => void
-  optimizing: boolean
   onOptimize: () => void
   onCancel?: () => void
   cancelling?: boolean
@@ -25,8 +22,10 @@ interface GunsmithResultProps {
   weaponId?: string
 }
 
-export function GunsmithResult({ result, failure, viewMode, onViewModeChange, optimizing, onOptimize, onCancel, cancelling, onCopy, disabled, weaponId }: GunsmithResultProps) {
+export function GunsmithResult({ run, viewMode, onViewModeChange, onOptimize, onCancel, cancelling, onCopy, disabled, weaponId }: GunsmithResultProps) {
   const { t } = useTranslation()
+  const { result, failure } = run
+  const optimizing = run.phase === 'running'
   if (!result) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
