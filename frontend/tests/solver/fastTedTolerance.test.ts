@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import { runExplore } from '../../src/solver/exploreSweep';
 import type { OptimizeFn } from '../../src/solver/exploreSweep';
 import { buildSweepSchedule, exploreRunRequest } from '../../src/solver/paretoExplorer';
-import type { ParetoParams } from '../../src/solver/paretoExplorer';
 import { nativeSolveOptions } from '../../src/solver/physical/nativeSolve';
 import { FAST_TED_TCHEBYCHEFF_TOLERANCE, FAST_TED_TOLERANCE_PER_WEIGHT } from '../../src/solver/physical/solveFast';
 import { DEFAULT_OBJECTIVE_TOLERANCE } from '../../src/solver/physical/solvePrecise';
@@ -58,11 +57,11 @@ test('a Fast TED pre-model stop (an invalid stash) reports the Fast TED default'
 
 test('Explore keeps the shared default: every Fast TrueErgo target reports it and runs at the capped native gap', { timeout: 300_000 }, async () => {
   const world = tedRequest(1);
-  const params: ParetoParams = { ...world, ignore: 'price', steps: 2 };
+  const request = exploreRunRequest(world, 'price', 2);
   const gaps: number[] = [];
   const optimize: OptimizeFn = async (p, guard) => (await solveRequest({ ...p, guard })).response;
   const result = await withNative(async (call, real) => { gaps.push(Number(call.options.mip_abs_gap)); return real(); },
-    () => runExplore(exploreRunRequest(params), buildSweepSchedule(params), fixedGuard(performance.now() + 120_000), optimize));
+    () => runExplore(request, buildSweepSchedule(request), fixedGuard(performance.now() + 120_000), optimize));
   assert.ok(result.step_outcomes.length >= 2);
   for (const row of result.step_outcomes) assert.equal(row.optimization.tolerance, DEFAULT_OBJECTIVE_TOLERANCE, `target ${row.target_index}`);
   assert.ok(gaps.length > 0);

@@ -3,9 +3,9 @@
 // domain, and the floor request reaches the solver intact (the witness scope of the real runtime shows it).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import type { MOAFloorResponse } from '../../src/api/client';
+import type { GunsmithTask, MOAFloorResponse } from '../../src/api/client';
 import {
-  domainRequestOf, exploreRequestOf, floorRequestKey, floorRequestOf, optimizeRequestOf,
+  domainRequestOf, exploreRequestOf, floorRequestKey, floorRequestOf, gunsmithRequestOf, optimizeRequestOf,
 } from '../../src/api/requestDomain';
 import type { RequestDomainState } from '../../src/api/requestDomain';
 import type { LoadedState } from '../../src/solver/dataService';
@@ -141,6 +141,68 @@ test('the floor is asked again when ANY domain field changes, and not otherwise'
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------
+// The Gunsmith request
+// ---------------------------------------------------------------------------------------------------------------------------
+
+const TASK: GunsmithTask = {
+  task_name: 'Task', weapon_id: 'gun-7', weapon_name: 'Gun 7',
+  constraints: { min_ergonomics: 38, max_recoil_sum: 600, min_mag_capacity: 20, min_sighting_range: 150, max_weight: 4.2 },
+  required_item_ids: ['r1', 'r2'], required_item_names: ['R1', 'R2'],
+  required_category_group_ids: [['c1', 'c2'], ['c3']], required_category_names: [['C1', 'C2'], ['C3']],
+};
+
+test('the Gunsmith request is the task asked under the player acquisition settings: always Precise, with the Gunsmith objective', () => {
+  assert.deepEqual(gunsmithRequestOf(FULL, TASK, true), {
+    weapon_id: 'gun-7',
+    ergo_weight: 1,
+    recoil_weight: 1,
+    price_weight: 0.5,
+    min_ergonomics: 38,
+    max_recoil_sum: 600,
+    min_mag_capacity: 20,
+    min_sighting_range: 150,
+    max_weight: 4.2,
+    include_items: ['r1', 'r2'],
+    include_categories: [['c1', 'c2'], ['c3']],
+    trader_levels: { ...DEFAULT_TRADER_LEVELS, prapor: 2, ref: 0 },
+    player_level: 42,
+    flea_available: false,
+    barter_available: true,
+    barter_exclude_dogtags: false,
+    precise_mode: true,
+    allow_repeated_parts: true,
+  });
+});
+
+test('the Gunsmith request asks under the same acquisition settings as Optimize, Explore and the floor, and carries none of the Optimize controls', () => {
+  const gunsmith = gunsmithRequestOf(FULL, TASK, false) as unknown as Record<string, unknown>;
+  const acquisition = ['trader_levels', 'player_level', 'flea_available', 'barter_available', 'barter_exclude_dogtags'] as const;
+  const floor = floorRequestOf(FULL) as unknown as Record<string, unknown>;
+  for (const key of acquisition) assert.deepEqual(gunsmith[key], floor[key], key);
+  // A change to any acquisition control reaches the Gunsmith call.
+  for (const change of [{ traderLevels: { ...DEFAULT_TRADER_LEVELS, skier: 1 } }, { playerLevel: 15 }, { fleaAvailable: true }, { barterAvailable: false }, { barterExcludeDogtags: true }]) {
+    assert.notDeepEqual(gunsmithRequestOf({ ...FULL, ...change }, TASK, false), gunsmithRequestOf(FULL, TASK, false), JSON.stringify(change));
+  }
+  // The budget, the minimums, the filters and the TrueErgo / Prevent Overswing controls are not the task's.
+  for (const key of ['max_price', 'use_true_ergo', 'prevent_overswing', 'equip_ergo_modifier', 'exclude_items', 'exclude_categories', 'max_moa', 'use_tchebycheff', 'owned_items']) {
+    assert.equal(gunsmith[key], undefined, key);
+  }
+  assert.equal(gunsmith.min_ergonomics, 38, 'the task minimum, not the 45 of the Optimize control');
+  assert.equal(gunsmith.min_mag_capacity, 20, 'the task minimum, not the 30 of the Optimize control');
+  assert.equal(gunsmith.weapon_id, 'gun-7', 'the task weapon, not the selected gun');
+});
+
+test('a task with no required parts and no constraints sends none of them; the repeated-parts option is carried only when on', () => {
+  const bare: GunsmithTask = { ...TASK, constraints: {}, required_item_ids: [], required_category_group_ids: [] };
+  const request = gunsmithRequestOf(DEFAULT, bare, false);
+  for (const key of ['min_ergonomics', 'max_recoil_sum', 'min_mag_capacity', 'min_sighting_range', 'max_weight', 'include_items', 'include_categories', 'allow_repeated_parts'] as const) {
+    assert.equal(request[key], undefined, key);
+  }
+  assert.equal(request.precise_mode, true);
+  assert.equal(gunsmithRequestOf(DEFAULT, bare, true).allow_repeated_parts, true);
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
 // The floor request reaches the solver intact
 // ---------------------------------------------------------------------------------------------------------------------------
 
@@ -175,4 +237,20 @@ test('through the real runtime, the floor request built from the UI state is wha
   assert.equal(scope?.acquisition.trader_levels?.prapor, 1);
   // The excluded best barrel and the budget change the minimum: it is not the floor of the weapon alone.
   assert.ok(!floor.witness?.selected_item_ids.includes('b_best'));
+});
+
+test('a MOA cap on a floor request is ignored: the floor searches the cap, so a stray one cannot narrow it', async () => {
+  const floorOf = async (extra: object): Promise<MOAFloorResponse> => {
+    const posted: WorkerOutMessage[] = [];
+    const state: LoadedState = { guns: [], mods: [], itemLookup: floorLookup(), loadedAt: 0, generation: 1 };
+    const runtime = createWorkerRuntime({ post: m => { posted.push(structuredClone(m)); }, loadData: async () => state });
+    runtime.receive({ type: 'computeMOAFloor', id: 1, payload: { request: { ...floorRequestOf({ ...DEFAULT, weaponId: WEAPON }), ...extra }, lang: 'en', gameMode: 'regular', deadline: epochNow() + 120_000 } });
+    await runtime.idle();
+    return posted.find(m => m.id === 1 && m.type !== 'snapshot')?.payload as MOAFloorResponse;
+  };
+  const plain = await floorOf({});
+  assert.equal(plain.status, 'model_proved', JSON.stringify(plain));
+  const stray = await floorOf({ max_moa: 0.001 });
+  assert.deepEqual([stray.status, stray.floor, stray.display_floor, stray.proved_lower_bound], [plain.status, plain.floor, plain.display_floor, plain.proved_lower_bound]);
+  assert.deepEqual(stray.witness?.selected_item_ids, plain.witness?.selected_item_ids);
 });

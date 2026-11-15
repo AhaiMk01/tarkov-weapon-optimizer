@@ -7,7 +7,6 @@ import type { ExploreRequest, ExploreResponse, MOAFloorRequest, OptimizeRequest,
 import type { LoadedState } from '../../src/solver/dataService';
 import { paramsOfTarget } from '../../src/solver/exploreSweep';
 import { buildSweepSchedule, exploreRunRequest } from '../../src/solver/paretoExplorer';
-import type { ParetoParams } from '../../src/solver/paretoExplorer';
 import { computeExactSolveCacheKey, computeIdealPointCacheKey } from '../../src/solver/reuseKey';
 import { solveRequest } from '../../src/solver/solver';
 import type { SolveReport } from '../../src/solver/solver';
@@ -166,12 +165,12 @@ test('Explore in Precise: the option is carried but ignored, and the sweep makes
 
 test('the Explore sweep builds its step parameters from the option: base, schedule targets and overrides', () => {
   const itemLookup = lookup();
-  const base: ParetoParams = { weaponId: WEAPON, itemLookup, compatibilityMap: buildCompatibilityMap(WEAPON, itemLookup), ignore: 'price', steps: 10, preciseMode: false };
-  const off = exploreRunRequest(base);
+  const base: SolveParams = { weaponId: WEAPON, itemLookup, compatibilityMap: buildCompatibilityMap(WEAPON, itemLookup), preciseMode: false };
+  const off = exploreRunRequest(base, 'price', 10);
   assert.equal(off.base.allowRepeatedParts, undefined, 'an absent option stays absent: the Fast default (one copy) applies');
-  const on = exploreRunRequest({ ...base, allowRepeatedParts: true });
+  const on = exploreRunRequest({ ...base, allowRepeatedParts: true }, 'price', 10);
   assert.equal(on.base.allowRepeatedParts, true);
-  const schedule = buildSweepSchedule({ ...base, allowRepeatedParts: true });
+  const schedule = buildSweepSchedule(on);
   assert.ok(schedule.targets.length > 0);
   for (const target of schedule.targets) assert.equal(paramsOfTarget(on, target).allowRepeatedParts, true);
 });

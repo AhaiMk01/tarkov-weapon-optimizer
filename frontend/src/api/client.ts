@@ -1,5 +1,6 @@
 import type {
-  IdealPoint, ModelQualification, MoaQualification, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved, PresetComponent, SolveStatus,
+  IdealPoint, MOAFloorRequest, ModelQualification, MoaQualification, OptimizeRequest, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved,
+  PresetComponent, SolveStatus, WitnessScope,
 } from '../solver/types';
 import {
   DEFAULT_EXPLORE_TIME_LIMIT_MS, DEFAULT_FLOOR_TIME_LIMIT_MS, DEFAULT_OPTIMIZE_TIME_LIMIT_MS, resolveTimeLimit,
@@ -9,7 +10,8 @@ import type { RequestOptions, WorkerLike } from './workerChannel';
 // The shared transport contract (ADR 0013 section 5). Its leaf types are defined once in solver/types.ts (DOM-free, so the solver and the
 // reference harness can read them) and re-exported here with the request/response records that use them.
 export type {
-  IdealPoint, ModelQualification, MoaQualification, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved, PresetComponent, SolveStatus,
+  IdealPoint, MOAFloorRequest, ModelQualification, MoaQualification, OptimizeRequest, Placement, PhysicalCertificate, PrecisionRequest, PrecisionResolved,
+  PresetComponent, SolveStatus, WitnessScope,
 } from '../solver/types';
 
 /**
@@ -33,65 +35,6 @@ export interface InfoResponse {
 }
 
 
-export interface OptimizeRequest {
-  weapon_id: string;
-  max_price?: number;
-  min_ergonomics?: number;
-  max_recoil_v?: number;
-  max_recoil_sum?: number;
-  min_mag_capacity?: number;
-  min_sighting_range?: number;
-  max_weight?: number;
-  prevent_overswing?: boolean;
-  /** Equipment ergonomics modifier b as a decimal percentage (e.g. -0.15 for -15% armor penalty). */
-  equip_ergo_modifier?: number;
-  max_moa?: number;
-  include_items?: string[];
-  exclude_items?: string[];
-  include_categories?: string[][];
-  exclude_categories?: string[];
-  ergo_weight?: number;
-  recoil_weight?: number;
-  price_weight?: number;
-  /** Optimize gear-adjusted TrueErgo Delta rather than raw ergonomics. */
-  use_true_ergo?: boolean;
-  /** When true, uses augmented Tchebycheff scalarization to reach non-convex/unsupported Pareto builds. */
-  use_tchebycheff?: boolean;
-  /** Unlocked loyalty level per trader `normalizedName`; 0 disables the trader. */
-  trader_levels?: {
-    prapor: number;
-    skier: number;
-    peacekeeper: number;
-    mechanic: number;
-    jaeger: number;
-    ref: number;
-    [key: string]: number;
-  };
-  flea_available?: boolean;
-  barter_available?: boolean;
-  barter_exclude_dogtags?: boolean;
-  player_level?: number;
-  /**
-   * Stash multiset (ADR 0008): one entry per owned copy, so `['m', 'm']` is two copies. Omitted or [] means no stock. At most
-   * 10,000 nonempty strings; an invalid list is rejected as `Invalid owned_items format`, never reported as infeasible.
-   * Inherited by `ExploreRequest`. The worker validates it first (before hashing, caching or any model work) and forwards the validated
-   * multiset to every solve of the request: Optimize, the Gunsmith optimize call, every Explore step and every floor trial.
-   */
-  owned_items?: string[];
-  /** Boolean values are normalized: true → precise, false → fast. */
-  precise_mode?: boolean | PrecisionRequest;
-  /**
-   * Fast only (owner decision 2c, default false): when the request runs in Fast mode, `true` lets the model install several copies of one part. Without
-   * it Fast uses at most one copy of each part. Precise ignores it and always allows repeats. Reaches every Fast solve of the request: Optimize,
-   * the Tchebycheff payoff endpoints, every Explore step and the Gunsmith call. The MOA floor (always Precise) does not carry it.
-   */
-  allow_repeated_parts?: boolean;
-  /**
-   * Request budget in milliseconds. ONE epoch deadline is stamped when the call enters, so time spent queued counts. Omitted means the
-   * default of the operation: 60 s for Optimize and Explore, 30 s for a MOA floor.
-   */
-  time_limit_ms?: number;
-}
 /**
  * How one installed occurrence is supplied (ADR 0013 section 4A): the preset's own stock, an owned copy, or a purchase of a whole lot of
  * one offer. The charge of a paid lot is on its first occurrence (`ItemDetail.price`), the other units of the lot ride on it at 0.
@@ -338,39 +281,6 @@ export interface ExploreSnapshot {
   response: ExploreResponse;
 }
 
-/** The complete normalized scope a MOA-floor witness was found under (ADR 0013 section 5): a cap trial is its own prepared domain. */
-export interface WitnessScope {
-  weapon_id: string;
-  precision_resolved: 'fast' | 'precise';
-  model_qualification: 'exact' | 'approximate';
-  moa_qualification: 'provisional_model';
-  /** The MOA cap this witness was found under; `null` for the unconstrained seed. */
-  max_moa: number | null;
-  acquisition: {
-    trader_levels: Record<string, number> | null;
-    flea_available: boolean;
-    barter_available: boolean;
-    barter_exclude_dogtags: boolean;
-    player_level: number | null;
-  };
-  feasibility: {
-    max_price: number | null;
-    min_ergonomics: number | null;
-    max_recoil_v: number | null;
-    max_recoil_sum: number | null;
-    min_mag_capacity: number | null;
-    min_sighting_range: number | null;
-    max_weight: number | null;
-    include_items: string[] | null;
-    exclude_items: string[] | null;
-    include_categories: string[][] | null;
-    exclude_categories: string[] | null;
-    prevent_overswing: boolean;
-    equip_ergo_modifier: number | null;
-  };
-  inventory: { owned_items: string[] };
-}
-
 /** A verified full build that met a MOA cap: the upper-bound witness of a floor query (never a proved minimum). */
 export interface WitnessBuild {
   achieved_moa: number;
@@ -381,13 +291,6 @@ export interface WitnessBuild {
   slot_pairs: Placement[];
   scope: WitnessScope;
 }
-
-/**
- * A MOA floor request (ADR 0013 section 5): the normalized Optimize domain except the MOA cap being searched. The objective is a constant
- * zero, the placement model is always Precise and the weights are irrelevant, so those fields are not part of it. `time_limit_ms` defaults
- * to 30 s.
- */
-export type MOAFloorRequest = Omit<OptimizeRequest, 'max_moa' | 'ergo_weight' | 'recoil_weight' | 'price_weight' | 'use_tchebycheff' | 'precise_mode' | 'allow_repeated_parts'>;
 
 /** The MOA floor of a weapon under the provisional model (ADR 0013 section 6): a bracket on the minimum, not a game-physical minimum. */
 export interface MOAFloorResponse {

@@ -18,89 +18,26 @@
  * be swept (an unknown weapon or axis, a non-finite `steps`); `runExplore` reports that as `invalid` with no points and no solve.
  */
 
-import type { ItemLookup, CompatibilityMap, PrecisionRequest, SolveParams, TraderLevels } from './types.ts';
+import type { SolveParams } from './types.ts';
 import type { ExploreAxis, ExploreRunRequest, SettledTarget, SweepSchedule, SweepTarget } from './exploreSweep.ts';
 
-export interface ParetoParams {
-  weaponId: string;
-  itemLookup: ItemLookup;
-  compatibilityMap: CompatibilityMap;
-  ignore: ExploreAxis;
-  maxPrice?: number | null;
-  minErgonomics?: number | null;
-  maxRecoilV?: number | null;
-  maxRecoilSum?: number | null;
-  minMagCapacity?: number | null;
-  minSightingRange?: number | null;
-  maxWeight?: number | null;
-  maxMOA?: number | null;
-  includeItems?: string[] | null;
-  excludeItems?: string[] | null;
-  includeCategories?: string[][] | null;
-  excludeCategories?: string[] | null;
-  useTrueErgo?: boolean;
-  preventOverswing?: boolean;
-  equipErgoModifier?: number | null;
-  steps?: number;
-  traderLevels?: TraderLevels | null;
-  fleaAvailable?: boolean;
-  barterAvailable?: boolean;
-  barterExcludeDogtags?: boolean;
-  playerLevel?: number | null;
-  /** Stash multiset (validated by the operation layer), forwarded to every target's solve. */
-  ownedItems?: readonly string[];
-  preciseMode?: boolean;
-  /** Fast only: allow several copies of one part (default false: one copy of each part). Forwarded to every target's solve. */
-  allowRepeatedParts?: boolean;
-  /** What the caller asked for, echoed on every point's `precision_request`. */
-  precisionRequest?: PrecisionRequest;
-}
-
-function buildBaseParams(p: ParetoParams): Omit<SolveParams, 'ergoWeight' | 'recoilWeight' | 'priceWeight'> {
-  return {
-    weaponId: p.weaponId,
-    itemLookup: p.itemLookup,
-    compatibilityMap: p.compatibilityMap,
-    maxPrice: p.maxPrice,
-    minErgonomics: p.minErgonomics,
-    maxRecoilV: p.maxRecoilV,
-    maxRecoilSum: p.maxRecoilSum,
-    minMagCapacity: p.minMagCapacity,
-    minSightingRange: p.minSightingRange,
-    maxWeight: p.maxWeight,
-    maxMOA: p.maxMOA,
-    includeItems: p.includeItems,
-    excludeItems: p.excludeItems,
-    includeCategories: p.includeCategories,
-    excludeCategories: p.excludeCategories,
-    useTrueErgo: p.useTrueErgo ?? false,
-    preventOverswing: p.preventOverswing ?? false,
-    equipErgoModifier: p.equipErgoModifier,
-    traderLevels: p.traderLevels,
-    fleaAvailable: p.fleaAvailable ?? true,
-    barterAvailable: p.barterAvailable ?? false,
-    barterExcludeDogtags: p.barterExcludeDogtags ?? false,
-    playerLevel: p.playerLevel,
-    ...(p.ownedItems === undefined ? {} : { ownedItems: p.ownedItems }),
-    preciseMode: p.preciseMode,
-    ...(p.allowRepeatedParts === undefined ? {} : { allowRepeatedParts: p.allowRepeatedParts }),
-    precisionRequest: p.precisionRequest,
-  };
-}
-
-const gunOf = (params: ParetoParams) => {
-  const weapon = Object.hasOwn(params.itemLookup, params.weaponId) ? params.itemLookup[params.weaponId] : undefined;
+const gunOf = (base: Pick<SolveParams, 'weaponId' | 'itemLookup'>) => {
+  const weapon = Object.hasOwn(base.itemLookup, base.weaponId) ? base.itemLookup[base.weaponId] : undefined;
   return weapon !== undefined && weapon.type === 'gun' ? weapon : null;
 };
 
-/** The request of a sweep, as `runExplore` reads it: the shared Optimize request, the axis, the precision flags and the weapon's naked recoil. */
-export function exploreRunRequest(params: ParetoParams): ExploreRunRequest {
-  const weapon = gunOf(params);
+/**
+ * The request of a sweep, as `runExplore` reads it: the normalized Optimize domain every target is solved under (`base`, whose precision flags
+ * and stash every point echoes), the swept axis, the grid and the weapon's naked recoil. `steps` is the caller's raw value; the grid defaults it.
+ */
+export function exploreRunRequest(base: SolveParams, ignore: ExploreAxis, steps?: number): ExploreRunRequest {
+  const weapon = gunOf(base);
   return {
-    ignore: params.ignore,
-    base: buildBaseParams(params),
-    precisionRequest: params.precisionRequest ?? (params.preciseMode ? 'precise' : 'fast'),
-    ...(params.preciseMode === undefined ? {} : { preciseMode: params.preciseMode }),
+    ignore,
+    steps,
+    base,
+    precisionRequest: base.precisionRequest ?? (base.preciseMode ? 'precise' : 'fast'),
+    ...(base.preciseMode === undefined ? {} : { preciseMode: base.preciseMode }),
     nakedRecoilV: weapon === null ? 0 : weapon.stats.naked_recoil_v,
   };
 }
@@ -123,14 +60,15 @@ const witnessStats = (settled: SettledTarget) => (settled.outcome === 'V' && set
  * Endpoint `target_value`s are the ends of the swept axis the endpoint solves for (ergonomics 0 or the user's minimum to 100, recoil 0 to the user's
  * maximum or the naked recoil); step `target_value`s are the constraint value passed to the solve.
  */
-export function buildSweepSchedule(params: ParetoParams): SweepSchedule {
+export function buildSweepSchedule(request: ExploreRunRequest): SweepSchedule {
   const none: SweepSchedule = { targets: [] };
-  const weapon = gunOf(params);
-  if (weapon === null || !isAxis(params.ignore)) return none;
-  const stepsRaw = params.steps ?? 10;
+  const { ignore, base } = request;
+  const weapon = gunOf(base);
+  if (weapon === null || !isAxis(ignore)) return none;
+  const stepsRaw = request.steps ?? 10;
   if (typeof stepsRaw !== 'number' || !Number.isFinite(stepsRaw)) return none;
   const grid = Math.max(stepsRaw, 10);
-  const { ignore, minErgonomics, maxRecoilV } = params;
+  const { minErgonomics, maxRecoilV } = base;
   const nakedRecoilV = Number.isFinite(weapon.stats.naked_recoil_v) ? weapon.stats.naked_recoil_v : 0;
 
   const ergoAxis = ignore !== 'ergo';

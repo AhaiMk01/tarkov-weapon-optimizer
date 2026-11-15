@@ -69,9 +69,10 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts �
    - TrueErgo / Prevent Overswing run a spatial search over total weight (secant bounds of the weight penalty) on whichever model runs; neither upgrades Fast to Precise.
    - Nothing is published unless the exact validator (`physical/validate.ts`) accepts the build; statuses and reasons come from `physical/outcome.ts`.
    - Acyclic part graphs are assumed (no gun has a cycle); a cycle reachable from the receiver makes `preparePhysicalWeapon` throw an internal error (`CYCLIC_PART_GRAPH`).
-4. `precisionMode.ts` — Auto: Precise for every plain request; for TrueErgo / Prevent Overswing, Precise up to 3,000 candidate edges (`AUTO_PRECISE_MAX_TED_EDGES`), Fast above.
-5. `solver.ts` — `solve` / `computeIdealPoint`: runs Precise or Fast and assembles the `OptimizeResponse` (instances, placements, provenance, exact stats, the Tchebycheff payoff table). `trueErgo.ts` holds the shared TED formulas.
-6. `solver.worker.ts` → `workerRuntime.ts` — request guards (epoch deadline, out-of-band cancel), stash validation, caches; Explore (`paretoExplorer.ts` schedule + `exploreSweep.ts` classification) and the MOA floor (`moaFloor.ts`)
+4. `domainFields.ts` — the **request domain**: the one table of the request fields that say what is asked (constraints, filters, model flags, acquisition). `SolveParams`, the Explore base, the MOA-floor witness scope and the reuse key are derived from it. To add a request option, add its wire field to `OptimizeRequest` (`types.ts`) and a row here; the compiler names whatever else must change. `api/requestDomain.ts` builds the wire requests from the UI controls (Optimize, Explore, MOA floor, Gunsmith).
+5. `precisionMode.ts` — Auto: Precise for every plain request; for TrueErgo / Prevent Overswing, Precise up to 3,000 candidate edges (`AUTO_PRECISE_MAX_TED_EDGES`), Fast above.
+6. `solver.ts` — `solve` / `computeIdealPoint`: runs Precise or Fast and assembles the `OptimizeResponse` (instances, placements, provenance, exact stats, the Tchebycheff payoff table). `trueErgo.ts` holds the shared TED formulas.
+7. `solver.worker.ts` → `workerRuntime.ts` — request guards (epoch deadline, out-of-band cancel), stash validation, caches; Explore (`paretoExplorer.ts` schedule + `exploreSweep.ts` classification) and the MOA floor (`moaFloor.ts`)
 
 **API Client (`api/client.ts`):** All `getInfo`, `optimize`, `explore`, etc. communicate via `postMessage` to the Web Worker — not HTTP. Signatures stay stable so UI code does not depend on transport.
 

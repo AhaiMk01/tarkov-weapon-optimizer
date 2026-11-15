@@ -28,7 +28,7 @@ import type { OptimizeResponse, OptimizationMetadata, FinalStats } from '../api/
 import type { SolveParams, IdealPoint, ModelQualification, MoaQualification, PhysicalCertificate, PrecisionRequest, PrecisionResolved, SolveStatus } from './types';
 export type { SolveParams, IdealPoint } from './types';
 import type { ObjectiveAxes } from './trueErgo';
-import { canonicalizeTraderLevels } from './reuseKey';
+import { canonicalizeTraderLevels } from './domainFields';
 import { itemDetails, presetDetail } from './buildDetails';
 import { optimizeEnvelope } from './operationEnvelopes';
 import { withDeadline } from './requestGuard';
