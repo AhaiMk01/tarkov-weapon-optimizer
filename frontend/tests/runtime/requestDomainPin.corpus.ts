@@ -101,5 +101,6 @@ export const RUNTIME_REQUESTS: Record<string, Omit<OptimizeRequest, 'weapon_id'>
   full: { ...FULL, weapon_id: undefined } as Omit<OptimizeRequest, 'weapon_id'>,
   'market only': { flea_available: false, barter_available: true, barter_exclude_dogtags: true, player_level: 15, trader_levels: { ...ALL_TRADERS, skier: 2 } },
   'flags and limits': { use_true_ergo: true, prevent_overswing: true, equip_ergo_modifier: 0, max_price: 100, max_moa: 2.5, max_weight: 3, min_sighting_range: 50 },
+  'limits on the swept axes': { min_ergonomics: 40, max_recoil_v: 85 },
   'stash and filters': { owned_items: ['b', 'a'], include_items: ['a'], exclude_items: ['b'], include_categories: [['c1', 'c2']], exclude_categories: ['c3'] },
 };
