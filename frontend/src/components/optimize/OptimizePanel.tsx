@@ -5,7 +5,7 @@ import { LevelConfig } from '../common/LevelConfig'
 import { AdvancedOptions } from '../common/AdvancedOptions'
 import type { Gun, ModInfo, ModCompatibility, ModCategoryOption, PrecisionRequest } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
-import type { FloorView } from '../common/floorView'
+import type { FloorState } from '../../runs/runState'
 
 interface OptimizePanelProps {
   guns: Gun[]
@@ -46,9 +46,7 @@ interface OptimizePanelProps {
   onPreventOverswingChange: (v: boolean) => void
   equipErgoPenalty: number
   onEquipErgoPenaltyChange: (v: number) => void
-  computingMOAFloor: boolean
-  moaFloor: FloorView | null
-  moaFloorError: string | null
+  floor: FloorState
   onCancelMOAFloor: () => void
   cancellingMOAFloor: boolean
   onRetryMOAFloor: () => void
@@ -119,9 +117,7 @@ export function OptimizePanel(props: OptimizePanelProps) {
         moaRange={props.moaRange}
         useExactMOAFloor={props.useExactMOAFloor}
         onUseExactMOAFloorChange={props.onUseExactMOAFloorChange}
-        computingMOAFloor={props.computingMOAFloor}
-        moaFloor={props.moaFloor}
-        moaFloorError={props.moaFloorError}
+        floor={props.floor}
         onCancelMOAFloor={props.onCancelMOAFloor}
         cancellingMOAFloor={props.cancellingMOAFloor}
         onRetryMOAFloor={props.onRetryMOAFloor}

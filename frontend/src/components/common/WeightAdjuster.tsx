@@ -6,6 +6,7 @@ import { TernaryPlot } from '../TernaryPlot'
 import { CancelButton } from './ResultStatus'
 import { floorLineOf } from './floorView'
 import type { FloorView } from './floorView'
+import type { FloorState } from '../../runs/runState'
 
 const { Text } = Typography
 
@@ -37,11 +38,8 @@ interface WeightAdjusterProps {
   moaRange: { base: number; min: number; max: number }
   useExactMOAFloor: boolean
   onUseExactMOAFloorChange: (v: boolean) => void
-  computingMOAFloor: boolean
-  /** The last floor answer (provisional MOA model), or `null` before one. */
-  moaFloor: FloorView | null
-  /** The message of a failed floor request. */
-  moaFloorError: string | null
+  /** The latest floor question: being asked, its last answer (provisional MOA model) and the message of a failed request. */
+  floor: FloorState
   onCancelMOAFloor: () => void
   cancellingMOAFloor: boolean
   onRetryMOAFloor: () => void
@@ -132,9 +130,7 @@ export function WeightAdjuster({
   moaRange,
   useExactMOAFloor,
   onUseExactMOAFloorChange,
-  computingMOAFloor,
-  moaFloor,
-  moaFloorError,
+  floor,
   onCancelMOAFloor,
   cancellingMOAFloor,
   onRetryMOAFloor,
@@ -355,15 +351,15 @@ export function WeightAdjuster({
                           <Tooltip title={t('constraints.exact_moa_floor_tooltip')}>
                             <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
                           </Tooltip>
-                          {computingMOAFloor && <Spin size="small" />}
+                          {floor.computing && <Spin size="small" />}
                         </Space>
                         <Segmented size="small" value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                       </div>
                       {useExactMOAFloor && (
                         <MoaFloorStatus
-                          computing={computingMOAFloor}
-                          view={moaFloor}
-                          error={moaFloorError}
+                          computing={floor.computing}
+                          view={floor.view}
+                          error={floor.error}
                           onCancel={onCancelMOAFloor}
                           cancelling={cancellingMOAFloor}
                           onRetry={onRetryMOAFloor}

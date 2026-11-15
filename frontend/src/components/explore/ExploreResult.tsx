@@ -15,23 +15,23 @@ import { paletteColorAt, seriesPalette } from './palette'
 import { CoverageDetails, ExploreStatusAlert } from './ExploreStatus'
 import { cancelReasonOf, pointsOfRuns, runLineOf, settledResponseOf } from './exploreView'
 import type { ExploreWeaponRun } from './exploreView'
+import type { ExploreState } from '../../runs/runState'
 
 const { Text } = Typography
 const { useToken } = theme
 
 interface ExploreResultProps {
-  /** One sweep per requested weapon, in order: the final response, or the live/retained snapshot of a run that is running or did not finish. */
-  runs: ExploreWeaponRun[]
-  resultTradeoff: 'price' | 'recoil' | 'ergo'
-  exploring: boolean
+  /**
+   * The latest request: one sweep per requested weapon, in order (the final response, or the live/retained snapshot of a run that is running or
+   * did not finish), the weapons it asked for (denominator for n/m status) and the axis it left free.
+   */
+  run: ExploreState
   onExplore: () => void
   /** Stops an in-flight run; the points found so far stay on screen. */
   onCancelExplore?: () => void
   cancellingExplore?: boolean
   disabled: boolean
   weaponId?: string
-  /** Weapon ids requested for the current/last Explore run (denominator for n/m status). */
-  runWeaponIds?: string[]
 }
 
 /**
@@ -73,17 +73,16 @@ const samePoint = (a: ExplorePoint, b: ExplorePoint): boolean =>
   a.weapon_id === b.weapon_id && a.ergo === b.ergo && a.recoil_v === b.recoil_v && a.recoil_h === b.recoil_h && a.price === b.price
 
 export function ExploreResult({
-  runs,
-  resultTradeoff,
-  exploring,
+  run,
   onExplore,
   onCancelExplore,
   cancellingExplore,
   disabled,
   weaponId,
-  runWeaponIds,
 }: ExploreResultProps) {
   const { t } = useTranslation()
+  const { runs, tradeoff: resultTradeoff, weaponIds: runWeaponIds } = run
+  const exploring = run.phase === 'running'
   const { token } = useToken()
   const xKey = xKeyOf(resultTradeoff)
   const yKey = resultTradeoff === 'price' ? 'recoil_v' : 'price'
