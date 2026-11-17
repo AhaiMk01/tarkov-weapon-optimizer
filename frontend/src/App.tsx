@@ -1,6 +1,6 @@
 declare const __APP_VERSION__: string;
 
-import { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
+import { lazy, Suspense, useState, useEffect, useLayoutEffect, useMemo, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
@@ -312,14 +312,18 @@ function AppContent({
   const [methodologyOpen, setMethodologyOpen] = useState<boolean | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const messageApiRef = useRef(messageApi)
-  messageApiRef.current = messageApi
   const tRef = useRef(t)
-  tRef.current = t
+  useLayoutEffect(() => {
+    messageApiRef.current = messageApi
+    tRef.current = t
+  })
   const optimizeCtl = useRequestController()
   const exploreCtl = useRequestController()
   const gunsmithCtl = useRequestController()
   const floorCtl = useRequestController()
   /** The run lifecycle (`runs/`): sequences every Optimize, Explore, Gunsmith and MOA floor request; the component renders what it holds. */
+  // `announce` reads the two refs when a request finishes, never while this initializer runs.
+  // eslint-disable-next-line react-hooks/refs
   const [runs] = useState(() => createRunLifecycle({
     api: { optimize, explore, computeMOAFloor },
     controllers: { optimize: optimizeCtl, explore: exploreCtl, gunsmith: gunsmithCtl, floor: floorCtl },
@@ -399,6 +403,7 @@ function AppContent({
   }, [t, i18n.language])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the flag must be up before the request starts
     setLoading(true)
     runs.clearResults()
     const lang = i18n.language || 'en'
@@ -471,6 +476,7 @@ function AppContent({
   useEffect(() => {
     if (!selectedGunId) return
     const seq = ++modsRequestSeq.current
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- the flag must be up before the request starts
     setLoadingMods(true)
     getWeaponMods(selectedGunId, gameMode, i18n.language || 'en', { withCompat: true })
       .then(data => {
@@ -492,6 +498,7 @@ function AppContent({
       : []
     if (ids.length <= 1) {
       exploreModsRequestSeq.current += 1
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fewer than two guns: drop the shared list
       setExploreAvailableMods([])
       setLoadingExploreMods(false)
       return
@@ -517,6 +524,7 @@ function AppContent({
 
   const exploreFilterAnchor = exploreWeaponIds[0] ?? selectedGunId
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a different gun, mode or language makes the old filters meaningless
     setIncludedModIds([])
     setExcludedModIds([])
     setIncludedCategories([])
@@ -583,6 +591,7 @@ function AppContent({
     if (exploreWeaponIds.length > 1) return
     if (guns.length > 0 && !guns.find(g => g.id === selectedGunId)) {
       const nextId = guns[0].id
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- the picked gun is gone after a reload: fall back to the first one
       setSelectedGunId(nextId)
       setExploreWeaponIds(prev => prev.length <= 1 ? [nextId] : prev)
     }
