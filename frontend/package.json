@@ -20,7 +20,7 @@
     "d3-color": "^3.1.1",
     "dayjs": "^1.11.23",
     "flag-icons": "^7.6.0",
-    "i18next": "^25.8.0",
+    "i18next": "^27.1.1",
     "i18next-browser-languagedetector": "^8.3.0",
     "i18next-http-backend": "^3.0.2",
     "katex": "^0.19.1",
