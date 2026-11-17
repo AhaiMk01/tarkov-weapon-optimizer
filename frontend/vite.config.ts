@@ -20,7 +20,8 @@ function contentSecurityPolicy(): Plugin {
               'Hash each inline script in contentSecurityPolicy() (vite.config.ts) or move it to a file.',
           );
         }
-        const hash = createHash('sha256').update(inline[0][2]).digest('base64');
+        // The HTML parser turns CRLF and lone CR into LF before the browser hashes the script, so hash that text.
+        const hash = createHash('sha256').update(inline[0][2].replace(/\r\n?/g, '\n')).digest('base64');
         const policy = [
           "default-src 'self'",
           // The solver workers compile WebAssembly and import the HiGHS glue from a blob URL. Current browsers
