@@ -420,10 +420,11 @@ export async function fetchAllData(lang: string, gameMode: string): Promise<{ gu
     try {
       return await fetchAllDataFromGraphQL(lang, gameMode);
     } catch (graphqlError) {
-      throw new Error(
+      throw new AggregateError(
+        [jsonError, graphqlError],
         `Could not load Tarkov data. JSON API: ${(jsonError as Error).message}. ` +
         `GraphQL API: ${(graphqlError as Error).message}.`,
-        { cause: jsonError },
+        { cause: graphqlError },
       );
     }
   }
@@ -747,8 +748,8 @@ function extractModStats(mod: RawItem): ModStats {
 
   const buyFor = mod.buyFor ?? [];
   const offers: OfferInfo[] = [];
-  let lowestPrice = 0;
-  let priceSource = 'market';
+  let lowestPrice: number;
+  let priceSource: string;
 
   for (const offer of buyFor) {
     if (typeof offer !== 'object' || !offer) continue;
@@ -756,12 +757,7 @@ function extractModStats(mod: RawItem): ModStats {
     if (price <= 0) continue;
     const source = offer.source ?? '';
     const vendor = offer.vendor ?? {};
-    let traderLevel: number | null = null;
-    if (source === 'fleaMarket') {
-      traderLevel = null;
-    } else {
-      traderLevel = vendor.minTraderLevel ?? 1;
-    }
+    const traderLevel = source === 'fleaMarket' ? null : (vendor.minTraderLevel ?? 1);
     offers.push({
       price,
       source,
