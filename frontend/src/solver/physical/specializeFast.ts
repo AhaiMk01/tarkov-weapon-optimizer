@@ -440,7 +440,7 @@ const lotName = (t: number, k: number): string => `lot_${t}_${k}`;
 
 /** Offers that no other offer beats on both lot size and price, ascending by price with strictly increasing size (ties keep the earlier offer). */
 export function nonDominatedLots<T extends { index: number; price: number; lotSize: number }>(offers: readonly T[]): T[] {
-  const sorted = [...offers].sort((a, b) => a.price - b.price || b.lotSize - a.lotSize || a.index - b.index);
+  const sorted = offers.toSorted((a, b) => a.price - b.price || b.lotSize - a.lotSize || a.index - b.index);
   const kept: T[] = [];
   let largest = 0;
   for (const offer of sorted) {

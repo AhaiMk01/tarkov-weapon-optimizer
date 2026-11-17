@@ -804,7 +804,7 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
     });
 
     // --- acquisition: preset supply, then owned stock, then the paid remainder in whole lots ------------------
-    const ordered = [...placements].sort((a, b) => codeUnitCompare(a.childInstanceId, b.childInstanceId));
+    const ordered = placements.toSorted((a, b) => codeUnitCompare(a.childInstanceId, b.childInstanceId));
     const remainingPreset = new Map<string, number>();
     const remainingOwned = new Map<string, number>();
     const deficits = new Map<string, number>();
@@ -877,7 +877,7 @@ export function preparePhysicalValidator(lookup: ItemLookup, request: PhysicalVa
       }
       if (claims.modSpend !== undefined && !closeTo(claims.modSpend, modSpend)) push('CLAIMED_SPEND_MISMATCH', `claimed mod spend ${String(claims.modSpend)}, exact ${ratString(modSpend)}`);
       if (claims.acquisition !== undefined) {
-        const claimed = [...claims.acquisition].sort((a, b) => codeUnitCompare(a.instanceId, b.instanceId));
+        const claimed = claims.acquisition.toSorted((a, b) => codeUnitCompare(a.instanceId, b.instanceId));
         if (claimed.length !== occurrences.length) {
           push('CLAIMED_ACQUISITION_MISMATCH', `${claimed.length} provenance record(s) claimed for ${occurrences.length} installed occurrence(s)`);
         } else {

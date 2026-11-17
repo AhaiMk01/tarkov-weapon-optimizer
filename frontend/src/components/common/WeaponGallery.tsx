@@ -84,7 +84,7 @@ export function WeaponGallery({
     return Array.from(bucket.entries())
       .map(([name, list]) => ({
         name,
-        guns: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+        guns: list.toSorted((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
   }, [guns, search, groupMode, caliberFilter, categoryFilter])
@@ -165,6 +165,7 @@ export function WeaponGallery({
           <Input
             allowClear
             autoFocus
+            aria-label={t('gallery.search_placeholder')}
             prefix={<SearchOutlined />}
             placeholder={t('gallery.search_placeholder')}
             value={search}
@@ -173,6 +174,7 @@ export function WeaponGallery({
           />
           <Select
             allowClear
+            aria-label={t('ui.weapon_category')}
             value={categoryFilter}
             onChange={v => setCategoryFilter(v ?? null)}
             placeholder={t('ui.weapon_category')}
@@ -181,6 +183,7 @@ export function WeaponGallery({
           />
           <Select
             allowClear
+            aria-label={t('ui.caliber_type')}
             value={caliberFilter}
             onChange={v => setCaliberFilter(v ?? null)}
             placeholder={t('ui.caliber_type')}
@@ -188,6 +191,7 @@ export function WeaponGallery({
             style={{ minWidth: 130 }}
           />
           <Segmented<GroupMode>
+            aria-label={t('gallery.group_by')}
             value={groupMode}
             onChange={setGroupMode}
             options={[

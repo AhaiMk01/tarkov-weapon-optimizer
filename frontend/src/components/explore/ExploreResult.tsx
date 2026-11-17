@@ -118,7 +118,7 @@ export function ExploreResult({
         id,
         name: points[0]?.weapon_name || id,
         color: paletteColorAt(palette, colorIndex),
-        data: [...points].sort((a, b) => a[xKey] - b[xKey]),
+        data: points.toSorted((a, b) => a[xKey] - b[xKey]),
       }
     })
   }, [exploreResult, weaponId, palette, xKey, runWeaponIds])
@@ -414,7 +414,7 @@ export function ExploreResult({
                       <ApproximateTag result={p} style={{ fontSize: 11 }} />
                     </div>
                   </div>
-                  <Button size="small" type="text" onClick={() => setPinned(null)}>
+                  <Button size="small" type="text" aria-label={t('ui.close')} onClick={() => setPinned(null)}>
                     ✕
                   </Button>
                 </div>

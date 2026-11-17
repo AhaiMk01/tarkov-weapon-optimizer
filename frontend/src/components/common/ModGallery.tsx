@@ -236,6 +236,7 @@ export function ModGallery({
           <Input
             allowClear
             autoFocus
+            aria-label={t('gallery.mods_search_placeholder')}
             prefix={<SearchOutlined />}
             placeholder={t('gallery.mods_search_placeholder')}
             value={search}
@@ -246,6 +247,7 @@ export function ModGallery({
             allowClear
             showSearch
             optionFilterProp="label"
+            aria-label={t('gallery.mod_category')}
             value={activeGroup}
             onChange={v => setGroupFilter(v ?? null)}
             placeholder={t('gallery.mod_category')}
@@ -255,6 +257,7 @@ export function ModGallery({
           {zoomOptions.length > 0 && (
             <Select
               allowClear
+              aria-label={t('gallery.zoom')}
               value={activeZoom}
               onChange={v => setZoomFilter(v ?? null)}
               placeholder={t('gallery.zoom')}

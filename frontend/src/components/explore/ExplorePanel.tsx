@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
-import { Card, InputNumber, Select, Segmented, Slider, Tooltip, Typography } from 'antd'
+import { Card, InputNumber, Select, Segmented, Slider, Typography } from 'antd'
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
 import { AdvancedOptions } from '../common/AdvancedOptions'
 import type { Gun, ModInfo, ModCompatibility, ModCategoryOption, PrecisionRequest } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
+import { FocusTooltip } from '../common/FocusTooltip'
 
 /**
  * explorePareto clamps with Math.max(steps, 10), so anything lower is ignored.
@@ -87,7 +88,7 @@ export function ExplorePanel(props: ExplorePanelProps) {
       />
       <Card size="small" title={<span style={{ userSelect: 'none' }}>{t('explore.tradeoff_strategy')}</span>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Select style={{ width: '100%' }} value={props.exploreTradeoff} onChange={props.onExploreTradeoffChange} options={[
+          <Select aria-label={t('explore.tradeoff_strategy')} style={{ width: '100%' }} value={props.exploreTradeoff} onChange={props.onExploreTradeoffChange} options={[
             { value: 'price', label: t('ui.tradeoff_ergo_vs_recoil') },
             { value: 'recoil', label: t('ui.tradeoff_ergo_vs_price') },
             { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price') },
@@ -95,16 +96,17 @@ export function ExplorePanel(props: ExplorePanelProps) {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <Tooltip title={t('explore.resolution_tooltip')}>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <FocusTooltip title={t('explore.resolution_tooltip')}>
+                <Typography.Text type="secondary" tabIndex={0} style={{ fontSize: 12 }}>
                   {t('explore.resolution')}
                 </Typography.Text>
-              </Tooltip>
+              </FocusTooltip>
               <Typography.Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                 {props.exploreSteps}
               </Typography.Text>
             </div>
             <Slider
+              ariaLabelForHandle={t('explore.resolution')}
               value={props.exploreSteps}
               onChange={props.onExploreStepsChange}
               min={MIN_EXPLORE_STEPS}
@@ -119,12 +121,13 @@ export function ExplorePanel(props: ExplorePanelProps) {
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo')}
                 </Typography.Text>
-                <Segmented size="small" value={props.useExploreBudget ? 'on' : 'off'} onChange={v => props.onUseExploreBudgetChange(v === 'on')} options={[{ label: t('ui.on', 'On'), value: 'on' }, { label: t('ui.off', 'Off'), value: 'off' }]} />
+                <Segmented size="small" aria-label={(props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo'))} value={props.useExploreBudget ? 'on' : 'off'} onChange={v => props.onUseExploreBudgetChange(v === 'on')} options={[{ label: t('ui.on', 'On'), value: 'on' }, { label: t('ui.off', 'Off'), value: 'off' }]} />
              </div>
              {props.useExploreBudget && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                    <InputNumber
                      size="small"
+                     aria-label={(props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo'))}
                      value={props.exploreBudgetValue}
                      onChange={v => props.onExploreBudgetValueChange(v ?? 0)}
                      min={0}

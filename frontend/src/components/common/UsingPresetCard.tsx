@@ -1,7 +1,9 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space, Table } from 'antd'
+import { CopyName } from './CopyName'
 import { TraderIcon, ItemRow, ItemTooltip } from '../ItemRow'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
+import { FocusTooltip } from './FocusTooltip'
 
 const { Text } = Typography
 
@@ -68,28 +70,22 @@ export function UsingPresetCard({ preset, retainedItems, usage, compactMode, vie
           </Tooltip>
         )}
         <div style={{ flex: 1, minWidth: 150 }}>
-          <Tooltip title={tooltipContent} styles={{ root: { maxWidth: 340 } }}>
-            <Text
-              strong
-              style={{ display: 'block', cursor: 'pointer', fontSize: 13, lineHeight: 1.3 }}
-              onClick={() => copyText(preset.name)}
-            >
-              {preset.name}
-            </Text>
-          </Tooltip>
+          <FocusTooltip title={tooltipContent} styles={{ root: { maxWidth: 340 } }}>
+            <CopyName name={preset.name} copy={copyText} style={{ display: 'block', fontSize: 13, lineHeight: 1.3 }} />
+          </FocusTooltip>
           {ownedReceiver ? (
-            <Tooltip title={t('ui.owned_receiver_tooltip')}>
-              <Text type="secondary" style={{ fontSize: 11, cursor: 'help' }}>{t('ui.owned_receiver', { name: preset.name })}</Text>
-            </Tooltip>
+            <FocusTooltip title={t('ui.owned_receiver_tooltip')}>
+              <Text type="secondary" tabIndex={0} style={{ fontSize: 11, cursor: 'help' }}>{t('ui.owned_receiver', { name: preset.name })}</Text>
+            </FocusTooltip>
           ) : (
             <Text type="secondary" style={{ fontSize: 11 }}>{isFactoryPreset ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {ownedReceiver ? (
-            <Tooltip title={t('ui.owned_receiver_tooltip')}>
-              <Tag style={{ margin: 0 }}>{t('ui.acq_owned')}</Tag>
-            </Tooltip>
+            <FocusTooltip title={t('ui.owned_receiver_tooltip')}>
+              <Tag tabIndex={0} style={{ margin: 0 }}>{t('ui.acq_owned')}</Tag>
+            </FocusTooltip>
           ) : (
             <>
               <TraderIcon source={preset.source} unknownLabel={unknown} barterRequirements={preset.barter_requirements} />

@@ -1,6 +1,6 @@
 declare const __APP_VERSION__: string;
 
-import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
+import { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
@@ -9,8 +9,6 @@ import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOptio
 import { exploreRequestOf, floorRequestKey, floorRequestOf, gunsmithRequestOf, optimizeRequestOf } from './api/requestDomain'
 import type { RequestDomainState } from './api/requestDomain'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
-import { ChangelogModal } from './components/common/ChangelogModal'
-import { MethodologyModal } from './components/common/MethodologyModal'
 import { shoppingListLines } from './components/common/shoppingList'
 import { useRequestController } from './components/common/useRequestController'
 import { authorityOf, qualifierKey } from './components/common/resultView'
@@ -21,12 +19,12 @@ import { createRunLifecycle } from './runs/runLifecycle'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
 import { ExplorePanel } from './components/explore/ExplorePanel'
-import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
-import 'flag-icons/css/flag-icons.min.css'
+import { FLAGS, type FlagCode } from './flags'
 import { amoledDarkToken } from './theme/amoledDark'
 import { darkPaletteTokens, type DarkPaletteId } from './theme/darkPalettes'
+import { onColor } from './theme/contrast'
 import { lightPaletteTokens, type LightPaletteId } from './theme/lightPalettes'
 import { includeCategoryInModFilter } from './solver/modCategoryFilter'
 import { DEFAULT_TRADER_LEVELS, TRADER_DISABLED, type TraderLevels } from './solver/types'
@@ -40,7 +38,15 @@ const GITHUB_PROFILE_URL = 'https://github.com/AhaiMk01'
 const TARKOV_DEV_URL = 'https://tarkov.dev'
 const { useToken } = theme
 
-const languages = [
+const ChangelogModal = lazy(() => import('./components/common/ChangelogModal').then(m => ({ default: m.ChangelogModal })))
+const MethodologyModal = lazy(() => import('./components/common/MethodologyModal').then(m => ({ default: m.MethodologyModal })))
+const ExploreResult = lazy(() => import('./components/explore/ExploreResult').then(m => ({ default: m.ExploreResult })))
+
+const Flag = ({ country, style, className }: { country: FlagCode; style?: CSSProperties; className?: string }) => (
+  <img src={FLAGS[country]} width={20} height={15} alt="" className={className} style={{ width: '1.333333em', height: '1em', ...style }} />
+)
+
+const languages: { code: string; name: string; country: FlagCode }[] = [
   { code: 'en', name: 'English', country: 'us' },
   { code: 'ru', name: 'Русский', country: 'ru' },
   { code: 'zh', name: '中文', country: 'cn' },
@@ -302,8 +308,8 @@ function AppContent({
   const [gunsmithTasks, setGunsmithTasks] = useState<GunsmithTask[]>([])
   const [selectedTaskName, setSelectedTaskName] = useState<string>('')
   const modsRequestSeq = useRef(0)
-  const [changelogOpen, setChangelogOpen] = useState(false)
-  const [methodologyOpen, setMethodologyOpen] = useState(false)
+  const [changelogOpen, setChangelogOpen] = useState<boolean | null>(null)
+  const [methodologyOpen, setMethodologyOpen] = useState<boolean | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const messageApiRef = useRef(messageApi)
   messageApiRef.current = messageApi
@@ -864,14 +870,16 @@ function AppContent({
             />
           }
           right={
-            <ExploreResult
-              run={exploreRun}
-              onExplore={handleExplore}
-              onCancelExplore={() => { if (exploreRun.phase === 'running') exploreCtl.cancel() }}
-              cancellingExplore={exploreCtl.cancelling}
-              disabled={exploreWeaponIds.length === 0}
-              weaponId={exploreWeaponIds[0]}
-            />
+            <Suspense fallback={<Spin style={{ display: 'block', margin: '48px auto' }} />}>
+              <ExploreResult
+                run={exploreRun}
+                onExplore={handleExplore}
+                onCancelExplore={() => { if (exploreRun.phase === 'running') exploreCtl.cancel() }}
+                cancellingExplore={exploreCtl.cancelling}
+                disabled={exploreWeaponIds.length === 0}
+                weaponId={exploreWeaponIds[0]}
+              />
+            </Suspense>
           }
         />
       ),
@@ -958,23 +966,23 @@ function AppContent({
     <AntApp>
       {contextHolder}
       {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, background: token.colorBgContainer }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh', flexDirection: 'column', gap: 16, background: token.colorBgLayout }}>
           <Spin size="large" />
           <Text type="secondary">{t('ui.initializing')}</Text>
         </div>
       ) : (
-      <Layout style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+      <Layout style={{ display: 'flex', flexDirection: 'column', height: '100dvh', overflow: 'hidden' }}>
         <Header style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 24px', height: 'auto', lineHeight: 'normal', background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }} onClick={() => window.location.reload()}>
-              <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="logo" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
-              <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1 }}>{t('app.title')}</span>
+              <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
+              <h1 style={{ fontSize: 18, fontWeight: 600, lineHeight: 1, margin: 0 }}>{t('app.title')}</h1>
               <Tag color="orange" style={{ margin: 0 }}>v{__APP_VERSION__}</Tag>
             </div>
             {!isMobile && (
               <span className="app-main-mode-nav" data-active-mode={activeTab} style={{ ...mainModeNavWrapStyle, display: 'inline-flex' }}>
                 <ConfigProvider theme={{ token: { colorPrimary: mainModeAccent.primary } }}>
-                  <Segmented value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
+                  <Segmented aria-label={t('ui.main_mode')} value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
                 </ConfigProvider>
               </span>
             )}
@@ -985,26 +993,27 @@ function AppContent({
                 popupRender={() => (
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <Button block icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing}>{t('ui.refresh_data')}</Button>
-                    <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
+                    <Segmented block aria-label={t('ui.game_mode')} value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
                     <Select
+                      aria-label={t('ui.theme')}
                       style={{ width: '100%' }}
                       popupMatchSelectWidth={false}
                       value={themeChoice}
                       onChange={(v) => setThemeChoice(v as ThemeChoice)}
                       options={themeSelectOptions}
                     />
-                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><span className={`fi fi-${l.country}`} style={{ marginRight: 6 }} />{l.name}</span> }))} />
+                    <Select aria-label={t('ui.language')} style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><Flag country={l.country} style={{ marginRight: 6 }} />{l.name}</span> }))} />
                   </div>
                 )}
               >
-                <Button icon={<MenuOutlined />} />
+                <Button icon={<MenuOutlined />} aria-label={t('ui.menu')} />
               </Dropdown>
             ) : (
               <Space wrap style={{ justifyContent: 'flex-end' }}>
                 <Tooltip title={t('ui.refresh_data_tooltip')}>
                   <Button icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing} aria-label={t('ui.refresh_data')} />
                 </Tooltip>
-                <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
+                <Segmented aria-label={t('ui.game_mode')} value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
                 {/* Theme and language collapse to icon triggers: the two full
                     Selects cost ~430px of header width and wrapped the row on
                     narrow desktops. The current choice stays readable as the
@@ -1034,13 +1043,13 @@ function AppContent({
                       style: { maxHeight: 360, overflowY: 'auto' },
                       items: languages.map(l => ({
                         key: l.code,
-                        icon: <span className={`fi fi-${l.country}`} />,
+                        icon: <Flag country={l.country} />,
                         label: l.name,
                       })),
                       onClick: ({ key }) => i18n.changeLanguage(key),
                     }}
                   >
-                    <Button icon={<span className={`fi fi-${activeLanguage.country}`} />} aria-label={activeLanguage.name} />
+                    <Button icon={<Flag country={activeLanguage.country} />} aria-label={activeLanguage.name} />
                   </Dropdown>
                 </Tooltip>
               </Space>
@@ -1050,13 +1059,13 @@ function AppContent({
           {isMobile && (
             <span className="app-main-mode-nav" data-active-mode={activeTab} style={{ ...mainModeNavWrapStyle, display: 'block', width: '100%', boxSizing: 'border-box' }}>
               <ConfigProvider theme={{ token: { colorPrimary: mainModeAccent.primary } }}>
-                <Segmented block size="small" style={{ width: '100%' }} value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
+                <Segmented block size="small" aria-label={t('ui.main_mode')} style={{ width: '100%' }} value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
               </ConfigProvider>
             </span>
           )}
         </Header>
         <Content
-          className="main-content"
+          className={isMobile ? 'main-content' : undefined}
           style={{ flex: 1, minHeight: 0, padding: isMobile ? '16px 0' : 16, overflowX: 'hidden', overflowY: isMobile ? 'auto' : 'hidden', background: token.colorBgLayout, display: 'flex', flexDirection: 'column' }}
         >
           <div style={{ padding: isMobile ? '0 16px' : 0, height: isMobile ? 'auto' : '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
@@ -1080,15 +1089,13 @@ function AppContent({
               {t('ui.footer_github')}
             </Link>
             <span style={{ opacity: 0.3 }}>•</span>
-            <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
-              <BulbOutlined aria-hidden />
+            <Button type="link" size="small" icon={<BulbOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
               {t('ui.methodology_title')}
-            </Link>
+            </Button>
             <span style={{ opacity: 0.3 }}>•</span>
-            <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setChangelogOpen(true)}>
-              <HistoryOutlined aria-hidden />
+            <Button type="link" size="small" icon={<HistoryOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setChangelogOpen(true)}>
               {t('ui.changelog_title')}
-            </Link>
+            </Button>
             <span style={{ opacity: 0.3 }}>•</span>
             <span>
               {t('ui.footer_data_from')}{' '}
@@ -1100,8 +1107,10 @@ function AppContent({
             <span>Made with ❤️</span>
           </div>
         </Footer>
-        <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
-        <MethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />
+        <Suspense fallback={null}>
+          {changelogOpen !== null && <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />}
+          {methodologyOpen !== null && <MethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />}
+        </Suspense>
       </Layout>
       )}
     </AntApp>
@@ -1162,17 +1171,24 @@ function App() {
     }
   }, [isDark, useAmoled, effectiveDarkWhenColored, effectiveLightPalette])
 
+  const paletteToken = useAmoled
+    ? amoledDarkToken
+    : isDark
+      ? darkPaletteTokens[effectiveDarkWhenColored]
+      : lightPaletteTokens[effectiveLightPalette]
+  const onPrimary = onColor(paletteToken.colorPrimary ?? '#1677ff')
+
   return (
     <ConfigProvider
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
-          ...(useAmoled
-            ? amoledDarkToken
-            : isDark
-              ? darkPaletteTokens[effectiveDarkWhenColored]
-              : lightPaletteTokens[effectiveLightPalette]),
+          ...paletteToken,
+        },
+        components: {
+          Button: { primaryColor: onPrimary },
+          Checkbox: { colorWhite: onPrimary },
         },
       }}
     >

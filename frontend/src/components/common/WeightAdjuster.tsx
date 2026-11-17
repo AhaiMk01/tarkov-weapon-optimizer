@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin, theme } from 'antd'
-import { UndoOutlined, QuestionCircleOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Spin } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
 import { CancelButton } from './ResultStatus'
+import { ResetButton } from './ResetButton'
+import { HelpTip } from './HelpTip'
 import { floorLineOf } from './floorView'
 import type { FloorView } from './floorView'
 import type { FloorState } from '../../runs/runState'
@@ -64,7 +66,6 @@ function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry 
   onRetry: () => void
 }) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
   if (computing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -93,9 +94,7 @@ function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry 
         >
           {t(line.key, { floor: line.floor ?? '' })}
         </Text>
-        <Tooltip title={tooltip}>
-          <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
-        </Tooltip>
+        <HelpTip icon="info" tone="tertiary" title={tooltip} />
       </Space>
       {line.retry && <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>{t('moa_floor.retry')}</Button>}
     </div>
@@ -164,7 +163,7 @@ export function WeightAdjuster({
         {
           key: 'weight',
           label: <span style={{ userSelect: 'none' }}>{t('optimize.header')}</span>,
-          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onWeightChange(33, 34, 33) }} /></Tooltip>,
+          extra: <ResetButton onReset={() => onWeightChange(33, 34, 33)} />,
           children: (
             <Space orientation="vertical" style={{ width: '100%' }}>
               <Space size="small" wrap>
@@ -179,16 +178,15 @@ export function WeightAdjuster({
               <div style={toggleRowStyle}>
                 <Space size={4}>
                   <Text type="secondary" style={labelStyle}>{t('optimize.true_ergo')}</Text>
-                  <Tooltip title={t('optimize.true_ergo_tooltip')}>
-                    <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
-                  </Tooltip>
+                  <HelpTip title={t('optimize.true_ergo_tooltip')} />
                 </Space>
-                <Segmented size="small" value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                <Segmented size="small" aria-label={t('optimize.true_ergo')} value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
               </div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
                 <Text type="secondary" style={labelStyle}>{t('optimize.weight_ui_label')}</Text>
                 <Segmented
                   size="small"
+                  aria-label={t('optimize.weight_ui_label')}
                   value={slidersMode ? 'sliders' : 'triangle'}
                   onChange={v => setSlidersMode(v === 'sliders')}
                   options={[
@@ -204,15 +202,15 @@ export function WeightAdjuster({
                 <>
                   <div>
                     <Text type="secondary" style={labelStyle}>{t('sidebar.ergonomics')}: {ergoWeight} ({pctErgo}%)</Text>
-                    <Slider value={ergoWeight} onChange={handleErgoChange} min={0} max={100} />
+                    <Slider ariaLabelForHandle={t('sidebar.ergonomics')} value={ergoWeight} onChange={handleErgoChange} min={0} max={100} />
                   </div>
                   <div>
                     <Text type="secondary" style={labelStyle}>{t('optimize.preset_recoil')}: {recoilWeight} ({pctRecoil}%)</Text>
-                    <Slider value={recoilWeight} onChange={handleRecoilChange} min={0} max={100} />
+                    <Slider ariaLabelForHandle={t('optimize.preset_recoil')} value={recoilWeight} onChange={handleRecoilChange} min={0} max={100} />
                   </div>
                   <div>
                     <Text type="secondary" style={labelStyle}>{t('sidebar.price')}: {priceWeight} ({pctPrice}%)</Text>
-                    <Slider value={priceWeight} onChange={handlePriceChange} min={0} max={100} />
+                    <Slider ariaLabelForHandle={t('sidebar.price')} value={priceWeight} onChange={handlePriceChange} min={0} max={100} />
                   </div>
                 </>
               )}
@@ -224,30 +222,27 @@ export function WeightAdjuster({
         {
           key: 'constraints',
           label: <span style={{ userSelect: 'none' }}>{t('constraints.header')}</span>,
-          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} /></Tooltip>,
+          extra: <ResetButton onReset={() => { onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} />,
           children: (
             <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={toggleRowStyle}>
                   <Space size={4}>
                     <Text type="secondary" style={labelStyle}>{t('constraints.prevent_overswing')}</Text>
-                    <Tooltip title={t('constraints.prevent_overswing_tooltip')}>
-                      <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
-                    </Tooltip>
+                    <HelpTip title={t('constraints.prevent_overswing_tooltip')} />
                   </Space>
-                  <Segmented size="small" value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                  <Segmented size="small" aria-label={t('constraints.prevent_overswing')} value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                 </div>
                 {(useTrueErgo || preventOverswing) && (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, margin: '0 4px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Space size={4}>
                         <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.equip_ergo_penalty')}</Text>
-                        <Tooltip title={t('constraints.equip_ergo_penalty_tooltip')}>
-                          <QuestionCircleOutlined style={{ color: '#888', fontSize: 11 }} />
-                        </Tooltip>
+                        <HelpTip title={t('constraints.equip_ergo_penalty_tooltip')} size={11} />
                       </Space>
                       <InputNumber
                         size="small"
+                        aria-label={t('constraints.equip_ergo_penalty')}
                         style={{ width: 75 }}
                         min={-50}
                         max={0}
@@ -259,6 +254,7 @@ export function WeightAdjuster({
                       />
                     </div>
                     <Slider
+                      ariaLabelForHandle={t('constraints.equip_ergo_penalty')}
                       style={{ margin: '4px 6px 18px 6px' }}
                       min={-40}
                       max={0}
@@ -280,24 +276,24 @@ export function WeightAdjuster({
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={toggleRowStyle}>
                   <Text type="secondary" style={labelStyle}>{t('constraints.budget_limit')}</Text>
-                  <Segmented size="small" value={useBudget ? 'on' : 'off'} onChange={(v) => onUseBudgetChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                  <Segmented size="small" aria-label={t('constraints.budget_limit')} value={useBudget ? 'on' : 'off'} onChange={(v) => onUseBudgetChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                 </div>
                 {useBudget && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Slider style={{ flex: 1, margin: '0 8px' }} value={maxPrice} onChange={onMaxPriceChange} min={10000} max={1000000} step={10000} tooltip={{ formatter: v => `₽${v}` }} />
-                    <InputNumber size="small" style={{ width: 90 }} value={maxPrice} onChange={(v) => onMaxPriceChange(v || 10000)} min={10000} step={10000} prefix="₽" />
+                    <Slider ariaLabelForHandle={t('constraints.budget_limit')} style={{ flex: 1, margin: '0 8px' }} value={maxPrice} onChange={onMaxPriceChange} min={10000} max={1000000} step={10000} tooltip={{ formatter: v => `₽${v}` }} />
+                    <InputNumber size="small" aria-label={t('constraints.budget_limit')} style={{ width: 90 }} value={maxPrice} onChange={(v) => onMaxPriceChange(v || 10000)} min={10000} step={10000} prefix="₽" />
                   </div>
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={toggleRowStyle}>
                   <Text type="secondary" style={labelStyle}>{t('constraints.min_ergo')}</Text>
-                  <Segmented size="small" value={minErgo > 0 ? 'on' : 'off'} onChange={(v) => onMinErgoChange(v === 'on' ? 40 : 0)} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                  <Segmented size="small" aria-label={t('constraints.min_ergo')} value={minErgo > 0 ? 'on' : 'off'} onChange={(v) => onMinErgoChange(v === 'on' ? 40 : 0)} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                 </div>
                 {minErgo > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <Slider style={{ flex: 1, margin: '0 8px' }} value={minErgo} onChange={onMinErgoChange} min={1} max={100} />
-                    <InputNumber size="small" style={{ width: 60 }} min={1} max={100} value={minErgo} onChange={(v) => onMinErgoChange(v || 1)} />
+                    <Slider ariaLabelForHandle={t('constraints.min_ergo')} style={{ flex: 1, margin: '0 8px' }} value={minErgo} onChange={onMinErgoChange} min={1} max={100} />
+                    <InputNumber size="small" aria-label={t('constraints.min_ergo')} style={{ width: 60 }} min={1} max={100} value={minErgo} onChange={(v) => onMinErgoChange(v || 1)} />
                   </div>
                 )}
               </div>
@@ -305,7 +301,7 @@ export function WeightAdjuster({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={toggleRowStyle}>
                     <Text type="secondary" style={labelStyle}>{t('constraints.min_mag_capacity')}</Text>
-                    <Segmented size="small" value={minMagCapacity > 0 ? 'on' : 'off'} onChange={(v) => {
+                    <Segmented size="small" aria-label={t('constraints.min_mag_capacity')} value={minMagCapacity > 0 ? 'on' : 'off'} onChange={(v) => {
                       const checked = v === 'on'
                       const initial = checked ? availableMagCapacities[0] : 0
                       onMinMagCapacityChange(initial)
@@ -315,6 +311,7 @@ export function WeightAdjuster({
                   {minMagCapacity > 0 && (
                     availableMagCapacities.length > 1 ? (
                       <Slider
+                        ariaLabelForHandle={t('constraints.min_mag_capacity')}
                         style={{ margin: '4px 8px 24px 8px' }}
                         value={minMagCapacity}
                         onChange={(v) => { onMinMagCapacityChange(v); onUseMinMagChange(true); }}
@@ -337,7 +334,7 @@ export function WeightAdjuster({
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={toggleRowStyle}>
                     <Text type="secondary" style={labelStyle}>{t('constraints.max_moa')}</Text>
-                    <Segmented size="small" value={useMOA ? 'on' : 'off'} onChange={(v) => {
+                    <Segmented size="small" aria-label={t('constraints.max_moa')} value={useMOA ? 'on' : 'off'} onChange={(v) => {
                        const checked = v === 'on'
                        onUseMOAChange(checked)
                        if (checked && maxMOA === 0) onMaxMOAChange(moaRange.base)
@@ -348,12 +345,10 @@ export function WeightAdjuster({
                       <div style={toggleRowStyle}>
                         <Space size={4}>
                           <Text type="secondary" style={labelStyle}>{t('constraints.exact_moa_floor')}</Text>
-                          <Tooltip title={t('constraints.exact_moa_floor_tooltip')}>
-                            <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
-                          </Tooltip>
+                          <HelpTip title={t('constraints.exact_moa_floor_tooltip')} />
                           {floor.computing && <Spin size="small" />}
                         </Space>
-                        <Segmented size="small" value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
+                        <Segmented size="small" aria-label={t('constraints.exact_moa_floor')} value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                       </div>
                       {useExactMOAFloor && (
                         <MoaFloorStatus
@@ -367,6 +362,7 @@ export function WeightAdjuster({
                       )}
                       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                         <Slider
+                          ariaLabelForHandle={t('constraints.max_moa')}
                           style={{ flex: 1, margin: '4px 8px 24px 8px' }}
                           value={maxMOA}
                           onChange={onMaxMOAChange}
@@ -375,7 +371,7 @@ export function WeightAdjuster({
                           step={0.01}
                           marks={moaMarks}
                         />
-                        <InputNumber size="small" style={{ width: 70 }} min={sliderMin} max={sliderMax} step={0.01} value={maxMOA} onChange={(v) => onMaxMOAChange(v || sliderMin)} />
+                        <InputNumber size="small" aria-label={t('constraints.max_moa')} style={{ width: 70 }} min={sliderMin} max={sliderMax} step={0.01} value={maxMOA} onChange={(v) => onMaxMOAChange(v || sliderMin)} />
                       </div>
                     </>
                   )}

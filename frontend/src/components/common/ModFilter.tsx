@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography, Tooltip } from 'antd'
-import { PlusOutlined, MinusOutlined, UndoOutlined, AppstoreOutlined } from '@ant-design/icons'
+import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography } from 'antd'
+import { PlusOutlined, MinusOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import type { ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
 import { ModGallery } from './ModGallery'
 import { computeBlockedModIds } from './modBlocking'
+import { ResetButton } from './ResetButton'
+import { FocusTooltip } from './FocusTooltip'
 
 const { useToken } = theme
 const { Text } = Typography
@@ -34,6 +36,52 @@ interface ModFilterProps {
   onModSearchChange: (v: string) => void
 }
 
+/**
+ * A chosen category or part. The label is a button that flips it between
+ * required and banned; the close icon is a button too, because antd's own is a
+ * bare span that keyboard users cannot reach. `canToggle` is false for a banned
+ * part that can no longer be required.
+ */
+function ToggleTag({ banned, label, name, canToggle, onToggle, onClose }: {
+  banned: boolean
+  label: string | undefined
+  name: string
+  canToggle: boolean
+  onToggle: () => void
+  onClose: () => void
+}) {
+  const { t } = useTranslation()
+  const tip = t(banned ? 'ui.tag_tip_to_require' : 'ui.tag_tip_to_ban')
+  return (
+    <Tag
+      color={banned ? 'error' : 'success'}
+      closable
+      closeIcon={
+        <button
+          type="button"
+          aria-label={t('ui.remove_tag', { name })}
+          style={{ padding: 0, border: 0, background: 'none', font: 'inherit', lineHeight: 'inherit' }}
+        >
+          <CloseOutlined />
+        </button>
+      }
+      onClose={onClose}
+    >
+      {canToggle ? (
+        <FocusTooltip title={tip}>
+          <button
+            type="button"
+            aria-label={`${name}: ${tip}`}
+            onClick={onToggle}
+            style={{ padding: 0, border: 0, background: 'none', font: 'inherit', color: 'inherit', cursor: 'pointer' }}
+          >
+            {label}
+          </button>
+        </FocusTooltip>
+      ) : label}
+    </Tag>
+  )
+}
 
 export function ModFilter({
   availableMods,
@@ -74,7 +122,7 @@ export function ModFilter({
       {
         key: 'mods',
         label: <span style={{ userSelect: 'none' }}>{t('sidebar.include_exclude')}</span>,
-        extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([]); onExcludedCategoriesChange([]); onIncludedModIdsChange([]); onExcludedModIdsChange([]); onCategorySearchChange(''); onModSearchChange('') }} /></Tooltip>,
+        extra: <ResetButton onReset={() => { onIncludedCategoriesChange([]); onExcludedCategoriesChange([]); onIncludedModIdsChange([]); onExcludedModIdsChange([]); onCategorySearchChange(''); onModSearchChange('') }} />,
         children: (
           <Space orientation="vertical" style={{ width: '100%' }}>
             <Text type="secondary" style={hintStyle}>
@@ -83,11 +131,19 @@ export function ModFilter({
             <Select
               showSearch
               style={{ width: '100%' }}
+              aria-label={t('sidebar.require_categories')}
               placeholder={t('sidebar.require_categories')}
               allowClear
               value={null}
               searchValue={categorySearch}
               onSearch={onCategorySearchChange}
+              onSelect={(id) => {
+                if (!id) return
+                if (!includedCategories.includes(id) && !excludedCategories.includes(id)) {
+                  onIncludedCategoriesChange([...includedCategories, id])
+                }
+                onCategorySearchChange('')
+              }}
               options={modCategoryOptions.map(o => ({
                 value: o.id,
                 label: (
@@ -96,8 +152,8 @@ export function ModFilter({
                     <Space size={4}>
                       {!includedCategories.includes(o.id) && !excludedCategories.includes(o.id) && (
                         <>
-                          <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([...includedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorSuccess }} />
-                          <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedCategoriesChange([...excludedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorError }} />
+                          <Button size="small" type="text" icon={<PlusOutlined />} aria-label={`${t('ui.lock_action_tooltip_add')}: ${o.name}`} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([...includedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorSuccess }} />
+                          <Button size="small" type="text" icon={<MinusOutlined />} aria-label={`${t('ui.ban_action_tooltip_add')}: ${o.name}`} onClick={(e) => { e.stopPropagation(); onExcludedCategoriesChange([...excludedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorError }} />
                         </>
                       )}
                     </Space>
@@ -108,16 +164,34 @@ export function ModFilter({
               filterOption={(input, option) => (option?.name as string ?? '').toLowerCase().includes(input.toLowerCase())}
             />
             <Space wrap>
-              {includedCategories.map(catId => (
-                <Tag key={catId} color="success" closable onClose={() => onIncludedCategoriesChange(includedCategories.filter(c => c !== catId))}>
-                  + {modCategoryOptions.find(o => o.id === catId)?.name || catId}
-                </Tag>
-              ))}
-              {excludedCategories.map(catId => (
-                <Tag key={catId} color="error" closable onClose={() => onExcludedCategoriesChange(excludedCategories.filter(c => c !== catId))}>
-                  - {modCategoryOptions.find(o => o.id === catId)?.name || catId}
-                </Tag>
-              ))}
+              {includedCategories.map(catId => {
+                const name = modCategoryOptions.find(o => o.id === catId)?.name || catId
+                return (
+                  <ToggleTag
+                    key={catId}
+                    banned={false}
+                    label={`+ ${name}`}
+                    name={name}
+                    canToggle
+                    onToggle={() => { onIncludedCategoriesChange(includedCategories.filter(c => c !== catId)); onExcludedCategoriesChange([...excludedCategories, catId]) }}
+                    onClose={() => onIncludedCategoriesChange(includedCategories.filter(c => c !== catId))}
+                  />
+                )
+              })}
+              {excludedCategories.map(catId => {
+                const name = modCategoryOptions.find(o => o.id === catId)?.name || catId
+                return (
+                  <ToggleTag
+                    key={catId}
+                    banned
+                    label={`- ${name}`}
+                    name={name}
+                    canToggle
+                    onToggle={() => { onExcludedCategoriesChange(excludedCategories.filter(c => c !== catId)); onIncludedCategoriesChange([...includedCategories, catId]) }}
+                    onClose={() => onExcludedCategoriesChange(excludedCategories.filter(c => c !== catId))}
+                  />
+                )
+              })}
             </Space>
             <Divider style={{ margin: '8px 0' }} />
             <Text type="secondary" style={hintStyle}>
@@ -135,6 +209,7 @@ export function ModFilter({
             <Select
               showSearch
               style={{ width: '100%' }}
+              aria-label={t('sidebar.require_items')}
               placeholder={t('sidebar.require_items')}
               value={null}
               searchValue={modSearch}
@@ -155,16 +230,22 @@ export function ModFilter({
                     </Space>
                     <Space size={4}>
                       {/* Blocked parts can still be banned, just not required. */}
-                      {!blocked && <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedModIdsChange([...includedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorSuccess }} />}
-                      <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedModIdsChange([...excludedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorError }} />
+                      {!blocked && <Button size="small" type="text" icon={<PlusOutlined />} aria-label={`${t('ui.lock_action_tooltip_add')}: ${mod?.name ?? ''}`} onClick={(e) => { e.stopPropagation(); onIncludedModIdsChange([...includedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorSuccess }} />}
+                      <Button size="small" type="text" icon={<MinusOutlined />} aria-label={`${t('ui.ban_action_tooltip_add')}: ${mod?.name ?? ''}`} onClick={(e) => { e.stopPropagation(); onExcludedModIdsChange([...excludedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorError }} />
                     </Space>
                   </div>
                 )
               }}
             />
             <Space wrap>
-              {includedModIds.map(id => <Tag key={id} color="success" closable onClose={() => onIncludedModIdsChange(includedModIds.filter(i => i !== id))}>{availableMods.find(m => m.id === id)?.name}</Tag>)}
-              {excludedModIds.map(id => <Tag key={id} color="error" closable onClose={() => onExcludedModIdsChange(excludedModIds.filter(i => i !== id))}>{availableMods.find(m => m.id === id)?.name}</Tag>)}
+              {includedModIds.map(id => {
+                const modName = availableMods.find(m => m.id === id)?.name
+                return <ToggleTag key={id} banned={false} label={modName} name={modName ?? id} canToggle onToggle={() => onToggleModExclude(id)} onClose={() => onIncludedModIdsChange(includedModIds.filter(i => i !== id))} />
+              })}
+              {excludedModIds.map(id => {
+                const modName = availableMods.find(m => m.id === id)?.name
+                return <ToggleTag key={id} banned label={modName} name={modName ?? id} canToggle={!blockedIds.has(id)} onToggle={() => onToggleModInclude(id)} onClose={() => onExcludedModIdsChange(excludedModIds.filter(i => i !== id))} />
+              })}
             </Space>
           </Space>
         ),

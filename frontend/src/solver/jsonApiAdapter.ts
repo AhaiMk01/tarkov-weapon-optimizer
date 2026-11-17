@@ -52,6 +52,9 @@
 import { barterIngredientCount, barterLotSize, presetComponentCount } from './sourceErrors.ts';
 
 const JSON_API_URL = 'https://json.tarkov.dev';
+
+/** Deadline for one game-data request, body included; the items document is large. */
+export const FETCH_TIMEOUT_MS = 60_000;
 const LANG_FALLBACK = 'en';
 const SUPPORTED_GAME_MODES = new Set(['regular', 'pve', 'pvp-season']);
 
@@ -85,6 +88,7 @@ async function fetchDoc<T>(path: string): Promise<T> {
     try {
       const resp = await fetch(`${JSON_API_URL}/${path}`, {
         headers: { Accept: 'application/json' },
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status} for ${path}`);
       const json = (await resp.json()) as JsonEnvelope<T>;
