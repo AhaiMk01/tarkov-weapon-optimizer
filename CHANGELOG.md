@@ -2,6 +2,26 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.3.0] — 2026-11-17
+
+### Added
+- **Keyboard support**: Every control now works without a mouse. Tab reaches the footer links, help icons and gallery cards. Enter in the category filter requires a category, Enter on an item name copies it, and the arrow keys move the weight triangle (hold Shift to move 5 points at a time).
+- **Switch a filter tag**: Click a required or banned category or part tag to flip it between required and banned.
+- **Screen reader names**: Switches, sliders, dropdowns and the lock and ban buttons now say what they control. Help text and barter details open on keyboard focus, and Escape closes them.
+
+### Changed
+- **Faster first load**: The first visit downloads about a third less code and almost no blocking styles. The formula, chart and changelog code now loads only when you open those parts.
+- **Easier to read**: Main buttons now use dark text on the blue accent, and secondary text is brighter on the One Dark and Tokyo Night themes. Scrollbars are easier to see on every dark theme.
+- **Touch**: The weight triangle can be dragged on a phone without scrolling the page.
+- **Safer page**: The site now ships a content security policy that only lets its own scripts run.
+- **Newer browsers required**: The optimizer now needs Chrome 119, Firefox 121 or Safari 17.4, or newer.
+
+### Fixed
+- **No white flash**: The page no longer flashes white before the dark theme appears.
+- **Endless loading**: If the game data server stops answering, loading now gives up after a minute and retries instead of spinning forever.
+- **Phone layout**: The footer is no longer hidden under the browser's address bar.
+- **Keyboard bugs**: Enter on a picked weapon's remove button now removes it instead of opening the gallery, and Enter on a panel's reset button no longer also collapses the panel.
+
 ## [v3.2.3] — 2026-10-27
 
 ### Changed
