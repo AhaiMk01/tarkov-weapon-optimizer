@@ -137,6 +137,7 @@ export function WeightAdjuster({
   onRetryMOAFloor,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   const [slidersMode, setSlidersMode] = useState(() => localStorage.getItem('weightUiSliders') === 'true')
   useEffect(() => { localStorage.setItem('weightUiSliders', String(slidersMode)) }, [slidersMode])
 
@@ -181,7 +182,7 @@ export function WeightAdjuster({
                 <Space size={4}>
                   <Text type="secondary" style={labelStyle}>{t('optimize.true_ergo')}</Text>
                   <Tooltip title={t('optimize.true_ergo_tooltip')}>
-                    <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                    <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 12 }} />
                   </Tooltip>
                 </Space>
                 <Segmented size="small" aria-label={t('optimize.true_ergo')} value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
@@ -234,7 +235,7 @@ export function WeightAdjuster({
                   <Space size={4}>
                     <Text type="secondary" style={labelStyle}>{t('constraints.prevent_overswing')}</Text>
                     <Tooltip title={t('constraints.prevent_overswing_tooltip')}>
-                      <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                      <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 12 }} />
                     </Tooltip>
                   </Space>
                   <Segmented size="small" aria-label={t('constraints.prevent_overswing')} value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
@@ -245,7 +246,7 @@ export function WeightAdjuster({
                       <Space size={4}>
                         <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.equip_ergo_penalty')}</Text>
                         <Tooltip title={t('constraints.equip_ergo_penalty_tooltip')}>
-                          <QuestionCircleOutlined style={{ color: '#888', fontSize: 11 }} />
+                          <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 11 }} />
                         </Tooltip>
                       </Space>
                       <InputNumber
@@ -354,7 +355,7 @@ export function WeightAdjuster({
                         <Space size={4}>
                           <Text type="secondary" style={labelStyle}>{t('constraints.exact_moa_floor')}</Text>
                           <Tooltip title={t('constraints.exact_moa_floor_tooltip')}>
-                            <QuestionCircleOutlined style={{ color: '#888', fontSize: 12 }} />
+                            <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 12 }} />
                           </Tooltip>
                           {floor.computing && <Spin size="small" />}
                         </Space>

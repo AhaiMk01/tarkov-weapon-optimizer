@@ -3,6 +3,7 @@ import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { ItemDetail } from '../api/client'
 import { priceCell } from './priceCell'
+import { isDarkColor } from './common/galleryEffects'
 import { TedTag } from './TedTag'
 import { isShownTedDelta } from '../solver/trueErgo'
 
@@ -49,6 +50,7 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
 
 export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barterRequirements, size = 64 }: { source: string | undefined; unknownLabel: string; compact?: boolean; barterRequirements?: BarterReq[]; size?: number }) {
   const { t } = useTranslation()
+  const { token } = theme.useToken()
   if (!source) return <Text type="secondary" style={compact ? { whiteSpace: 'nowrap' } : undefined}>—</Text>
   if (source === 'not_purchasable') {
     const label = compact ? t('ui.unlisted_label') : t('ui.not_on_market_label')
@@ -80,7 +82,7 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
             />
             <span style={{
               position: 'absolute', bottom: 0, right: 0,
-              background: '#faad14', color: '#000', fontSize: size < 40 ? 8 : 10, fontWeight: 700,
+              background: token.colorWarning, color: isDarkColor(token.colorWarning) ? token.colorTextLightSolid : '#000', fontSize: size < 40 ? 8 : 10, fontWeight: 700,
               borderRadius: '4px 0 4px 0', padding: size < 40 ? '0 2px' : '1px 4px', lineHeight: 1.2,
             }}>{t('ui.barter_badge_short')}</span>
           </div>
