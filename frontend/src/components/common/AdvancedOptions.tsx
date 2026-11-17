@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { Button, Collapse, Segmented, Space, Tooltip, Typography, theme } from 'antd'
-import { QuestionCircleOutlined, UndoOutlined } from '@ant-design/icons'
+import { Collapse, Segmented, Space, Tooltip, Typography, theme } from 'antd'
+import { QuestionCircleOutlined } from '@ant-design/icons'
 import type { PrecisionRequest } from '../../api/client'
+import { ResetButton } from './ResetButton'
 import { ADVANCED_DEFAULTS, isAdvancedDefault, repeatedPartsApply } from './advancedDefaults'
 
 const { Text } = Typography
@@ -51,11 +52,7 @@ export function AdvancedOptions({
       {
         key: 'advanced',
         label: <span style={{ userSelect: 'none' }}>{t('advanced.title')}</span>,
-        extra: (
-          <Tooltip title={t('ui.reset')}>
-            <Button type="text" size="small" icon={<UndoOutlined />} disabled={atDefaults} onClick={(e) => { e.stopPropagation(); reset() }} />
-          </Tooltip>
-        ),
+        extra: <ResetButton onReset={reset} disabled={atDefaults} />,
         children: (
           <Space orientation="vertical" style={{ width: '100%' }}>
             <div style={rowStyle}>

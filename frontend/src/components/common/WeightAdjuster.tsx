@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin, theme } from 'antd'
-import { UndoOutlined, QuestionCircleOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { QuestionCircleOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
 import { CancelButton } from './ResultStatus'
+import { ResetButton } from './ResetButton'
 import { floorLineOf } from './floorView'
 import type { FloorView } from './floorView'
 import type { FloorState } from '../../runs/runState'
@@ -164,7 +165,7 @@ export function WeightAdjuster({
         {
           key: 'weight',
           label: <span style={{ userSelect: 'none' }}>{t('optimize.header')}</span>,
-          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onWeightChange(33, 34, 33) }} /></Tooltip>,
+          extra: <ResetButton onReset={() => onWeightChange(33, 34, 33)} />,
           children: (
             <Space orientation="vertical" style={{ width: '100%' }}>
               <Space size="small" wrap>
@@ -224,7 +225,7 @@ export function WeightAdjuster({
         {
           key: 'constraints',
           label: <span style={{ userSelect: 'none' }}>{t('constraints.header')}</span>,
-          extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} /></Tooltip>,
+          extra: <ResetButton onReset={() => { onUseBudgetChange(false); onMaxPriceChange(200000); onMinErgoChange(0); onUseMinMagChange(false); onMinMagCapacityChange(0); onUseMOAChange(false); onMaxMOAChange(0); onPreventOverswingChange(false); onEquipErgoPenaltyChange(0) }} />,
           children: (
             <Space orientation="vertical" style={{ width: '100%' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

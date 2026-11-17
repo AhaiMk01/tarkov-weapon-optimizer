@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography, Tooltip } from 'antd'
-import { PlusOutlined, MinusOutlined, UndoOutlined, AppstoreOutlined } from '@ant-design/icons'
+import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography } from 'antd'
+import { PlusOutlined, MinusOutlined, AppstoreOutlined } from '@ant-design/icons'
 import type { ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
 import { ModGallery } from './ModGallery'
 import { computeBlockedModIds } from './modBlocking'
+import { ResetButton } from './ResetButton'
 
 const { useToken } = theme
 const { Text } = Typography
@@ -74,7 +75,7 @@ export function ModFilter({
       {
         key: 'mods',
         label: <span style={{ userSelect: 'none' }}>{t('sidebar.include_exclude')}</span>,
-        extra: <Tooltip title={t('ui.reset')}><Button type="text" size="small" icon={<UndoOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([]); onExcludedCategoriesChange([]); onIncludedModIdsChange([]); onExcludedModIdsChange([]); onCategorySearchChange(''); onModSearchChange('') }} /></Tooltip>,
+        extra: <ResetButton onReset={() => { onIncludedCategoriesChange([]); onExcludedCategoriesChange([]); onIncludedModIdsChange([]); onExcludedModIdsChange([]); onCategorySearchChange(''); onModSearchChange('') }} />,
         children: (
           <Space orientation="vertical" style={{ width: '100%' }}>
             <Text type="secondary" style={hintStyle}>
