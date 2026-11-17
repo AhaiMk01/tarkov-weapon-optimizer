@@ -24,7 +24,7 @@ import { ExplorePanel } from './components/explore/ExplorePanel'
 import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
-import 'flag-icons/css/flag-icons.min.css'
+import { FLAGS, type FlagCode } from './flags'
 import { amoledDarkToken } from './theme/amoledDark'
 import { darkPaletteTokens, type DarkPaletteId } from './theme/darkPalettes'
 import { lightPaletteTokens, type LightPaletteId } from './theme/lightPalettes'
@@ -40,7 +40,11 @@ const GITHUB_PROFILE_URL = 'https://github.com/AhaiMk01'
 const TARKOV_DEV_URL = 'https://tarkov.dev'
 const { useToken } = theme
 
-const languages = [
+const Flag = ({ country, style, className }: { country: FlagCode; style?: CSSProperties; className?: string }) => (
+  <img src={FLAGS[country]} width={20} height={15} alt="" className={className} style={{ width: '1.333333em', height: '1em', ...style }} />
+)
+
+const languages: { code: string; name: string; country: FlagCode }[] = [
   { code: 'en', name: 'English', country: 'us' },
   { code: 'ru', name: 'Русский', country: 'ru' },
   { code: 'zh', name: '中文', country: 'cn' },
@@ -993,7 +997,7 @@ function AppContent({
                       onChange={(v) => setThemeChoice(v as ThemeChoice)}
                       options={themeSelectOptions}
                     />
-                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><span className={`fi fi-${l.country}`} style={{ marginRight: 6 }} />{l.name}</span> }))} />
+                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><Flag country={l.country} style={{ marginRight: 6 }} />{l.name}</span> }))} />
                   </div>
                 )}
               >
@@ -1034,13 +1038,13 @@ function AppContent({
                       style: { maxHeight: 360, overflowY: 'auto' },
                       items: languages.map(l => ({
                         key: l.code,
-                        icon: <span className={`fi fi-${l.country}`} />,
+                        icon: <Flag country={l.country} />,
                         label: l.name,
                       })),
                       onClick: ({ key }) => i18n.changeLanguage(key),
                     }}
                   >
-                    <Button icon={<span className={`fi fi-${activeLanguage.country}`} />} aria-label={activeLanguage.name} />
+                    <Button icon={<Flag country={activeLanguage.country} />} aria-label={activeLanguage.name} />
                   </Dropdown>
                 </Tooltip>
               </Space>
