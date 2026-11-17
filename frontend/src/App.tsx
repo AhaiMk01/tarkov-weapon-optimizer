@@ -1,6 +1,6 @@
 declare const __APP_VERSION__: string;
 
-import { useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
+import { lazy, Suspense, useState, useEffect, useMemo, useRef, useCallback, useSyncExternalStore, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfigProvider, Layout, Select, Segmented, Spin, message, App as AntApp, theme, Typography, Tag, Space, Grid, Dropdown, Button, Tooltip } from 'antd'
 import { ThunderboltOutlined, BarChartOutlined, ToolOutlined, MoonOutlined, MenuOutlined, BlockOutlined, GithubOutlined, CloudOutlined, HistoryOutlined, ReloadOutlined, BulbOutlined } from '@ant-design/icons'
@@ -9,8 +9,6 @@ import type { Gun, OptimizeResponse, ModInfo, ModCompatibility, ModCategoryOptio
 import { exploreRequestOf, floorRequestKey, floorRequestOf, gunsmithRequestOf, optimizeRequestOf } from './api/requestDomain'
 import type { RequestDomainState } from './api/requestDomain'
 import { ResponsiveLayout } from './layouts/ResponsiveLayout'
-import { ChangelogModal } from './components/common/ChangelogModal'
-import { MethodologyModal } from './components/common/MethodologyModal'
 import { shoppingListLines } from './components/common/shoppingList'
 import { useRequestController } from './components/common/useRequestController'
 import { authorityOf, qualifierKey } from './components/common/resultView'
@@ -21,7 +19,6 @@ import { createRunLifecycle } from './runs/runLifecycle'
 import { OptimizePanel } from './components/optimize/OptimizePanel'
 import { OptimizeResult } from './components/optimize/OptimizeResult'
 import { ExplorePanel } from './components/explore/ExplorePanel'
-import { ExploreResult } from './components/explore/ExploreResult'
 import { GunsmithPanel } from './components/gunsmith/GunsmithPanel'
 import { GunsmithResult } from './components/gunsmith/GunsmithResult'
 import { FLAGS, type FlagCode } from './flags'
@@ -39,6 +36,10 @@ const GITHUB_PROFILE_URL = 'https://github.com/AhaiMk01'
 /** Game item / mod API and site credit. */
 const TARKOV_DEV_URL = 'https://tarkov.dev'
 const { useToken } = theme
+
+const ChangelogModal = lazy(() => import('./components/common/ChangelogModal').then(m => ({ default: m.ChangelogModal })))
+const MethodologyModal = lazy(() => import('./components/common/MethodologyModal').then(m => ({ default: m.MethodologyModal })))
+const ExploreResult = lazy(() => import('./components/explore/ExploreResult').then(m => ({ default: m.ExploreResult })))
 
 const Flag = ({ country, style, className }: { country: FlagCode; style?: CSSProperties; className?: string }) => (
   <img src={FLAGS[country]} width={20} height={15} alt="" className={className} style={{ width: '1.333333em', height: '1em', ...style }} />
@@ -306,8 +307,8 @@ function AppContent({
   const [gunsmithTasks, setGunsmithTasks] = useState<GunsmithTask[]>([])
   const [selectedTaskName, setSelectedTaskName] = useState<string>('')
   const modsRequestSeq = useRef(0)
-  const [changelogOpen, setChangelogOpen] = useState(false)
-  const [methodologyOpen, setMethodologyOpen] = useState(false)
+  const [changelogOpen, setChangelogOpen] = useState<boolean | null>(null)
+  const [methodologyOpen, setMethodologyOpen] = useState<boolean | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const messageApiRef = useRef(messageApi)
   messageApiRef.current = messageApi
@@ -868,14 +869,16 @@ function AppContent({
             />
           }
           right={
-            <ExploreResult
-              run={exploreRun}
-              onExplore={handleExplore}
-              onCancelExplore={() => { if (exploreRun.phase === 'running') exploreCtl.cancel() }}
-              cancellingExplore={exploreCtl.cancelling}
-              disabled={exploreWeaponIds.length === 0}
-              weaponId={exploreWeaponIds[0]}
-            />
+            <Suspense fallback={<Spin style={{ display: 'block', margin: '48px auto' }} />}>
+              <ExploreResult
+                run={exploreRun}
+                onExplore={handleExplore}
+                onCancelExplore={() => { if (exploreRun.phase === 'running') exploreCtl.cancel() }}
+                cancellingExplore={exploreCtl.cancelling}
+                disabled={exploreWeaponIds.length === 0}
+                weaponId={exploreWeaponIds[0]}
+              />
+            </Suspense>
           }
         />
       ),
@@ -1104,8 +1107,10 @@ function AppContent({
             <span>Made with ❤️</span>
           </div>
         </Footer>
-        <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />
-        <MethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />
+        <Suspense fallback={null}>
+          {changelogOpen !== null && <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />}
+          {methodologyOpen !== null && <MethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />}
+        </Suspense>
       </Layout>
       )}
     </AntApp>
