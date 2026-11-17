@@ -302,7 +302,8 @@
     "copy_name": "copy name: {{name}}",
     "tag_tip_to_ban": "Required. Activate to ban it instead.",
     "tag_tip_to_require": "Banned. Activate to require it instead.",
-    "remove_tag": "remove: {{name}}"
+    "remove_tag": "remove: {{name}}",
+    "ternary_hint": "Use the arrow keys to adjust the weights; hold Shift to move 5 at a time"
   },
   "error": {
     "title": "Ocorreu um erro",
