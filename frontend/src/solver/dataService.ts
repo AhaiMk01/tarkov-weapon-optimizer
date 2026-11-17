@@ -423,6 +423,7 @@ export async function fetchAllData(lang: string, gameMode: string): Promise<{ gu
       throw new Error(
         `Could not load Tarkov data. JSON API: ${(jsonError as Error).message}. ` +
         `GraphQL API: ${(graphqlError as Error).message}.`,
+        { cause: jsonError },
       );
     }
   }

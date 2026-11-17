@@ -1,6 +1,7 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useId } from 'react'
 import { theme } from 'antd'
 import { useTranslation } from 'react-i18next'
+import { stepWeights, TERNARY_KEYS, type TernaryKey } from './ternaryKeys'
 
 const { useToken } = theme
 
@@ -99,14 +100,27 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
   const pctErgo = total > 0 ? Math.round(ergoWeight / total * 100) : 33
   const pctRecoil = total > 0 ? Math.round(recoilWeight / total * 100) : 34
   const pctPrice = total > 0 ? 100 - pctErgo - pctRecoil : 33
+  const summary = `${t('sidebar.ergonomics')} ${pctErgo}%, ${t('item.recoil')} ${pctRecoil}%, ${t('sidebar.price')} ${pctPrice}%`
+  const hintId = useId()
+  const handleKeyDown = (ev: React.KeyboardEvent<SVGSVGElement>) => {
+    if (ev.ctrlKey || ev.altKey || ev.metaKey || !TERNARY_KEYS.includes(ev.key)) return
+    ev.preventDefault()
+    const from = { ergo: pctErgo, recoil: pctRecoil, price: pctPrice }
+    const to = stepWeights(from, ev.key as TernaryKey, ev.shiftKey)
+    if (to.ergo !== from.ergo || to.recoil !== from.recoil || to.price !== from.price) onChange(to.ergo, to.recoil, to.price)
+  }
   return (
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
-        role="img"
-        aria-label={`${t('sidebar.ergonomics')} ${pctErgo}%, ${t('item.recoil')} ${pctRecoil}%, ${t('sidebar.price')} ${pctPrice}%`}
+        className="ternary-plot"
+        role="group"
+        tabIndex={0}
+        aria-label={summary}
+        aria-describedby={hintId}
+        onKeyDown={handleKeyDown}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: '100%', height: 'auto', cursor: dragging ? 'grabbing' : 'crosshair', userSelect: 'none', touchAction: 'none' }}
+        style={{ '--ternary-ring': token.colorPrimary, width: '100%', height: 'auto', cursor: dragging ? 'grabbing' : 'crosshair', userSelect: 'none', touchAction: 'none' } as React.CSSProperties}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={() => setDragging(false)}
@@ -141,6 +155,8 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
         </g>
         <circle cx={displaySVG.x} cy={displaySVG.y} r={6} fill={token.colorWarning} stroke={token.colorBgContainer} strokeWidth={2} style={{ pointerEvents: 'none' }} />
       </svg>
+      <span id={hintId} className="visually-hidden">{t('ui.ternary_hint')}</span>
+      <span className="visually-hidden" aria-live="polite">{summary}</span>
     </div>
   )
 }

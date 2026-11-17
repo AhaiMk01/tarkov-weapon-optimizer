@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import type { GlobalToken } from 'antd'
+import { onColor } from '../../theme/contrast'
 
 /**
  * Presentation shared by the weapon and mod galleries.
@@ -44,7 +45,7 @@ export function galleryVars(token: GlobalToken): CSSProperties {
   return {
     '--wg-accent': token.colorPrimary,
     '--wg-accent-ring': rgba(token.colorPrimary, 0.75),
-    '--wg-on-accent': token.colorWhite,
+    '--wg-on-accent': onColor(token.colorPrimary),
     '--wg-danger': token.colorError,
     '--wg-danger-bg': token.colorErrorBg,
     '--wg-card-bg': dark ? token.colorBgContainer : token.colorBgLayout,

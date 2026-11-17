@@ -296,7 +296,14 @@
     "acq_lot_tooltip": "Przychodzi razem z poprzednią sztuką z tej samej partii; cena partii jest liczona raz, przy pierwszej sztuce.",
     "preset_usage_tooltip": "Z presetu zamontowano {{installed}} z {{supplied}} dostarczonych; reszta zawartości presetu jest zdejmowana.",
     "shopping_base": "baza",
-    "moa_provisional_tooltip": "MOA pochodzi z tymczasowego modelu, a nie z pomiaru w grze."
+    "moa_provisional_tooltip": "MOA pochodzi z tymczasowego modelu, a nie z pomiaru w grze.",
+    "help": "Help",
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}",
+    "tag_tip_to_ban": "Required. Activate to ban it instead.",
+    "tag_tip_to_require": "Banned. Activate to require it instead.",
+    "remove_tag": "remove: {{name}}",
+    "ternary_hint": "Use the arrow keys to adjust the weights; hold Shift to move 5 at a time"
   },
   "error": {
     "title": "Wystąpił błąd",
