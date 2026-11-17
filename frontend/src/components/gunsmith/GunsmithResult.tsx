@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ToolOutlined } from '@ant-design/icons'
 import { EmptyState } from '../common/EmptyState'
-import { StatsCards } from '../common/StatsCards'
+import { BuildSummary } from '../common/BuildSummary'
 import { BuildManifest } from '../common/BuildManifest'
 import { UsingPresetCard } from '../common/UsingPresetCard'
 import { CancelButton, FailureAlert, ResultStatusAlert } from '../common/ResultStatus'
@@ -20,9 +20,11 @@ interface GunsmithResultProps {
   onCopy: () => void
   disabled: boolean
   weaponId?: string
+  weaponName?: string
+  weaponImage?: string
 }
 
-export function GunsmithResult({ run, viewMode, onViewModeChange, onOptimize, onCancel, cancelling, onCopy, disabled, weaponId }: GunsmithResultProps) {
+export function GunsmithResult({ run, viewMode, onViewModeChange, onOptimize, onCancel, cancelling, onCopy, disabled, weaponId, weaponName, weaponImage }: GunsmithResultProps) {
   const { t } = useTranslation()
   const { result, failure } = run
   const optimizing = run.phase === 'running'
@@ -59,7 +61,7 @@ export function GunsmithResult({ run, viewMode, onViewModeChange, onOptimize, on
       />
       {hasBuild && result.final_stats && (
         <>
-          <StatsCards
+          <BuildSummary
             ergonomics={result.final_stats.ergonomics}
             recoilVertical={result.final_stats.recoil_vertical}
             recoilHorizontal={result.final_stats.recoil_horizontal}
@@ -68,6 +70,8 @@ export function GunsmithResult({ run, viewMode, onViewModeChange, onOptimize, on
             moa={result.final_stats.moa}
             trueErgoDelta={result.final_stats.true_ergo_delta}
             overswingPct={result.final_stats.overswing_pct}
+            weaponName={weaponName}
+            weaponImage={weaponImage}
           />
           {result.selected_preset && (
             <UsingPresetCard

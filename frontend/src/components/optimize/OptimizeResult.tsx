@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ThunderboltOutlined } from '@ant-design/icons'
 import { EmptyState } from '../common/EmptyState'
-import { StatsCards } from '../common/StatsCards'
+import { BuildSummary } from '../common/BuildSummary'
 import { BuildManifest } from '../common/BuildManifest'
 import { UsingPresetCard } from '../common/UsingPresetCard'
 import { CancelButton, FailureAlert, ResultStatusAlert } from '../common/ResultStatus'
@@ -20,13 +20,15 @@ interface OptimizeResultProps {
   onCopy: () => void
   disabled: boolean
   weaponId?: string
+  weaponName?: string
+  weaponImage?: string
   lockedIds?: string[]
   excludedIds?: string[]
   onToggleLock?: (id: string) => void
   onToggleExclude?: (id: string) => void
 }
 
-export function OptimizeResult({ run, viewMode, onViewModeChange, onOptimize, onCancel, cancelling, onCopy, disabled, weaponId, lockedIds, excludedIds, onToggleLock, onToggleExclude }: OptimizeResultProps) {
+export function OptimizeResult({ run, viewMode, onViewModeChange, onOptimize, onCancel, cancelling, onCopy, disabled, weaponId, weaponName, weaponImage, lockedIds, excludedIds, onToggleLock, onToggleExclude }: OptimizeResultProps) {
   const { t } = useTranslation()
   const { result, failure } = run
   const optimizing = run.phase === 'running'
@@ -64,7 +66,7 @@ export function OptimizeResult({ run, viewMode, onViewModeChange, onOptimize, on
       />
       {hasBuild && result.final_stats && (
         <>
-          <StatsCards
+          <BuildSummary
             ergonomics={result.final_stats.ergonomics}
             recoilVertical={result.final_stats.recoil_vertical}
             recoilHorizontal={result.final_stats.recoil_horizontal}
@@ -73,6 +75,8 @@ export function OptimizeResult({ run, viewMode, onViewModeChange, onOptimize, on
             moa={result.final_stats.moa}
             trueErgoDelta={result.final_stats.true_ergo_delta}
             overswingPct={result.final_stats.overswing_pct}
+            weaponName={weaponName}
+            weaponImage={weaponImage}
           />
           {result.selected_preset && (
             <UsingPresetCard

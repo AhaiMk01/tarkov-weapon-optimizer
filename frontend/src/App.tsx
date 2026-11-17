@@ -834,6 +834,8 @@ function AppContent({
               onCopy={copyBuild}
               disabled={!selectedGunId}
               weaponId={selectedGunId}
+              weaponName={selectedGun?.name}
+              weaponImage={selectedGun?.image}
               lockedIds={includedModIds}
               excludedIds={excludedModIds}
               onToggleLock={toggleLock}
@@ -918,6 +920,8 @@ function AppContent({
               onCopy={copyGunsmithBuild}
               disabled={!selectedTask}
               weaponId={selectedTask?.weapon_id}
+              weaponName={selectedTask?.weapon_name}
+              weaponImage={selectedTask?.weapon_image}
             />
           }
         />
