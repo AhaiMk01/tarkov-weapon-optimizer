@@ -106,6 +106,7 @@ function SelectedTile({
         aria-label={gun.name}
         onClick={onOpen}
         onKeyDown={e => {
+          if (e.target !== e.currentTarget) return
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault()
             onOpen()
