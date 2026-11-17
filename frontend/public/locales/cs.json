@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (bez překmitu)",
     "ted_label_over": "TED (překmit)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED, které tento díl sestavě přidává (zeleně) nebo ubírá (červeně): TED sestavy minus TED bez tohoto dílu.",
+    "ted_part_tooltip": "TED, které tento díl sestavě přidává (+) nebo ubírá (-): TED sestavy minus TED bez tohoto dílu.",
     "overswing_severity": "Síla překmitu {{pct}} %",
     "cancel_btn": "Zrušit",
     "cancelling": "Ruším…",

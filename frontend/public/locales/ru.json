@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (без заноса)",
     "ted_label_over": "TED (занос)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED, который эта деталь добавляет сборке (зелёный) или отнимает (красный): TED сборки минус TED без этой детали.",
+    "ted_part_tooltip": "TED, который эта деталь добавляет сборке (+) или отнимает (-): TED сборки минус TED без этой детали.",
     "overswing_severity": "Сила заноса {{pct}}%",
     "cancel_btn": "Отмена",
     "cancelling": "Отмена…",

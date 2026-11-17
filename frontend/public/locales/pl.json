@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (bez bezwładności)",
     "ted_label_over": "TED (bezwładność)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED, które ta część dodaje do zestawu (zielony) lub odejmuje (czerwony): TED zestawu minus TED bez tej części.",
+    "ted_part_tooltip": "TED, które ta część dodaje do zestawu (+) lub odejmuje (-): TED zestawu minus TED bez tej części.",
     "overswing_severity": "Siła bezwładności {{pct}}%",
     "cancel_btn": "Anuluj",
     "cancelling": "Anulowanie…",

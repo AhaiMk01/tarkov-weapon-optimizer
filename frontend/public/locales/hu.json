@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (nincs túllengés)",
     "ted_label_over": "TED (túllengés)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "Ennyi TED-et ad hozzá (zöld) vagy vesz el (piros) ez az alkatrész: az összeállítás TED-je mínusz a TED nélküle.",
+    "ted_part_tooltip": "Ennyi TED-et ad hozzá (+) vagy vesz el (-) ez az alkatrész: az összeállítás TED-je mínusz a TED nélküle.",
     "overswing_severity": "Túllengés erőssége {{pct}}%",
     "cancel_btn": "Mégse",
     "cancelling": "Megszakítás…",

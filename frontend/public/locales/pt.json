@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (sem inércia de mira)",
     "ted_label_over": "TED (inércia de mira)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED que esta peça acrescenta à build (verde) ou tira dela (vermelho): TED da build menos TED sem esta peça.",
+    "ted_part_tooltip": "TED que esta peça acrescenta à build (+) ou tira dela (-): TED da build menos TED sem esta peça.",
     "overswing_severity": "Intensidade de oscilação excessiva {{pct}}%",
     "cancel_btn": "Cancelar",
     "cancelling": "Cancelando…",

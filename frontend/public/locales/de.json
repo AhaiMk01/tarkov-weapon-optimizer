@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (kein Überschwingen)",
     "ted_label_over": "TED (Überschwingen)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED, das dieses Teil dem Aufbau bringt (grün) oder kostet (rot): TED des Aufbaus minus TED ohne dieses Teil.",
+    "ted_part_tooltip": "TED, das dieses Teil dem Aufbau bringt (+) oder kostet (-): TED des Aufbaus minus TED ohne dieses Teil.",
     "overswing_severity": "Überschwung-Stärke {{pct}} %",
     "cancel_btn": "Abbrechen",
     "cancelling": "Wird abgebrochen…",

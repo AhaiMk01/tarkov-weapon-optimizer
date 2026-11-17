@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (nessuna sovraelongazione)",
     "ted_label_over": "TED (sovraelongazione)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED che questo pezzo aggiunge alla build (verde) o le toglie (rosso): TED della build meno TED senza questo pezzo.",
+    "ted_part_tooltip": "TED che questo pezzo aggiunge alla build (+) o le toglie (-): TED della build meno TED senza questo pezzo.",
     "overswing_severity": "Intensità di oscillazione eccessiva {{pct}}%",
     "cancel_btn": "Annulla",
     "cancelling": "Annullamento…",

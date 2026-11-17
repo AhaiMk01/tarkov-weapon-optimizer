@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (bez prekmitu)",
     "ted_label_over": "TED (prekmit)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED, ktoré tento diel zostave pridáva (zeleno) alebo uberá (červeno): TED zostavy mínus TED bez tohto dielu.",
+    "ted_part_tooltip": "TED, ktoré tento diel zostave pridáva (+) alebo uberá (-): TED zostavy mínus TED bez tohto dielu.",
     "overswing_severity": "Sila prekmitu {{pct}} %",
     "cancel_btn": "Zrušiť",
     "cancelling": "Ruším…",
