@@ -241,7 +241,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         {actionBtns}
         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', gap: 4, alignItems: 'center' }}>
           <ItemTooltip item={item}>
-            <CopyName name={item.name} copy={copyToClipboard} style={{ fontSize: 12, ...truncateStyle, display: 'inline' }} />
+            <CopyName name={item.name} copy={copyToClipboard} title={item.name} style={{ fontSize: 12, ...truncateStyle, display: 'inline' }} />
           </ItemTooltip>
           {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
           <TedTag item={item} style={{ margin: 0, fontSize: 11, flexShrink: 0 }} />
