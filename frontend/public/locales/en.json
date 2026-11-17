@@ -298,7 +298,8 @@
     "shopping_base": "base",
     "moa_provisional_tooltip": "MOA comes from a provisional model, not a measured in-game value.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "trader": {
     "prapor": "Prapor",

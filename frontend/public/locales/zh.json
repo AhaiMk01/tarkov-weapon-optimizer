@@ -298,7 +298,8 @@
     "shopping_base": "基础",
     "moa_provisional_tooltip": "MOA 来自临时模型，并非游戏内实测值。",
     "help": "说明",
-    "barter_details": "查看兑换详情"
+    "barter_details": "查看兑换详情",
+    "copy_name": "复制名称：{{name}}"
   },
   "trader": {
     "prapor": "Prapor",

@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Tag, Typography, message, Grid, Tooltip, Collapse, Space, Table } from 'antd'
+import { CopyName } from './CopyName'
 import { TraderIcon, ItemRow, ItemTooltip } from '../ItemRow'
 import type { OptimizeResponse, ItemDetail } from '../../api/client'
 
@@ -68,14 +69,8 @@ export function UsingPresetCard({ preset, retainedItems, usage, compactMode, vie
           </Tooltip>
         )}
         <div style={{ flex: 1, minWidth: 150 }}>
-          <Tooltip title={tooltipContent} styles={{ root: { maxWidth: 340 } }}>
-            <Text
-              strong
-              style={{ display: 'block', cursor: 'pointer', fontSize: 13, lineHeight: 1.3 }}
-              onClick={() => copyText(preset.name)}
-            >
-              {preset.name}
-            </Text>
+          <Tooltip title={tooltipContent} styles={{ root: { maxWidth: 340 } }} trigger={['hover', 'focus']}>
+            <CopyName name={preset.name} copy={copyText} style={{ display: 'block', fontSize: 13, lineHeight: 1.3 }} />
           </Tooltip>
           {ownedReceiver ? (
             <Tooltip title={t('ui.owned_receiver_tooltip')} trigger={['hover', 'focus']}>

@@ -298,7 +298,8 @@
     "shopping_base": "základ",
     "moa_provisional_tooltip": "MOA pochádza z predbežného modelu, nejde o hodnotu nameranú v hre.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "error": {
     "title": "Vyskytla sa chyba",

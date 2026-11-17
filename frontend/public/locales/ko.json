@@ -298,7 +298,8 @@
     "shopping_base": "기본",
     "moa_provisional_tooltip": "MOA는 잠정 모델에서 나온 값이며, 게임 내 실측값이 아닙니다.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "error": {
     "title": "오류가 발생했습니다",

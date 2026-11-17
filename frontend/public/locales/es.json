@@ -298,7 +298,8 @@
     "shopping_base": "base",
     "moa_provisional_tooltip": "El MOA proviene de un modelo provisional, no de un valor medido en el juego.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "error": {
     "title": "Ocurrió un error",

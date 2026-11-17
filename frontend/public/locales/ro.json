@@ -298,7 +298,8 @@
     "shopping_base": "bază",
     "moa_provisional_tooltip": "MOA provine dintr-un model provizoriu, nu dintr-o valoare măsurată în joc.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "error": {
     "title": "A apărut o eroare",

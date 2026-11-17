@@ -298,7 +298,8 @@
     "shopping_base": "основа",
     "moa_provisional_tooltip": "MOA взят из предварительной модели, а не измерен в игре.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "error": {
     "title": "Произошла ошибка",

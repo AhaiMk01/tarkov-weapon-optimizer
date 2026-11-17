@@ -129,3 +129,9 @@ html, body {
 .app-main-mode-nav .ant-segmented-item-selected {
   font-weight: 600;
 }
+
+.copy-name:focus-visible {
+  outline: 2px solid var(--copy-name-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}

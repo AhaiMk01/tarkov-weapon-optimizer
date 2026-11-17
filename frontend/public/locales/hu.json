@@ -298,7 +298,8 @@
     "shopping_base": "alap",
     "moa_provisional_tooltip": "A MOA ideiglenes modellből származik, nem a játékban mért érték.",
     "help": "Help",
-    "barter_details": "Show barter details"
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}"
   },
   "error": {
     "title": "Hiba történt",
