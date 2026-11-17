@@ -2,6 +2,14 @@
 
 All notable changes to the Tarkov Weapon Mod Optimizer.
 
+## [v3.4.0] — 2026-11-17
+
+### Changed
+- **Result at a glance**: A solved build now opens with one card that shows the weapon, its name and the three numbers you trade off: ergonomics, vertical recoil and total cost. Horizontal recoil, weight, MOA and TED sit on one line below.
+- **Readable build list**: Each part shows its full name first. Stat changes are a line of small text under the name instead of coloured badges, and only a change that hurts the build is red.
+- **Phone layout**: The footer now scrolls with the page, and pressing Optimize brings the result into view.
+- **Under the hood**: The site is built with newer tools and libraries, and every change is now tested automatically before it goes live.
+
 ## [v3.3.0] — 2026-11-17
 
 ### Added
