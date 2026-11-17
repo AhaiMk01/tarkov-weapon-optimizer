@@ -1064,7 +1064,7 @@ function AppContent({
           )}
         </Header>
         <Content
-          className="main-content"
+          className={isMobile ? 'main-content' : undefined}
           style={{ flex: 1, minHeight: 0, padding: isMobile ? '16px 0' : 16, overflowX: 'hidden', overflowY: isMobile ? 'auto' : 'hidden', background: token.colorBgLayout, display: 'flex', flexDirection: 'column' }}
         >
           <div style={{ padding: isMobile ? '0 16px' : 0, height: isMobile ? 'auto' : '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
