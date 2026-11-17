@@ -24,6 +24,7 @@ import { GunsmithResult } from './components/gunsmith/GunsmithResult'
 import { FLAGS, type FlagCode } from './flags'
 import { amoledDarkToken } from './theme/amoledDark'
 import { darkPaletteTokens, type DarkPaletteId } from './theme/darkPalettes'
+import { onColor } from './theme/contrast'
 import { lightPaletteTokens, type LightPaletteId } from './theme/lightPalettes'
 import { includeCategoryInModFilter } from './solver/modCategoryFilter'
 import { DEFAULT_TRADER_LEVELS, TRADER_DISABLED, type TraderLevels } from './solver/types'
@@ -1170,17 +1171,24 @@ function App() {
     }
   }, [isDark, useAmoled, effectiveDarkWhenColored, effectiveLightPalette])
 
+  const paletteToken = useAmoled
+    ? amoledDarkToken
+    : isDark
+      ? darkPaletteTokens[effectiveDarkWhenColored]
+      : lightPaletteTokens[effectiveLightPalette]
+  const onPrimary = onColor(paletteToken.colorPrimary ?? '#1677ff')
+
   return (
     <ConfigProvider
       theme={{
         algorithm: isDark ? theme.darkAlgorithm : theme.defaultAlgorithm,
         token: {
           fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'",
-          ...(useAmoled
-            ? amoledDarkToken
-            : isDark
-              ? darkPaletteTokens[effectiveDarkWhenColored]
-              : lightPaletteTokens[effectiveLightPalette]),
+          ...paletteToken,
+        },
+        components: {
+          Button: { primaryColor: onPrimary },
+          Checkbox: { colorWhite: onPrimary },
         },
       }}
     >

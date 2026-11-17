@@ -27,7 +27,7 @@ export const oneDarkHighContrastToken: Partial<AliasToken> = {
 
   colorText: '#c8cdd5',
   colorTextSecondary: '#9da3b0',
-  colorTextTertiary: '#7e848f',
+  colorTextTertiary: '#8d94a0',
   colorTextQuaternary: '#6a707a',
 
   colorBorder: '#4d5566',
@@ -93,7 +93,7 @@ export const tokyoNightStormToken: Partial<AliasToken> = {
 
   colorText: '#c0caf5',
   colorTextSecondary: '#a9b1d6',
-  colorTextTertiary: '#565f89',
+  colorTextTertiary: '#868fbb',
   colorTextQuaternary: '#4a5170',
 
   colorBorder: '#3b4261',
