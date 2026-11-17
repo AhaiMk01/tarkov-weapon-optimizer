@@ -52,7 +52,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const p = 1 - e - r
     return { e: Math.max(0, Math.min(1, e)), r: Math.max(0, Math.min(1, r)), p: Math.max(0, Math.min(1, p)) }
   }, [])
-  const svgCoords = useCallback((ev: React.MouseEvent<SVGSVGElement> | MouseEvent) => {
+  const svgCoords = useCallback((ev: React.PointerEvent<SVGSVGElement>) => {
     const svg = svgRef.current
     if (!svg) return null
     const rect = svg.getBoundingClientRect()
@@ -62,7 +62,7 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const y = (ev.clientY - rect.top) * scaleY
     return { x, y }
   }, [])
-  const applyPoint = useCallback((ev: React.MouseEvent<SVGSVGElement> | MouseEvent) => {
+  const applyPoint = useCallback((ev: React.PointerEvent<SVGSVGElement>) => {
     const coords = svgCoords(ev)
     if (!coords) return
     const { e: ergo, r: recoil, p: price } = toBarycentric(coords.x, coords.y)
@@ -72,20 +72,14 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     const priceNorm = 100 - ergoNorm - recoilNorm
     onChange(ergoNorm, recoilNorm, priceNorm)
   }, [onChange, toBarycentric, svgCoords])
-  const handleMouseDown = useCallback((ev: React.MouseEvent<SVGSVGElement>) => {
+  const handlePointerDown = useCallback((ev: React.PointerEvent<SVGSVGElement>) => {
     ev.preventDefault()
+    ev.currentTarget.setPointerCapture(ev.pointerId)
     setDragging(true)
     applyPoint(ev)
-    const handleMouseMove = (moveEv: MouseEvent) => {
-      applyPoint(moveEv)
-    }
-    const handleMouseUp = () => {
-      setDragging(false)
-      window.removeEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-    window.addEventListener('mousemove', handleMouseMove)
-    window.addEventListener('mouseup', handleMouseUp)
+  }, [applyPoint])
+  const handlePointerMove = useCallback((ev: React.PointerEvent<SVGSVGElement>) => {
+    if (ev.currentTarget.hasPointerCapture(ev.pointerId)) applyPoint(ev)
   }, [applyPoint])
   const gridLines = []
   for (let i = 1; i < 10; i++) {
@@ -109,9 +103,14 @@ export function TernaryPlot({ ergoWeight, recoilWeight, priceWeight, onChange }:
     <div style={{ position: 'relative' }}>
       <svg
         ref={svgRef}
+        role="img"
+        aria-label={`${t('sidebar.ergonomics')} ${pctErgo}%, ${t('item.recoil')} ${pctRecoil}%, ${t('sidebar.price')} ${pctPrice}%`}
         viewBox={`0 0 ${width} ${height}`}
-        style={{ width: '100%', height: 'auto', cursor: dragging ? 'grabbing' : 'crosshair', userSelect: 'none' }}
-        onMouseDown={handleMouseDown}
+        style={{ width: '100%', height: 'auto', cursor: dragging ? 'grabbing' : 'crosshair', userSelect: 'none', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={() => setDragging(false)}
+        onLostPointerCapture={() => setDragging(false)}
       >
         <polygon
           points={`${topX},${topY} ${rightX},${rightY} ${leftX},${leftY}`}
