@@ -8,6 +8,7 @@ import { isDarkColor } from './common/galleryEffects'
 import { TedTag } from './TedTag'
 import { CopyName } from './common/CopyName'
 import { isShownTedDelta } from '../solver/trueErgo'
+import { FocusTooltip } from './common/FocusTooltip'
 
 const { Text } = Typography
 const { useToken } = theme
@@ -44,9 +45,9 @@ function BarterTooltip({ requirements, name, children }: { requirements?: Barter
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
   return (
-    <Tooltip styles={{ root: { maxWidth: 400 } }} trigger={['hover', 'focus']} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
+    <FocusTooltip styles={{ root: { maxWidth: 400 } }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
       {cloneElement(children, { tabIndex: 0, 'aria-label': `${name}: ${t('ui.barter_details')}` } as object)}
-    </Tooltip>
+    </FocusTooltip>
   )
 }
 

@@ -1,11 +1,12 @@
 import { useTranslation } from 'react-i18next'
-import { Card, InputNumber, Select, Segmented, Slider, Tooltip, Typography } from 'antd'
+import { Card, InputNumber, Select, Segmented, Slider, Typography } from 'antd'
 import { WeaponSelector } from '../common/WeaponSelector'
 import { ModFilter } from '../common/ModFilter'
 import { LevelConfig } from '../common/LevelConfig'
 import { AdvancedOptions } from '../common/AdvancedOptions'
 import type { Gun, ModInfo, ModCompatibility, ModCategoryOption, PrecisionRequest } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
+import { FocusTooltip } from '../common/FocusTooltip'
 
 /**
  * explorePareto clamps with Math.max(steps, 10), so anything lower is ignored.
@@ -95,11 +96,11 @@ export function ExplorePanel(props: ExplorePanelProps) {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <Tooltip title={t('explore.resolution_tooltip')} trigger={['hover', 'focus']}>
+              <FocusTooltip title={t('explore.resolution_tooltip')}>
                 <Typography.Text type="secondary" tabIndex={0} style={{ fontSize: 12 }}>
                   {t('explore.resolution')}
                 </Typography.Text>
-              </Tooltip>
+              </FocusTooltip>
               <Typography.Text style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
                 {props.exploreSteps}
               </Typography.Text>

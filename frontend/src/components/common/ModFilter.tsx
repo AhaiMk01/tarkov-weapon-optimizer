@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Select, Space, Tag, Button, Divider, Tooltip, theme, Typography } from 'antd'
+import { Collapse, Select, Space, Tag, Button, Divider, theme, Typography } from 'antd'
 import { PlusOutlined, MinusOutlined, AppstoreOutlined, CloseOutlined } from '@ant-design/icons'
 import type { ModInfo, ModCompatibility, ModCategoryOption } from '../../api/client'
 import { ModGallery } from './ModGallery'
 import { computeBlockedModIds } from './modBlocking'
 import { ResetButton } from './ResetButton'
+import { FocusTooltip } from './FocusTooltip'
 
 const { useToken } = theme
 const { Text } = Typography
@@ -67,7 +68,7 @@ function ToggleTag({ banned, label, name, canToggle, onToggle, onClose }: {
       onClose={onClose}
     >
       {canToggle ? (
-        <Tooltip title={tip} trigger={['hover', 'focus']}>
+        <FocusTooltip title={tip}>
           <button
             type="button"
             aria-label={`${name}: ${tip}`}
@@ -76,7 +77,7 @@ function ToggleTag({ banned, label, name, canToggle, onToggle, onClose }: {
           >
             {label}
           </button>
-        </Tooltip>
+        </FocusTooltip>
       ) : label}
     </Tag>
   )

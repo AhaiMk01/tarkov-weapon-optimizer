@@ -5,6 +5,7 @@ import { CloseOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Gun } from '../../api/client'
 import { WeaponGallery } from './WeaponGallery'
 import { caliberLabel } from './caliberLabels'
+import { FocusTooltip } from './FocusTooltip'
 
 const { useToken } = theme
 
@@ -99,7 +100,7 @@ function SelectedTile({
   const { token } = useToken()
   const [hover, setHover] = useState(false)
   return (
-    <Tooltip title={`${gun.name} · ${caliberLabel(gun.caliber)}`} trigger={['hover', 'focus']}>
+    <FocusTooltip title={`${gun.name} · ${caliberLabel(gun.caliber)}`}>
       <div
         className="wg-tile"
         onMouseEnter={() => setHover(true)}
@@ -153,7 +154,7 @@ function SelectedTile({
           }}
         />
       </div>
-    </Tooltip>
+    </FocusTooltip>
   )
 }
 

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
-import { Tooltip, theme } from 'antd'
+import { theme } from 'antd'
 import { InfoCircleOutlined, QuestionCircleOutlined } from '@ant-design/icons'
+import { FocusTooltip } from './FocusTooltip'
 
 /**
  * Help icon that keyboard and screen-reader users can reach. Its click and key
@@ -21,12 +22,12 @@ export function HelpTip({
   const { token } = theme.useToken()
   const Icon = icon === 'info' ? InfoCircleOutlined : QuestionCircleOutlined
   return (
-    <Tooltip title={title} trigger={['hover', 'focus']}>
+    <FocusTooltip title={title}>
       <button
         type="button"
         aria-label={t('ui.help')}
         onClick={e => e.stopPropagation()}
-        onKeyDown={e => e.stopPropagation()}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') e.stopPropagation() }}
         style={{
           display: 'inline-flex',
           verticalAlign: '-0.125em',
@@ -43,6 +44,6 @@ export function HelpTip({
       >
         <Icon />
       </button>
-    </Tooltip>
+    </FocusTooltip>
   )
 }
