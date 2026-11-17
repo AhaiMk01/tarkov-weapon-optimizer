@@ -7,7 +7,7 @@
 import type {
   ItemLookup, SlotInfo, GunStats, ModStats, OfferInfo, PresetComponent, PresetInfo,
 } from './types.ts';
-import { fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
+import { FETCH_TIMEOUT_MS, fetchAllDataFromJsonApi } from './jsonApiAdapter.ts';
 import { barterIngredientCount, barterLotSize, presetComponentCount, SourceDataError } from './sourceErrors.ts';
 import { barterLotPrice } from './physical/barterPrice.ts';
 
@@ -341,6 +341,7 @@ async function runQuery<T>(query: string, variables: Record<string, string>): Pr
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, variables }),
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
       });
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const json = await resp.json();
