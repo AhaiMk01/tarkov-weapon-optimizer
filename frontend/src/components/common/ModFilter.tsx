@@ -89,6 +89,13 @@ export function ModFilter({
               value={null}
               searchValue={categorySearch}
               onSearch={onCategorySearchChange}
+              onSelect={(id) => {
+                if (!id) return
+                if (!includedCategories.includes(id) && !excludedCategories.includes(id)) {
+                  onIncludedCategoriesChange([...includedCategories, id])
+                }
+                onCategorySearchChange('')
+              }}
               options={modCategoryOptions.map(o => ({
                 value: o.id,
                 label: (
@@ -97,8 +104,8 @@ export function ModFilter({
                     <Space size={4}>
                       {!includedCategories.includes(o.id) && !excludedCategories.includes(o.id) && (
                         <>
-                          <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([...includedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorSuccess }} />
-                          <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedCategoriesChange([...excludedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorError }} />
+                          <Button size="small" type="text" icon={<PlusOutlined />} aria-label={`${t('ui.lock_action_tooltip_add')}: ${o.name}`} onClick={(e) => { e.stopPropagation(); onIncludedCategoriesChange([...includedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorSuccess }} />
+                          <Button size="small" type="text" icon={<MinusOutlined />} aria-label={`${t('ui.ban_action_tooltip_add')}: ${o.name}`} onClick={(e) => { e.stopPropagation(); onExcludedCategoriesChange([...excludedCategories, o.id]); onCategorySearchChange('') }} style={{ color: token.colorError }} />
                         </>
                       )}
                     </Space>
@@ -156,8 +163,8 @@ export function ModFilter({
                     </Space>
                     <Space size={4}>
                       {/* Blocked parts can still be banned, just not required. */}
-                      {!blocked && <Button size="small" type="text" icon={<PlusOutlined />} onClick={(e) => { e.stopPropagation(); onIncludedModIdsChange([...includedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorSuccess }} />}
-                      <Button size="small" type="text" icon={<MinusOutlined />} onClick={(e) => { e.stopPropagation(); onExcludedModIdsChange([...excludedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorError }} />
+                      {!blocked && <Button size="small" type="text" icon={<PlusOutlined />} aria-label={`${t('ui.lock_action_tooltip_add')}: ${mod?.name ?? ''}`} onClick={(e) => { e.stopPropagation(); onIncludedModIdsChange([...includedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorSuccess }} />}
+                      <Button size="small" type="text" icon={<MinusOutlined />} aria-label={`${t('ui.ban_action_tooltip_add')}: ${mod?.name ?? ''}`} onClick={(e) => { e.stopPropagation(); onExcludedModIdsChange([...excludedModIds, option.value as string]); onModSearchChange('') }} style={{ color: token.colorError }} />
                     </Space>
                   </div>
                 )
