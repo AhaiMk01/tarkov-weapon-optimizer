@@ -87,30 +87,38 @@ html, body {
   height: 100dvh;
 }
 
-* {
-  scrollbar-width: thin;
+:root {
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }
 
-*::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* scrollbar-width switches off ::-webkit-scrollbar, so set it only where scrollbar-color can style the thin bar. */
+@supports (scrollbar-color: auto) {
+  * {
+    scrollbar-width: thin;
+  }
 }
 
-*::-webkit-scrollbar-track {
-  background: var(--scrollbar-track);
-  border-radius: 4px;
-}
+@supports not (scrollbar-color: auto) {
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
 
-*::-webkit-scrollbar-thumb {
-  background-color: var(--scrollbar-thumb);
-  border-radius: 4px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
+  *::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+    border-radius: 4px;
+  }
 
-*::-webkit-scrollbar-thumb:hover {
-  background-color: var(--scrollbar-thumb-hover);
+  *::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 4px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: var(--scrollbar-thumb-hover);
+  }
 }
 
 .main-content {
