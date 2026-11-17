@@ -54,6 +54,8 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
               icon={lockedIds?.includes(record.id) ? <LockOutlined style={{ color: token.colorPrimary }} /> : <UnlockOutlined style={{ opacity: 0.3 }} />}
               onClick={() => onToggleLock?.(record.id)}
               title={t('ui.lock_tooltip')}
+              aria-label={`${t(lockedIds?.includes(record.id) ? 'ui.lock_action_tooltip_remove' : 'ui.lock_action_tooltip_add')}: ${record.name}`}
+              aria-pressed={!!lockedIds?.includes(record.id)}
             />
             <Button
               size="small"
@@ -62,6 +64,8 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
               icon={<StopOutlined style={excludedIds?.includes(record.id) ? undefined : { opacity: 0.3 }} />}
               onClick={() => onToggleExclude?.(record.id)}
               title={t('ui.exclude_tooltip')}
+              aria-label={`${t(excludedIds?.includes(record.id) ? 'ui.ban_action_tooltip_remove' : 'ui.ban_action_tooltip_add')}: ${record.name}`}
+              aria-pressed={!!excludedIds?.includes(record.id)}
             />
           </div>
           <ItemTooltip item={record}>
@@ -131,6 +135,7 @@ export function BuildManifest({ result, viewMode, onViewModeChange, onCopy, weap
         {onCopy && <Button size="small" icon={<CopyOutlined />} onClick={onCopy}>{t('ui.copy_btn')}</Button>}
         <Segmented
           size="small"
+          aria-label={t('ui.build_manifest')}
           value={viewMode}
           onChange={(v) => onViewModeChange(v as BuildManifestProps['viewMode'])}
           options={[

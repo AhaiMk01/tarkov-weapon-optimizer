@@ -84,6 +84,7 @@ export function ModFilter({
             <Select
               showSearch
               style={{ width: '100%' }}
+              aria-label={t('sidebar.require_categories')}
               placeholder={t('sidebar.require_categories')}
               allowClear
               value={null}
@@ -143,6 +144,7 @@ export function ModFilter({
             <Select
               showSearch
               style={{ width: '100%' }}
+              aria-label={t('sidebar.require_items')}
               placeholder={t('sidebar.require_items')}
               value={null}
               searchValue={modSearch}

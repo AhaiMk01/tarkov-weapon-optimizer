@@ -974,14 +974,14 @@ function AppContent({
         <Header style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 10, padding: '12px 24px', height: 'auto', lineHeight: 'normal', background: token.colorBgContainer, borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
           <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px 16px', width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', userSelect: 'none' }} onClick={() => window.location.reload()}>
-              <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="logo" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
-              <span style={{ fontSize: 18, fontWeight: 600, lineHeight: 1 }}>{t('app.title')}</span>
+              <img src={import.meta.env.BASE_URL + 'favicon.svg'} alt="" style={{ width: 24, height: 24, display: 'block', pointerEvents: 'none' }} draggable={false} />
+              <h1 style={{ fontSize: 18, fontWeight: 600, lineHeight: 1, margin: 0 }}>{t('app.title')}</h1>
               <Tag color="orange" style={{ margin: 0 }}>v{__APP_VERSION__}</Tag>
             </div>
             {!isMobile && (
               <span className="app-main-mode-nav" data-active-mode={activeTab} style={{ ...mainModeNavWrapStyle, display: 'inline-flex' }}>
                 <ConfigProvider theme={{ token: { colorPrimary: mainModeAccent.primary } }}>
-                  <Segmented value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
+                  <Segmented aria-label={t('ui.main_mode')} value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
                 </ConfigProvider>
               </span>
             )}
@@ -992,26 +992,27 @@ function AppContent({
                 popupRender={() => (
                   <div style={{ padding: 12, background: token.colorBgElevated, borderRadius: 8, boxShadow: token.boxShadowSecondary, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     <Button block icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing}>{t('ui.refresh_data')}</Button>
-                    <Segmented block value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
+                    <Segmented block aria-label={t('ui.game_mode')} value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
                     <Select
+                      aria-label={t('ui.theme')}
                       style={{ width: '100%' }}
                       popupMatchSelectWidth={false}
                       value={themeChoice}
                       onChange={(v) => setThemeChoice(v as ThemeChoice)}
                       options={themeSelectOptions}
                     />
-                    <Select style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><Flag country={l.country} style={{ marginRight: 6 }} />{l.name}</span> }))} />
+                    <Select aria-label={t('ui.language')} style={{ width: '100%' }} value={languages.find(l => i18n.language?.startsWith(l.code))?.code || 'en'} onChange={(v) => i18n.changeLanguage(v)} options={languages.map(l => ({ value: l.code, label: <span><Flag country={l.country} style={{ marginRight: 6 }} />{l.name}</span> }))} />
                   </div>
                 )}
               >
-                <Button icon={<MenuOutlined />} />
+                <Button icon={<MenuOutlined />} aria-label={t('ui.menu')} />
               </Dropdown>
             ) : (
               <Space wrap style={{ justifyContent: 'flex-end' }}>
                 <Tooltip title={t('ui.refresh_data_tooltip')}>
                   <Button icon={<ReloadOutlined spin={refreshing} />} onClick={handleForceRefresh} loading={refreshing} aria-label={t('ui.refresh_data')} />
                 </Tooltip>
-                <Segmented value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
+                <Segmented aria-label={t('ui.game_mode')} value={gameMode} onChange={(v) => setGameMode(v as GameMode)} options={gameModeOptions} />
                 {/* Theme and language collapse to icon triggers: the two full
                     Selects cost ~430px of header width and wrapped the row on
                     narrow desktops. The current choice stays readable as the
@@ -1057,7 +1058,7 @@ function AppContent({
           {isMobile && (
             <span className="app-main-mode-nav" data-active-mode={activeTab} style={{ ...mainModeNavWrapStyle, display: 'block', width: '100%', boxSizing: 'border-box' }}>
               <ConfigProvider theme={{ token: { colorPrimary: mainModeAccent.primary } }}>
-                <Segmented block size="small" style={{ width: '100%' }} value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
+                <Segmented block size="small" aria-label={t('ui.main_mode')} style={{ width: '100%' }} value={activeTab} onChange={setActiveTab} options={mainModeNavOptions} />
               </ConfigProvider>
             </span>
           )}

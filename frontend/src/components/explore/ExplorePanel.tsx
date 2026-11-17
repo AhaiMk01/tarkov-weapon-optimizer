@@ -87,7 +87,7 @@ export function ExplorePanel(props: ExplorePanelProps) {
       />
       <Card size="small" title={<span style={{ userSelect: 'none' }}>{t('explore.tradeoff_strategy')}</span>}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <Select style={{ width: '100%' }} value={props.exploreTradeoff} onChange={props.onExploreTradeoffChange} options={[
+          <Select aria-label={t('explore.tradeoff_strategy')} style={{ width: '100%' }} value={props.exploreTradeoff} onChange={props.onExploreTradeoffChange} options={[
             { value: 'price', label: t('ui.tradeoff_ergo_vs_recoil') },
             { value: 'recoil', label: t('ui.tradeoff_ergo_vs_price') },
             { value: 'ergo', label: t('ui.tradeoff_recoil_vs_price') },
@@ -105,6 +105,7 @@ export function ExplorePanel(props: ExplorePanelProps) {
               </Typography.Text>
             </div>
             <Slider
+              ariaLabelForHandle={t('explore.resolution')}
               value={props.exploreSteps}
               onChange={props.onExploreStepsChange}
               min={MIN_EXPLORE_STEPS}
@@ -119,12 +120,13 @@ export function ExplorePanel(props: ExplorePanelProps) {
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                   {props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo')}
                 </Typography.Text>
-                <Segmented size="small" value={props.useExploreBudget ? 'on' : 'off'} onChange={v => props.onUseExploreBudgetChange(v === 'on')} options={[{ label: t('ui.on', 'On'), value: 'on' }, { label: t('ui.off', 'Off'), value: 'off' }]} />
+                <Segmented size="small" aria-label={(props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo'))} value={props.useExploreBudget ? 'on' : 'off'} onChange={v => props.onUseExploreBudgetChange(v === 'on')} options={[{ label: t('ui.on', 'On'), value: 'on' }, { label: t('ui.off', 'Off'), value: 'off' }]} />
              </div>
              {props.useExploreBudget && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                    <InputNumber
                      size="small"
+                     aria-label={(props.exploreTradeoff === 'price' ? t('explore.limit_price') : props.exploreTradeoff === 'recoil' ? t('explore.limit_recoil') : t('explore.limit_ergo'))}
                      value={props.exploreBudgetValue}
                      onChange={v => props.onExploreBudgetValueChange(v ?? 0)}
                      min={0}

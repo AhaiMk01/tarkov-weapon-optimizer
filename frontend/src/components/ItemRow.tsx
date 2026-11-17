@@ -185,6 +185,8 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
             size="small"
             icon={isLocked ? <LockOutlined /> : <UnlockOutlined />}
             onClick={() => onToggleLock(item.id)}
+            aria-label={`${isLocked ? t('ui.lock_action_tooltip_remove') : t('ui.lock_action_tooltip_add')}: ${item.name}`}
+            aria-pressed={isLocked}
             style={{ padding: '0 4px', ...(isLocked ? {} : { color: token.colorTextSecondary }) }}
           />
         </Tooltip>
@@ -197,6 +199,8 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
             size="small"
             icon={<StopOutlined />}
             onClick={() => onToggleExclude(item.id)}
+            aria-label={`${isExcluded ? t('ui.ban_action_tooltip_remove') : t('ui.ban_action_tooltip_add')}: ${item.name}`}
+            aria-pressed={isExcluded}
             style={{ padding: '0 4px', ...(isExcluded ? {} : { color: token.colorTextSecondary }) }}
           />
         </Tooltip>
@@ -264,10 +268,10 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
           {hasActions && (
              <div style={{ display: 'flex', gap: 4, background: token.colorFillAlter, borderRadius: 12, padding: '2px 4px' }}>
                 {onToggleLock && (
-                  <Button type="text" size="small" icon={<LockOutlined />} onClick={() => onToggleLock(item.id)} style={{ padding: 0, height: 20, width: 20, minWidth: 20, color: isLocked ? token.colorPrimary : token.colorTextSecondary }} />
+                  <Button type="text" size="small" icon={<LockOutlined />} onClick={() => onToggleLock(item.id)} aria-label={`${isLocked ? t('ui.lock_action_tooltip_remove') : t('ui.lock_action_tooltip_add')}: ${item.name}`} aria-pressed={isLocked} style={{ padding: 0, color: isLocked ? token.colorPrimary : token.colorTextSecondary }} />
                 )}
                 {onToggleExclude && (
-                  <Button type="text" size="small" icon={<StopOutlined />} onClick={() => onToggleExclude(item.id)} style={{ padding: 0, height: 20, width: 20, minWidth: 20, color: isExcluded ? token.colorError : token.colorTextSecondary }} />
+                  <Button type="text" size="small" icon={<StopOutlined />} onClick={() => onToggleExclude(item.id)} aria-label={`${isExcluded ? t('ui.ban_action_tooltip_remove') : t('ui.ban_action_tooltip_add')}: ${item.name}`} aria-pressed={isExcluded} style={{ padding: 0, color: isExcluded ? token.colorError : token.colorTextSecondary }} />
                 )}
              </div>
           )}

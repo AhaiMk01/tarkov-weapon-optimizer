@@ -62,6 +62,7 @@ export function AdvancedOptions({
               </Space>
               <Segmented
                 size="small"
+                aria-label={t('advanced.solver_precision')}
                 value={solverPrecision}
                 onChange={(v) => onSolverPrecisionChange(v as PrecisionRequest)}
                 options={[
@@ -78,6 +79,7 @@ export function AdvancedOptions({
               </Space>
               <Segmented
                 size="small"
+                aria-label={t('advanced.allow_repeated_parts')}
                 disabled={!repeatedPartsApply(solverPrecision)}
                 value={allowRepeatedParts ? 'on' : 'off'}
                 onChange={(v) => onAllowRepeatedPartsChange(v === 'on')}
@@ -90,7 +92,7 @@ export function AdvancedOptions({
                   <Text type="secondary" style={labelStyle}>{t('optimize.tchebycheff')}</Text>
                   {hint(t('optimize.tchebycheff_tooltip'))}
                 </Space>
-                <Segmented size="small" value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={onOff} />
+                <Segmented size="small" aria-label={t('optimize.tchebycheff')} value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={onOff} />
               </div>
             )}
           </Space>
