@@ -47,7 +47,7 @@ const provenance = () => lookupOf(
 test('the response carries unique instances, placements, the installed multiset, the count-bearing base and exact per-occurrence provenance', async () => {
   const params = paramsOf(provenance(), { ownedItems: ['b'], priceWeight: 0.01 });
   const response = await solve(params);
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['a', 'a', 'b', 'c'], 'duplicates are kept');
   assert.deepEqual(response.selected_items.map(i => i.instanceId), [
     'weapon_0/s1:a', 'weapon_0/s2:a', 'weapon_0/s3:b', 'weapon_0/s4:c',
@@ -102,7 +102,7 @@ test('a barter lot is bought whole and is charged once, to the first unit taken;
   );
   const params = paramsOf(lookup, { barterAvailable: true });
   const response = await solve(params);
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['a', 'a', 'a']);
   assert.equal(response.final_stats?.total_price, 5000 + 1200, 'three units need two lots of two');
   assert.deepEqual(response.selected_items.map(i => i.price), [600, 0, 600]);
@@ -166,7 +166,7 @@ test('a TED request reports its search; a limit with a verified build is feasibl
     ['a', mod('a', { weight: 1, ergo: 20 })], ['b', mod('b', { weight: 2, ergo: 30 })], ['c', mod('c', { weight: 3, ergo: 41 })],
   );
   const full = await solve(paramsOf(lookup, { ergoWeight: 100, useTrueErgo: true }));
-  assert.equal(full.status, 'optimal', full.reason);
+  assert.equal(full.status, 'optimal', full.reason ?? `status is ${String(full.status)}`);
   assert.equal(full.optimization?.termination, 'optimal');
   assert.ok(full.optimization.absolute_gap !== null && full.optimization.absolute_gap <= full.optimization.tolerance);
   assert.deepEqual(full.selected_item_ids, ['b']);
@@ -191,7 +191,7 @@ test('a requested tolerance is honoured: 1e-9 certifies a TrueErgo request, and 
     ['a', mod('a', { weight: 2, ergo: 30 })], ['b', mod('b', { weight: 5, ergo: 60 })],
   );
   const response = await solve(paramsOf(lookup, { ergoWeight: 100, useTrueErgo: true, objectiveTolerance: 1e-9 }));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.equal(response.optimization?.tolerance, 1e-9);
   assert.equal(response.optimization?.termination, 'optimal');
   assert.ok(response.optimization.absolute_gap !== null && response.optimization.absolute_gap <= 1e-9);
@@ -218,7 +218,7 @@ test('the payoff table comes from three single-axis solves of the exact model, i
 test('a Tchebycheff solve without a payoff table computes it and reports the table it used; a supplied table is reported as given', async () => {
   const params = paramsOf(payoff(), { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true });
   const computed = await solve(params);
-  assert.equal(computed.status, 'optimal', computed.reason);
+  assert.equal(computed.status, 'optimal', computed.reason ?? `status is ${String(computed.status)}`);
   assert.deepEqual(computed.ideal_point, { zE: 500, nadE: 0, zR: -300, nadR: 0, zP: 5010, nadP: 5100 });
   const given = { zE: 500, nadE: 0, zR: -300, nadR: 0, zP: 5010, nadP: 5100 };
   const supplied = await solve({ ...params, idealPoint: given });
@@ -261,7 +261,7 @@ test('Fast publishes the same shape, decoded into a rooted placement tree and va
   );
   const params = paramsOf(lookup, { preciseMode: false });
   const response = await solve(params);
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['host', 'butt', 'sight'], 'in placement order: the receiver slots first, then what hangs on the placed parts');
   assert.deepEqual(response.slot_pairs?.map(p => p.childInstanceId).sort(), ['weapon_0/mount:host', 'weapon_0/mount:host/rail:sight', 'weapon_0/stock:butt']);
   assert.equal(revalidate(params, response).ok, true);
@@ -294,7 +294,7 @@ test('Fast never publishes a result that is not a valid physical build: a bounda
   );
   const params = paramsOf(lookup, { preciseMode: false, maxWeight: 3 });
   const response = await solve(params);
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['v']);
   assert.equal(revalidate(params, response).ok, true);
   // Two required slots, one part capped at one copy by its self-conflict: the count model states the cap, so no point exists.
@@ -313,7 +313,7 @@ test('Fast honours the stash: an owned part has no offer to buy and is still ins
   const lookup = lookupOf(gun(WEAPON, { slots: [slot('s', ['rare'])] }), ['rare', mod('rare', { ergo: 9, offers: [] })]);
   const params = paramsOf(lookup, { preciseMode: false, ownedItems: ['rare'] });
   const response = await solve(params);
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['rare']);
   assert.equal(response.final_stats?.total_price, 5000);
   assert.equal(response.selected_items[0].acquisition?.source, 'owned');
@@ -327,7 +327,7 @@ test('Fast installs several copies of one part with the same provenance and spen
   // Repeats allowed: Fast installs one copy of each part by default (owner decision 2c, fastSingleCopy.test.ts), and this test is about several copies.
   const params = paramsOf(lookup, { preciseMode: false, allowRepeatedParts: true, ownedItems: ['b'], priceWeight: 0.01 });
   const fast = await solve(params);
-  assert.equal(fast.status, 'optimal', fast.reason);
+  assert.equal(fast.status, 'optimal', fast.reason ?? `status is ${String(fast.status)}`);
   assert.deepEqual(fast.selected_item_ids, ['a', 'a', 'b', 'c'], 'duplicates are kept');
   assert.equal(new Set(fast.selected_items.map(i => i.instanceId)).size, 4);
   assert.deepEqual(fast.selected_items.map(i => [i.instanceId, i.acquisition, i.price]), precise.selected_items.map(i => [i.instanceId, i.acquisition, i.price]));
@@ -474,7 +474,7 @@ test('precision_request echoes what was asked and precision_resolved says what r
     const label = JSON.stringify(request);
     const ted = await solve(paramsOf(lookup, { preciseMode: false, ergoWeight: 100, ...request }));
     assert.deepEqual([ted.precision_request, ted.precision_resolved, ted.model_qualification, ted.physical_certificate], ['fast', 'fast', 'approximate', 'approximate_optimal'], label);
-    assert.equal(ted.status, 'optimal', ted.reason);
+    assert.equal(ted.status, 'optimal', ted.reason ?? `status is ${String(ted.status)}`);
     const resolvedFast = await solve(paramsOf(lookup, { preciseMode: false, precisionRequest: 'auto', ergoWeight: 100, ...request }));
     assert.deepEqual([resolvedFast.precision_request, resolvedFast.precision_resolved, resolvedFast.model_qualification], ['auto', 'fast', 'approximate'], label);
     const resolvedPrecise = await solve(paramsOf(lookup, { preciseMode: true, precisionRequest: 'auto', ergoWeight: 100, ...request }));
@@ -496,7 +496,7 @@ test('a Fast TED response is the same build the Precise model certifies, with Fa
     const params = paramsOf(lookup, { preciseMode: false, ergoWeight: 100, ...request });
     const fast = await solve(params);
     const precise = await solve({ ...params, preciseMode: true });
-    assert.equal(fast.status, 'optimal', fast.reason);
+    assert.equal(fast.status, 'optimal', fast.reason ?? `status is ${String(fast.status)}`);
     assert.deepEqual(fast.selected_item_ids, ['b']);
     assert.deepEqual(fast.selected_item_ids, precise.selected_item_ids);
     assert.equal(fast.objective_value, precise.objective_value);

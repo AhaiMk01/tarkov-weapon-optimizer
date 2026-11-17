@@ -108,7 +108,7 @@ for (const op of SEARCH_OPERATIONS) {
     const { response } = await run(op);
     if (op.kind === 'optimize') {
       const r = asOptimize(response);
-      assert.equal(r.status, 'optimal', r.reason);
+      assert.equal(r.status, 'optimal', r.reason ?? `status is ${String(r.status)}`);
       assert.equal(r.physical_certificate, op.precise ? 'certified_optimal' : 'approximate_optimal');
       assert.equal(r.reason, undefined);
       assert.equal(r.optimization.termination, 'optimal');

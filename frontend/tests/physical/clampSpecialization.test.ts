@@ -362,7 +362,7 @@ test('a clamp lower bound straddling zero retains a certificate at the consumer 
     const result = await solvePrecise({ params: request, deadline: performance.now() + 120_000, lanes: null, edgeIntegrality });
     assert.equal(result.kind, 'build', edgeIntegrality);
     if (result.kind !== 'build') continue;
-    assert.equal(result.certified, true, result.reason);
+    assert.equal(result.certified, true, result.reason ?? `certified is ${String(result.certified)}`);
     assert.ok(result.summary.bounds.gap !== null && result.summary.bounds.gap <= request.objectiveTolerance);
     assert.ok(Math.abs(result.best.score - 36) < 1e-12);
     assert.equal(validatePhysicalBuild(request.itemLookup, request, result.best.build, { requirePathInstanceIds: true }).ok, true);
