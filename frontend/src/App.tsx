@@ -328,7 +328,7 @@ function AppContent({
     api: { optimize, explore, computeMOAFloor },
     controllers: { optimize: optimizeCtl, explore: exploreCtl, gunsmith: gunsmithCtl, floor: floorCtl },
     // A finished request says what its result's headline says: never "complete" for anything but a proved optimum.
-    announce: toast => { messageApiRef.current[toast.type](tRef.current(toast.key, toast.params)) },
+    announce: toast => { messageApiRef.current[toast.type](tRef.current(toast.key, toast.params ?? {})) },
     logError: (message, error) => console.error(message, error),
     setTimer: (fn, ms) => {
       const timer = setTimeout(fn, ms)
