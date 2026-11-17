@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -43,10 +43,35 @@ jobs:
         with:
           path: frontend/dist
 
+  # The pinned captures are not in the repository, so the tests that need them
+  # skip here. test:reference needs the raw pins and still runs only locally.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Lint
+        run: npm run lint
+        working-directory: frontend
+
+      - name: Unit tests
+        run: npm run test:unit
+        working-directory: frontend
+
   # Split from the build so only this job holds the Pages token and the
   # github-pages environment; pull requests never reach it.
   deploy:
-    needs: build
+    needs: [build, test]
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
