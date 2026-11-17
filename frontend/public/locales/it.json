@@ -299,7 +299,10 @@
     "moa_provisional_tooltip": "Il MOA deriva da un modello provvisorio, non da un valore misurato in gioco.",
     "help": "Help",
     "barter_details": "Show barter details",
-    "copy_name": "copy name: {{name}}"
+    "copy_name": "copy name: {{name}}",
+    "tag_tip_to_ban": "Required. Activate to ban it instead.",
+    "tag_tip_to_require": "Banned. Activate to require it instead.",
+    "remove_tag": "remove: {{name}}"
   },
   "error": {
     "title": "Si è verificato un errore",
