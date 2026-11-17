@@ -16,5 +16,12 @@ updates:
       # react-i18next names an exact i18next major as its peer, so they only install together.
       i18next:
         patterns: ["i18next*", "react-i18next"]
+      # @eslint/js carries the recommended rule set of the same eslint major.
+      eslint:
+        patterns: ["eslint", "@eslint/js"]
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # typescript-eslint 8.73 supports typescript below 6.1. Remove this when it supports 7.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]

@@ -386,7 +386,7 @@ export async function runExplore(
     stopCause = guardStop(guard);
     if (stopCause !== null) break;
     const target = targets[next];
-    let response: OptimizeResponse | null = null;
+    let response: OptimizeResponse | null;
     let row: ExploreStepOutcome;
     let outcome: StepOutcome;
     try {
