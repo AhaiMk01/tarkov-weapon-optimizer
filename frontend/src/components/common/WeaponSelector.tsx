@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button, Card, Space, Tooltip, Typography, theme } from 'antd'
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons'
@@ -99,22 +99,13 @@ function SelectedTile({
   const { token } = useToken()
   const [hover, setHover] = useState(false)
   return (
-    <Tooltip title={`${gun.name} · ${caliberLabel(gun.caliber)}`}>
+    <Tooltip title={`${gun.name} · ${caliberLabel(gun.caliber)}`} trigger={['hover', 'focus']}>
       <div
-        role="button"
-        tabIndex={0}
-        aria-label={gun.name}
-        onClick={onOpen}
-        onKeyDown={e => {
-          if (e.target !== e.currentTarget) return
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onOpen()
-          }
-        }}
+        className="wg-tile"
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
         style={{
+          '--wg-tile-ring': token.colorPrimary,
           position: 'relative',
           aspectRatio: '1 / 1',
           display: 'flex',
@@ -126,8 +117,9 @@ function SelectedTile({
           borderRadius: token.borderRadius,
           background: hover ? token.colorPrimaryBg : token.colorFillQuaternary,
           transition: 'border-color 0.15s, background 0.15s',
-        }}
+        } as CSSProperties}
       >
+        <button type="button" className="wg-tile-pick" aria-label={gun.name} onClick={onOpen} />
         {gun.image && (
           <img
             src={gun.image}
@@ -148,11 +140,9 @@ function SelectedTile({
           type="text"
           icon={<CloseOutlined />}
           aria-label={`${gun.name} ✕`}
-          onClick={e => {
-            e.stopPropagation()
-            onRemove()
-          }}
+          onClick={onRemove}
           style={{
+            zIndex: 2,
             position: 'absolute',
             top: 0,
             right: 0,
