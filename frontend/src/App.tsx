@@ -1087,15 +1087,13 @@ function AppContent({
               {t('ui.footer_github')}
             </Link>
             <span style={{ opacity: 0.3 }}>•</span>
-            <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
-              <BulbOutlined aria-hidden />
+            <Button type="link" size="small" icon={<BulbOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
               {t('ui.methodology_title')}
-            </Link>
+            </Button>
             <span style={{ opacity: 0.3 }}>•</span>
-            <Link style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }} onClick={() => setChangelogOpen(true)}>
-              <HistoryOutlined aria-hidden />
+            <Button type="link" size="small" icon={<HistoryOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setChangelogOpen(true)}>
               {t('ui.changelog_title')}
-            </Link>
+            </Button>
             <span style={{ opacity: 0.3 }}>•</span>
             <span>
               {t('ui.footer_data_from')}{' '}
