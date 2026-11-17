@@ -7,3 +7,11 @@ updates:
     directory: /
     schedule:
       interval: monthly
+  # One grouped PR a month for minor and patch bumps; each major gets its own PR.
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: monthly
+    groups:
+      minor-and-patch:
+        update-types: [minor, patch]
