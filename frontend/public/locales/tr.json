@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Aynı partinin bir önceki birimiyle birlikte gelir; partinin fiyatı yalnızca bir kez, ilk biriminde alınır.",
     "preset_usage_tooltip": "Ön ayarın sağladığı {{supplied}} parçadan {{installed}} tanesi takıldı; ön ayarın geri kalanı söküldü.",
     "shopping_base": "temel",
-    "moa_provisional_tooltip": "MOA, oyun içinde ölçülmüş bir değerden değil, geçici bir modelden gelir."
+    "moa_provisional_tooltip": "MOA, oyun içinde ölçülmüş bir değerden değil, geçici bir modelden gelir.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Bir hata oluştu",

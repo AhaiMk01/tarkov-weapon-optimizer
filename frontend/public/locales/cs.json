@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Přichází s předchozím kusem ze stejné dávky; cena dávky se účtuje jednou, u jejího prvního kusu.",
     "preset_usage_tooltip": "Z presetu nasazeno {{installed}} z {{supplied}} dodaných; zbytek dílů presetu se odstraní.",
     "shopping_base": "základ",
-    "moa_provisional_tooltip": "MOA pochází z prozatímního modelu, nejde o hodnotu naměřenou ve hře."
+    "moa_provisional_tooltip": "MOA pochází z prozatímního modelu, nejde o hodnotu naměřenou ve hře.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Došlo k chybě",

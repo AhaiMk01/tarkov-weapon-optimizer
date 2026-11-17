@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "같은 묶음의 앞 부품과 함께 얻습니다. 묶음 가격은 첫 번째 부품에 한 번만 계산됩니다.",
     "preset_usage_tooltip": "프리셋이 제공한 {{supplied}}개 중 {{installed}}개를 장착했습니다. 나머지는 분리됩니다.",
     "shopping_base": "기본",
-    "moa_provisional_tooltip": "MOA는 잠정 모델에서 나온 값이며, 게임 내 실측값이 아닙니다."
+    "moa_provisional_tooltip": "MOA는 잠정 모델에서 나온 값이며, 게임 내 실측값이 아닙니다.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "오류가 발생했습니다",

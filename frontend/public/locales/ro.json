@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Vine cu unitatea anterioară din același lot; prețul lotului se plătește o singură dată, la prima unitate.",
     "preset_usage_tooltip": "{{installed}} montate din preset din {{supplied}} furnizate; restul pieselor presetului sunt demontate.",
     "shopping_base": "bază",
-    "moa_provisional_tooltip": "MOA provine dintr-un model provizoriu, nu dintr-o valoare măsurată în joc."
+    "moa_provisional_tooltip": "MOA provine dintr-un model provizoriu, nu dintr-o valoare măsurată în joc.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "A apărut o eroare",

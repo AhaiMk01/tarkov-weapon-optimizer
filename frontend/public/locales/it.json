@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Arriva con l'unità precedente dello stesso lotto; il prezzo del lotto viene addebitato una sola volta, sulla prima unità.",
     "preset_usage_tooltip": "{{installed}} installati dal preset su {{supplied}} forniti; il resto delle parti del preset viene rimosso.",
     "shopping_base": "base",
-    "moa_provisional_tooltip": "Il MOA deriva da un modello provvisorio, non da un valore misurato in gioco."
+    "moa_provisional_tooltip": "Il MOA deriva da un modello provvisorio, non da un valore misurato in gioco.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Si è verificato un errore",

@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Comes with the previous unit of the same lot; the lot's price is charged once, on its first unit.",
     "preset_usage_tooltip": "{{installed}} installed from the preset out of {{supplied}} supplied; the rest of the preset's stock is stripped.",
     "shopping_base": "base",
-    "moa_provisional_tooltip": "MOA comes from a provisional model, not a measured in-game value."
+    "moa_provisional_tooltip": "MOA comes from a provisional model, not a measured in-game value.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "trader": {
     "prapor": "Prapor",

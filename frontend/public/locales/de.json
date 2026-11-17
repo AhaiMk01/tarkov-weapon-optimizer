@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Kommt mit dem vorherigen Stück desselben Loses; der Preis des Loses wird nur einmal berechnet, beim ersten Stück.",
     "preset_usage_tooltip": "{{installed}} von {{supplied}} mitgelieferten Teilen aus dem Preset eingebaut; der Rest des Presets wird abgebaut.",
     "shopping_base": "Basis",
-    "moa_provisional_tooltip": "MOA stammt aus einem vorläufigen Modell, nicht aus einem im Spiel gemessenen Wert."
+    "moa_provisional_tooltip": "MOA stammt aus einem vorläufigen Modell, nicht aus einem im Spiel gemessenen Wert.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Ein Fehler ist aufgetreten",

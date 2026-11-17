@@ -78,8 +78,8 @@ export function UsingPresetCard({ preset, retainedItems, usage, compactMode, vie
             </Text>
           </Tooltip>
           {ownedReceiver ? (
-            <Tooltip title={t('ui.owned_receiver_tooltip')}>
-              <Text type="secondary" style={{ fontSize: 11, cursor: 'help' }}>{t('ui.owned_receiver', { name: preset.name })}</Text>
+            <Tooltip title={t('ui.owned_receiver_tooltip')} trigger={['hover', 'focus']}>
+              <Text type="secondary" tabIndex={0} style={{ fontSize: 11, cursor: 'help' }}>{t('ui.owned_receiver', { name: preset.name })}</Text>
             </Tooltip>
           ) : (
             <Text type="secondary" style={{ fontSize: 11 }}>{isFactoryPreset ? t('ui.base_preset_used') : t('ui.naked_receiver')}</Text>
@@ -87,8 +87,8 @@ export function UsingPresetCard({ preset, retainedItems, usage, compactMode, vie
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
           {ownedReceiver ? (
-            <Tooltip title={t('ui.owned_receiver_tooltip')}>
-              <Tag style={{ margin: 0 }}>{t('ui.acq_owned')}</Tag>
+            <Tooltip title={t('ui.owned_receiver_tooltip')} trigger={['hover', 'focus']}>
+              <Tag tabIndex={0} style={{ margin: 0 }}>{t('ui.acq_owned')}</Tag>
             </Tooltip>
           ) : (
             <>

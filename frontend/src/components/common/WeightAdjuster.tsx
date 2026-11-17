@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Tooltip, Spin, theme } from 'antd'
-import { QuestionCircleOutlined, ReloadOutlined, InfoCircleOutlined } from '@ant-design/icons'
+import { Collapse, Button, Slider, InputNumber, Space, Typography, Segmented, Spin } from 'antd'
+import { ReloadOutlined } from '@ant-design/icons'
 import { TernaryPlot } from '../TernaryPlot'
 import { CancelButton } from './ResultStatus'
 import { ResetButton } from './ResetButton'
+import { HelpTip } from './HelpTip'
 import { floorLineOf } from './floorView'
 import type { FloorView } from './floorView'
 import type { FloorState } from '../../runs/runState'
@@ -65,7 +66,6 @@ function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry 
   onRetry: () => void
 }) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
   if (computing) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -94,9 +94,7 @@ function MoaFloorStatus({ computing, view, error, onCancel, cancelling, onRetry 
         >
           {t(line.key, { floor: line.floor ?? '' })}
         </Text>
-        <Tooltip title={tooltip}>
-          <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
-        </Tooltip>
+        <HelpTip icon="info" tone="tertiary" title={tooltip} />
       </Space>
       {line.retry && <Button size="small" icon={<ReloadOutlined />} onClick={onRetry}>{t('moa_floor.retry')}</Button>}
     </div>
@@ -137,7 +135,6 @@ export function WeightAdjuster({
   onRetryMOAFloor,
 }: WeightAdjusterProps) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
   const [slidersMode, setSlidersMode] = useState(() => localStorage.getItem('weightUiSliders') === 'true')
   useEffect(() => { localStorage.setItem('weightUiSliders', String(slidersMode)) }, [slidersMode])
 
@@ -181,9 +178,7 @@ export function WeightAdjuster({
               <div style={toggleRowStyle}>
                 <Space size={4}>
                   <Text type="secondary" style={labelStyle}>{t('optimize.true_ergo')}</Text>
-                  <Tooltip title={t('optimize.true_ergo_tooltip')}>
-                    <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 12 }} />
-                  </Tooltip>
+                  <HelpTip title={t('optimize.true_ergo_tooltip')} />
                 </Space>
                 <Segmented size="small" aria-label={t('optimize.true_ergo')} value={useTrueErgo ? 'on' : 'off'} onChange={(v) => onUseTrueErgoChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
               </div>
@@ -234,9 +229,7 @@ export function WeightAdjuster({
                 <div style={toggleRowStyle}>
                   <Space size={4}>
                     <Text type="secondary" style={labelStyle}>{t('constraints.prevent_overswing')}</Text>
-                    <Tooltip title={t('constraints.prevent_overswing_tooltip')}>
-                      <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 12 }} />
-                    </Tooltip>
+                    <HelpTip title={t('constraints.prevent_overswing_tooltip')} />
                   </Space>
                   <Segmented size="small" aria-label={t('constraints.prevent_overswing')} value={preventOverswing ? 'on' : 'off'} onChange={(v) => onPreventOverswingChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />
                 </div>
@@ -245,9 +238,7 @@ export function WeightAdjuster({
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <Space size={4}>
                         <Text type="secondary" style={{ fontSize: 12 }}>{t('constraints.equip_ergo_penalty')}</Text>
-                        <Tooltip title={t('constraints.equip_ergo_penalty_tooltip')}>
-                          <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 11 }} />
-                        </Tooltip>
+                        <HelpTip title={t('constraints.equip_ergo_penalty_tooltip')} size={11} />
                       </Space>
                       <InputNumber
                         size="small"
@@ -354,9 +345,7 @@ export function WeightAdjuster({
                       <div style={toggleRowStyle}>
                         <Space size={4}>
                           <Text type="secondary" style={labelStyle}>{t('constraints.exact_moa_floor')}</Text>
-                          <Tooltip title={t('constraints.exact_moa_floor_tooltip')}>
-                            <QuestionCircleOutlined style={{ color: token.colorTextSecondary, fontSize: 12 }} />
-                          </Tooltip>
+                          <HelpTip title={t('constraints.exact_moa_floor_tooltip')} />
                           {floor.computing && <Spin size="small" />}
                         </Space>
                         <Segmented size="small" aria-label={t('constraints.exact_moa_floor')} value={useExactMOAFloor ? 'on' : 'off'} onChange={(v) => onUseExactMOAFloorChange(v === 'on')} options={[{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]} />

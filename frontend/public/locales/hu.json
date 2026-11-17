@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Ugyanannak a tételnek az előző darabjával együtt jár; a tétel árát csak egyszer, az első darabnál számoljuk.",
     "preset_usage_tooltip": "A preset által adott {{supplied}} darabból {{installed}} van beszerelve; a preset többi része le van szerelve.",
     "shopping_base": "alap",
-    "moa_provisional_tooltip": "A MOA ideiglenes modellből származik, nem a játékban mért érték."
+    "moa_provisional_tooltip": "A MOA ideiglenes modellből származik, nem a játékban mért érték.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Hiba történt",

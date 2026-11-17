@@ -95,8 +95,8 @@ export function ExplorePanel(props: ExplorePanelProps) {
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-              <Tooltip title={t('explore.resolution_tooltip')}>
-                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Tooltip title={t('explore.resolution_tooltip')} trigger={['hover', 'focus']}>
+                <Typography.Text type="secondary" tabIndex={0} style={{ fontSize: 12 }}>
                   {t('explore.resolution')}
                 </Typography.Text>
               </Tooltip>

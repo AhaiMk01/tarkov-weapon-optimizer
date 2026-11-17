@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Card, Statistic, Tooltip, Typography, theme } from 'antd'
-import { InfoCircleOutlined } from '@ant-design/icons'
+import { Card, Statistic, Typography, theme } from 'antd'
+import { HelpTip } from './HelpTip'
 
 const { useToken } = theme
 
@@ -52,9 +52,7 @@ export function StatsCards({ ergonomics, recoilVertical, recoilHorizontal, weigh
             title={
               <span>
                 {t('ui.moa_label')}{' '}
-                <Tooltip title={t('ui.moa_provisional_tooltip')}>
-                  <InfoCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
-                </Tooltip>
+                <HelpTip icon="info" tone="tertiary" title={t('ui.moa_provisional_tooltip')} />
               </span>
             }
             value={moa.toFixed(3)}

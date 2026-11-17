@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Идёт вместе с предыдущей единицей той же партии; цена партии учитывается один раз, на первой единице.",
     "preset_usage_tooltip": "Из пресета установлено {{installed}} из {{supplied}}; остальное из пресета снимается.",
     "shopping_base": "основа",
-    "moa_provisional_tooltip": "MOA взят из предварительной модели, а не измерен в игре."
+    "moa_provisional_tooltip": "MOA взят из предварительной модели, а не измерен в игре.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Произошла ошибка",

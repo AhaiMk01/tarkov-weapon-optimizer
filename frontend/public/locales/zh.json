@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "与同一批次的前一件一起获得；批次价格只在第一件上计费一次。",
     "preset_usage_tooltip": "预设共提供 {{supplied}} 件，其中装上了 {{installed}} 件；其余被拆除。",
     "shopping_base": "基础",
-    "moa_provisional_tooltip": "MOA 来自临时模型，并非游戏内实测值。"
+    "moa_provisional_tooltip": "MOA 来自临时模型，并非游戏内实测值。",
+    "help": "说明",
+    "barter_details": "查看兑换详情"
   },
   "trader": {
     "prapor": "Prapor",

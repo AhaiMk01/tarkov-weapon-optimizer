@@ -1,3 +1,4 @@
+import { cloneElement } from 'react'
 import { SettingOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
 import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -28,7 +29,7 @@ const traderIcons: Record<string, { icon: string; name: string }> = {
 
 export type BarterReq = { name: string; count: number; unit_price: number; icon?: string }
 
-function BarterTooltip({ requirements, children }: { requirements?: BarterReq[]; children: React.ReactElement }) {
+function BarterTooltip({ requirements, name, children }: { requirements?: BarterReq[]; name: string; children: React.ReactElement }) {
   // Hooks must run before any early return — an instance that first renders
   // without requirements and later with them would otherwise change its hook
   // count and throw (e.g. toggling barters on and re-solving).
@@ -42,8 +43,8 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
   return (
-    <Tooltip styles={{ root: { maxWidth: 400 } }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
-      {children}
+    <Tooltip styles={{ root: { maxWidth: 400 } }} trigger={['hover', 'focus']} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
+      {cloneElement(children, { tabIndex: 0, 'aria-label': `${name}: ${t('ui.barter_details')}` } as object)}
     </Tooltip>
   )
 }
@@ -69,11 +70,11 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
     const trader = traderIcons[traderKey]
     const traderName = trader?.name || source.replace('barter:', '')
     if (compact) {
-      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_short')})</Text></BarterTooltip>
+      return <BarterTooltip requirements={barterRequirements} name={traderName}><Text type="secondary" style={{ whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_short')})</Text></BarterTooltip>
     }
     if (trader?.icon) {
       return (
-        <BarterTooltip requirements={barterRequirements}>
+        <BarterTooltip requirements={barterRequirements} name={traderName}>
           <div style={{ position: 'relative', display: 'inline-block', cursor: barterRequirements?.length ? 'help' : undefined }}>
             <img
               src={trader.icon}
@@ -89,7 +90,7 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
         </BarterTooltip>
       )
     }
-    return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_long')})</Text></BarterTooltip>
+    return <BarterTooltip requirements={barterRequirements} name={traderName}><Text type="secondary" style={{ cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_long')})</Text></BarterTooltip>
   }
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]

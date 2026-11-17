@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Przychodzi razem z poprzednią sztuką z tej samej partii; cena partii jest liczona raz, przy pierwszej sztuce.",
     "preset_usage_tooltip": "Z presetu zamontowano {{installed}} z {{supplied}} dostarczonych; reszta zawartości presetu jest zdejmowana.",
     "shopping_base": "baza",
-    "moa_provisional_tooltip": "MOA pochodzi z tymczasowego modelu, a nie z pomiaru w grze."
+    "moa_provisional_tooltip": "MOA pochodzi z tymczasowego modelu, a nie z pomiaru w grze.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Wystąpił błąd",

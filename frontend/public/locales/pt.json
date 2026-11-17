@@ -296,7 +296,9 @@
     "acq_lot_tooltip": "Vem com a unidade anterior do mesmo lote; o preço do lote é cobrado uma única vez, na primeira unidade.",
     "preset_usage_tooltip": "{{installed}} instaladas do preset de {{supplied}} fornecidas; o restante do preset é removido.",
     "shopping_base": "base",
-    "moa_provisional_tooltip": "O MOA vem de um modelo provisório, não de um valor medido no jogo."
+    "moa_provisional_tooltip": "O MOA vem de um modelo provisório, não de um valor medido no jogo.",
+    "help": "Help",
+    "barter_details": "Show barter details"
   },
   "error": {
     "title": "Ocorreu um erro",
