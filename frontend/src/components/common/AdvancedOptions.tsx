@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
-import { Collapse, Segmented, Space, Tooltip, Typography, theme } from 'antd'
-import { QuestionCircleOutlined } from '@ant-design/icons'
+import { Collapse, Segmented, Space, Typography } from 'antd'
+import { HelpTip } from './HelpTip'
 import type { PrecisionRequest } from '../../api/client'
 import { ResetButton } from './ResetButton'
 import { ADVANCED_DEFAULTS, isAdvancedDefault, repeatedPartsApply } from './advancedDefaults'
@@ -33,12 +33,7 @@ export function AdvancedOptions({
   onUseTchebycheffChange,
 }: AdvancedOptionsProps) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
-  const hint = (title: string) => (
-    <Tooltip title={title}>
-      <QuestionCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
-    </Tooltip>
-  )
+  const hint = (title: string) => <HelpTip tone="tertiary" title={title} />
   const onOff = [{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]
   const showSweetSpot = useTchebycheff !== undefined && onUseTchebycheffChange !== undefined
   const atDefaults = isAdvancedDefault({ solverPrecision, allowRepeatedParts, useTchebycheff })

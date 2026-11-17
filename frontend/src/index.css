@@ -49,26 +49,26 @@
 }
 
 [data-theme='dark'][data-dark-palette='onedark'] {
-  --scrollbar-thumb: rgba(90, 98, 112, 0.72);
-  --scrollbar-thumb-hover: rgba(110, 118, 132, 0.9);
+  --scrollbar-thumb: #7e848f;
+  --scrollbar-thumb-hover: #8e95a1;
   --scrollbar-track: rgba(40, 44, 52, 0.55);
 }
 
 [data-theme='dark'][data-dark-palette='github'] {
-  --scrollbar-thumb: rgba(110, 118, 129, 0.62);
-  --scrollbar-thumb-hover: rgba(139, 148, 158, 0.82);
+  --scrollbar-thumb: #8b949e;
+  --scrollbar-thumb-hover: #a5adb8;
   --scrollbar-track: rgba(13, 17, 23, 0.55);
 }
 
 [data-theme='dark'][data-dark-palette='tokyo'] {
-  --scrollbar-thumb: rgba(106, 122, 181, 0.55);
-  --scrollbar-thumb-hover: rgba(122, 142, 207, 0.75);
+  --scrollbar-thumb: #737aa2;
+  --scrollbar-thumb-hover: #8890bb;
   --scrollbar-track: rgba(36, 40, 59, 0.5);
 }
 
 [data-theme='amoled'] {
-  --scrollbar-thumb: rgba(120, 130, 145, 0.45);
-  --scrollbar-thumb-hover: rgba(150, 160, 175, 0.65);
+  --scrollbar-thumb: #7a808a;
+  --scrollbar-thumb-hover: #9aa0ab;
   --scrollbar-track: rgba(0, 0, 0, 0.35);
 }
 
@@ -128,4 +128,27 @@ html, body {
 /* Mode switch in header: frame + Segmented thumb use per-mode accent (see App.tsx mainModeAccent) */
 .app-main-mode-nav .ant-segmented-item-selected {
   font-weight: 600;
+}
+
+.copy-name:focus-visible {
+  outline: 2px solid var(--copy-name-ring);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ternary-plot:focus-visible {
+  outline: 2px solid var(--ternary-ring);
+  outline-offset: 2px;
 }

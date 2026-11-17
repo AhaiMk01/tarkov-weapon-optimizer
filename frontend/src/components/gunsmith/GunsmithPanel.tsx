@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { Card, Select, Space, Tag, Typography, message } from 'antd'
+import { CopyName } from '../common/CopyName'
 import { LevelConfig } from '../common/LevelConfig'
 import type { GunsmithTask } from '../../api/client'
 import type { TraderLevels } from '../../solver/types'
@@ -54,7 +55,9 @@ export function GunsmithPanel(props: GunsmithPanelProps) {
             {props.selectedTask.weapon_image && (
               <img src={props.selectedTask.weapon_image} alt="" style={{ width: '100%', maxHeight: 120, objectFit: 'contain' }} />
             )}
-            <Title level={5} style={{ margin: 0, textAlign: 'center', cursor: 'pointer' }} onClick={() => copyText(props.selectedTask!.weapon_name)}>{props.selectedTask.weapon_name}</Title>
+            <Title level={5} style={{ margin: 0, textAlign: 'center' }}>
+              <CopyName name={props.selectedTask.weapon_name} copy={copyText} />
+            </Title>
             <div>
               <Text strong>{t('gunsmith.constraints')}</Text>
               <div style={{ marginTop: 8 }}>

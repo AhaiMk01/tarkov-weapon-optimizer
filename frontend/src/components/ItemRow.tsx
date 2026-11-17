@@ -1,3 +1,4 @@
+import { cloneElement } from 'react'
 import { SettingOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
 import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -5,7 +6,9 @@ import type { ItemDetail } from '../api/client'
 import { priceCell } from './priceCell'
 import { isDarkColor } from './common/galleryEffects'
 import { TedTag } from './TedTag'
+import { CopyName } from './common/CopyName'
 import { isShownTedDelta } from '../solver/trueErgo'
+import { FocusTooltip } from './common/FocusTooltip'
 
 const { Text } = Typography
 const { useToken } = theme
@@ -28,7 +31,7 @@ const traderIcons: Record<string, { icon: string; name: string }> = {
 
 export type BarterReq = { name: string; count: number; unit_price: number; icon?: string }
 
-function BarterTooltip({ requirements, children }: { requirements?: BarterReq[]; children: React.ReactElement }) {
+function BarterTooltip({ requirements, name, children }: { requirements?: BarterReq[]; name: string; children: React.ReactElement }) {
   // Hooks must run before any early return — an instance that first renders
   // without requirements and later with them would otherwise change its hook
   // count and throw (e.g. toggling barters on and re-solving).
@@ -42,9 +45,9 @@ function BarterTooltip({ requirements, children }: { requirements?: BarterReq[];
   ))
   const total = requirements.reduce((s, r) => s + r.count * r.unit_price, 0)
   return (
-    <Tooltip styles={{ root: { maxWidth: 400 } }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
-      {children}
-    </Tooltip>
+    <FocusTooltip styles={{ root: { maxWidth: 400 } }} title={<div style={{ fontSize: 13 }}><div style={{ fontWeight: 600, marginBottom: 6 }}>{t('ui.barter_req_label')}:</div>{lines}<div style={{ marginTop: 6, borderTop: '1px solid rgba(255,255,255,0.2)', paddingTop: 6, fontWeight: 600 }}>{t('ui.total_label')}: ₽{total.toLocaleString()}</div></div>}>
+      {cloneElement(children, { tabIndex: 0, 'aria-label': `${name}: ${t('ui.barter_details')}` } as object)}
+    </FocusTooltip>
   )
 }
 
@@ -69,11 +72,11 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
     const trader = traderIcons[traderKey]
     const traderName = trader?.name || source.replace('barter:', '')
     if (compact) {
-      return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_short')})</Text></BarterTooltip>
+      return <BarterTooltip requirements={barterRequirements} name={traderName}><Text type="secondary" style={{ whiteSpace: 'nowrap', cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_short')})</Text></BarterTooltip>
     }
     if (trader?.icon) {
       return (
-        <BarterTooltip requirements={barterRequirements}>
+        <BarterTooltip requirements={barterRequirements} name={traderName}>
           <div style={{ position: 'relative', display: 'inline-block', cursor: barterRequirements?.length ? 'help' : undefined }}>
             <img
               src={trader.icon}
@@ -89,7 +92,7 @@ export function TraderIcon({ source, unknownLabel: _unknownLabel, compact, barte
         </BarterTooltip>
       )
     }
-    return <BarterTooltip requirements={barterRequirements}><Text type="secondary" style={{ cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_long')})</Text></BarterTooltip>
+    return <BarterTooltip requirements={barterRequirements} name={traderName}><Text type="secondary" style={{ cursor: barterRequirements?.length ? 'help' : undefined }}>{traderName} ({t('ui.barter_badge_long')})</Text></BarterTooltip>
   }
   const key = source.toLowerCase().replace(/\s+/g, '')
   const trader = traderIcons[key]
@@ -170,7 +173,6 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
     }
   }
   const truncateStyle = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
-  const clickableStyle = { cursor: 'pointer' }
   const tagStyle = { margin: 0, minWidth: 90, textAlign: 'center' as const }
   const ergoLabel = t('item.ergo')
   const recoilLabel = t('item.recoil')
@@ -219,7 +221,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
              {actionBtns}
              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                <ItemTooltip item={item}>
-                 <Text strong style={{ fontSize: 13, display: 'inline-block', lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+                 <CopyName name={item.name} copy={copyToClipboard} style={{ fontSize: 13, display: 'inline-block', lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word' }} />
                </ItemTooltip>
                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                  {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
@@ -240,7 +242,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         {actionBtns}
         <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', gap: 4, alignItems: 'center' }}>
           <ItemTooltip item={item}>
-            <Text strong style={{ fontSize: 12, ...truncateStyle, display: 'inline', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+            <CopyName name={item.name} copy={copyToClipboard} title={item.name} style={{ fontSize: 12, ...truncateStyle, display: 'inline' }} />
           </ItemTooltip>
           {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
           <TedTag item={item} style={{ margin: 0, fontSize: 11, flexShrink: 0 }} />
@@ -281,7 +283,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
-              <Text strong style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word', ...clickableStyle }} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+              <CopyName name={item.name} copy={copyToClipboard} style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word' }} />
             </div>
             {!hidePrice && <Tag color="gold" style={{ margin: 0, flexShrink: 0, border: 'none', background: token.colorFillQuaternary, fontWeight: 600 }}>{priceCell(item)}</Tag>}
           </div>
@@ -320,7 +322,7 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       </ItemTooltip>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <Text strong style={{ display: 'block', fontSize: 13, ...truncateStyle, ...clickableStyle }} title={item.name} onClick={() => copyToClipboard(item.name)}>{item.name}</Text>
+          <CopyName name={item.name} copy={copyToClipboard} title={item.name} style={{ display: 'block', fontSize: 13, ...truncateStyle }} />
         </div>
         {(item.handbook_categories?.[0] || item.category) && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }} title={item.handbook_categories?.length ? item.handbook_categories.toReversed().join(' > ') : item.category}>{item.handbook_categories?.length ? item.handbook_categories.toReversed().join(' > ') : item.category}</Text>}
         {hasTags && (

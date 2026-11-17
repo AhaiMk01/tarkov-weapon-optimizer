@@ -296,7 +296,14 @@
     "acq_lot_tooltip": "Prichádza s predchádzajúcim kusom z rovnakej dávky; cena dávky sa účtuje raz, pri jej prvom kuse.",
     "preset_usage_tooltip": "Z presetu nasadených {{installed}} z {{supplied}} dodaných; zvyšok dielov presetu sa odstráni.",
     "shopping_base": "základ",
-    "moa_provisional_tooltip": "MOA pochádza z predbežného modelu, nejde o hodnotu nameranú v hre."
+    "moa_provisional_tooltip": "MOA pochádza z predbežného modelu, nejde o hodnotu nameranú v hre.",
+    "help": "Help",
+    "barter_details": "Show barter details",
+    "copy_name": "copy name: {{name}}",
+    "tag_tip_to_ban": "Required. Activate to ban it instead.",
+    "tag_tip_to_require": "Banned. Activate to require it instead.",
+    "remove_tag": "remove: {{name}}",
+    "ternary_hint": "Use the arrow keys to adjust the weights; hold Shift to move 5 at a time"
   },
   "error": {
     "title": "Vyskytla sa chyba",

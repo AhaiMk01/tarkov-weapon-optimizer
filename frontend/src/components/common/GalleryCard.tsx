@@ -55,24 +55,19 @@ export const GalleryCard = memo(function GalleryCard({
         opacity: blocked ? 0.45 : undefined,
         cursor: blocked ? 'not-allowed' : undefined,
       }}
-      role="button"
-      tabIndex={0}
       title={title}
-      aria-pressed={showBadge ? state === 'on' : undefined}
-      aria-disabled={blocked || undefined}
-      aria-label={name}
-      onClick={() => onPick?.(itemId)}
-      onKeyDown={e => {
-        // Keys pressed on the corner toggle bubble up here; without this guard
-        // Enter on "ban" was swallowed and required the part instead.
-        if (e.target !== e.currentTarget) return
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onPick?.(itemId)
-        }
-      }}
       onAnimationEnd={() => setEntering(false)}
     >
+      {/* A sibling of the corner toggle, not its parent: a button's children are
+          presentational to assistive tech, so the toggle would vanish. */}
+      <button
+        type="button"
+        className="wg-card-pick"
+        aria-label={name}
+        aria-pressed={showBadge ? state === 'on' : undefined}
+        aria-disabled={blocked || undefined}
+        onClick={() => onPick?.(itemId)}
+      />
       <div className="wg-card-shadow" aria-hidden="true" />
       {image ? (
         <img
@@ -103,11 +98,7 @@ export const GalleryCard = memo(function GalleryCard({
           title={actionLabel}
           aria-label={actionLabel ? `${name} — ${actionLabel}` : name}
           aria-pressed={state === 'off'}
-          onClick={e => {
-            // the card itself toggles "required"
-            e.stopPropagation()
-            onAction(itemId)
-          }}
+          onClick={() => onAction(itemId)}
         >
           <MinusOutlined />
         </button>
