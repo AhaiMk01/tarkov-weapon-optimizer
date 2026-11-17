@@ -28,7 +28,7 @@ export interface EndpointControls {
  */
 export function canonicalizeOwnedItems(items?: readonly string[] | null): string[] | undefined {
   if (!items || items.length === 0) return undefined;
-  return [...items].sort();
+  return items.toSorted();
 }
 
 /**

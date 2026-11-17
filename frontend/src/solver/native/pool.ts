@@ -272,9 +272,7 @@ export class NativePool implements SolveLanes {
   }
 
   start(lpText: string, options: HighsOptions, extras: SolveExtras, priority: number): SolveTicket {
-    let resolve!: (r: NativeResult) => void;
-    let reject!: (e: unknown) => void;
-    const result = new Promise<NativeResult>((res, rej) => { resolve = res; reject = rej; });
+    const { promise: result, resolve, reject } = Promise.withResolvers<NativeResult>();
     // An abandoned job's promise is never awaited: mark it handled so its rejection is not reported.
     result.catch(() => undefined);
     const job: Job = { id: this.nextJob++, seq: this.nextSeq++, priority, lpText, options, extras, attempts: 0, settled: false, lane: null, resolve, reject };

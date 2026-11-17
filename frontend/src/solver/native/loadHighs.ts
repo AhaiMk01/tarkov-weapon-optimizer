@@ -278,8 +278,7 @@ export async function loadHighs(config: LoadHighsConfig = {}): Promise<HighsRunt
   }
   let module: HighsWasmModule;
   try {
-    let failInstantiation: (reason: unknown) => void = () => undefined;
-    const instantiationFailed = new Promise<never>((_, reject) => { failInstantiation = reject; });
+    const { promise: instantiationFailed, reject: failInstantiation } = Promise.withResolvers<never>();
     const ready = factory({
       instantiateWasm: (imports, receiveInstance) => {
         // A foreign module can instantiate and still break the glue inside receiveInstance (no memory export): that is a failure too.

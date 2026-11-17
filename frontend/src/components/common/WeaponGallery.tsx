@@ -84,7 +84,7 @@ export function WeaponGallery({
     return Array.from(bucket.entries())
       .map(([name, list]) => ({
         name,
-        guns: [...list].sort((a, b) => a.name.localeCompare(b.name)),
+        guns: list.toSorted((a, b) => a.name.localeCompare(b.name)),
       }))
       .sort((a, b) => rank(a.name) - rank(b.name) || a.name.localeCompare(b.name))
   }, [guns, search, groupMode, caliberFilter, categoryFilter])

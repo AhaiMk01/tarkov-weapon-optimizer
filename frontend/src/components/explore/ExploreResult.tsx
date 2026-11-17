@@ -118,7 +118,7 @@ export function ExploreResult({
         id,
         name: points[0]?.weapon_name || id,
         color: paletteColorAt(palette, colorIndex),
-        data: [...points].sort((a, b) => a[xKey] - b[xKey]),
+        data: points.toSorted((a, b) => a[xKey] - b[xKey]),
       }
     })
   }, [exploreResult, weaponId, palette, xKey, runWeaponIds])
