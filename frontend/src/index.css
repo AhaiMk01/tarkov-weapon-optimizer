@@ -1,4 +1,6 @@
 :root {
+  color-scheme: dark;
+  background-color: #1e2127;
   font-family: Inter, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "WenQuanYi Micro Hei", system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
@@ -9,6 +11,23 @@
   --scrollbar-thumb: rgba(0, 0, 0, 0.15);
   --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
   --scrollbar-track: rgba(0, 0, 0, 0.04);
+}
+
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'][data-dark-palette='github'] {
+  background-color: #010409;
+}
+
+:root[data-theme='dark'][data-dark-palette='tokyo'] {
+  background-color: #1a1b2a;
+}
+
+:root[data-theme='amoled'] {
+  background-color: #000000;
 }
 
 [data-theme='light'][data-light-palette='primer'] {

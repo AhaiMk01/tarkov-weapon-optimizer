@@ -2,6 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <meta name="color-scheme" content="dark" />
+    <script>
+      // Must mirror normalizeStoredThemeRaw and the theme effect in src/App.tsx.
+      try {
+        var r = localStorage.getItem('theme') ?? localStorage.getItem('themeChoice') ?? localStorage.getItem('themeMode');
+        var d = document.documentElement;
+        if (r === 'amoled') {
+          d.setAttribute('data-theme', 'amoled');
+        } else {
+          d.setAttribute('data-theme', 'dark');
+          d.setAttribute('data-dark-palette', r === 'dark_github' ? 'github' : r === 'dark_tokyo' ? 'tokyo' : 'onedark');
+        }
+      } catch (e) {}
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tarkov Weapon Optimizer v3.2.3</title>

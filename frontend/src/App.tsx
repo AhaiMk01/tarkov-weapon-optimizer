@@ -965,7 +965,7 @@ function AppContent({
     <AntApp>
       {contextHolder}
       {loading ? (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, background: token.colorBgContainer }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, background: token.colorBgLayout }}>
           <Spin size="large" />
           <Text type="secondary">{t('ui.initializing')}</Text>
         </div>
