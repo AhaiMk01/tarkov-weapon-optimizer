@@ -1,11 +1,10 @@
-import { cloneElement } from 'react'
+import { cloneElement, type CSSProperties } from 'react'
 import { SettingOutlined, LockOutlined, UnlockOutlined, StopOutlined } from '@ant-design/icons'
-import { Tag, Typography, theme, App, Tooltip, Button, Grid } from 'antd'
+import { Typography, theme, App, Tooltip, Button, Grid } from 'antd'
 import { useTranslation } from 'react-i18next'
 import type { ItemDetail } from '../api/client'
 import { priceCell } from './priceCell'
 import { isDarkColor } from './common/galleryEffects'
-import { TedTag } from './TedTag'
 import { CopyName } from './common/CopyName'
 import { isShownTedDelta } from '../solver/trueErgo'
 import { FocusTooltip } from './common/FocusTooltip'
@@ -128,6 +127,39 @@ export function ItemTooltip({ item, children }: { item: ItemDetail; children: Re
   return <Tooltip title={content} styles={{ root: { maxWidth: 240 } }}>{children}</Tooltip>
 }
 
+const nameStyle = { display: 'block', textAlign: 'left', whiteSpace: 'normal', overflowWrap: 'anywhere' } as const
+
+/** The part's stat changes as one quiet line: the label is secondary, the value is plain text and red only when it hurts the build. */
+function ItemStats({ item, full = false, style }: { item: ItemDetail; full?: boolean; style?: CSSProperties }) {
+  const { t } = useTranslation()
+  const { token } = theme.useToken()
+  const stats: { key: string; label: string; value: string; bad?: boolean; tip?: string }[] = []
+  if (item.ergonomics !== 0) stats.push({ key: 'ergo', label: t('item.ergo'), value: `${item.ergonomics > 0 ? '+' : ''}${item.ergonomics}`, bad: item.ergonomics < 0 })
+  if (isShownTedDelta(item.ted_delta)) stats.push({ key: 'ted', label: t('ui.ted_part_label'), value: `${item.ted_delta > 0 ? '+' : ''}${item.ted_delta.toFixed(1)}`, tip: t('ui.ted_part_tooltip') })
+  if (item.recoil_modifier !== 0) stats.push({ key: 'recoil', label: t('item.recoil'), value: `${item.recoil_modifier > 0 ? '+' : ''}${(item.recoil_modifier * 100).toFixed(1)}%`, bad: item.recoil_modifier > 0 })
+  if (full && item.accuracy_modifier) stats.push({ key: 'acc', label: t('ui.acc_label'), value: `${item.accuracy_modifier > 0 ? '+' : ''}${item.accuracy_modifier}%` })
+  if (full && item.sighting_range) stats.push({ key: 'sight', label: t('ui.sight_label'), value: `${item.sighting_range}m` })
+  if (!stats.length) return null
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 12, rowGap: 2, fontSize: 12, lineHeight: 1.4, fontVariantNumeric: 'tabular-nums', ...style }}>
+      {stats.map(s => {
+        const node = (
+          <span key={s.key} style={{ whiteSpace: 'nowrap', cursor: s.tip ? 'help' : undefined }}>
+            <span style={{ color: token.colorTextSecondary }}>{s.label}</span>{' '}
+            <span style={s.bad ? { color: token.colorError } : undefined}>{s.value}</span>
+          </span>
+        )
+        return s.tip ? <Tooltip key={s.key} title={s.tip}>{node}</Tooltip> : node
+      })}
+    </div>
+  )
+}
+
+function PriceText({ item, style }: { item: ItemDetail; style?: CSSProperties }) {
+  const { token } = theme.useToken()
+  return <span style={{ color: token.colorWarning, fontVariantNumeric: 'tabular-nums', fontWeight: 500, textAlign: 'right', whiteSpace: 'nowrap', ...style }}>{priceCell(item)}</span>
+}
+
 interface ItemRowProps {
   item: ItemDetail
   hidePrice?: boolean
@@ -173,9 +205,6 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
     }
   }
   const truncateStyle = { overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' as const }
-  const tagStyle = { margin: 0, minWidth: 90, textAlign: 'center' as const }
-  const ergoLabel = t('item.ergo')
-  const recoilLabel = t('item.recoil')
   const unknownLabel = t('ui.unknown')
   const isLocked = lockedIds?.includes(item.id) ?? false
   const isExcluded = excludedIds?.includes(item.id) ?? false
@@ -211,7 +240,6 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       )}
     </div>
   ) : null
-  const hasTags = item.ergonomics !== 0 || item.recoil_modifier !== 0 || !!item.accuracy_modifier || !!item.sighting_range || isShownTedDelta(item.ted_delta)
 
   if (compactMode) {
     if (isMobile) {
@@ -221,37 +249,31 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
              {actionBtns}
              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
                <ItemTooltip item={item}>
-                 <CopyName name={item.name} copy={copyToClipboard} style={{ fontSize: 13, display: 'inline-block', lineHeight: 1.2, whiteSpace: 'normal', wordBreak: 'break-word' }} />
+                 <CopyName name={item.name} copy={copyToClipboard} style={{ ...nameStyle, fontSize: 13, lineHeight: 1.3 }} />
                </ItemTooltip>
-               <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                 {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
-                 <TedTag item={item} style={{ margin: 0, fontSize: 11 }} />
-                 {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
-               </div>
+               <ItemStats item={item} />
              </div>
            </div>
            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12, paddingLeft: hasActions ? 34 : 0 }}>
              <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
-             {!hidePrice && <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>{priceCell(item)}</Tag>}
+             {!hidePrice && <PriceText item={item} />}
            </div>
         </div>
       )
     }
     return (
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '4px 8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '6px 8px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
         {actionBtns}
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden', display: 'flex', gap: 4, alignItems: 'center' }}>
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           <ItemTooltip item={item}>
-            <CopyName name={item.name} copy={copyToClipboard} title={item.name} style={{ fontSize: 12, ...truncateStyle, display: 'inline' }} />
+            <CopyName name={item.name} copy={copyToClipboard} style={{ ...nameStyle, fontSize: 13, lineHeight: 1.3 }} />
           </ItemTooltip>
-          {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
-          <TedTag item={item} style={{ margin: 0, fontSize: 11, flexShrink: 0 }} />
-          {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
+          <ItemStats item={item} />
         </div>
         <div style={{ width: 80, textAlign: 'left', flexShrink: 0 }}>
           <TraderIcon source={item.source} unknownLabel={unknownLabel} compact barterRequirements={item.barter_requirements} />
         </div>
-        {!hidePrice && <div style={{ width: 70, textAlign: 'right', flexShrink: 0 }}><Tag color="gold" style={{ margin: 0, fontSize: 11 }}>{priceCell(item)}</Tag></div>}
+        {!hidePrice && <div style={{ minWidth: 70, textAlign: 'right', flexShrink: 0 }}><PriceText item={item} style={{ fontSize: 13 }} /></div>}
       </div>
     )
   }
@@ -283,18 +305,12 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flexWrap: 'wrap' }}>
-              <CopyName name={item.name} copy={copyToClipboard} style={{ fontSize: 13, lineHeight: 1.3, wordBreak: 'break-word' }} />
+              <CopyName name={item.name} copy={copyToClipboard} style={{ ...nameStyle, fontSize: 13, lineHeight: 1.3 }} />
             </div>
-            {!hidePrice && <Tag color="gold" style={{ margin: 0, flexShrink: 0, border: 'none', background: token.colorFillQuaternary, fontWeight: 600 }}>{priceCell(item)}</Tag>}
+            {!hidePrice && <PriceText item={item} style={{ flexShrink: 0 }} />}
           </div>
 
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-            {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
-            <TedTag item={item} bordered={false} style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }} />
-            {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{recoilLabel}: {(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
-            {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
-            {!!item.sighting_range && <Tag color="purple" variant="filled" style={{ margin: 0, fontSize: 11, padding: '0 4px', lineHeight: '18px' }}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}
-          </div>
+          <ItemStats item={item} full />
 
           <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, gap: 4 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -322,26 +338,18 @@ export function ItemRow({ item, hidePrice = false, compactMode = false, lockedId
       </ItemTooltip>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-          <CopyName name={item.name} copy={copyToClipboard} title={item.name} style={{ display: 'block', fontSize: 13, ...truncateStyle }} />
+          <CopyName name={item.name} copy={copyToClipboard} style={{ ...nameStyle, fontSize: 14, lineHeight: 1.3 }} />
         </div>
         {(item.handbook_categories?.[0] || item.category) && <Text type="secondary" style={{ fontSize: 11, ...truncateStyle, display: 'block' }} title={item.handbook_categories?.length ? item.handbook_categories.toReversed().join(' > ') : item.category}>{item.handbook_categories?.length ? item.handbook_categories.toReversed().join(' > ') : item.category}</Text>}
-        {hasTags && (
-          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4, overflow: 'hidden' }}>
-            {item.ergonomics !== 0 && <Tag color={item.ergonomics > 0 ? 'blue' : 'red'} style={tagStyle}>{ergoLabel}: {item.ergonomics > 0 ? '+' : ''}{item.ergonomics}</Tag>}
-            <TedTag item={item} style={tagStyle} />
-            {item.recoil_modifier !== 0 && <Tag color={item.recoil_modifier < 0 ? 'green' : 'red'} style={tagStyle}>{recoilLabel}: {item.recoil_modifier > 0 ? '+' : ''}{(item.recoil_modifier * 100).toFixed(1)}%</Tag>}
-            {!!item.accuracy_modifier && <Tag color={item.accuracy_modifier > 0 ? 'orange' : 'volcano'} style={tagStyle}>{t('ui.acc_label')}: {item.accuracy_modifier > 0 ? '+' : ''}{item.accuracy_modifier}%</Tag>}
-            {!!item.sighting_range && <Tag color="purple" style={tagStyle}>{t('ui.sight_label')}: {item.sighting_range}m</Tag>}
-          </div>
-        )}
+        <ItemStats item={item} full style={{ marginTop: 4 }} />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
         <div style={{ width: 64, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <TraderIcon source={item.source} unknownLabel={unknownLabel} barterRequirements={item.barter_requirements} />
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, width: 80 }}>
-          {!hidePrice && <Tag color="gold" style={{ margin: 0, fontWeight: 600 }}>{priceCell(item)}</Tag>}
-          {item.weight ? <Tag color="cyan" style={{ margin: 0 }}>{item.weight.toFixed(2)} {t('ui.weight_unit')}</Tag> : null}
+          {!hidePrice && <PriceText item={item} style={{ fontSize: 14 }} />}
+          {item.weight ? <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>{item.weight.toFixed(2)} {t('ui.weight_unit')}</Text> : null}
         </div>
       </div>
     </div>

@@ -784,6 +784,7 @@ function AppContent({
       label: <span style={{ userSelect: 'none' }}><ThunderboltOutlined /> {t('tabs.optimize')}</span>,
       children: (
         <ResponsiveLayout
+          revealRight={optimizeRun.phase === 'running'}
           left={
             <OptimizePanel
               {...commonPanelProps}
@@ -834,6 +835,8 @@ function AppContent({
               onCopy={copyBuild}
               disabled={!selectedGunId}
               weaponId={selectedGunId}
+              weaponName={selectedGun?.name}
+              weaponImage={selectedGun?.image}
               lockedIds={includedModIds}
               excludedIds={excludedModIds}
               onToggleLock={toggleLock}
@@ -848,6 +851,7 @@ function AppContent({
       label: <span style={{ userSelect: 'none' }}><BarChartOutlined /> {t('tabs.explore')}</span>,
       children: (
         <ResponsiveLayout
+          revealRight={exploreRun.phase === 'running'}
           left={
             <ExplorePanel
               {...commonPanelProps}
@@ -889,6 +893,7 @@ function AppContent({
       label: <span style={{ userSelect: 'none' }}><ToolOutlined /> {t('tabs.gunsmith')}</span>,
       children: (
         <ResponsiveLayout
+          revealRight={gunsmithRun.phase === 'running'}
           left={
             <GunsmithPanel
               gunsmithTasks={gunsmithTasks}
@@ -918,6 +923,8 @@ function AppContent({
               onCopy={copyGunsmithBuild}
               disabled={!selectedTask}
               weaponId={selectedTask?.weapon_id}
+              weaponName={selectedTask?.weapon_name}
+              weaponImage={selectedTask?.weapon_image}
             />
           }
         />
@@ -961,6 +968,44 @@ function AppContent({
       label: <span style={{ userSelect: 'none', whiteSpace: 'nowrap' }}><ToolOutlined /> {t('tabs.gunsmith')}</span>,
     },
   ]
+
+  const footer = (
+    <Footer
+      style={{
+        flexShrink: 0,
+        margin: isMobile ? '16px 0 0' : 0,
+        padding: '12px 16px',
+        background: token.colorBgContainer,
+        borderTop: `1px solid ${token.colorBorderSecondary}`,
+      }}
+    >
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '8px 16px', fontSize: 13, color: token.colorTextSecondary }}>
+        <span>{t('ui.footer_copyright', { year: new Date().getFullYear() })}</span>
+        <span style={{ opacity: 0.3 }}>•</span>
+        <Link href={GITHUB_PROFILE_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <GithubOutlined aria-hidden />
+          {t('ui.footer_github')}
+        </Link>
+        <span style={{ opacity: 0.3 }}>•</span>
+        <Button type="link" size="small" icon={<BulbOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
+          {t('ui.methodology_title')}
+        </Button>
+        <span style={{ opacity: 0.3 }}>•</span>
+        <Button type="link" size="small" icon={<HistoryOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setChangelogOpen(true)}>
+          {t('ui.changelog_title')}
+        </Button>
+        <span style={{ opacity: 0.3 }}>•</span>
+        <span>
+          {t('ui.footer_data_from')}{' '}
+          <Link href={TARKOV_DEV_URL} target="_blank" rel="noopener noreferrer">
+            Tarkov.dev
+          </Link>
+        </span>
+        <span style={{ opacity: 0.3 }}>•</span>
+        <span>Made with ❤️</span>
+      </div>
+    </Footer>
+  )
 
   return (
     <AntApp>
@@ -1066,47 +1111,14 @@ function AppContent({
         </Header>
         <Content
           className={isMobile ? 'main-content' : undefined}
-          style={{ flex: 1, minHeight: 0, padding: isMobile ? '16px 0' : 16, overflowX: 'hidden', overflowY: isMobile ? 'auto' : 'hidden', background: token.colorBgLayout, display: 'flex', flexDirection: 'column' }}
+          style={{ flex: 1, minHeight: 0, padding: isMobile ? '16px 0 0' : 16, overflowX: 'hidden', overflowY: isMobile ? 'auto' : 'hidden', background: token.colorBgLayout, display: 'flex', flexDirection: 'column' }}
         >
           <div style={{ padding: isMobile ? '0 16px' : 0, height: isMobile ? 'auto' : '100%', display: 'flex', flexDirection: 'column', flex: 1 }}>
             {tabItems.find(i => i.key === activeTab)?.children}
           </div>
+          {isMobile && footer}
         </Content>
-        <Footer
-          style={{
-            flexShrink: 0,
-            margin: 0,
-            padding: '12px 16px',
-            background: token.colorBgContainer,
-            borderTop: `1px solid ${token.colorBorderSecondary}`,
-          }}
-        >
-          <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center', gap: '8px 16px', fontSize: 13, color: token.colorTextSecondary }}>
-            <span>{t('ui.footer_copyright', { year: new Date().getFullYear() })}</span>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <Link href={GITHUB_PROFILE_URL} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <GithubOutlined aria-hidden />
-              {t('ui.footer_github')}
-            </Link>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <Button type="link" size="small" icon={<BulbOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setMethodologyOpen(true)}>
-              {t('ui.methodology_title')}
-            </Button>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <Button type="link" size="small" icon={<HistoryOutlined aria-hidden />} style={{ padding: 0, height: 'auto', fontSize: 'inherit', gap: 4 }} onClick={() => setChangelogOpen(true)}>
-              {t('ui.changelog_title')}
-            </Button>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <span>
-              {t('ui.footer_data_from')}{' '}
-              <Link href={TARKOV_DEV_URL} target="_blank" rel="noopener noreferrer">
-                Tarkov.dev
-              </Link>
-            </span>
-            <span style={{ opacity: 0.3 }}>•</span>
-            <span>Made with ❤️</span>
-          </div>
-        </Footer>
+        {!isMobile && footer}
         <Suspense fallback={null}>
           {changelogOpen !== null && <ChangelogModal open={changelogOpen} onClose={() => setChangelogOpen(false)} />}
           {methodologyOpen !== null && <MethodologyModal open={methodologyOpen} onClose={() => setMethodologyOpen(false)} />}

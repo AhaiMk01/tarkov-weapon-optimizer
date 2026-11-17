@@ -25,7 +25,7 @@ interface BuildManifestProps {
 
 const itemGridStyle = (viewMode: 'detailed' | 'compact' | 'table'): React.CSSProperties => ({
   display: 'grid',
-  gridTemplateColumns: `repeat(auto-fit, minmax(max(${viewMode === 'compact' ? 'calc(33.33% - 8px)' : 'calc(50% - 4px)'}, min(100%, ${viewMode === 'compact' ? 480 : 640}px)), 1fr))`,
+  gridTemplateColumns: `repeat(auto-fit, minmax(max(${viewMode === 'compact' ? 'calc(33.33% - 8px)' : 'calc(50% - 4px)'}, min(100%, ${viewMode === 'compact' ? 560 : 640}px)), 1fr))`,
   gap: 8,
 })
 

@@ -89,7 +89,7 @@ UI Component → api/client.ts → Web Worker (solver.worker.ts) → solver.ts �
 - `components/optimize/` — Single build optimization panel and results
 - `components/explore/` — Pareto frontier exploration UI
 - `components/gunsmith/` — Gunsmith task optimization
-- `components/common/` — Shared UI: WeaponSelector, LevelConfig, ModFilter, TernaryPlot, StatsCards, BuildManifest
+- `components/common/` — Shared UI: WeaponSelector, LevelConfig, ModFilter, TernaryPlot, BuildSummary, BuildManifest
 - `layouts/` — Responsive layout wrapper
 
 ### Streamlit App (Python, Root Level)
