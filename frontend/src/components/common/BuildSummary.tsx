@@ -28,7 +28,7 @@ export function BuildSummary({ ergonomics, recoilVertical, recoilHorizontal, wei
   const big = (label: string, value: ReactNode, color?: string) => (
     <div style={{ minWidth: 0 }}>
       <dt style={{ fontSize: 12, color: token.colorTextSecondary }}>{label}</dt>
-      <dd style={{ ...dd, fontSize: isMobile ? 22 : 30, lineHeight: 1.25, fontWeight: 600, fontVariantNumeric: 'tabular-nums', overflowWrap: 'anywhere', color }}>{value}</dd>
+      <dd style={{ ...dd, fontSize: isMobile ? 22 : 30, lineHeight: 1.25, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', color }}>{value}</dd>
     </div>
   )
   const small = (label: ReactNode, value: ReactNode, color?: string) => (
@@ -63,7 +63,7 @@ export function BuildSummary({ ergonomics, recoilVertical, recoilHorizontal, wei
           {weaponName && (
             <h2 style={{ margin: 0, fontSize: isMobile ? 18 : 20, lineHeight: 1.3, fontWeight: 600, overflowWrap: 'anywhere' }}>{weaponName}</h2>
           )}
-          <dl style={{ margin: 0, display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', columnGap: isMobile ? 8 : 24 }}>
+          <dl style={{ margin: 0, display: 'flex', flexWrap: 'wrap', gap: isMobile ? '8px 20px' : '10px 32px' }}>
             {big(t('sidebar.ergonomics'), Math.min(100, Math.max(0, ergonomics)).toFixed(1))}
             {big(t('ui.vert_recoil'), recoilVertical.toFixed(1))}
             {big(t('ui.total_cost'), `₽${price.toLocaleString()}`, token.colorWarning)}

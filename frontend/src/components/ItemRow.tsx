@@ -135,7 +135,7 @@ function ItemStats({ item, full = false, style }: { item: ItemDetail; full?: boo
   const { token } = theme.useToken()
   const stats: { key: string; label: string; value: string; bad?: boolean; tip?: string }[] = []
   if (item.ergonomics !== 0) stats.push({ key: 'ergo', label: t('item.ergo'), value: `${item.ergonomics > 0 ? '+' : ''}${item.ergonomics}`, bad: item.ergonomics < 0 })
-  if (isShownTedDelta(item.ted_delta)) stats.push({ key: 'ted', label: t('ui.ted_part_label'), value: `${item.ted_delta > 0 ? '+' : ''}${item.ted_delta.toFixed(1)}`, bad: item.ted_delta < 0, tip: t('ui.ted_part_tooltip') })
+  if (isShownTedDelta(item.ted_delta)) stats.push({ key: 'ted', label: t('ui.ted_part_label'), value: `${item.ted_delta > 0 ? '+' : ''}${item.ted_delta.toFixed(1)}`, tip: t('ui.ted_part_tooltip') })
   if (item.recoil_modifier !== 0) stats.push({ key: 'recoil', label: t('item.recoil'), value: `${item.recoil_modifier > 0 ? '+' : ''}${(item.recoil_modifier * 100).toFixed(1)}%`, bad: item.recoil_modifier > 0 })
   if (full && item.accuracy_modifier) stats.push({ key: 'acc', label: t('ui.acc_label'), value: `${item.accuracy_modifier > 0 ? '+' : ''}${item.accuracy_modifier}%` })
   if (full && item.sighting_range) stats.push({ key: 'sight', label: t('ui.sight_label'), value: `${item.sighting_range}m` })
