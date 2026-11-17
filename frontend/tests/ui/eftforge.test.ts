@@ -83,7 +83,7 @@ test('a real single-occurrence build from the solver exports, and its pairs are 
     ['c', mod('c', { ergo: 3 })],
   );
   const response = await solve(params(lookup));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.equal(response.slot_pairs.length, 3);
   const projection = projectToEftforgeV1(WEAPON, response.slot_pairs);
   assert.ok(projection.ok, JSON.stringify(projection));
@@ -132,7 +132,7 @@ test('the real multi-copy build of the solver is refused, with no copy dropped f
     ['a', mod('a', { ergo: 5 })],
   );
   const response: OptimizeResponse = await solve(params(lookup));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['a', 'a']);
   assert.equal(response.slot_pairs.length, 2, 'both occurrences are in the internal manifest');
   assert.equal(refusalOf(WEAPON, response.slot_pairs), 'repeated_item');
@@ -146,7 +146,7 @@ test('a real build with two copies of a parent and a child under each is refused
     ['rail', mod('rail', { ergo: 3 })],
   );
   const response = await solve(params(lookup));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.equal(response.slot_pairs.length, 4, 'two handguards and a rail on each');
   assert.equal(refusalOf(WEAPON, response.slot_pairs), 'repeated_slot');
 });

@@ -123,7 +123,7 @@ test('sequential payoff endpoints (configurePayoff concurrent: false) are guarde
   try {
   const full = drivenGuard();
   const done = await solve(paramsOf(lookup, { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true, guard: full }));
-  assert.equal(done.status, 'optimal', done.reason);
+  assert.equal(done.status, 'optimal', done.reason ?? `status is ${String(done.status)}`);
   // Per endpoint: the search yield and the endpoint yield; then the search yield of the objective itself.
   assert.equal(full.yields, 3 * 2 + 1);
 
@@ -149,7 +149,7 @@ test('concurrent payoff endpoints (production): one guard check before them, the
   );
   const full = drivenGuard();
   const done = await solve(paramsOf(lookup, { ergoWeight: 34, recoilWeight: 33, priceWeight: 33, useTchebycheff: true, guard: full }));
-  assert.equal(done.status, 'optimal', done.reason);
+  assert.equal(done.status, 'optimal', done.reason ?? `status is ${String(done.status)}`);
   // The three endpoint searches yield once each, the table once; then the search yield of the objective itself.
   assert.equal(full.yields, 3 + 1 + 1);
 

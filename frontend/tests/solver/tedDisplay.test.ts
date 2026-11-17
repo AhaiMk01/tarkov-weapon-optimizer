@@ -24,7 +24,7 @@ function onePart(partErgo: number, partWeight: number, extra: Partial<SolveParam
 test('an overswinging build: 8 kg at 40 ergonomics swings 4.8 kg (45 %), TED -22.5, and its only part costs exactly that TED', async () => {
   // Without the part the build is the bare 1 kg receiver at 0 ergonomics: TED 0, so the part's delta is the whole TED.
   const r = await solve(onePart(40, 7, { useTrueErgo: true }));
-  assert.equal(r.status, 'optimal', r.reason);
+  assert.equal(r.status, 'optimal', r.reason ?? `status is ${String(r.status)}`);
   near(r.final_stats?.true_ergo_delta, -22.5, 'TED');
   near(r.final_stats?.overswing_pct, 45, 'overswing %');
   near(r.selected_items[0].ted_delta, -22.5, 'part TED delta');

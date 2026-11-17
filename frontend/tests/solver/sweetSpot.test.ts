@@ -174,7 +174,7 @@ test('real pool workers: a cancel during the endpoints of a slow Sweet Spot True
     assert.equal(response.reason, 'Cancelled by user');
     assert.equal(response.ideal_point, undefined);
     const next = await solve(request(idOf('MP5')));
-    assert.equal(next.status, 'optimal', next.reason);
+    assert.equal(next.status, 'optimal', next.reason ?? `status is ${String(next.status)}`);
   } finally {
     await shutdownNativePool();
     configureNativePool({});

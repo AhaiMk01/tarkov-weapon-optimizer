@@ -13,5 +13,8 @@ updates:
     schedule:
       interval: monthly
     groups:
+      # react-i18next names an exact i18next major as its peer, so they only install together.
+      i18next:
+        patterns: ["i18next*", "react-i18next"]
       minor-and-patch:
         update-types: [minor, patch]

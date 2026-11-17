@@ -36,7 +36,7 @@ const provenance = (): ItemLookup => lookupOf(
 
 async function provenanceBuild(): Promise<OptimizeResponse> {
   const response = await solve(paramsOf(provenance(), { ownedItems: ['b'], priceWeight: 0.01 }));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   return response;
 }
 
@@ -61,7 +61,7 @@ test('the preset keeps its component counts, and its usage is units supplied aga
     gun(WEAPON, { slots: [slot('s1', ['a'])], presets: [{ id: 'pre', items: [{ itemId: 'a', count: 2 }], offers: [trader('prapor', 1, 1000)] }], offers: [trader('prapor', 1, 5000)] }),
     ['a', mod('a', { ergo: 5 })],
   )));
-  assert.equal(stripped.status, 'optimal', stripped.reason);
+  assert.equal(stripped.status, 'optimal', stripped.reason ?? `status is ${String(stripped.status)}`);
   assert.deepEqual(stripped.selected_preset?.items, [{ itemId: 'a', count: 2 }]);
   assert.deepEqual(presetUsage(stripped), { supplied: 2, installed: 1 });
 });
@@ -69,7 +69,7 @@ test('the preset keeps its component counts, and its usage is units supplied aga
 test('a naked receiver has no preset occurrences: every occurrence is listed', async () => {
   const lookup = lookupOf(gun(WEAPON, { slots: [slot('s1', ['a'])], offers: [trader('prapor', 1, 5000)] }), ['a', mod('a', { ergo: 5 })]);
   const response = await solve(paramsOf(lookup));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   const { preset, listed } = partitionManifest(response);
   assert.equal(preset.length, 0);
   assert.equal(listed.length, 1);
@@ -103,7 +103,7 @@ test('copies of one template with one provenance are counted on a line (×n) wit
     ['a', mod('a', { ergo: 5, offers: [trader('prapor', 1, 100)] })],
   );
   const response = await solve(paramsOf(lookup, { ownedItems: ['a'] }));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_item_ids, ['a', 'a', 'a']);
   const lines = shoppingListLines(response, LABELS);
   assert.deepEqual(lines, [`gun — base — ₽${(5000).toLocaleString()}`, 'a — owned', `a ×2 — Prapor — ₽${(200).toLocaleString()}`]);
@@ -117,7 +117,7 @@ test('a barter lot is charged once, on its first unit: the rider unit is listed 
     ['a', mod('a', { ergo: 5, offers: [barter('mechanic', 1, 600, false, 2)] })],
   );
   const response = await solve(paramsOf(lookup, { barterAvailable: true }));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.deepEqual(response.selected_items.map(i => i.price), [600, 0, 600], 'two lots of two for three units');
   assert.equal(manifestSpend(response), 5000 + 1200);
   assert.equal(manifestSpend(response), response.final_stats?.total_price);
@@ -132,7 +132,7 @@ test('a gun nobody sells is the player’s own: the base line has no price, it i
     ['a', mod('a', { ergo: 5, offers: [trader('prapor', 1, 100)] })],
   );
   const response = await solve(paramsOf(lookup));
-  assert.equal(response.status, 'optimal', response.reason);
+  assert.equal(response.status, 'optimal', response.reason ?? `status is ${String(response.status)}`);
   assert.equal(response.selected_preset?.id, WEAPON, 'the naked receiver, never the preset');
   assert.deepEqual(response.selected_preset?.acquisition, { source: 'owned' });
   assert.equal(response.selected_preset?.price, 0);

@@ -85,7 +85,7 @@ test('the Gunsmith request shape (Precise, weights 1 / 1 / 0.5, task caps) on a 
   const r = await run<OptimizeResponse>(pkpLookup(), optimizeMsg({
     precise_mode: true, ergo_weight: 1, recoil_weight: 1, price_weight: 0.5, min_ergonomics: 35, max_recoil_sum: 400, flea_available: true, barter_available: false,
   }));
-  assert.equal(r.status, 'optimal', r.reason);
+  assert.equal(r.status, 'optimal', r.reason ?? `status is ${String(r.status)}`);
   assert.equal(r.physical_certificate, 'certified_optimal');
   assertOwnedBase('gunsmith', r.selected_preset, r.selected_items, r.final_stats?.total_price);
   assert.ok(r.final_stats!.ergonomics >= 35);
@@ -104,7 +104,7 @@ test('Explore and the MOA floor on a gun nobody sells use the owned receiver too
 
 test('a preset that can be bought turns the owned receiver off: the build is made on that preset at its price', async () => {
   const r = await run<OptimizeResponse>(pkpLookup(true), optimizeMsg({ precise_mode: 'precise', flea_available: true }));
-  assert.equal(r.status, 'optimal', r.reason);
+  assert.equal(r.status, 'optimal', r.reason ?? `status is ${String(r.status)}`);
   assert.equal(r.selected_preset?.id, 'pkp_sold');
   assert.deepEqual(r.selected_preset?.acquisition, { source: 'offer' });
   assert.equal(r.selected_preset?.price, 90000);

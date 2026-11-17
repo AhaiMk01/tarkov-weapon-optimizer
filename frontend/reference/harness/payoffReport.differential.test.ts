@@ -43,7 +43,7 @@ test('the table production computes and reports is admissible for the oracle, an
   // Admissible: exact ideal coordinates and a nadir some choice of tied endpoint builds attains.
   const { ideal_point: _table, use_tchebycheff: _t, ...constraints } = c.request;
   const verdict = checkIdealPoint(c.fixture, constraints, reported);
-  assert.equal(verdict.admissible, true, verdict.admissible === true ? '' : (verdict as { reason?: string }).reason);
+  assert.equal(verdict.admissible, true, verdict.admissible === true ? '' : (verdict as { reason?: string }).reason ?? 'not admissible');
   // Which of the two admissible tables was it? The ledger gives the exact optimum and maximizers under each.
   const entry = payoff.tables.find(t => KEYS.every(k => toNumber(parseQ(t.table[k])) === reported[k]));
   assert.ok(entry, `the reported table ${JSON.stringify(reported)} is one of the ledger's admissible tables`);
