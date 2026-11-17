@@ -396,7 +396,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wg-card,
+  .wg-card {
+    transition-property: border-color, background-color, background !important;
+  }
   .wg-card img,
   .wg-card-shadow,
   .wg-card-corners,
@@ -407,10 +409,7 @@
     opacity: 1;
     animation: none;
   }
-  /* Scoped to .wg-in-view: images are lazy, so a card that is nowhere near the
-   viewport is not fetching anything, and an infinite animation on 100+ offscreen
-   placeholders burns a frame budget nobody can see. */
-.wg-in-view img:not(.wg-loaded) {
+  .wg-in-view img:not(.wg-loaded) {
     animation: none;
   }
 }
