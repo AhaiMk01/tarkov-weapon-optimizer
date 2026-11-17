@@ -245,7 +245,7 @@
   border-bottom-right-radius: 4px;
 }
 .wg-card:hover .wg-card-corners,
-.wg-card:focus-visible .wg-card-corners {
+.wg-card:has(.wg-card-pick:focus-visible) .wg-card-corners {
   opacity: 1;
   transform: scale(1);
 }
@@ -330,8 +330,44 @@
   pointer-events: none;
 }
 
-.wg-card:focus-visible {
+/* The pick button covers the card; it has no outline of its own, the card shows
+   the ring. z-index sits above the card content and below the corner toggle. */
+.wg-card-pick {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: inherit;
+  outline: none;
+}
+.wg-card:has(.wg-card-pick:focus-visible) {
   outline: 2px solid var(--wg-accent);
+  outline-offset: 2px;
+}
+
+/* Same overlay pattern for the selected-weapon tiles in the sidebar tray. */
+.wg-tile-pick {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+.wg-tile:has(.wg-tile-pick:focus-visible) {
+  outline: 2px solid var(--wg-tile-ring);
   outline-offset: 2px;
 }
 
@@ -396,7 +432,9 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wg-card,
+  .wg-card {
+    transition-property: border-color, background-color, background !important;
+  }
   .wg-card img,
   .wg-card-shadow,
   .wg-card-corners,
@@ -407,10 +445,7 @@
     opacity: 1;
     animation: none;
   }
-  /* Scoped to .wg-in-view: images are lazy, so a card that is nowhere near the
-   viewport is not fetching anything, and an infinite animation on 100+ offscreen
-   placeholders burns a frame budget nobody can see. */
-.wg-in-view img:not(.wg-loaded) {
+  .wg-in-view img:not(.wg-loaded) {
     animation: none;
   }
 }

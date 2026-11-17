@@ -414,7 +414,7 @@ export function ExploreResult({
                       <ApproximateTag result={p} style={{ fontSize: 11 }} />
                     </div>
                   </div>
-                  <Button size="small" type="text" onClick={() => setPinned(null)}>
+                  <Button size="small" type="text" aria-label={t('ui.close')} onClick={() => setPinned(null)}>
                     ✕
                   </Button>
                 </div>

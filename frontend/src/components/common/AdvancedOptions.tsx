@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next'
-import { Button, Collapse, Segmented, Space, Tooltip, Typography, theme } from 'antd'
-import { QuestionCircleOutlined, UndoOutlined } from '@ant-design/icons'
+import { Collapse, Segmented, Space, Typography } from 'antd'
+import { HelpTip } from './HelpTip'
 import type { PrecisionRequest } from '../../api/client'
+import { ResetButton } from './ResetButton'
 import { ADVANCED_DEFAULTS, isAdvancedDefault, repeatedPartsApply } from './advancedDefaults'
 
 const { Text } = Typography
@@ -32,12 +33,7 @@ export function AdvancedOptions({
   onUseTchebycheffChange,
 }: AdvancedOptionsProps) {
   const { t } = useTranslation()
-  const { token } = theme.useToken()
-  const hint = (title: string) => (
-    <Tooltip title={title}>
-      <QuestionCircleOutlined style={{ color: token.colorTextTertiary, fontSize: 12 }} />
-    </Tooltip>
-  )
+  const hint = (title: string) => <HelpTip tone="tertiary" title={title} />
   const onOff = [{ label: t('ui.on'), value: 'on' }, { label: t('ui.off'), value: 'off' }]
   const showSweetSpot = useTchebycheff !== undefined && onUseTchebycheffChange !== undefined
   const atDefaults = isAdvancedDefault({ solverPrecision, allowRepeatedParts, useTchebycheff })
@@ -51,11 +47,7 @@ export function AdvancedOptions({
       {
         key: 'advanced',
         label: <span style={{ userSelect: 'none' }}>{t('advanced.title')}</span>,
-        extra: (
-          <Tooltip title={t('ui.reset')}>
-            <Button type="text" size="small" icon={<UndoOutlined />} disabled={atDefaults} onClick={(e) => { e.stopPropagation(); reset() }} />
-          </Tooltip>
-        ),
+        extra: <ResetButton onReset={reset} disabled={atDefaults} />,
         children: (
           <Space orientation="vertical" style={{ width: '100%' }}>
             <div style={rowStyle}>
@@ -65,6 +57,7 @@ export function AdvancedOptions({
               </Space>
               <Segmented
                 size="small"
+                aria-label={t('advanced.solver_precision')}
                 value={solverPrecision}
                 onChange={(v) => onSolverPrecisionChange(v as PrecisionRequest)}
                 options={[
@@ -81,6 +74,7 @@ export function AdvancedOptions({
               </Space>
               <Segmented
                 size="small"
+                aria-label={t('advanced.allow_repeated_parts')}
                 disabled={!repeatedPartsApply(solverPrecision)}
                 value={allowRepeatedParts ? 'on' : 'off'}
                 onChange={(v) => onAllowRepeatedPartsChange(v === 'on')}
@@ -93,7 +87,7 @@ export function AdvancedOptions({
                   <Text type="secondary" style={labelStyle}>{t('optimize.tchebycheff')}</Text>
                   {hint(t('optimize.tchebycheff_tooltip'))}
                 </Space>
-                <Segmented size="small" value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={onOff} />
+                <Segmented size="small" aria-label={t('optimize.tchebycheff')} value={useTchebycheff ? 'on' : 'off'} onChange={(v) => onUseTchebycheffChange(v === 'on')} options={onOff} />
               </div>
             )}
           </Space>
