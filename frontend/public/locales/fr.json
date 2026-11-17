@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (sans inertie)",
     "ted_label_over": "TED (inertie)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED que cette pièce apporte à la build (vert) ou lui coûte (rouge) : TED de la build moins TED sans cette pièce.",
+    "ted_part_tooltip": "TED que cette pièce apporte à la build (+) ou lui coûte (-) : TED de la build moins TED sans cette pièce.",
     "overswing_severity": "Force de l’inertie {{pct}} %",
     "cancel_btn": "Annuler",
     "cancelling": "Annulation…",

@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (fără balans)",
     "ted_label_over": "TED (balans)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED-ul pe care această piesă îl adaugă build-ului (verde) sau îl scade (roșu): TED-ul build-ului minus TED-ul fără această piesă.",
+    "ted_part_tooltip": "TED-ul pe care această piesă îl adaugă build-ului (+) sau îl scade (-): TED-ul build-ului minus TED-ul fără această piesă.",
     "overswing_severity": "Intensitate suprabalans {{pct}}%",
     "cancel_btn": "Anulează",
     "cancelling": "Se anulează…",

@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (Aşırı sallanma yok)",
     "ted_label_over": "TED (Aşırı sallanma)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "Bu parçanın yapıya kattığı (yeşil) veya götürdüğü (kırmızı) TED: yapının TED'i eksi bu parça olmadan TED.",
+    "ted_part_tooltip": "Bu parçanın yapıya kattığı (+) veya götürdüğü (-) TED: yapının TED'i eksi bu parça olmadan TED.",
     "overswing_severity": "Aşırı sallanma şiddeti %{{pct}}",
     "cancel_btn": "İptal",
     "cancelling": "İptal ediliyor…",

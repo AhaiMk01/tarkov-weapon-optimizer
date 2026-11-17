@@ -281,7 +281,7 @@
     "ted_label_ok": "TED（无过摆）",
     "ted_label_over": "TED（过摆）",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "此配件为配装带来（绿）或损失（红）的 TED：整体 TED 减去去掉该配件后的 TED。",
+    "ted_part_tooltip": "此配件为配装带来（+）或损失（-）的 TED：整体 TED 减去去掉该配件后的 TED。",
     "overswing_severity": "过摆强度 {{pct}}%",
     "cancel_btn": "取消",
     "cancelling": "正在取消…",

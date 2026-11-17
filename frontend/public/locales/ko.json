@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (오버스윙 없음)",
     "ted_label_over": "TED (오버스윙)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "이 부품이 빌드에 더하는(초록) 또는 깎는(빨강) TED: 빌드 TED에서 이 부품을 뺀 TED를 뺀 값.",
+    "ted_part_tooltip": "이 부품이 빌드에 더하는(+) 또는 깎는(-) TED: 빌드 TED에서 이 부품을 뺀 TED를 뺀 값.",
     "overswing_severity": "오버스윙 강도 {{pct}}%",
     "cancel_btn": "취소",
     "cancelling": "취소하는 중…",

@@ -281,7 +281,7 @@
     "ted_label_ok": "TED (sin sobregiro)",
     "ted_label_over": "TED (sobregiro)",
     "ted_part_label": "TED",
-    "ted_part_tooltip": "TED que esta pieza aporta a la build (verde) o le resta (rojo): TED de la build menos TED sin esta pieza.",
+    "ted_part_tooltip": "TED que esta pieza aporta a la build (+) o le resta (-): TED de la build menos TED sin esta pieza.",
     "overswing_severity": "Intensidad de sobregiro {{pct}} %",
     "cancel_btn": "Cancelar",
     "cancelling": "Cancelando…",
